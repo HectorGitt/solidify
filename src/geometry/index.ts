@@ -365,14 +365,28 @@ function flipFaces(g: THREE.BufferGeometry) {
 }
 
 /** Closed-coil helical spring along Y from y=0 to y=length. Ends are capped. */
-export function helixSpring(coilRadius: number, wireRadius: number, length: number, turns: number) {
+export function helixSpring(coilRadius: number, wireRadius: number, length: number, turns: number, closedEnds = true) {
   class Helix extends THREE.Curve<THREE.Vector3> {
     constructor() {
       super()
     }
     getPoint(t: number, target = new THREE.Vector3()) {
       const a = t * turns * Math.PI * 2
-      return target.set(coilRadius * Math.cos(a), t * length, coilRadius * Math.sin(a))
+      let y = t * length
+      
+      if (closedEnds && turns >= 2.5) {
+        const d = 2 * wireRadius
+        const turn = t * turns
+        if (turn <= 1) {
+          y = turn * d
+        } else if (turn >= turns - 1) {
+          y = length - (turns - turn) * d
+        } else {
+          y = d + (turn - 1) * ((length - 2 * d) / (turns - 2))
+        }
+      }
+      
+      return target.set(coilRadius * Math.cos(a), y, coilRadius * Math.sin(a))
     }
   }
   return pipe(new Helix(), wireRadius, 0, Math.max(64, Math.round(turns * 32)), 10)
