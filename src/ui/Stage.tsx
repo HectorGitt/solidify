@@ -1,4 +1,4 @@
-import { CameraControls, Environment, Grid, Lightformer } from '@react-three/drei'
+import { CameraControls, ContactShadows, Environment, Grid, Lightformer } from '@react-three/drei'
 import { Canvas } from '@react-three/fiber'
 import { Suspense, useCallback, useEffect, useRef } from 'react'
 import type CameraControlsImpl from 'camera-controls'
@@ -46,8 +46,9 @@ function Floor({ y, extent }: { y: number; extent: number }) {
     <group position={[0, y, 0]}>
       <mesh rotation-x={-Math.PI / 2} receiveShadow>
         <planeGeometry args={[extent * 30, extent * 30]} />
-        <shadowMaterial transparent opacity={0.32} />
+        <shadowMaterial transparent opacity={0.25} />
       </mesh>
+      <ContactShadows resolution={512} scale={extent * 10} blur={2.5} opacity={0.65} far={extent * 1.5} color="#070a12" position={[0, 0.001, 0]} />
       <Grid
         position={[0, 0.0005, 0]}
         args={[extent * 20, extent * 20]}
