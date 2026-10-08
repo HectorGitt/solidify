@@ -43,7 +43,7 @@ export function ackermann(steer: number, wheelbase = TRACTOR.wheelbase, track = 
   const Rm = wheelbase / Math.tan(Math.abs(steer))
   const inner = Math.atan(wheelbase / (Rm - track / 2))
   const outer = Math.atan(wheelbase / (Rm + track / 2))
-  return steer > 0 ? { left: outer, right: inner } : { left: -inner, right: -outer }
+  return steer > 0 ? { left: inner, right: outer } : { left: -outer, right: -inner }
 }
 
 const INFO = {

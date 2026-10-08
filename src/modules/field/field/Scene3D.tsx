@@ -205,7 +205,7 @@ export function Field3D() {
     const p2 = pointAt(drive.plan, drive.s)
     tractor.current?.position.set(p2.x, 0, p2.z)
     tractor.current?.rotation.set(0, p2.h, 0)
-    pose.steer = p2.turn ? p2.turn * Math.min(0.6, Math.atan(TRACTOR.wheelbase / p2.R)) : 0
+    pose.steer = p2.turn ? -p2.turn * Math.min(0.6, Math.atan(TRACTOR.wheelbase / p2.R)) : 0
     pose.rearAngle += (V0 * dt) / TRACTOR.rear.rolling
     pose.frontAngle += (V * dt) / TRACTOR.front.radius
     pose.engineAngle += (dt * 2 * PI * (Number.isFinite(d.rpm) ? d.rpm : 0)) / 60
