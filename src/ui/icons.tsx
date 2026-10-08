@@ -1,0 +1,139 @@
+import type { SVGProps } from 'react'
+
+const base = (p: SVGProps<SVGSVGElement>) => ({
+  width: 18,
+  height: 18,
+  viewBox: '0 0 24 24',
+  fill: 'none',
+  stroke: 'currentColor',
+  strokeWidth: 1.8,
+  strokeLinecap: 'round' as const,
+  strokeLinejoin: 'round' as const,
+  ...p,
+})
+
+export const Icon = {
+  play: (p: SVGProps<SVGSVGElement>) => (
+    <svg {...base(p)}>
+      <path d="M7 5v14l11-7z" fill="currentColor" stroke="none" />
+    </svg>
+  ),
+  pause: (p: SVGProps<SVGSVGElement>) => (
+    <svg {...base(p)}>
+      <path d="M8 5v14M16 5v14" strokeWidth={3} />
+    </svg>
+  ),
+  step: (p: SVGProps<SVGSVGElement>) => (
+    <svg {...base(p)}>
+      <path d="M6 5v14l9-7z" fill="currentColor" stroke="none" />
+      <path d="M18 5v14" strokeWidth={2.4} />
+    </svg>
+  ),
+  cut: (p: SVGProps<SVGSVGElement>) => (
+    <svg {...base(p)}>
+      <path d="M4 20 20 4" />
+      <rect x="4" y="9" width="11" height="11" rx="1" />
+      <path d="M7 17l5-5M7 13l2-2M11 17l2-2" strokeWidth={1.2} />
+    </svg>
+  ),
+  explode: (p: SVGProps<SVGSVGElement>) => (
+    <svg {...base(p)}>
+      <rect x="9" y="9" width="6" height="6" rx="1" />
+      <path d="M4 4l3 3M20 4l-3 3M4 20l3-3M20 20l-3-3" />
+    </svg>
+  ),
+  xray: (p: SVGProps<SVGSVGElement>) => (
+    <svg {...base(p)}>
+      <rect x="3" y="5" width="18" height="14" rx="2" strokeDasharray="3 2" />
+      <circle cx="12" cy="12" r="3" />
+    </svg>
+  ),
+  label: (p: SVGProps<SVGSVGElement>) => (
+    <svg {...base(p)}>
+      <path d="M4 7h10l4 5-4 5H4z" />
+    </svg>
+  ),
+  reset: (p: SVGProps<SVGSVGElement>) => (
+    <svg {...base(p)}>
+      <path d="M4 4v6h6" />
+      <path d="M20 12a8 8 0 1 1-2.3-5.7L20 9" transform="scale(-1,1) translate(-24,0)" />
+    </svg>
+  ),
+  camera: (p: SVGProps<SVGSVGElement>) => (
+    <svg {...base(p)}>
+      <path d="M3 8h4l2-3h6l2 3h4v11H3z" />
+      <circle cx="12" cy="13" r="3.5" />
+    </svg>
+  ),
+  eye: (p: SVGProps<SVGSVGElement>) => (
+    <svg {...base(p)}>
+      <path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z" />
+      <circle cx="12" cy="12" r="3" />
+    </svg>
+  ),
+  eyeOff: (p: SVGProps<SVGSVGElement>) => (
+    <svg {...base(p)}>
+      <path d="M3 3l18 18M10.6 6.1A10 10 0 0 1 12 6c6 0 10 6 10 6a17 17 0 0 1-3.2 3.8M6.2 7.4C3.6 9.2 2 12 2 12s4 7 10 7c1.6 0 3-.4 4.3-1" />
+    </svg>
+  ),
+  target: (p: SVGProps<SVGSVGElement>) => (
+    <svg {...base(p)}>
+      <circle cx="12" cy="12" r="8" />
+      <circle cx="12" cy="12" r="2" fill="currentColor" />
+    </svg>
+  ),
+  isolate: (p: SVGProps<SVGSVGElement>) => (
+    <svg {...base(p)}>
+      <rect x="8" y="8" width="8" height="8" rx="1" />
+      <path d="M3 3h4M3 3v4M21 3h-4M21 3v4M3 21h4M3 21v-4M21 21h-4M21 21v-4" />
+    </svg>
+  ),
+  chevron: (p: SVGProps<SVGSVGElement>) => (
+    <svg {...base(p)}>
+      <path d="M9 6l6 6-6 6" />
+    </svg>
+  ),
+  back: (p: SVGProps<SVGSVGElement>) => (
+    <svg {...base(p)}>
+      <path d="M15 6l-6 6 6 6" />
+    </svg>
+  ),
+  close: (p: SVGProps<SVGSVGElement>) => (
+    <svg {...base(p)}>
+      <path d="M6 6l12 12M18 6 6 18" />
+    </svg>
+  ),
+  tour: (p: SVGProps<SVGSVGElement>) => (
+    <svg {...base(p)}>
+      <path d="M4 5h11l5 5-5 5H4z" />
+      <path d="M4 19h8" />
+    </svg>
+  ),
+  book: (p: SVGProps<SVGSVGElement>) => (
+    <svg {...base(p)}>
+      <path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z" />
+      <path d="M4 19V5" />
+    </svg>
+  ),
+  panel: (p: SVGProps<SVGSVGElement>) => (
+    <svg {...base(p)}>
+      <rect x="3" y="4" width="18" height="16" rx="2" />
+      <path d="M9 4v16" />
+    </svg>
+  ),
+  sliders: (p: SVGProps<SVGSVGElement>) => (
+    <svg {...base(p)}>
+      <path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0" />
+      <circle cx="16" cy="6" r="2" />
+      <circle cx="10" cy="12" r="2" />
+      <circle cx="18" cy="18" r="2" />
+    </svg>
+  ),
+  tractor: (p: SVGProps<SVGSVGElement>) => (
+    <svg {...base(p)}>
+      <circle cx="7" cy="16" r="4" />
+      <circle cx="18" cy="17.5" r="2.5" />
+      <path d="M4 11V6h7l2 5h5l2 4M11 11h2" />
+    </svg>
+  ),
+}

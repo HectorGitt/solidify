@@ -1,0 +1,208 @@
+import type { ModuleDef, SceneDef } from './types'
+
+/**
+ * Scenes register themselves by folder: src/modules/<moduleId>/<scene folder>/index.tsx
+ * (folder defaults to the scene id). Anything without a folder is shown as "coming soon".
+ */
+const SCENE_FILES = import.meta.glob<{ default: SceneDef }>('./*/*/index.tsx')
+
+/**
+ * The full syllabus map (see docs/PLAN.md §4). Scenes without `load` are planned and shown
+ * as "coming soon" so the catalogue doubles as the roadmap.
+ */
+export const MODULES: ModuleDef[] = [
+  {
+    id: 'engine',
+    code: 'M1',
+    title: 'Engine',
+    courses: ['AEE509'],
+    blurb: 'Four- and two-stroke cycles, the parts inside a tractor diesel, and the systems that feed, cool, lubricate and govern it.',
+    scenes: [
+      {
+        id: 'four-stroke-diesel',
+        title: 'Four-stroke diesel cutaway',
+        summary: 'Piston, crank, valve train and injector through 720°, with live P–V and T–s diagrams for the Otto, Diesel and Dual cycles.',
+        exam: true,
+        folder: 'four-stroke',
+      },
+      { id: 'two-stroke', title: 'Two-stroke petrol engine', summary: 'Ports, deflector piston, crankcase compression and petroil lubrication.', exam: true },
+      { id: 'multi-cylinder', title: 'Crankshafts & firing order', summary: '2-, 3-, 4-, 6- and 8-cylinder crank layouts with a live firing chart.', exam: true },
+      { id: 'diesel-fuel', title: 'Diesel fuel system & injector', summary: 'Tank to injector: lift pump, filters, helix-metered injection pump and needle-valve injector.' },
+      { id: 'carburettor', title: 'Carburettor (SI fuel system)', summary: 'Float chamber, venturi, choke and throttle; sediment bowl and diaphragm lift pump.' },
+      { id: 'air-governor', title: 'Air cleaner & governor', summary: 'Oil-bath air cleaner airflow and the flyweight governor with regulation and hunting.' },
+      { id: 'lubrication', title: 'Lubrication system', summary: 'Force-feed vs splash lubrication, relief valve, filter and oil galleries.', exam: true },
+      { id: 'cooling', title: 'Cooling system', summary: 'Thermosiphon vs forced circulation, thermostat, radiator and pressure cap; air cooling.', exam: true },
+      { id: 'ignition', title: 'Ignition, starting & charging', summary: 'Coil and magneto ignition, starter motor engagement, dynamo and alternator.' },
+      { id: 'performance', title: 'Engine performance calculator', summary: 'PD, CR, IP/BP/FP, bmep, efficiencies and the heat balance.', exam: true },
+    ],
+  },
+  {
+    id: 'powertrain',
+    code: 'M2',
+    title: 'Power train',
+    courses: ['AEE510', 'AEE503'],
+    blurb: 'From flywheel to wheel: clutches, gearboxes, planetary and hydrostatic drives, torque converters, the differential, final drives and brakes.',
+    scenes: [
+      { id: 'line-of-drive', title: 'Line of drive (1/2/4WD)', summary: 'The whole power train with live power flow and the three speed reductions.', exam: true },
+      { id: 'clutches', title: 'Clutches', summary: 'Single dry plate, dual clutch for live PTO, wet multi-plate IPTO clutch.', exam: true },
+      { id: 'gearboxes', title: 'Sliding, constant-mesh & synchromesh gearboxes', summary: 'Selector forks, dog collars and cone synchronisers.' },
+      { id: 'mf-16-speed', title: '16F/12R tractor gearbox', summary: 'Speed-shift epicyclic, shuttle, synchro and range gears, PTO through the layshaft.' },
+      { id: 'planetary', title: 'Planetary gear set', summary: 'Lock or brake any member and watch the ratio change.', exam: true },
+      { id: 'powershift', title: 'Hydraulic-assist (powershift)', summary: 'Clutch packs, countershaft ranges and the shift-oil circuit.', exam: true },
+      { id: 'hydrostatic', title: 'Hydrostatic drive', summary: 'Variable swashplate pump driving a fixed motor; the four pump/motor combinations.', exam: true },
+      { id: 'torque-converter', title: 'Torque converter', summary: 'Impeller, turbine and stator; vortex vs rotary flow.', exam: true },
+      { id: 'differential', title: 'Crown wheel, differential & diff lock', summary: 'Straight running vs cornering, one wheel held, diff lock.', exam: true },
+      { id: 'final-drives', title: 'Final drives & rear axle', summary: 'Spur and epicyclic reductions, wet brakes in the trumpet housing.' },
+      { id: 'brakes', title: 'Tractor brakes', summary: 'Expanding shoe, ball-ramp dry disc and wet multi-plate brakes.' },
+    ],
+  },
+  {
+    id: 'pto',
+    code: 'M3',
+    title: 'PTO & driveline',
+    courses: ['AEE502', 'AEE510'],
+    blurb: "Power take-off types and standards, Hooke's joints, double cardans and CV joints.",
+    scenes: [
+      { id: 'hookes-joint', title: "Hooke's joint", summary: 'Live ω₂/ω₁ and acceleration as the shaft angle changes.', exam: true },
+      { id: 'double-cardan', title: 'Double joints & phasing', summary: 'In-phase vs out-of-phase yokes; equal and unequal angles in turns.', exam: true },
+      { id: 'pto-types', title: 'PTO types & standards', summary: 'Transmission, live, independent and ground-speed PTO; 540 and 1000 rpm shafts.' },
+      { id: 'pto-shaft', title: 'Telescopic PTO shaft & guards', summary: 'Tractor-to-implement driveline with guards, turning and lifting.' },
+      { id: 'cv-joints', title: 'Constant-velocity joints', summary: 'Rzeppa, Weiss, Tracta and tripode joints.' },
+    ],
+  },
+  {
+    id: 'hydraulics',
+    code: 'M4',
+    title: 'Hydraulics & three-point hitch',
+    courses: ['AEE502', 'AEE510'],
+    blurb: 'Pumps, valves and rams; draft and position control; the three-point linkage and its virtual hitch point.',
+    scenes: [
+      { id: 'lift-circuit', title: 'Hydraulic lift circuit', summary: 'Lift, hold, lower and relief — with oil flow.', exam: true },
+      { id: 'pumps', title: 'Gear & vane pumps', summary: 'Pump internals and the pump/motor efficiency calculations.', exam: true },
+      { id: 'cylinder', title: 'Double-acting cylinder', summary: 'Extend/retract forces and speeds.', exam: true },
+      { id: 'draft-control', title: 'Draft vs position control', summary: 'Top-link sensing keeps ploughing draft constant.' },
+      { id: 'three-point', title: 'Three-point linkage & virtual hitch', summary: 'Four-bar linkage geometry and implement penetration.', exam: true },
+    ],
+  },
+  {
+    id: 'steering',
+    code: 'M5',
+    title: 'Steering',
+    courses: ['AEE510'],
+    blurb: 'Manual linkages, steering boxes, power-assisted and hydrostatic steering, toe-in.',
+    scenes: [
+      { id: 'linkage', title: 'Manual steering linkage', summary: 'Wheel, box, drop arm, drag link and track rod.' },
+      { id: 'boxes', title: 'Steering boxes', summary: 'Recirculating-ball and worm-and-peg cutaways.' },
+      { id: 'hydrostatic-steering', title: 'Power & hydrostatic steering', summary: 'Pump, column valve and steering cylinder.' },
+    ],
+  },
+  {
+    id: 'traction',
+    code: 'M6',
+    title: 'Tyres, tracks & traction',
+    courses: ['AEE510', 'AEE502'],
+    blurb: 'Tyre construction, inflation and ballast, crawler undercarriages, and the traction mechanics of wheel slip.',
+    scenes: [
+      { id: 'tyre', title: 'Tyre construction', summary: 'Bias, belted and radial plies; size codes and tread classes.' },
+      { id: 'ballast', title: 'Inflation & ballast', summary: 'Liquid ballast, wheel weights and the slip test.' },
+      { id: 'tracks', title: 'Crawler undercarriage', summary: 'Sprocket, idler, rollers, recoil spring and track tension.' },
+      { id: 'traction-lab', title: 'Traction lab', summary: 'Slip, tractive efficiency, the Brixius equations and the speed–pull chart.', exam: true },
+    ],
+  },
+  {
+    id: 'chassis',
+    code: 'M7',
+    title: 'Chassis, hitching & stability',
+    courses: ['AEE502', 'AEE510'],
+    blurb: 'Centre of gravity, weight transfer, trailed vs mounted hitches, slopes and overturning.',
+    scenes: [
+      { id: 'weight-transfer', title: 'Weight transfer', summary: 'Dynamic wheel loads with pull, slope and drawbar height.', exam: true },
+      { id: 'hitches', title: 'Trailed vs semi-mounted vs mounted', summary: 'Which axle gains weight under the same soil force.', exam: true },
+      { id: 'stability', title: 'Slopes & overturning', summary: 'Slope limits, rear overturn and ROPS.' },
+      { id: 'tractor-types', title: 'Tractor types', summary: 'The twelve tractor types and how they evolved.', exam: true },
+    ],
+  },
+  {
+    id: 'implements',
+    code: 'M8',
+    title: 'Implements & attachments',
+    courses: ['AEE502', 'AEE501'],
+    blurb: 'Land clearing, tillage, planting, fertilising, spraying, mowing, baling, harvesting and root-crop lifting.',
+    scenes: [
+      { id: 'mouldboard', title: 'Mouldboard plough', summary: 'Share, mouldboard, landside and frog cutting and inverting the furrow slice.', exam: true },
+      { id: 'disc-plough', title: 'Disc plough & disc harrow', summary: 'Disc and tilt angles; gang angles.', exam: true },
+      { id: 'cultivators', title: 'Cultivators, harrows, rotavator & ridger', summary: 'Secondary tillage tools.' },
+      { id: 'planters', title: 'Seed drill & planter', summary: 'Fluted-roller and plate metering; calibration.', exam: true },
+      { id: 'sprayer', title: 'Boom sprayer & nozzles', summary: 'Pump, relief valve, boom and nozzle cutaways; calibration.' },
+      { id: 'spreaders', title: 'Fertilizer & manure spreaders', summary: 'Spinning disc broadcaster and apron-and-beater spreader.' },
+      { id: 'mower-baler', title: 'Mower & baler', summary: 'Crank-and-pitman cutter bar; pick-up, plunger and knotter.' },
+      { id: 'combine', title: 'Combine harvester', summary: 'Crop flow through cutting, threshing, separating and cleaning.', exam: true },
+      { id: 'root-crops', title: 'Root-crop harvesters', summary: 'Groundnut digger-shaker and cassava digger-elevator.', exam: true },
+      { id: 'land-clearing', title: 'Land clearing', summary: 'Bulldozer, tree pusher, chaining, root plough and the clearing sequence.', exam: true },
+    ],
+  },
+  {
+    id: 'elements',
+    code: 'M9',
+    title: 'Machine elements lab',
+    courses: ['AEE503'],
+    blurb: 'Belts, chains, gears, bearings, clutches, brakes, springs, welds and ropes — the parts every machine is made from.',
+    scenes: [
+      { id: 'belts', title: 'Belt drives', summary: 'Open and crossed belts, wrap angle, tension ratio and selection.', exam: true },
+      { id: 'chains', title: 'Chain drives', summary: 'Roller chain anatomy and selection.' },
+      { id: 'gears', title: 'Gears & gear forces', summary: 'Spur nomenclature; helical and bevel force components.', exam: true },
+      { id: 'bearings', title: 'Bearings', summary: 'Rolling-element types, journal bearings and load capacity.', exam: true },
+      { id: 'clutch-brake', title: 'Clutch & brake design', summary: 'Multi-disc and cone clutches; shoe and band brakes.', exam: true },
+      { id: 'springs-welds', title: 'Springs & welded joints', summary: 'Helical and leaf springs; fillet weld throats.' },
+    ],
+  },
+  {
+    id: 'testing',
+    code: 'M10',
+    title: 'Testing & management',
+    courses: ['AEE502', 'AEE501'],
+    blurb: 'Dynamometers and tractor tests, field capacity and machinery costs.',
+    scenes: [
+      { id: 'dynamometers', title: 'Dynamometers', summary: 'Prony brake, hydraulic, eddy-current, DC and PTO dynamometers.', exam: true },
+      { id: 'drawbar-test', title: 'Drawbar & chassis testing', summary: 'Test car, load cells and the chassis dynamometer.' },
+      { id: 'costs', title: 'Field capacity & machinery costs', summary: 'Capacity, ownership and operating costs per hectare.', exam: true },
+    ],
+  },
+  {
+    id: 'vibration',
+    code: 'M11',
+    title: 'Vibration & the operator',
+    courses: ['AEE518', 'AEE510'],
+    blurb: 'Spring–mass–damper systems, isolation, the tractor seat, cab ergonomics and maintenance.',
+    scenes: [
+      { id: 'smd', title: 'Spring–mass–damper lab', summary: 'Damping cases, step and sine response, log decrement.', exam: true },
+      { id: 'isolation', title: 'Transmissibility & isolation', summary: 'Resonance, isolation efficiency, the hopper shaker.', exam: true },
+      { id: 'seat', title: 'Tractor seat model', summary: 'Two-DOF seat over rough ground against ISO 2631 limits.' },
+      { id: 'cab', title: 'Cab, controls & maintenance', summary: 'Controls layout, noise, ROPS and service intervals.' },
+    ],
+  },
+  {
+    id: 'field',
+    code: 'M12',
+    title: 'Field',
+    courses: ['All'],
+    blurb: 'Drive the assembled tractor with any implement and watch every system work at once.',
+    scenes: [{ id: 'field', title: 'Field operations', summary: 'Live dashboard, deformable soil and an X-ray view of the drivetrain at work.' }],
+  },
+]
+
+for (const m of MODULES) {
+  for (const s of m.scenes) {
+    const key = `./${m.id}/${s.folder ?? s.id}/index.tsx`
+    if (!s.load && SCENE_FILES[key]) s.load = SCENE_FILES[key]
+  }
+}
+
+export function findModule(id: string) {
+  return MODULES.find((m) => m.id === id)
+}
+
+export function countScenes() {
+  const all = MODULES.flatMap((m) => m.scenes)
+  return { total: all.length, ready: all.filter((s) => s.load).length }
+}

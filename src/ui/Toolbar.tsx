@@ -1,0 +1,163 @@
+import { useState } from 'react'
+import { TIME_SCALES, formatTimeScale, useSim } from '@/core/sim'
+import type { SceneDef } from '@/modules/types'
+import { useView } from '@/render/view'
+import { flyTo } from './camera'
+import { IconButton } from './controls'
+import { Icon } from './icons'
+
+function Divider() {
+  return <span className="mx-1 h-5 w-px bg-line-2" aria-hidden />
+}
+
+/** Floating viewport toolbar: time, section, explode, x-ray, labels, camera. */
+export function Toolbar({ scene }: { scene: SceneDef }) {
+  const playing = useSim((s) => s.playing)
+  const toggle = useSim((s) => s.toggle)
+  const step = useSim((s) => s.step)
+  const timeScale = useSim((s) => s.timeScale)
+  const setTimeScale = useSim((s) => s.setTimeScale)
+
+  const cut = useView((s) => s.cut)
+  const setCut = useView((s) => s.setCut)
+  const presets = useView((s) => s.cutPresets)
+  const activePreset = useView((s) => s.activePreset)
+  const applyPreset = useView((s) => s.applyPreset)
+  const explode = useView((s) => s.explode)
+  const setExplode = useView((s) => s.setExplode)
+  const xray = useView((s) => s.xray)
+  const setXray = useView((s) => s.setXray)
+  const labels = useView((s) => s.labels)
+  const setLabels = useView((s) => s.setLabels)
+  const [openCut, setOpenCut] = useState(false)
+
+  return (
+    <div className="pointer-events-auto relative max-w-[calc(100vw-1.5rem)]">
+    <div className="flex items-center gap-0.5 overflow-x-auto rounded-xl border border-line-2 bg-panel/90 px-1.5 py-1 shadow-xl shadow-black/40 backdrop-blur">
+      <IconButton label={playing ? 'Pause (space)' : 'Play (space)'} onClick={toggle} active={playing}>
+        {playing ? <Icon.pause /> : <Icon.play />}
+      </IconButton>
+      <IconButton label="Step one frame" onClick={step}>
+        <Icon.step />
+      </IconButton>
+      <label className="ml-1 flex items-center gap-1 text-[11.5px] text-mute" title="Slow motion: sim seconds per real second">
+        <span className="sr-only">Speed</span>
+        <select
+          className="rounded-md border border-line-2 bg-panel-2 px-1.5 py-1 font-mono text-[11.5px] text-ink"
+          value={timeScale}
+          onChange={(e) => setTimeScale(parseFloat(e.target.value))}
+        >
+          {TIME_SCALES.map((t) => (
+            <option key={t} value={t}>
+              {formatTimeScale(t)}
+            </option>
+          ))}
+        </select>
+      </label>
+      <Divider />
+      <IconButton label={cut.enabled ? 'Section: on' : 'Section: off'} onClick={() => setCut({ enabled: !cut.enabled })} active={cut.enabled}>
+        <Icon.cut />
+      </IconButton>
+      <button
+        className="whitespace-nowrap rounded-md px-2 py-1 text-[11.5px] font-medium text-mute hover:bg-panel-3 hover:text-ink"
+        onClick={() => {
+          const next = !openCut
+          setOpenCut(next)
+          useView.getState().setShowPlanes(next)
+        }}
+        aria-expanded={openCut}
+      >
+        {presets.find((p) => p.id === activePreset)?.label ?? 'Custom'}
+      </button>
+      <Divider />
+      <div className="flex items-center gap-1.5 px-1" title="Exploded view">
+        <Icon.explode className="text-mute" />
+        <input
+          aria-label="Explode"
+          type="range"
+          className="slider w-20"
+          min={0}
+          max={1}
+          step={0.01}
+          value={explode}
+          style={{ ['--fill' as string]: `${explode * 100}%` }}
+          onChange={(e) => setExplode(parseFloat(e.target.value))}
+        />
+      </div>
+      <IconButton label="X-ray housings" onClick={() => setXray(!xray)} active={xray}>
+        <Icon.xray />
+      </IconButton>
+      <IconButton label="Part labels" onClick={() => setLabels(!labels)} active={labels}>
+        <Icon.label />
+      </IconButton>
+      <IconButton label="Reset camera" onClick={() => flyTo(scene.camera)}>
+        <Icon.camera />
+      </IconButton>
+    </div>
+
+      {openCut ? (
+        <div className="absolute bottom-[calc(100%+8px)] left-1/2 w-72 -translate-x-1/2 rounded-xl border border-line-2 bg-panel p-3 shadow-2xl shadow-black/50">
+          <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-mute">Section view</div>
+          <div className="mb-3 grid grid-cols-2 gap-1.5">
+            {presets.map((p) => (
+              <button
+                key={p.id}
+                onClick={() => applyPreset(p.id)}
+                className={`rounded-md border px-2 py-1.5 text-left text-[12px] ${
+                  activePreset === p.id && cut.enabled ? 'border-accent bg-accent/10 text-ink' : 'border-line-2 text-mute hover:text-ink'
+                }`}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
+          {cut.planes.map((_, i) => (
+            <PlaneSlider key={i} index={i} extent={scene.extent} />
+          ))}
+          <label className="mt-2 flex items-center justify-between text-[12px] text-ink/90">
+            Section moving parts too
+            <input type="checkbox" checked={cut.sectionMoving} onChange={(e) => setCut({ sectionMoving: e.target.checked })} />
+          </label>
+          <p className="mt-2 text-[11px] leading-snug text-dim">
+            Museum-style cutaway: housings are sectioned and hatched by material; moving parts stay whole unless you section them too.
+          </p>
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
+function PlaneSlider({ index, extent }: { index: number; extent: number }) {
+  const plane = useView((s) => s.cut.planes[index])
+  const setPlane = useView((s) => s.setPlane)
+  if (!plane) return null
+  const axis = Math.abs(plane.normal[0]) > 0.9 ? 'X' : Math.abs(plane.normal[1]) > 0.9 ? 'Y' : Math.abs(plane.normal[2]) > 0.9 ? 'Z' : 'n'
+  const range = extent * 0.6
+  const fill = ((plane.pos + range) / (2 * range)) * 100
+  return (
+    <div className="mb-2">
+      <div className="mb-0.5 flex justify-between text-[11.5px] text-mute">
+        <span>
+          Plane {index + 1} · {axis} {plane.normal.some((v) => v < 0) ? '(−)' : '(+)'}
+        </span>
+        <button
+          className="text-[11px] text-info hover:underline"
+          onClick={() => setPlane(index, { normal: plane.normal.map((v) => -v) as [number, number, number], pos: -plane.pos })}
+        >
+          flip side
+        </button>
+      </div>
+      <input
+        aria-label={`Plane ${index + 1} position`}
+        type="range"
+        className="slider"
+        min={-range}
+        max={range}
+        step={extent / 1000}
+        value={plane.pos}
+        style={{ ['--fill' as string]: `${fill}%` }}
+        onChange={(e) => setPlane(index, { pos: parseFloat(e.target.value) })}
+      />
+    </div>
+  )
+}

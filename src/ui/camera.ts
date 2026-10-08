@@ -1,0 +1,40 @@
+import type CameraControlsImpl from 'camera-controls'
+import * as THREE from 'three'
+import type { CameraPose } from '@/modules/types'
+import { partObjects } from '@/parts/registry'
+
+let controls: CameraControlsImpl | null = null
+
+export function setCameraControls(c: CameraControlsImpl | null) {
+  controls = c
+}
+
+export function getCameraControls() {
+  return controls
+}
+
+export function flyTo(pose: CameraPose, smooth = true) {
+  if (!controls) return
+  const [px, py, pz] = pose.position
+  const [tx, ty, tz] = pose.target
+  void controls.setLookAt(px, py, pz, tx, ty, tz, smooth)
+}
+
+/** Frame a part in view. */
+export function focusPart(id: string) {
+  const obj = partObjects.get(id)
+  if (!obj || !controls) return
+  const box = new THREE.Box3().setFromObject(obj)
+  if (box.isEmpty()) return
+  void controls.fitToBox(box, true, { paddingTop: 0.15, paddingBottom: 0.15, paddingLeft: 0.15, paddingRight: 0.15 })
+}
+
+export function currentPose(): CameraPose | null {
+  if (!controls) return null
+  const p = new THREE.Vector3()
+  const t = new THREE.Vector3()
+  controls.getPosition(p)
+  controls.getTarget(t)
+  const r = (n: number) => Math.round(n * 1000) / 1000
+  return { position: [r(p.x), r(p.y), r(p.z)], target: [r(t.x), r(t.y), r(t.z)] }
+}
