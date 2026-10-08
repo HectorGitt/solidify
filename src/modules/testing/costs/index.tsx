@@ -13,6 +13,7 @@ const scene: SceneDef = {
   Viewport: Scene3D,
   Panel,
   camera: overview,
+  follow: 'tractor',
   extent: 90,
   floorY: 0,
   hatchScale: 0.6,

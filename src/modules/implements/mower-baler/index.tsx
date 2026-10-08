@@ -14,6 +14,7 @@ const scene: SceneDef = {
   Viewport: MowerBaler3D,
   Panel: MowerBalerPanel,
   camera: MOWER_VIEW,
+  follow: 'tractor',
   extent: 8,
   floorY: 0,
   hatchScale: 0.04,

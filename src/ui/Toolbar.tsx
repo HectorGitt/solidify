@@ -90,6 +90,9 @@ export function Toolbar({ scene }: { scene: SceneDef }) {
         <IconButton label="Part labels" onClick={() => setLabels(!labels)} active={labels}>
           <Icon.label />
         </IconButton>
+        <IconButton label="Measurement Calipers" onClick={() => useView.getState().setCaliperMode(!useView.getState().caliperMode)} active={useView((s) => s.caliperMode)}>
+          <Icon.ruler />
+        </IconButton>
         <IconButton label="Reset camera" onClick={() => flyTo(scene.camera)}>
           <Icon.camera />
         </IconButton>

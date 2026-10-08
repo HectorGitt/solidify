@@ -52,6 +52,8 @@ export interface SceneDef {
   applyParams?: (p: Record<string, unknown>) => void
   /** reset scene-local state when entering */
   reset?: () => void
+  /** part id the camera keeps following (e.g. 'tractor' in field scenes), preserving its offset */
+  follow?: string
   /** async work before the scene mounts (e.g. building CSG geometry in the worker) */
   prepare?: () => Promise<unknown>
 }

@@ -55,6 +55,16 @@ export const InstancedPartMesh = forwardRef<THREE.InstancedMesh, { geometry: THR
           if (!id) return
           e.stopPropagation()
           if (e.delta > 4) return
+          
+          const view = useView.getState()
+          if (view.caliperMode) {
+            const p = e.point
+            let nextPts = [...view.caliperPoints, [p.x, p.y, p.z] as [number, number, number]]
+            if (nextPts.length > 2) nextPts = [nextPts[nextPts.length - 1]]
+            view.setCaliperPoints(nextPts)
+            return
+          }
+          
           select(id)
         }}
         onPointerOver={(e: ThreeEvent<PointerEvent>) => {

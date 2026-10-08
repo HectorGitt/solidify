@@ -15,6 +15,7 @@ const scene: SceneDef = {
   Viewport: Spreaders3D,
   Panel: SpreadersPanel,
   camera: BC_VIEW,
+  follow: 'tractor',
   extent: 10,
   floorY: 0,
   hatchScale: 0.05,

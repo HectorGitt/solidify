@@ -41,11 +41,15 @@ export interface ViewState {
   explode: number
   xray: boolean
   labels: boolean
+  caliperMode: boolean
+  caliperPoints: [number, number, number][]
   cut: CutState
   cutPresets: CutPreset[]
   activePreset: string | null
   /** draw the cut-plane outlines (while the section menu is open) */
   showPlanes: boolean
+  setCaliperMode: (v: boolean) => void
+  setCaliperPoints: (pts: [number, number, number][]) => void
   setShowPlanes: (v: boolean) => void
   select: (id: string | null) => void
   hover: (id: string | null) => void
@@ -77,10 +81,14 @@ export const useView = create<ViewState>((set, get) => ({
   explode: 0,
   xray: false,
   labels: false,
+  caliperMode: false,
+  caliperPoints: [],
   cut: initialCut,
   cutPresets: DEFAULT_CUT_PRESETS,
   activePreset: 'half',
   showPlanes: false,
+  setCaliperMode: (caliperMode) => set({ caliperMode, caliperPoints: [] }),
+  setCaliperPoints: (caliperPoints) => set({ caliperPoints }),
   setShowPlanes: (showPlanes) => set({ showPlanes }),
   select: (selectedId) => set({ selectedId }),
   hover: (hoveredId) => set({ hoveredId }),

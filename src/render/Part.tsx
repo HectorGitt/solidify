@@ -136,6 +136,16 @@ export function PartMesh({ geometry, material, customMaterial, ...rest }: PartMe
     if (!id) return
     e.stopPropagation()
     if (e.delta > 4) return // was a drag
+    
+    const view = useView.getState()
+    if (view.caliperMode) {
+      const p = e.point
+      let nextPts = [...view.caliperPoints, [p.x, p.y, p.z] as [number, number, number]]
+      if (nextPts.length > 2) nextPts = [nextPts[nextPts.length - 1]]
+      view.setCaliperPoints(nextPts)
+      return
+    }
+    
     select(id)
   }
   const onOver = (e: ThreeEvent<PointerEvent>) => {

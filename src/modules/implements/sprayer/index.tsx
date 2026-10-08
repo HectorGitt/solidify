@@ -15,6 +15,7 @@ const scene: SceneDef = {
   Viewport: Scene3D,
   Panel: SprayerPanel,
   camera: view,
+  follow: 'tractor',
   extent: 9,
   floorY: -0.4,
   hatchScale: 0.012,

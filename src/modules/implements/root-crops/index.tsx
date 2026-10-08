@@ -13,6 +13,7 @@ const scene: SceneDef = {
   Viewport: RootCrops3D,
   Panel: RootCropsPanel,
   camera: VIEW,
+  follow: 'tractor',
   extent: 12,
   floorY: -0.4,
   hatchScale: 0.06,

@@ -1,4 +1,5 @@
 import { unpack, type Packed } from './serialize'
+import { get, set } from 'idb-keyval'
 
 let worker: Worker | null = null
 let nextId = 1
@@ -13,7 +14,7 @@ function getWorker() {
     if (!p) return
     pending.delete(e.data.id)
     if (e.data.error) p.reject(new Error(e.data.error))
-    else p.resolve(unpack(e.data.packed!))
+    else p.resolve(e.data.packed!)
   }
   return worker
 }
@@ -29,14 +30,32 @@ export function buildGeometry<T>(builder: string, fallback: () => T): Promise<T>
   if (typeof Worker === 'undefined') {
     p = Promise.resolve(fallback())
   } else {
-    p = new Promise<T>((resolve, reject) => {
-      const id = nextId++
-      pending.set(id, { resolve: resolve as (v: unknown) => void, reject })
-      getWorker().postMessage({ id, builder })
-    }).catch((err) => {
-      console.warn(`Geometry worker failed for ${builder}; building on the main thread.`, err)
-      return fallback()
-    })
+    p = (async () => {
+      try {
+        const cached = await get(`csg_${builder}`)
+        if (cached) return unpack(cached as Packed) as T
+      } catch (e) {
+        // ignore IDB errors on read
+      }
+
+      return new Promise<Packed>((resolve, reject) => {
+        const id = nextId++
+        pending.set(id, { resolve: resolve as (v: unknown) => void, reject })
+        getWorker().postMessage({ id, builder })
+      })
+        .then(async (packed) => {
+          try {
+            await set(`csg_${builder}`, packed)
+          } catch (e) {
+            // ignore IDB errors on write
+          }
+          return unpack(packed) as T
+        })
+        .catch((err) => {
+          console.warn(`Geometry worker failed for ${builder}; building on the main thread.`, err)
+          return fallback()
+        })
+    })()
   }
   cache.set(builder, p)
   return p

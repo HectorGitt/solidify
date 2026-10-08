@@ -21,12 +21,20 @@ export function getCameraControls() {
   return controls
 }
 
+/**
+ * When a scene follows a moving part (e.g. a tractor driving down a field), camera poses are
+ * written relative to that part's ground position; the follower keeps this origin up to date.
+ */
+export const followOrigin = { active: false, x: 0, z: 0 }
+
 export function flyTo(pose: CameraPose, smooth = true) {
   if (!controls) return
   trackedPartId = null
+  const ox = followOrigin.active ? followOrigin.x : 0
+  const oz = followOrigin.active ? followOrigin.z : 0
   const [px, py, pz] = pose.position
   const [tx, ty, tz] = pose.target
-  void controls.setLookAt(px, py, pz, tx, ty, tz, smooth)
+  void controls.setLookAt(px + ox, py, pz + oz, tx + ox, ty, tz + oz, smooth)
 }
 
 /** Frame a part in view. */

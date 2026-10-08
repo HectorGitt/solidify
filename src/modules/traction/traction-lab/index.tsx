@@ -16,6 +16,7 @@ const scene: SceneDef = {
   Viewport: Lab3D,
   Panel: LabPanel,
   camera: view,
+  follow: 'tractor',
   extent: 9,
   floorY: -0.4,
   hatchScale: 0.05,

@@ -1,15 +1,53 @@
-import { CameraControls, ContactShadows, Environment, Grid, Lightformer } from '@react-three/drei'
+import { CameraControls, ContactShadows, Environment, Grid, Lightformer, Html, Line } from '@react-three/drei'
 import { Canvas, useFrame } from '@react-three/fiber'
 import { Suspense, useCallback, useEffect, useRef } from 'react'
 import type CameraControlsImpl from 'camera-controls'
 import * as THREE from 'three'
 import { SimClockDriver } from '@/core/sim'
-import type { SceneDef } from '@/modules/types'
+import type { CameraPose, SceneDef } from '@/modules/types'
 import { CutController, CutPlaneHelpers } from '@/render/CutController'
 import { useView } from '@/render/view'
-import { setCameraControls, trackedPartId } from './camera'
+import { flyTo, followOrigin, getCameraControls, setCameraControls, trackedPartId } from './camera'
 import { installDevBridge } from './devBridge'
 import { partObjects } from '@/parts/registry'
+
+function CaliperTool({ extent }: { extent: number }) {
+  const caliperMode = useView((s) => s.caliperMode)
+  const caliperPoints = useView((s) => s.caliperPoints)
+
+  if (!caliperMode || !caliperPoints || caliperPoints.length === 0) return null
+
+  const p1 = new THREE.Vector3(...caliperPoints[0])
+  const p2 = caliperPoints.length > 1 ? new THREE.Vector3(...caliperPoints[1]) : null
+  
+  const dist = p2 ? p1.distanceTo(p2) : 0
+  const mid = p2 ? p1.clone().lerp(p2, 0.5) : p1
+
+  const s = extent * 0.005
+
+  return (
+    <group>
+      <mesh position={p1}>
+        <sphereGeometry args={[s, 16, 16]} />
+        <meshBasicMaterial color="#ef4444" depthTest={false} />
+      </mesh>
+      {p2 && (
+        <>
+          <mesh position={p2}>
+            <sphereGeometry args={[s, 16, 16]} />
+            <meshBasicMaterial color="#ef4444" depthTest={false} />
+          </mesh>
+          <Line points={[p1, p2]} color="#ef4444" lineWidth={3} depthTest={false} transparent opacity={0.8} />
+          <Html position={mid} center className="pointer-events-none">
+            <div className="rounded-md bg-panel-2/95 px-2 py-1 text-[11px] font-mono font-medium text-ink shadow-2xl backdrop-blur-xl ring-1 ring-white/10">
+              {(dist * 1000).toFixed(1)} mm
+            </div>
+          </Html>
+        </>
+      )}
+    </group>
+  )
+}
 
 function Lights({ extent }: { extent: number }) {
   const s = extent
@@ -81,9 +119,7 @@ function CameraTracker({ controlsRef }: { controlsRef: React.RefObject<CameraCon
     const obj = partObjects.get(trackedPartId)
     if (!obj) return
     
-    const box = new THREE.Box3().setFromObject(obj)
-    if (box.isEmpty()) return
-    box.getCenter(v.current)
+    obj.getWorldPosition(v.current)
     
     if (lastCenter.current.lengthSq() === 0) {
       lastCenter.current.copy(v.current)
@@ -125,6 +161,43 @@ function CameraTracker({ controlsRef }: { controlsRef: React.RefObject<CameraCon
 
 
 
+/** Keeps the camera on a moving part (e.g. a tractor driving down the field). */
+function FollowCamera({ partId, pose }: { partId: string; pose: CameraPose }) {
+  const last = useRef<THREE.Vector3 | null>(null)
+  const p = useRef(new THREE.Vector3())
+  const t = useRef(new THREE.Vector3())
+  useEffect(() => {
+    followOrigin.active = true
+    return () => {
+      followOrigin.active = false
+      followOrigin.x = 0
+      followOrigin.z = 0
+    }
+  }, [])
+  useFrame(() => {
+    const obj = partObjects.get(partId)
+    const c = getCameraControls()
+    if (!obj || !c) return
+    obj.getWorldPosition(p.current)
+    followOrigin.x = p.current.x
+    followOrigin.z = p.current.z
+    if (!last.current) {
+      // first sighting: place the scene's pose relative to the part
+      last.current = p.current.clone()
+      flyTo(pose, false)
+      return
+    }
+    const dx = p.current.x - last.current.x
+    const dz = p.current.z - last.current.z
+    if (Math.abs(dx) > 1e-5 || Math.abs(dz) > 1e-5) {
+      c.getTarget(t.current)
+      void c.moveTo(t.current.x + dx, t.current.y, t.current.z + dz, false)
+    }
+    last.current.copy(p.current)
+  })
+  return null
+}
+
 export function Stage({ scene }: { scene: SceneDef }) {
   const ref = useRef<CameraControlsImpl>(null)
   const select = useView((s) => s.select)
@@ -152,7 +225,10 @@ export function Stage({ scene }: { scene: SceneDef }) {
       camera={{ fov: 32, near: scene.extent / 200, far: scene.extent * 60, position }}
       gl={{ antialias: true, toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.05 }}
       onPointerMissed={(e) => {
-        if (e.type === 'click') select(null)
+        if (e.type === 'click') {
+          if (useView.getState().caliperMode) return
+          select(null)
+        }
       }}
       onCreated={({ camera, scene: s3, gl }) => {
         camera.lookAt(...target)
@@ -165,11 +241,13 @@ export function Stage({ scene }: { scene: SceneDef }) {
       <SimClockDriver />
       <CameraTracker controlsRef={ref} />
       <CutController hatchScale={scene.hatchScale ?? scene.extent / 220} />
+      <CaliperTool extent={scene.extent} />
       <Lights extent={scene.extent} />
       <Suspense fallback={null}>
         <scene.Viewport />
       </Suspense>
       <Floor y={scene.floorY ?? 0} extent={scene.extent} />
+      {scene.follow ? <FollowCamera partId={scene.follow} pose={scene.camera} /> : null}
       <CutPlaneHelpers size={scene.extent * 1.2} />
       <CameraControls
         ref={attach}

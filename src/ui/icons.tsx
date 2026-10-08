@@ -29,6 +29,12 @@ export const Icon = {
       <path d="M18 5v14" strokeWidth={2.4} />
     </svg>
   ),
+  ruler: (p: SVGProps<SVGSVGElement>) => (
+    <svg {...base(p)}>
+      <path d="M21 16.5V20H3V4h3.5v5.5m5.5-5.5V11m5.5-7v3.5" />
+      <path d="M6.5 4v16" />
+    </svg>
+  ),
   cut: (p: SVGProps<SVGSVGElement>) => (
     <svg {...base(p)}>
       <path d="M4 20 20 4" />
