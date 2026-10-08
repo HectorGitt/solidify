@@ -5,8 +5,16 @@ import { partObjects } from '@/parts/registry'
 
 let controls: CameraControlsImpl | null = null
 
+export let trackedPartId: string | null = null
+
 export function setCameraControls(c: CameraControlsImpl | null) {
+  if (controls) controls.removeEventListener('controlstart', onUserControl)
   controls = c
+  if (controls) controls.addEventListener('controlstart', onUserControl)
+}
+
+function onUserControl() {
+  trackedPartId = null
 }
 
 export function getCameraControls() {
@@ -15,6 +23,7 @@ export function getCameraControls() {
 
 export function flyTo(pose: CameraPose, smooth = true) {
   if (!controls) return
+  trackedPartId = null
   const [px, py, pz] = pose.position
   const [tx, ty, tz] = pose.target
   void controls.setLookAt(px, py, pz, tx, ty, tz, smooth)
@@ -24,6 +33,7 @@ export function flyTo(pose: CameraPose, smooth = true) {
 export function focusPart(id: string) {
   const obj = partObjects.get(id)
   if (!obj || !controls) return
+  trackedPartId = id
   const box = new THREE.Box3().setFromObject(obj)
   if (box.isEmpty()) return
   void controls.fitToBox(box, true, { paddingTop: 0.15, paddingBottom: 0.15, paddingLeft: 0.15, paddingRight: 0.15 })

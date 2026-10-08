@@ -1,5 +1,5 @@
 import { CameraControls, ContactShadows, Environment, Grid, Lightformer } from '@react-three/drei'
-import { Canvas } from '@react-three/fiber'
+import { Canvas, useFrame } from '@react-three/fiber'
 import { Suspense, useCallback, useEffect, useRef } from 'react'
 import type CameraControlsImpl from 'camera-controls'
 import * as THREE from 'three'
@@ -7,8 +7,9 @@ import { SimClockDriver } from '@/core/sim'
 import type { SceneDef } from '@/modules/types'
 import { CutController, CutPlaneHelpers } from '@/render/CutController'
 import { useView } from '@/render/view'
-import { setCameraControls } from './camera'
+import { setCameraControls, trackedPartId } from './camera'
 import { installDevBridge } from './devBridge'
+import { partObjects } from '@/parts/registry'
 
 function Lights({ extent }: { extent: number }) {
   const s = extent
@@ -66,6 +67,64 @@ function Floor({ y, extent }: { y: number; extent: number }) {
   )
 }
 
+function CameraTracker({ controlsRef }: { controlsRef: React.RefObject<CameraControlsImpl | null> }) {
+  const lastCenter = useRef(new THREE.Vector3())
+  const v = useRef(new THREE.Vector3())
+
+  useFrame(() => {
+    const controls = controlsRef.current
+    if (!controls || !trackedPartId) {
+      lastCenter.current.set(0, 0, 0)
+      return
+    }
+    
+    const obj = partObjects.get(trackedPartId)
+    if (!obj) return
+    
+    const box = new THREE.Box3().setFromObject(obj)
+    if (box.isEmpty()) return
+    box.getCenter(v.current)
+    
+    if (lastCenter.current.lengthSq() === 0) {
+      lastCenter.current.copy(v.current)
+      return
+    }
+    
+    const dx = v.current.x - lastCenter.current.x
+    const dy = v.current.y - lastCenter.current.y
+    const dz = v.current.z - lastCenter.current.z
+    
+    if (Math.abs(dx) > 1e-5 || Math.abs(dy) > 1e-5 || Math.abs(dz) > 1e-5) {
+      controls.camera.position.x += dx
+      controls.camera.position.y += dy
+      controls.camera.position.z += dz
+      
+      const anyControls = controls as any
+      if (anyControls._target) {
+        anyControls._target.x += dx
+        anyControls._target.y += dy
+        anyControls._target.z += dz
+      }
+      if (anyControls._targetEnd) {
+        anyControls._targetEnd.x += dx
+        anyControls._targetEnd.y += dy
+        anyControls._targetEnd.z += dz
+      }
+      if (anyControls._cameraEnd) {
+        anyControls._cameraEnd.x += dx
+        anyControls._cameraEnd.y += dy
+        anyControls._cameraEnd.z += dz
+      }
+      
+      lastCenter.current.copy(v.current)
+    }
+  })
+  
+  return null
+}
+
+
+
 export function Stage({ scene }: { scene: SceneDef }) {
   const ref = useRef<CameraControlsImpl>(null)
   const select = useView((s) => s.select)
@@ -104,6 +163,7 @@ export function Stage({ scene }: { scene: SceneDef }) {
       <color attach="background" args={['#09090b']} />
       <fog attach="fog" args={['#09090b', scene.extent * 6, scene.extent * 16]} />
       <SimClockDriver />
+      <CameraTracker controlsRef={ref} />
       <CutController hatchScale={scene.hatchScale ?? scene.extent / 220} />
       <Lights extent={scene.extent} />
       <Suspense fallback={null}>
