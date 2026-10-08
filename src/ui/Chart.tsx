@@ -29,9 +29,9 @@ export interface ChartProps {
 }
 
 const AXIS = {
-  stroke: '#93a59a',
-  grid: { stroke: 'rgba(147,165,154,0.12)', width: 1 },
-  ticks: { stroke: 'rgba(147,165,154,0.25)', width: 1 },
+  stroke: '#9ca3af',
+  grid: { stroke: 'rgba(255, 255, 255, 0.07)', width: 1 },
+  ticks: { stroke: 'rgba(255, 255, 255, 0.15)', width: 1 },
   font: '10.5px JetBrains Mono, monospace',
   labelFont: '11px Inter, sans-serif',
 }
@@ -100,7 +100,7 @@ export function Chart({ data, series, xLabel, yLabel, height = 190, logX, logY, 
             ctx.fillStyle = markerColor
             ctx.fill()
             ctx.lineWidth = 2 * devicePixelRatio
-            ctx.strokeStyle = '#0c110f'
+            ctx.strokeStyle = '#09090b'
             ctx.stroke()
             ctx.restore()
           },

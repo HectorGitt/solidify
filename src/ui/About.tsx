@@ -52,9 +52,9 @@ export function About() {
 
         <div className="mt-8 grid gap-4 sm:grid-cols-2">
           {POINTS.map((p) => (
-            <div key={p.title} className="rounded-2xl border border-line bg-panel p-5">
+            <div key={p.title} className="rounded-2xl border border-line bg-panel-2/70 p-6 backdrop-blur-sm hover:border-line-2 transition-all">
               <h2 className="text-[15px] font-semibold text-ink">{p.title}</h2>
-              <p className="mt-1.5 text-[13.5px] leading-relaxed text-mute">{p.text}</p>
+              <p className="mt-2 text-[13.5px] leading-relaxed text-mute">{p.text}</p>
             </div>
           ))}
         </div>

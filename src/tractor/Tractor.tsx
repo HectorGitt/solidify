@@ -17,7 +17,7 @@ export interface TractorPose {
   /** rear-wheel rotation (positive = rolling forward) */
   rearAngle: number
   frontAngle: number
-  /** mean front-wheel steer angle, positive = turning left */
+  /** mean front-wheel steer angle, positive = turning right */
   steer: number
   /** crankshaft angle */
   engineAngle: number
@@ -27,6 +27,10 @@ export interface TractorPose {
   hitchHeight: number
   /** set by <Tractor> each frame: the solved linkage */
   linkage?: LinkagePose
+  /** dynamic front track width (if set, overrides dims.ts) */
+  frontTrack?: number
+  /** dynamic rear track width (if set, overrides dims.ts) */
+  rearTrack?: number
 }
 
 export function createTractorPose(p: Partial<TractorPose> = {}): TractorPose {
@@ -39,7 +43,7 @@ export function ackermann(steer: number, wheelbase = TRACTOR.wheelbase, track = 
   const Rm = wheelbase / Math.tan(Math.abs(steer))
   const inner = Math.atan(wheelbase / (Rm - track / 2))
   const outer = Math.atan(wheelbase / (Rm + track / 2))
-  return steer > 0 ? { left: inner, right: outer } : { left: -outer, right: -inner }
+  return steer > 0 ? { left: outer, right: inner } : { left: -inner, right: -outer }
 }
 
 const INFO = {
@@ -151,7 +155,20 @@ export function Tractor({ pose, id = 'tractor', paint = 'paintRed', linkage = tr
     rearR.current?.rotation.set(0, 0, -p.rearAngle)
     frontL.current?.rotation.set(0, 0, -p.frontAngle)
     frontR.current?.rotation.set(0, 0, -p.frontAngle)
-    const st = ackermann(p.steer)
+    
+    if (p.rearTrack !== undefined) {
+      const rZ = p.rearTrack / 2
+      if (rearL.current?.parent) rearL.current.parent.position.z = rZ
+      if (rearR.current?.parent) rearR.current.parent.position.z = -rZ
+    }
+    if (p.frontTrack !== undefined) {
+      const fZ = p.frontTrack / 2
+      const kZ = fZ - 0.09
+      if (knuckleR.current?.parent) knuckleR.current.parent.position.z = kZ
+      if (knuckleL.current?.parent) knuckleL.current.parent.position.z = -kZ
+    }
+
+    const st = ackermann(p.steer, TRACTOR.wheelbase, p.frontTrack ?? (2 * KINGPIN_Z + 0.18))
     knuckleL.current?.rotation.set(0, st.left, 0)
     knuckleR.current?.rotation.set(0, st.right, 0)
     // driveline (display): wheel → crown wheel → pinion/output → layshaft → input/crank

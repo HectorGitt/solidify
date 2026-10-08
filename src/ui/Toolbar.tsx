@@ -33,70 +33,70 @@ export function Toolbar({ scene }: { scene: SceneDef }) {
 
   return (
     <div className="pointer-events-auto relative max-w-[calc(100vw-1.5rem)]">
-    <div className="flex items-center gap-0.5 overflow-x-auto rounded-xl border border-line-2 bg-panel/90 px-1.5 py-1 shadow-xl shadow-black/40 backdrop-blur">
-      <IconButton label={playing ? 'Pause (space)' : 'Play (space)'} onClick={toggle} active={playing}>
-        {playing ? <Icon.pause /> : <Icon.play />}
-      </IconButton>
-      <IconButton label="Step one frame" onClick={step}>
-        <Icon.step />
-      </IconButton>
-      <label className="ml-1 flex items-center gap-1 text-[11.5px] text-mute" title="Slow motion: sim seconds per real second">
-        <span className="sr-only">Speed</span>
-        <select
-          className="rounded-md border border-line-2 bg-panel-2 px-1.5 py-1 font-mono text-[11.5px] text-ink"
-          value={timeScale}
-          onChange={(e) => setTimeScale(parseFloat(e.target.value))}
+      <div className="flex items-center gap-1 overflow-x-auto rounded-2xl border border-line-2 bg-panel-2/85 px-2 py-1.5 shadow-2xl shadow-black/60 backdrop-blur-xl ring-1 ring-white/[0.04]">
+        <IconButton label={playing ? 'Pause (space)' : 'Play (space)'} onClick={toggle} active={playing}>
+          {playing ? <Icon.pause /> : <Icon.play />}
+        </IconButton>
+        <IconButton label="Step one frame" onClick={step}>
+          <Icon.step />
+        </IconButton>
+        <label className="ml-1 flex items-center gap-1 text-[11.5px] text-mute" title="Slow motion: sim seconds per real second">
+          <span className="sr-only">Speed</span>
+          <select
+            className="rounded-lg border border-line-2 bg-panel px-1.5 py-1 font-mono text-[11.5px] text-ink focus:outline-none focus:border-accent"
+            value={timeScale}
+            onChange={(e) => setTimeScale(parseFloat(e.target.value))}
+          >
+            {TIME_SCALES.map((t) => (
+              <option key={t} value={t}>
+                {formatTimeScale(t)}
+              </option>
+            ))}
+          </select>
+        </label>
+        <Divider />
+        <IconButton label={cut.enabled ? 'Section: on' : 'Section: off'} onClick={() => setCut({ enabled: !cut.enabled })} active={cut.enabled}>
+          <Icon.cut />
+        </IconButton>
+        <button
+          className="whitespace-nowrap rounded-lg px-2 py-1 text-[11.5px] font-medium text-mute hover:bg-panel-3 hover:text-ink transition-colors"
+          onClick={() => {
+            const next = !openCut
+            setOpenCut(next)
+            useView.getState().setShowPlanes(next)
+          }}
+          aria-expanded={openCut}
         >
-          {TIME_SCALES.map((t) => (
-            <option key={t} value={t}>
-              {formatTimeScale(t)}
-            </option>
-          ))}
-        </select>
-      </label>
-      <Divider />
-      <IconButton label={cut.enabled ? 'Section: on' : 'Section: off'} onClick={() => setCut({ enabled: !cut.enabled })} active={cut.enabled}>
-        <Icon.cut />
-      </IconButton>
-      <button
-        className="whitespace-nowrap rounded-md px-2 py-1 text-[11.5px] font-medium text-mute hover:bg-panel-3 hover:text-ink"
-        onClick={() => {
-          const next = !openCut
-          setOpenCut(next)
-          useView.getState().setShowPlanes(next)
-        }}
-        aria-expanded={openCut}
-      >
-        {presets.find((p) => p.id === activePreset)?.label ?? 'Custom'}
-      </button>
-      <Divider />
-      <div className="flex items-center gap-1.5 px-1" title="Exploded view">
-        <Icon.explode className="text-mute" />
-        <input
-          aria-label="Explode"
-          type="range"
-          className="slider w-20"
-          min={0}
-          max={1}
-          step={0.01}
-          value={explode}
-          style={{ ['--fill' as string]: `${explode * 100}%` }}
-          onChange={(e) => setExplode(parseFloat(e.target.value))}
-        />
+          {presets.find((p) => p.id === activePreset)?.label ?? 'Custom'}
+        </button>
+        <Divider />
+        <div className="flex items-center gap-1.5 px-1" title="Exploded view">
+          <Icon.explode className="text-mute" />
+          <input
+            aria-label="Explode"
+            type="range"
+            className="slider w-20"
+            min={0}
+            max={1}
+            step={0.01}
+            value={explode}
+            style={{ ['--fill' as string]: `${explode * 100}%` }}
+            onChange={(e) => setExplode(parseFloat(e.target.value))}
+          />
+        </div>
+        <IconButton label="X-ray housings" onClick={() => setXray(!xray)} active={xray}>
+          <Icon.xray />
+        </IconButton>
+        <IconButton label="Part labels" onClick={() => setLabels(!labels)} active={labels}>
+          <Icon.label />
+        </IconButton>
+        <IconButton label="Reset camera" onClick={() => flyTo(scene.camera)}>
+          <Icon.camera />
+        </IconButton>
       </div>
-      <IconButton label="X-ray housings" onClick={() => setXray(!xray)} active={xray}>
-        <Icon.xray />
-      </IconButton>
-      <IconButton label="Part labels" onClick={() => setLabels(!labels)} active={labels}>
-        <Icon.label />
-      </IconButton>
-      <IconButton label="Reset camera" onClick={() => flyTo(scene.camera)}>
-        <Icon.camera />
-      </IconButton>
-    </div>
 
       {openCut ? (
-        <div className="absolute bottom-[calc(100%+8px)] left-1/2 w-72 -translate-x-1/2 rounded-xl border border-line-2 bg-panel p-3 shadow-2xl shadow-black/50">
+        <div className="absolute bottom-[calc(100%+10px)] left-1/2 w-72 -translate-x-1/2 rounded-2xl border border-line-2 bg-panel-2/95 p-3.5 shadow-2xl shadow-black/70 backdrop-blur-xl ring-1 ring-white/[0.05]">
           <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-mute">Section view</div>
           <div className="mb-3 grid grid-cols-2 gap-1.5">
             {presets.map((p) => (

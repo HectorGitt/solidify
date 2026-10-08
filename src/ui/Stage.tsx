@@ -14,7 +14,7 @@ function Lights({ extent }: { extent: number }) {
   const s = extent
   return (
     <>
-      <hemisphereLight args={['#dfeee4', '#1b211d', 0.55]} />
+      <hemisphereLight args={['#ffffff', '#0f172a', 0.65]} />
       <directionalLight
         position={[s * 1.4, s * 2.2, s * 1.6]}
         intensity={2.1}
@@ -35,7 +35,7 @@ function Lights({ extent }: { extent: number }) {
         <Lightformer form="rect" intensity={1.2} color="#e8f3ff" position={[-5, 1.5, 1]} scale={[3, 6, 1]} rotation-y={Math.PI / 2} />
         <Lightformer form="rect" intensity={0.9} color="#fff3e0" position={[5, 1, 2]} scale={[3, 5, 1]} rotation-y={-Math.PI / 2} />
         <Lightformer form="ring" intensity={1.5} color="#ffffff" position={[2, 3, 6]} scale={2} />
-        <Lightformer form="rect" intensity={0.4} color="#9bd17a" position={[0, -3, 0]} scale={[10, 10, 1]} rotation-x={-Math.PI / 2} />
+        <Lightformer form="rect" intensity={0.25} color="#10b981" position={[0, -3, 0]} scale={[10, 10, 1]} rotation-x={-Math.PI / 2} />
       </Environment>
     </>
   )
@@ -53,10 +53,10 @@ function Floor({ y, extent }: { y: number; extent: number }) {
         args={[extent * 20, extent * 20]}
         cellSize={extent / 20}
         cellThickness={0.6}
-        cellColor="#26332c"
+        cellColor="#1c1e24"
         sectionSize={extent / 4}
         sectionThickness={1}
-        sectionColor="#34463b"
+        sectionColor="#2a2d37"
         fadeDistance={extent * 7}
         fadeStrength={1.5}
         infiniteGrid
@@ -100,8 +100,8 @@ export function Stage({ scene }: { scene: SceneDef }) {
       }}
       aria-label={`3D view: ${scene.title}`}
     >
-      <color attach="background" args={['#0c110f']} />
-      <fog attach="fog" args={['#0c110f', scene.extent * 6, scene.extent * 16]} />
+      <color attach="background" args={['#09090b']} />
+      <fog attach="fog" args={['#09090b', scene.extent * 6, scene.extent * 16]} />
       <SimClockDriver />
       <CutController hatchScale={scene.hatchScale ?? scene.extent / 220} />
       <Lights extent={scene.extent} />

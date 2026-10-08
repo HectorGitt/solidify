@@ -156,7 +156,7 @@ export const crossedLoop = (c1: [number, number], r1: number, c2: [number, numbe
  * — outward is away from the pulley the belt wraps (the left-hand normal of travel, sign-adjusted).
  * The loop is closed, so the result is a closed solid with no end caps.
  */
-export function sweepLoop(loop: BeltLoop, section: V2[], samples = 360, normalSide: (s: number) => number = () => 1) {
+export function sweepLoop(loop: BeltLoop, section: V2[], samples = 360, twistAngle: (s: number) => number = () => 0) {
   const n = samples
   const m = section.length
   const pos: number[] = []
@@ -169,9 +169,12 @@ export function sweepLoop(loop: BeltLoop, section: V2[], samples = 360, normalSi
     loop.pointAt(s, p)
     loop.tangentAt(s, t)
     // in-plane normal pointing to the right of travel (away from a CCW pulley's centre)
-    const nrm = new THREE.Vector3(t.y, -t.x, 0).normalize().multiplyScalar(normalSide(s))
+    const nrm = new THREE.Vector3(t.y, -t.x, 0).normalize()
     const bz = z.clone().sub(t.clone().multiplyScalar(t.dot(z))).normalize()
-    rings.push(section.map(([u, w]) => p.clone().addScaledVector(nrm, u).addScaledVector(bz, w)))
+    const phi = twistAngle(s)
+    const nx = nrm.clone().multiplyScalar(Math.cos(phi)).addScaledVector(bz, Math.sin(phi))
+    const nz = bz.clone().multiplyScalar(Math.cos(phi)).addScaledVector(nrm, -Math.sin(phi))
+    rings.push(section.map(([u, w]) => p.clone().addScaledVector(nx, u).addScaledVector(nz, w)))
   }
   const tri = (a: THREE.Vector3, b: THREE.Vector3, c: THREE.Vector3) => pos.push(a.x, a.y, a.z, b.x, b.y, b.z, c.x, c.y, c.z)
   for (let i = 0; i < n; i++) {

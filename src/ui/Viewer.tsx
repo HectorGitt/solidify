@@ -167,7 +167,11 @@ export function Viewer() {
                     {s.load ? (
                       <Link
                         to={`/m/${mod.id}/${s.id}`}
-                        className={`flex items-center gap-1.5 rounded-md px-2 py-1 text-[12.5px] ${s.id === entry?.id ? 'bg-accent/15 text-ink' : 'text-ink/80 hover:bg-panel-3'}`}
+                        className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[12.5px] transition-colors ${
+                          s.id === entry?.id
+                            ? 'bg-accent/15 text-accent font-medium border border-accent/25'
+                            : 'text-ink/80 hover:bg-panel-2 hover:text-ink'
+                        }`}
                       >
                         <span className="truncate">{s.title}</span>
                         {academic && s.exam ? <span className="ml-auto h-1.5 w-1.5 shrink-0 rounded-full bg-warn" title="Frequently examined" /> : null}

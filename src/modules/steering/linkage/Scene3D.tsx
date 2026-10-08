@@ -99,12 +99,13 @@ export function Steering3D() {
     const dP = s.dPlus + ex * s.toe0
     const dM = s.dMinus - ex * s.toe0
     pose.steer = (dP + dM) / 2
+    pose.frontTrack = TRACTOR.front.track + p.trackMM / 1000
     // the shared tractor draws ideal-Ackermann knuckles from pose.steer; set them to the linkage's angles
     const k = knuckles.current
     if ((!k.plus || !k.minus) && wrap.current) {
       wrap.current.traverse((o) => {
         if (o.children.length === 0) return
-        if (Math.abs(o.position.x - TRACTOR.wheelbase) < 1e-6 && Math.abs(o.position.y - FRONT_Y) < 1e-6 && Math.abs(Math.abs(o.position.z) - KINGPIN_Z) < 1e-6) {
+        if (Math.abs(o.position.x - TRACTOR.wheelbase) < 1e-6 && Math.abs(o.position.y - FRONT_Y) < 1e-6 && Math.abs(o.position.z) > 0.1) {
           if (o.position.z > 0) k.plus = o.children[0]
           else k.minus = o.children[0]
         }

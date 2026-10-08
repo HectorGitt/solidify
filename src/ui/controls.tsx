@@ -87,8 +87,8 @@ export function Segmented<T extends string>({
 }) {
   return (
     <div className="mb-2.5">
-      {label ? <div className="mb-1 text-[12.5px] text-ink/90">{label}</div> : null}
-      <div role="radiogroup" aria-label={label} className="flex rounded-md border border-line-2 bg-panel-2 p-0.5">
+      {label ? <div className="mb-1 text-[12.5px] font-medium text-ink/90">{label}</div> : null}
+      <div role="radiogroup" aria-label={label} className="flex rounded-lg border border-line-2 bg-panel-2 p-0.5 shadow-inner shadow-black/20">
         {options.map((o) => (
           <button
             key={o.value}
@@ -96,8 +96,8 @@ export function Segmented<T extends string>({
             aria-checked={o.value === value}
             title={o.title}
             onClick={() => onChange(o.value)}
-            className={`flex-1 rounded-[5px] px-2 ${size === 'sm' ? 'py-0.5 text-[11.5px]' : 'py-1 text-[12.5px]'} font-medium transition-colors ${
-              o.value === value ? 'bg-accent text-accent-ink' : 'text-mute hover:text-ink'
+            className={`flex-1 rounded-md px-2 ${size === 'sm' ? 'py-0.5 text-[11.5px]' : 'py-1 text-[12px]'} font-medium transition-all ${
+              o.value === value ? 'bg-ink font-semibold text-bg shadow-sm' : 'text-mute hover:bg-white/[0.04] hover:text-ink'
             }`}
           >
             {o.label}
@@ -127,11 +127,11 @@ export function Toggle({ label, checked, onChange, hint }: { label: ReactNode; c
 export function Readout({ label, value, unit, tone = 'ink' }: { label: ReactNode; value: ReactNode; unit?: string; tone?: 'ink' | 'accent' | 'warn' | 'info' }) {
   const toneCls = { ink: 'text-ink', accent: 'text-accent', warn: 'text-warn', info: 'text-info' }[tone]
   return (
-    <div className="rounded-md border border-line bg-panel-2 px-2.5 py-1.5">
-      <div className="text-[10.5px] uppercase tracking-wide text-dim">{label}</div>
-      <div className={`font-mono text-[14px] ${toneCls}`}>
+    <div className="rounded-xl border border-line bg-panel-2/90 px-3 py-2 shadow-sm ring-1 ring-white/[0.02]">
+      <div className="text-[10px] font-medium uppercase tracking-wider text-dim">{label}</div>
+      <div className={`mt-0.5 font-mono text-[14px] font-semibold ${toneCls}`}>
         {value}
-        {unit ? <span className="ml-1 text-[11px] text-mute">{unit}</span> : null}
+        {unit ? <span className="ml-1 text-[11.5px] font-normal text-mute">{unit}</span> : null}
       </div>
     </div>
   )
@@ -139,14 +139,14 @@ export function Readout({ label, value, unit, tone = 'ink' }: { label: ReactNode
 
 export function Badge({ children, tone = 'mute', title }: { children: ReactNode; tone?: 'mute' | 'warn' | 'info' | 'accent' | 'danger'; title?: string }) {
   const cls = {
-    mute: 'border-line-2 text-mute',
-    warn: 'border-warn/50 text-warn',
-    info: 'border-info/50 text-info',
-    accent: 'border-accent/50 text-accent',
-    danger: 'border-danger/50 text-danger',
+    mute: 'border-line-2 bg-panel-3/50 text-mute',
+    warn: 'border-warn/30 bg-warn/10 text-warn',
+    info: 'border-info/30 bg-info/10 text-info',
+    accent: 'border-accent/30 bg-accent/10 text-accent',
+    danger: 'border-danger/30 bg-danger/10 text-danger',
   }[tone]
   return (
-    <span title={title} className={`inline-flex items-center rounded border px-1.5 py-px text-[10.5px] font-medium ${cls}`}>
+    <span title={title} className={`inline-flex items-center rounded-md border px-2 py-0.5 text-[10.5px] font-medium tracking-tight ${cls}`}>
       {children}
     </span>
   )
@@ -171,8 +171,8 @@ export function IconButton({
       title={label}
       disabled={disabled}
       onClick={onClick}
-      className={`grid h-8 w-8 place-items-center rounded-md transition-colors disabled:opacity-40 ${
-        active ? 'bg-accent text-accent-ink' : 'text-ink/85 hover:bg-panel-3 hover:text-ink'
+      className={`grid h-8 w-8 place-items-center rounded-xl transition-all disabled:opacity-30 ${
+        active ? 'bg-accent font-semibold text-accent-ink shadow-sm' : 'text-ink/80 hover:bg-panel-3 hover:text-ink active:scale-95'
       }`}
     >
       {children}

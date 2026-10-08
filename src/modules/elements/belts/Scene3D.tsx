@@ -52,7 +52,14 @@ export function Belts3D() {
     // belt: flat belts ride on the rim (loop at r + t/2, symmetric section); V-belts on the pitch line
     const loop = isV ? buildLoop(p) : buildLoop(p, beltT / 2)
     const section = isV ? vSection(sec.top, sec.h, p.groove, sec.h * 0.35) : flatSection(beltW, beltT).map(([u, z]) => [u - beltT / 2, z] as [number, number])
-    const band = sweepLoop(loop, section, Math.min(720, Math.max(240, Math.round(loop.length * 120))))
+    const twistAngle = (s: number) => {
+      if (!crossed) return 0
+      const si = loop.segAt(s)
+      const g = loop.segs[si]
+      const u = (s - g.s0) / (g.s1 - g.s0)
+      return si === 1 ? Math.PI * u : si === 2 ? Math.PI : si === 3 ? Math.PI * (1 + u) : 0
+    }
+    const band = sweepLoop(loop, section, Math.min(720, Math.max(240, Math.round(loop.length * 120))), twistAngle)
     const pw = Math.max(small.width, large.width)
     return { small, large, loop, band, pw }
   }, [p.d, p.D, p.C, p.layout, p.kind, p.section, p.groove, p.idlerAt, p.idlerPush, n, beltW, beltT]) // eslint-disable-line react-hooks/exhaustive-deps
