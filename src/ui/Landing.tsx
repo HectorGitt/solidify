@@ -6,6 +6,8 @@ import { useAcademic, useAudience } from './audience'
 import { AudienceSwitch } from './AudienceSwitch'
 import { Icon } from './icons'
 import { Logo } from './Logo'
+import { ModuleProgress } from '@/study/ui/badges'
+import { StudyLinks } from '@/study/ui/StudyShell'
 
 const MEDIA = './media'
 
@@ -118,6 +120,11 @@ function ModuleCard({ m, academic }: { m: ModuleDef; academic: boolean }) {
           ))}
           {m.scenes.length > 3 ? <li className="px-1 py-0.5 text-[11.5px] text-dim">+{m.scenes.length - 3} more</li> : null}
         </ul>
+        {academic ? (
+          <div className="mt-3">
+            <ModuleProgress moduleId={m.id} />
+          </div>
+        ) : null}
         {academic && exam > 0 ? (
           <div className="mt-auto pt-3.5 flex items-center gap-1.5 text-[11.5px] font-medium text-warn">
             <span className="h-1.5 w-1.5 rounded-full bg-warn animate-pulse" />
@@ -195,6 +202,7 @@ export function Landing() {
               How it works
             </Link>
           </nav>
+          <StudyLinks compact className="hidden md:flex" />
           <div className="ml-auto flex items-center gap-3">
             <AudienceSwitch />
             <Link
@@ -420,6 +428,7 @@ export function Landing() {
             <Link to="/about" className="hover:text-ink transition-colors">
               How it works
             </Link>
+            <StudyLinks always compact />
           </nav>
         </div>
       </footer>

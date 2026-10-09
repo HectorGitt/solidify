@@ -189,6 +189,51 @@ export const MODULES: ModuleDef[] = [
     blurb: 'Drive the assembled tractor with any implement and watch every system work at once.',
     scenes: [{ id: 'field', title: 'Field operations', summary: 'Live dashboard, deformable soil and an X-ray view of the drivetrain at work.' }],
   },
+  {
+    id: 'processing',
+    code: 'M13',
+    title: 'Crop processing & preservation',
+    courses: ['AEE504', 'AEE536'],
+    blurb: 'Handling and conveying, size reduction, cleaning and separation, processing lines for garri, rice and palm oil, and food preservation.',
+    scenes: [
+      { id: 'conveyors', title: 'Conveyors & handling', summary: 'Belt, chain, screw, bucket and pneumatic conveyors with capacity and power.', exam: true },
+      { id: 'size-reduction', title: 'Size reduction: hammer, burr & roller mills', summary: 'Mills at work with Rittinger, Kick and Bond energy laws and fineness modulus.', exam: true },
+      { id: 'separation', title: 'Cleaning & separation', summary: 'Sieve shaker, screens, aspirator and cyclone; screen effectiveness and Stokes settling.', exam: true },
+      { id: 'plant-layout', title: 'Processing plant layout', summary: 'Planning a factory: flow, handling routes and equipment placement.' },
+      { id: 'cassava-garri', title: 'Cassava to garri line', summary: 'Peeling, grating, pressing, fermenting, sieving and frying, with mass balance.', exam: true },
+      { id: 'rice-processing', title: 'Rice processing line', summary: 'Cleaning, parboiling, drying, hulling and polishing with yields.' },
+      { id: 'palm-oil', title: 'Palm oil mill', summary: 'Sterilising, threshing, digesting, pressing and clarifying.' },
+      { id: 'preservation', title: 'Preservation & storage', summary: 'Blancher, retort (D and z values), cold store load and freezing time; yam barn and silo.', exam: true },
+    ],
+  },
+  {
+    id: 'water',
+    code: 'M14',
+    title: 'Water & irrigation',
+    courses: ['AEE507'],
+    blurb: 'Irrigation methods and water requirements, wells and farm ponds, water and wind erosion, and conservation structures.',
+    scenes: [
+      { id: 'irrigation-methods', title: 'Irrigation methods', summary: 'Surface (basin, border, furrow), sprinkler, drip and sub-irrigation working on a field.', exam: true },
+      { id: 'water-requirement', title: 'Crop water requirement & efficiencies', summary: 'Blaney–Criddle and Jensen–Haise ET, leaching requirement and the six irrigation efficiencies.', exam: true },
+      { id: 'wells-ponds', title: 'Wells, aquifers & farm ponds', summary: 'Confined and unconfined wells with Dupuit–Thiem drawdown, and farm-pond storage.', exam: true },
+      { id: 'water-erosion', title: 'Water erosion & terraces', summary: 'Splash, sheet, rill and gully erosion; USLE soil loss; diversion terrace design.', exam: true },
+      { id: 'waterways', title: 'Grassed waterways', summary: 'Channel shapes, Manning velocity and capacity, and waterway design.', exam: true },
+      { id: 'wind-erosion', title: 'Wind erosion & windbreaks', summary: 'Saltation, suspension and creep; windbreak protection and control practices.' },
+    ],
+  },
+  {
+    id: 'structures',
+    code: 'M15',
+    title: 'Farm structures',
+    courses: ['AEE505'],
+    blurb: 'Farmstead planning and layout, farm buildings, machinery storage and greenhouse environmental control.',
+    scenes: [
+      { id: 'farmstead', title: 'Farmstead planning & zones', summary: 'Site selection, zone rings, wind direction, drives and services laid out in 3D.', exam: true },
+      { id: 'farmhouse', title: 'Farm dwelling plans', summary: 'The seven plan types with room-size rules, walk-through in 3D.' },
+      { id: 'machinery-storage', title: 'Workshop & machinery storage', summary: 'Machinery shed and workshop sizing, drives, parking and the hazard-separation rule.' },
+      { id: 'greenhouse', title: 'Greenhouse design & ventilation', summary: 'Glass vs polythene houses with live ventilation-rate and temperature-rise calculation.', exam: true },
+    ],
+  },
 ]
 
 for (const m of MODULES) {

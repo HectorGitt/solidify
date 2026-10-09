@@ -6,6 +6,10 @@ let nextId = 1
 const pending = new Map<number, { resolve: (v: unknown) => void; reject: (e: Error) => void }>()
 const cache = new Map<string, Promise<unknown>>()
 
+/** Cached geometry is keyed to the build, so a new build never shows outdated models. */
+declare const __BUILD_ID__: string
+const KEY = (builder: string) => `csg_${typeof __BUILD_ID__ === 'string' ? __BUILD_ID__ : 'dev'}_${builder}`
+
 function getWorker() {
   if (worker) return worker
   worker = new Worker(new URL('./geometry.worker.ts', import.meta.url), { type: 'module' })
@@ -32,7 +36,7 @@ export function buildGeometry<T>(builder: string, fallback: () => T): Promise<T>
   } else {
     p = (async () => {
       try {
-        const cached = await get(`csg_${builder}`)
+        const cached = await get(KEY(builder))
         if (cached) return unpack(cached as Packed) as T
       } catch (e) {
         // ignore IDB errors on read
@@ -45,7 +49,7 @@ export function buildGeometry<T>(builder: string, fallback: () => T): Promise<T>
       })
         .then(async (packed) => {
           try {
-            await set(`csg_${builder}`, packed)
+            await set(KEY(builder), packed)
           } catch (e) {
             // ignore IDB errors on write
           }

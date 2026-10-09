@@ -14,6 +14,9 @@ import { PartsTree } from './PartsTree'
 import { Stage } from './Stage'
 import { Toolbar } from './Toolbar'
 import { TourPlayer, useTour } from './TourPlayer'
+import { onSceneReady } from '@/study/bridge'
+import { SceneMark } from '@/study/ui/badges'
+import { StudyLinks } from '@/study/ui/StudyShell'
 
 function useMediaQuery(q: string) {
   const [m, setM] = useState(() => window.matchMedia(q).matches)
@@ -66,6 +69,7 @@ export function Viewer() {
         v.applyPreset(def.defaultPreset ?? (def.cutPresets ?? DEFAULT_CUT_PRESETS)[0].id)
         useSim.setState({ playing: true, timeScale: def.timeScale ?? 1 / 50, time: 0 })
         def.reset?.()
+        onSceneReady(entry?.id ?? def.id, def)
         setScene(def)
         document.title = `${def.title} · Solidify`
       })
@@ -135,6 +139,7 @@ export function Viewer() {
           ))}
         </select>
         <div className="ml-auto flex items-center gap-1.5">
+          <StudyLinks compact className="hidden lg:flex" />
           <div className="hidden md:block">
             <AudienceSwitch compact />
           </div>
@@ -173,6 +178,7 @@ export function Viewer() {
                             : 'text-ink/80 hover:bg-panel-2 hover:text-ink'
                         }`}
                       >
+                        {academic ? <SceneMark sceneId={s.id} /> : null}
                         <span className="truncate">{s.title}</span>
                         {academic && s.exam ? <span className="ml-auto h-1.5 w-1.5 shrink-0 rounded-full bg-warn" title="Frequently examined" /> : null}
                       </Link>

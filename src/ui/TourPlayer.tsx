@@ -5,6 +5,7 @@ import type { SceneDef, TourStep } from '@/modules/types'
 import { useView } from '@/render/view'
 import { flyTo } from './camera'
 import { Icon } from './icons'
+import { onTourFinished } from '@/study/bridge'
 
 interface TourState {
   active: boolean
@@ -112,7 +113,13 @@ export function TourPlayer({ scene }: { scene: SceneDef }) {
             Next
           </button>
         ) : (
-          <button onClick={stop} className="rounded-md bg-accent px-3 py-1 text-[12.5px] font-semibold text-accent-ink hover:brightness-110">
+          <button
+            onClick={() => {
+              onTourFinished(scene.id)
+              stop()
+            }}
+            className="rounded-md bg-accent px-3 py-1 text-[12.5px] font-semibold text-accent-ink hover:brightness-110"
+          >
             Finish
           </button>
         )}

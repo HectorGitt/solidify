@@ -203,4 +203,11 @@ export const ERRATA: Erratum[] = [
     says: '96 dB(A) is allowed for 3 h.',
     correct: 'On the 5 dB exchange rule between the OSHA points (90 dB 8 h … 115 dB ¼ h), 96 dB(A) allows about 3.5 h.',
   },
+  {
+    id: 'glass-weight',
+    topic: 'Greenhouse glazing weight (AEE505)',
+    where: { course: 'AEE505', file: 'AEE 505 Lecture note 2 new.pdf' },
+    says: '4 mm glass weighs 2.8 kg/m².',
+    correct: 'Glass is about 2500 kg/m³, so 4 mm glass weighs about 10 kg/m².',
+  },
 ]
