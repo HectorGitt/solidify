@@ -132,3 +132,8 @@ input[type="range"].slider::-moz-range-thumb {
   border-radius: 4px;
   transform: translate(8px, -50%);
 }
+
+/* looking inside a part: the scene's floating 3D labels (drei Html: siblings of the canvas wrapper) step aside */
+.inside-mode div:has(> canvas) ~ div:not(:has(.inside-label)) {
+  display: none !important;
+}

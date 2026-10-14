@@ -135,6 +135,28 @@ export const Icon = {
       <circle cx="18" cy="18" r="2" />
     </svg>
   ),
+  wrench: (p: SVGProps<SVGSVGElement>) => (
+    <svg {...base(p)}>
+      <path d="M14.7 6.3a4 4 0 0 0 5 5L21 13l-8 8-3-3 8-8-1.3-1.3a4 4 0 0 0-5-5L14 5z" />
+      <path d="M3 21l6-6" />
+    </svg>
+  ),
+  bolt: (p: SVGProps<SVGSVGElement>) => (
+    <svg {...base(p)}>
+      <path d="M13 3 5 14h6l-1 7 8-11h-6z" />
+    </svg>
+  ),
+  trophy: (p: SVGProps<SVGSVGElement>) => (
+    <svg {...base(p)}>
+      <path d="M8 4h8v5a4 4 0 0 1-8 0z" />
+      <path d="M8 6H5a3 3 0 0 0 3 4M16 6h3a3 3 0 0 1-3 4M12 13v4M8.5 20h7M10 17h4" />
+    </svg>
+  ),
+  check: (p: SVGProps<SVGSVGElement>) => (
+    <svg {...base(p)}>
+      <path d="M5 12.5l4.5 4.5L19 7.5" />
+    </svg>
+  ),
   tractor: (p: SVGProps<SVGSVGElement>) => (
     <svg {...base(p)}>
       <circle cx="7" cy="16" r="4" />

@@ -2,7 +2,8 @@ import { useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { SRC } from '@/content/citations'
 import { useSimFrame } from '@/core/sim'
-import { box, cylinder, tube, xform, mat4, merge } from '@/geometry'
+import { box, mat4, merge, xform } from '@/geometry'
+import { stabiliserParts, topLinkParts } from '@/parts/lib/hydraulics'
 import { draftLineY, soilDir } from '@/physics/linkageControl'
 import { PartLabel } from '@/render/Label'
 import { Part, PartMesh } from '@/render/Part'
@@ -34,9 +35,6 @@ const INFO = {
   soil: { summary: 'Field soil.', role: 'The furrow is cut at the current working depth.' },
 }
 
-/** Unit cylinder along X (0…1). */
-const unitX = (r: number) => xform(cylinder(r, 1, 16), mat4.c(mat4.t(0.5, 0, 0), mat4.rz(Math.PI / 2)))
-
 const v3 = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z)
 
 export function ThreePoint3D() {
@@ -49,11 +47,11 @@ export function ThreePoint3D() {
   const K = useMemo(() => couplerGeometry(cat.mast, cat.spread), [cat])
   const parts = useMemo(
     () => ({
-      topRod: unitX(0.016),
-      topBarrel: xform(cylinder(0.03, 0.26, 20), mat4.rz(Math.PI / 2)),
-      topEye: xform(tube(0.032, 0.014, 0.045, 24), mat4.rx(Math.PI / 2)),
-      stab: unitX(0.014),
-      stabSleeve: xform(cylinder(0.022, 0.3, 16), mat4.c(mat4.t(0.15, 0, 0), mat4.rz(Math.PI / 2))),
+      ...(() => {
+        const t = topLinkParts()
+        const st = stabiliserParts()
+        return { topRod: t.rod, topBarrel: t.barrel, topEye: t.eye, stab: st.bar, stabSleeve: st.sleeve }
+      })(),
       levelBox: merge(box(0.07, 0.11, 0.06), xform(box(0.12, 0.012, 0.012), mat4.t(0.06, 0.06, 0.03))),
       anchor: box(0.06, 0.08, 0.06),
     }),

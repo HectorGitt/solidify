@@ -1,8 +1,9 @@
 import { useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { useSimFrame } from '@/core/sim'
-import { box, cylinder, helixSpring, lathe, mat4, merge, roundedBox, xform } from '@/geometry'
+import { box, cylinder, lathe, mat4, merge, roundedBox, xform } from '@/geometry'
 import { hexBolt } from '@/geometry/parts'
+import { coilSpring, telescopicDamper } from '@/parts/lib/chassis'
 import { PartLabel } from '@/render/Label'
 import { Part, PartMesh } from '@/render/Part'
 import { Arrow, setArrow } from '../_shared/ui'
@@ -59,9 +60,11 @@ export function Scene3D() {
   const g = useMemo(() => {
     const foundation = xform(box(1.7, DIM.foundationTop, 1.05), mat4.t(0, DIM.foundationTop / 2, 0))
     const pad = xform(cylinder(0.075, 0.02, 32), mat4.t(0, 0.01, 0))
-    const springGeo = helixSpring(0.055, 0.0095, 1, 5.5)
-    const damperBodySolid = xform(cylinder(0.026, 0.1, 24), mat4.t(0, 0.07, 0))
-    const damperRod = xform(cylinder(0.009, 1, 16), mat4.t(0, -0.5, 0))
+    // isolator: coil spring with a telescopic damper inside it (parts library)
+    const springGeo = coilSpring({ coilR: 0.055, wireR: 0.0095, turns: 5.5 })
+    const damper = telescopicDamper({ bodyR: 0.026, bodyL: 0.1, rodR: 0.009, base: 0.02 })
+    const damperBodySolid = damper.body
+    const damperRod = damper.rod
     const frame = xform(roundedBox(1.42, DIM.frameT, 0.86, 0.015), mat4.t(0, DIM.frameT / 2, 0))
     const topPad = xform(cylinder(0.075, 0.018, 32), mat4.t(0, -0.009, 0))
     // compressor + motor

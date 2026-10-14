@@ -26,7 +26,7 @@ import {
   turnsLockToLock,
   useSteer,
 } from './model'
-import { LAY, RAM_BARREL, RAM_ROD, steeringParts } from './parts'
+import { GLAND_IN, LAY, PISTON_W, RAM_BARREL, RAM_ROD, steeringParts } from './parts'
 
 const { PI } = Math
 
@@ -210,8 +210,8 @@ export function Steering3D() {
     piston.current?.position.set(sp, 0, 0)
     if (capOil.current) capOil.current.scale.x = Math.max(1e-4, sp)
     if (annOil.current) {
-      annOil.current.position.x = sp + 0.025
-      annOil.current.scale.x = Math.max(1e-4, RAM_BARREL - 0.02 - sp - 0.025)
+      annOil.current.position.x = sp + PISTON_W
+      annOil.current.scale.x = Math.max(1e-4, RAM_BARREL - GLAND_IN - sp - PISTON_W)
     }
     const left = qCyl > 0.05
     const right = qCyl < -0.05
@@ -293,6 +293,11 @@ export function Steering3D() {
           <group ref={cyl}>
             <Part id="steer-cylinder" name="Steering cylinder" material="paintBlack" role="static" info={INFO.cylinder} cites={hydro ? CITE.hydro : CITE.assist} explode={[0, 0.2, 0]}>
               <PartMesh geometry={g.cyl.barrel} />
+              <Part id="steer-gland" name="Gland and rod seals" material="steelDark" info={{ summary: 'Gland (rod-end head).', role: 'Guides the rod; its seal holds the rod-end pressure and the wiper keeps dirt out.' }}>
+                <PartMesh geometry={g.cyl.gland.body} />
+                <PartMesh geometry={g.cyl.gland.rodSeal} material="rubber" />
+                <PartMesh geometry={g.cyl.gland.wiper} material="rubber" />
+              </Part>
               <Part id="cap-oil" name="Cap-end oil" role="fluid" info={INFO.capOil}>
                 <PartMesh ref={capOil} geometry={g.cyl.unitOil} customMaterial={capMat.material} castShadow={false} />
               </Part>
@@ -302,6 +307,7 @@ export function Steering3D() {
               <group ref={piston}>
                 <Part id="steer-piston" name="Piston & rod" material="chrome" role="moving" info={{ summary: 'Piston and rod.', role: 'The rod end is pinned to the left steering arm.' }}>
                   <PartMesh geometry={g.cyl.piston} material="steel" />
+                  <PartMesh geometry={g.cyl.seals} material="rubber" />
                   <PartMesh geometry={g.cyl.rod} />
                 </Part>
               </group>

@@ -17,7 +17,7 @@ const scene: SceneDef = {
   camera: BC_VIEW,
   follow: 'tractor',
   extent: 10,
-  floorY: 0,
+  floorY: -0.45,
   hatchScale: 0.05,
   timeScale: 1 / 3,
   cutPresets: [

@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { cite } from '@/content/citations'
-import { leadForSwing, rad, recircBall, wormPeg } from '@/physics/joints'
+import { rad, recircBall, wormPeg } from '@/physics/joints'
 
 /** Tractor Steering .pdf (AEE510), PDF p3–4 = book pp92–93; Fig 46. */
 export const ST = (where: string) => cite('AEE510', 'Tractor Steering .pdf', where)
@@ -14,41 +14,11 @@ export const SWING = rad(30)
 /** steering-wheel turns from straight ahead to full lock (typical, beyond notes) */
 export const TURNS = 2
 
-export const BALL = {
-  z: 0.12,
-  /** ball-centre (pitch) radius, land radius, ball and groove radii */
-  Rb: 0.0135,
-  Ro: 0.0122,
-  ball: 0.0035,
-  groove: 0.0037,
-  /** rocker radius: rocker-shaft axis to the peg's line of travel */
-  arm: 0.045,
-  lead: leadForSwing('ball', 0.045, rad(30), 2),
-  threadLen: 0.12,
-  nutLen: 0.05,
-  nutH: 0.025,
-  /** rocker shaft E position (below the screw) */
-  eY: -0.083,
-  /** peg engagement height */
-  pegY: -0.038,
-  turnsInNut: 2,
-  balls: 32,
-}
+export { BALL, helixAngle, SCREW_PHASE } from '@/parts/lib/steeringBox'
+import { BALL } from '@/parts/lib/steeringBox'
 
-export const WORM = {
-  z: -0.12,
-  /** rocker shaft E above the worm */
-  eY: 0.075,
-  /** effective peg radius (rocker shaft to the pitch line of the thread) */
-  arm: 0.058,
-  lead: leadForSwing('peg', 0.058, rad(30), 2),
-  /** radius from E to the groove bottom (hourglass worm follows this arc) */
-  rootArc: 0.063,
-  depth: 0.006,
-  len: 0.084,
-  pegBase: 0.044,
-  pegTip: 0.0615,
-}
+export { WORM } from '@/parts/lib/steeringBox'
+import { WORM } from '@/parts/lib/steeringBox'
 
 export const COLUMN_END = 0.3
 
@@ -102,10 +72,3 @@ export function curves(n = 121) {
   }
   return { xs, pb, pp, rb, rp }
 }
-
-/**
- * Ball-centre helix angle in the nut frame, a = −2πx′/lead + π/2 (groove at (Y, Z) = (sin a, −cos a)).
- * The screw mesh is turned by θ_wheel + π/2 so its groove matches; both circuit ends are then on top.
- */
-export const helixAngle = (xLocal: number) => (-2 * Math.PI * xLocal) / BALL.lead + Math.PI / 2
-export const SCREW_PHASE = Math.PI / 2

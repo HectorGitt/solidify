@@ -1,5 +1,6 @@
 import * as THREE from 'three'
 import { box, csg, cylinder, extrude, helixSpring, lathe, mat4, merge, pipe, tube, xform, type CsgOp, type V2 } from '@/geometry'
+import { valve } from '@/parts/lib/engine'
 import { FLOAT_ARM, L } from './model'
 
 const { PI } = Math
@@ -289,7 +290,7 @@ function headStub() {
 }
 
 function inletValve() {
-  return lathe([[0, 0], [0.017, 0], [0.017, 0.002], [0.006, 0.008], [0.004, 0.016], [0.004, 0.06], [0, 0.06]], 32)
+  return valve({ headR: 0.017, stemR: 0.004, length: 0.06 })
 }
 
 /* ------------------------------ build ------------------------------ */

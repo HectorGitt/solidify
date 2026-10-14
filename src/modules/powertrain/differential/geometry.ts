@@ -1,5 +1,6 @@
 import { box, csg, cylinder, lathe, mat4, merge, tube, xform, type V2 } from '@/geometry'
-import { bevelGear, hexBolt, rim, tyre } from '@/geometry/parts'
+import { bevelGear, rim, tyre } from '@/geometry/parts'
+import { bevelPinion, crownWheel } from '@/parts/lib/driveline'
 import { APEX, CROWN_ANGLES, DIFF_ANGLES, DIM } from './model'
 
 const { PI } = Math
@@ -9,25 +10,24 @@ const alongZ = mat4.rx(PI / 2)
 
 /** Bevel pinion (local frame of bevelGear: axis +Z towards the apex) with its shaft and drive flange behind. */
 function pinion() {
-  const teeth = bevelGear({ teeth: DIM.zPinion, module: DIM.crownModule, faceWidth: DIM.crownFace, pitchAngleDeg: CROWN_ANGLES.pinion })
-  const shaft = xform(cylinder(0.022, 0.2, 32), mat4.c(mat4.t(0, 0, -0.1), alongZ))
-  const flange = xform(lathe([[0.022, 0], [0.06, 0], [0.06, 0.012], [0.03, 0.022], [0.022, 0.022]], 48), mat4.c(mat4.t(0, 0, -0.2), mat4.rx(-PI / 2)))
-  return { teeth, shaft: merge(shaft, flange) }
+  const p = bevelPinion({ teeth: DIM.zPinion, module: DIM.crownModule, face: DIM.crownFace, pitchAngleDeg: CROWN_ANGLES.pinion, shaftR: 0.022, shaftLen: 0.2, flangeR: 0.06 })
+  return { teeth: p.teeth, shaft: p.shaft! }
 }
 
 /** Crown wheel with its backing ring and bolts (local bevel frame; the back is −Z). */
 function crown() {
-  const teeth = bevelGear({ teeth: DIM.zCrown, module: DIM.crownModule, faceWidth: DIM.crownFace, pitchAngleDeg: CROWN_ANGLES.gear, bore: 0.095 })
   const back = APEX.crown
-  const ringDepth = 0.046 - back
-  const ring = xform(tube(0.142, 0.095, ringDepth, 96), mat4.c(mat4.t(0, 0, -ringDepth / 2), alongZ))
-  const bolts = []
-  for (let i = 0; i < 10; i++) {
-    const a = (2 * PI * i) / 10 + 0.1
-    // bolt heads on the far side of the cage flange, pointing back towards the crown
-    bolts.push(xform(hexBolt(0.01, 0.03), mat4.c(mat4.t(0.107 * Math.cos(a), 0.107 * Math.sin(a), -(0.058 - back) - 0.0005), mat4.rx(-PI / 2))))
-  }
-  return { teeth, ring, bolts: merge(...bolts) }
+  // bolt heads on the far side of the cage flange, pointing back towards the crown
+  const c = crownWheel({
+    teeth: DIM.zCrown,
+    module: DIM.crownModule,
+    face: DIM.crownFace,
+    pitchAngleDeg: CROWN_ANGLES.gear,
+    bore: 0.095,
+    backing: { rOut: 0.142, depth: 0.046 - back },
+    bolts: { n: 10, r: 0.107, z: -(0.058 - back) - 0.0005, phase: 0.1 },
+  })
+  return { teeth: c.teeth, ring: c.ring!, bolts: c.bolts! }
 }
 
 function sideGear() {

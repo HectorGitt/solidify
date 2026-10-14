@@ -10,7 +10,8 @@ import { FRONT_Z, REAR_Z } from '@/tractor/geometry'
 import { phiForHitchHeight, solveLinkage } from '@/tractor/linkage'
 import { Tractor, createTractorPose } from '@/tractor/Tractor'
 import { ForceArrow, Ground, LiveTag, type ArrowState } from '../common/three'
-import { bar, slab, wheelGeo } from '../common/wheel'
+import { implementWheel, wheel } from '@/parts/lib/wheels'
+import { bar, slab } from '../common/wheel'
 import { CH, solve, useHitch, type Hitch } from './model'
 
 const deg = Math.PI / 180
@@ -25,12 +26,16 @@ const PIN: [number, number] = [-CH.xd, CH.yd]
 const TINE_Z = [-0.72, -0.36, 0, 0.36, 0.72]
 const W = 1.9
 
+/** Implement road wheel; on the −Z side the rim and hub are turned to face outward. */
 function Wheel({ x, y, z, r, w }: { x: number; y: number; z: number; r: number; w: number }) {
-  const g = wheelGeo(r, w, 'F2')
+  const g = wheel(implementWheel(r, w))
   return (
     <group position={[x, y, z]}>
       <PartMesh geometry={g.tyre} material="rubber" />
-      <PartMesh geometry={g.rim} material="paintYellow" />
+      <group rotation={[0, z < 0 ? Math.PI : 0, 0]}>
+        <PartMesh geometry={g.rim} material="paintYellow" />
+        {g.hub ? <PartMesh geometry={g.hub} material="steelDark" /> : null}
+      </group>
     </group>
   )
 }

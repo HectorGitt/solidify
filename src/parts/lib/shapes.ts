@@ -1,8 +1,10 @@
 import * as THREE from 'three'
 import { cylinder, extrudeTwisted, gearOutline, helixSpring, lathe, mat4, merge, xform, type V2 } from '@/geometry'
+import { splineShaft } from '@/geometry/parts'
 
 /**
- * Geometry helpers shared by the power-train scenes. Convention: shafts run along world Z,
+ * Shared parts library — basic shapes: shafts, tubes, spur/helical/internal gears, dog rings,
+ * splined plates, coil springs, casings. (Started as the power-train scenes' helpers.) Convention: shafts run along world Z,
  * gears lie in the XY plane (as `gear()` builds them), so a gear turns by rotation.z.
  * All solids are closed and outward-facing.
  */
@@ -13,6 +15,16 @@ const { PI } = Math
 export function axial(profile: V2[], segments = 48) {
   return xform(lathe(profile, segments), mat4.rx(PI / 2))
 }
+
+/** Make an (r, z) loop counter-clockwise (solid on the left), as lathe() expects. */
+export function ccwProfile(pts: V2[]) {
+  let a = 0
+  for (let i = 0; i < pts.length; i++) a += pts[i][0] * pts[(i + 1) % pts.length][1] - pts[(i + 1) % pts.length][0] * pts[i][1]
+  return a > 0 ? pts : pts.slice().reverse()
+}
+
+/** Revolved solid about Z from a closed (r, z) loop given in either winding. */
+export const shellZ = (pts: V2[], segments = 64) => axial(ccwProfile(pts), segments)
 
 /** Annulus / tube along Z from z0 to z1. */
 export function ringZ(rOut: number, rIn: number, z0: number, z1: number, segments = 48) {
@@ -30,6 +42,14 @@ export function ringZ(rOut: number, rIn: number, z0: number, z1: number, segment
 /** Solid shaft along Z from z0 to z1. */
 export function shaftZ(r: number, z0: number, z1: number, segments = 24) {
   return xform(cylinder(r, z1 - z0, segments), mat4.c(mat4.t(0, 0, (z0 + z1) / 2), mat4.rx(PI / 2)))
+}
+
+/**
+ * Splined shaft along Z from z0 to z1 (`splineShaft` from geometry/parts, turned onto Z):
+ * `splines` teeth with tips at rOut and roots at rRoot.
+ */
+export function splineZ(splines: number, rOut: number, rRoot: number, z0: number, z1: number, toothFrac?: number) {
+  return xform(splineShaft(splines, rOut, rRoot, z1 - z0, toothFrac), mat4.c(mat4.t(0, 0, (z0 + z1) / 2), mat4.rx(PI / 2)))
 }
 
 function circle(r: number, n = 32, cw = false) {
@@ -160,6 +180,14 @@ export function casing(
  */
 export function meshPhase(za: number, phiA: number, zb: number, gamma: number) {
   return gamma + PI + PI / zb - (phiA - gamma) * (za / zb)
+}
+
+/**
+ * Angle gear A (z_a teeth) must have so that it interlocks with gear B whose absolute tooth-0
+ * angle is φ_B, B lying in direction γ from A (external mesh). Inverse of `meshPhase`.
+ */
+export function phaseToMeet(za: number, zb: number, phiB: number, gamma: number) {
+  return gamma + (PI - (phiB - gamma - PI) * zb) / za
 }
 
 /** Angle of the line of centres from (ax, ay) to (bx, by). */

@@ -39,7 +39,19 @@ export interface ViewState {
   isolatedId: string | null
   hidden: string[]
   explode: number
+  /** explode only this part's sub-parts (null = the whole scene) */
+  explodeScope: string | null
+  /** with a scope: how many levels below it move (null = all) */
+  explodeDepth: number | null
+  setExplodeDepth: (d: number | null) => void
+  setExplodeScope: (id: string | null) => void
   xray: boolean
+  /** tint every part that has known common faults */
+  faultMode: boolean
+  /** colour parts by the system they belong to (Part `tint`) */
+  tints: boolean
+  setTints: (v: boolean) => void
+  setFaultMode: (v: boolean) => void
   labels: boolean
   caliperMode: boolean
   caliperPoints: [number, number, number][]
@@ -79,6 +91,10 @@ export const useView = create<ViewState>((set, get) => ({
   isolatedId: null,
   hidden: [],
   explode: 0,
+  explodeScope: null,
+  explodeDepth: null,
+  setExplodeDepth: (explodeDepth) => set({ explodeDepth }),
+  setExplodeScope: (explodeScope) => set({ explodeScope }),
   xray: false,
   labels: false,
   caliperMode: false,
@@ -97,6 +113,10 @@ export const useView = create<ViewState>((set, get) => ({
   showAll: () => set({ hidden: [], isolatedId: null }),
   setExplode: (explode) => set({ explode }),
   setXray: (xray) => set({ xray }),
+  faultMode: false,
+  tints: false,
+  setTints: (tints) => set({ tints }),
+  setFaultMode: (faultMode) => set({ faultMode }),
   setLabels: (labels) => set({ labels }),
   setCut: (patch) => set((s) => ({ cut: { ...s.cut, ...patch } })),
   setPlane: (i, patch) =>
@@ -126,7 +146,10 @@ export const useView = create<ViewState>((set, get) => ({
       isolatedId: null,
       hidden: [],
       explode: 0,
+      explodeScope: null,
+      explodeDepth: null,
       xray: false,
+      tints: false,
       cut: initialCut,
       activePreset: 'half',
     }),

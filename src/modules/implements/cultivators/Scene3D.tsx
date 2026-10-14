@@ -7,9 +7,8 @@ import { Part, PartMesh } from '@/render/Part'
 import { PROFILES, stampRun } from '@/render/soil'
 import { createTractorPose, type TractorPose } from '@/tractor/Tractor'
 import { FieldGround, FieldRun, makeSoil } from '../_shared/field'
-import { bar, plateXY, rod, thickSurface, type P3 } from '../_shared/geom'
+import { bar, chainMat, chiselShank, cultivatorTine, headstockGeometry, plateXY, ridgerBody, rod, rotavatorRotor, shovel, spike, sweepBlade, thickSurface } from '@/parts/lib/implements'
 import { PtoDriveline } from '../_appkit/three'
-import { chainMat, lBlade, pathBar, shovel, spike, sweepBlade } from '../_tillage/parts'
 import { C, H, RAISED, ROTOR_R, TOOLS, cultOf, live, useCult, type Tool } from './model'
 
 /** x of the soil-working line in the hitch frame, per tool (where the soil is stamped) */
@@ -32,11 +31,7 @@ const cite = [C.am('§12–12.7 primary and secondary tillage'), C.bush('p5–7 
 function toolGeo(tool: Tool, spacing: number, blades: number) {
   const fl = -H
   const g: Record<string, THREE.BufferGeometry> = {}
-  const head = merge(
-    bar([0, 0, -0.45], [0, 0, 0.45], 0.05, 0.05),
-    plateXY([[-0.06, -0.03], [0.05, -0.03], [0.02, 0.66], [-0.04, 0.66]], 0.016, 0.1),
-    plateXY([[-0.06, -0.03], [0.05, -0.03], [0.02, 0.66], [-0.04, 0.66]], 0.016, -0.1),
-  )
+  const head = headstockGeometry()
   if (tool === 'rigid' || tool === 'spring') {
     const n = 7
     const W = TOOLS[tool].width
@@ -45,9 +40,8 @@ function toolGeo(tool: Tool, spacing: number, blades: number) {
     for (let i = 0; i < n; i++) {
       const z = -W / 2 + W / (2 * n) + (i * W) / n
       const x = i % 2 ? -0.75 : -0.35
-      const tip: P3 = [x - 0.25, fl, z]
-      if (tool === 'rigid') shanks.push(pathBar([[x, 0.1, z], [x - 0.02, -0.15, z], [x - 0.1, fl + 0.12, z], tip], 0.025, 0.05, 14))
-      else shanks.push(pathBar([[x, 0.1, z], [x + 0.08, -0.05, z], [x - 0.12, -0.2, z], [x + 0.05, fl + 0.2, z], tip], 0.012, 0.035, 20))
+      const { shank, tip } = cultivatorTine({ x, z, floor: fl, kind: tool })
+      shanks.push(shank)
       pts.push(xform(tool === 'rigid' ? shovel(0.06, 0.16) : sweepBlade(0.18, 0.06, 0.05), mat4.t(tip[0] + 0.02, tip[1], tip[2])))
     }
     g.frame = merge(head, bar([0.05, 0.1, -W / 2], [0.05, 0.1, W / 2], 0.07, 0.07), bar([-0.35, 0.1, -W / 2], [-0.35, 0.1, W / 2], 0.07, 0.07), bar([-0.75, 0.1, -W / 2], [-0.75, 0.1, W / 2], 0.07, 0.07), bar([0.05, 0.1, -0.5], [-0.75, 0.1, -0.5], 0.07, 0.07), bar([0.05, 0.1, 0.5], [-0.75, 0.1, 0.5], 0.07, 0.07), bar([0, 0.6, 0], [-0.4, 0.1, 0], 0.05, 0.05))
@@ -84,40 +78,17 @@ function toolGeo(tool: Tool, spacing: number, blades: number) {
     side.translate(ax, ay + 0.2, W / 2 + 0.06)
     g.drive = merge(gb, side, bar([ax + 0.05, ay + 0.47, 0], [ax + 0.05, ay + 0.47, W / 2 + 0.06], 0.06, 0.06))
     g.flap = thickSurface((u, v) => new THREE.Vector3(ax - 0.33 - v * 0.25, ay + 0.0 - v * 0.2, -W / 2 + u * W), 1, 4, 0.006)
-    const parts = [rod([0, 0, -W / 2], [0, 0, W / 2], 0.03, 12)]
-    const fN = 8
-    for (let f = 0; f < fN; f++) {
-      const z = -W / 2 + 0.1 + (f * (W - 0.2)) / (fN - 1)
-      parts.push(xform(rod([0, 0, -0.006], [0, 0, 0.006], 0.09, 18), mat4.t(0, 0, z)))
-      for (let b = 0; b < blades; b++)
-        for (const side of [1, -1]) {
-          const a = ((b + (side > 0 ? 0 : 0.5)) / blades) * Math.PI * 2
-          parts.push(xform(lBlade(0.07, ROTOR_R, 0.07 * side), mat4.c(mat4.t(0, 0, z), mat4.rz(a))))
-        }
-    }
-    g.rotor = merge(...parts)
+    g.rotor = rotavatorRotor({ width: W, R: ROTOR_R, blades })
   } else if (tool === 'ridger') {
-    const wing = thickSurface((u, v) => new THREE.Vector3(-u * 0.4, v * 0.28, (0.03 + u * 0.16) * (0.5 + 0.7 * v)), 10, 6, 0.006)
-    const bodies: THREE.BufferGeometry[] = []
-    for (const k of [-1, 0, 1]) {
-      const z = k * spacing
-      bodies.push(xform(wing, mat4.t(-0.6, fl, z)), xform(wing, mat4.c(mat4.t(-0.6, fl, z), new THREE.Matrix4().makeScale(1, 1, -1))))
-      bodies.push(xform(shovel(0.08, 0.14), mat4.t(-0.56, fl, z)))
-    }
-    g.tines = merge(...bodies)
+    const body = ridgerBody()
+    g.tines = merge(...[-1, 0, 1].map((k) => xform(body, mat4.t(-0.6, fl, k * spacing))))
     const W = 3 * spacing
     g.frame = merge(head, bar([-0.55, 0.1, -W / 2], [-0.55, 0.1, W / 2], 0.08, 0.08), bar([0, 0.6, 0], [-0.55, 0.1, 0], 0.05, 0.05), bar([0, 0, 0.3], [-0.55, 0.1, 0.3], 0.05, 0.05), bar([0, 0, -0.3], [-0.55, 0.1, -0.3], 0.05, 0.05), ...[-1, 0, 1].map((k) => bar([-0.55, 0.1, k * spacing], [-0.75, fl + 0.2, k * spacing], 0.03, 0.07)))
   } else {
     const sub = tool === 'subsoiler'
     const zs = sub ? [-0.3, 0.3] : [-0.8, -0.4, 0, 0.4, 0.8]
     const sh: THREE.BufferGeometry[] = []
-    for (const z of zs) {
-      const x = sub ? -0.45 : -0.4
-      sh.push(pathBar([[x, 0.12, z], [x - 0.05, -0.2, z], [x - 0.15, fl + 0.15, z], [x - 0.3, fl, z]], sub ? 0.035 : 0.025, sub ? 0.16 : 0.08, 16))
-      const foot = box(sub ? 0.2 : 0.1, 0.03, sub ? 0.07 : 0.05)
-      foot.translate(x - 0.32, fl + 0.015, z)
-      sh.push(foot)
-    }
+    for (const z of zs) sh.push(chiselShank(sub ? -0.45 : -0.4, z, fl, sub))
     g.tines = merge(...sh)
     g.frame = merge(head, bar([-0.4, 0.12, sub ? -0.55 : -1.0], [-0.4, 0.12, sub ? 0.55 : 1.0], 0.1, 0.1), bar([0, 0.6, 0], [-0.4, 0.12, 0], 0.06, 0.06), bar([0, 0, 0.4], [-0.4, 0.12, 0.4], 0.06, 0.06), bar([0, 0, -0.4], [-0.4, 0.12, -0.4], 0.06, 0.06))
   }

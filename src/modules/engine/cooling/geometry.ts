@@ -1,7 +1,21 @@
 import * as THREE from 'three'
-import { box, csg, cylinder, extrude, helixSpring, lathe, mat4, merge, pipe, tube, xform, type CsgOp, type V2 } from '@/geometry'
+import { box, csg, cylinder, lathe, mat4, merge, pipe, xform, type CsgOp, type V2 } from '@/geometry'
 import { beltBand, loopPath } from '@/geometry/parts'
 import { AIRC, CRANK_Y, ENG, FAN, PULLEY_Z, PUMP, RAD, THERMO } from './model'
+import {
+  fan as libFan,
+  impeller as libImpeller,
+  pumpVolute as libPumpVolute,
+  radiatorCap,
+  radiatorCore as libRadiatorCore,
+  radiatorFrame as libRadiatorFrame,
+  radiatorTank,
+  thermostatHousing as libThermostatHousing,
+  thermostatParts as libThermostatParts,
+  tubeXs,
+  vPulley,
+} from '@/parts/lib/cooling'
+import { cylinderLiner } from '@/parts/lib/engine'
 
 const { PI } = Math
 const at = (x: number, y: number, z: number) => mat4.t(x, y, z)
@@ -36,7 +50,8 @@ function block() {
 }
 
 function liners() {
-  return merge(...ENG.cylZ.map((z) => xform(tube(ENG.linerOuter - 0.0002, ENG.bore / 2, ENG.deck - 0.08, 48), at(0, (ENG.deck + 0.08) / 2, z))))
+  const liner = cylinderLiner({ bore: ENG.bore, outer: ENG.linerOuter, y0: 0.08, y1: ENG.deck, segments: 48 })
+  return merge(...ENG.cylZ.map((z) => xform(liner, at(0, 0, z))))
 }
 
 function head() {
@@ -74,77 +89,29 @@ function rockerCover() {
 
 /** Housing on the head outlet, local origin at the head top face. Outlet to the top hose on +Z, bypass on −X. */
 function thermostatHousing() {
-  const prof: V2[] = [
-    [0.022, 0],
-    [0.028, 0],
-    [0.028, 0.062],
-    [0, 0.062],
-    [0, 0.056],
-    [0.022, 0.056],
-  ]
-  return csg(lathe(prof, 40), [
-    { op: 'sub', geometry: xform(cylinder(0.012, 0.04, 20), mat4.c(at(0, 0.038, 0.025), alongZ)) },
-    { op: 'sub', geometry: xform(cylinder(0.008, 0.04, 16), mat4.c(at(-0.025, 0.012, 0), alongX)) },
-  ])
+  return libThermostatHousing()
 }
 
 function thermostatParts() {
-  const seat = tube(0.0218, 0.012, 0.003, 40)
-  const valve = lathe([[0, 0], [0.0135, 0], [0.0135, 0.002], [0, 0.003]], 32)
-  const pellet = xform(cylinder(0.0065, 0.016, 24), at(0, -0.009, 0))
-  const spring = helixSpring(0.011, 0.0011, 1, 4)
-  const bridge = xform(box(0.044, 0.002, 0.006), at(0, 0, 0))
-  return { seat, valve, pellet, spring, bridge }
+  return libThermostatParts()
 }
 
 /* ------------------------------ water pump, fan, belt ------------------------------ */
 
 function pumpVolute() {
-  const prof: V2[] = [
-    [0.012, 0],
-    [0.055, 0],
-    [0.055, 0.045],
-    [0.012, 0.045],
-    [0.012, 0.04],
-    [0.048, 0.04],
-    [0.048, 0.005],
-    [0.012, 0.005],
-  ]
-  // axis along Z (rx(+90°) maps +Y to +Z): the volute spans local z = 0 … 0.045
-  const v = xform(lathe(prof, 48), alongZ)
-  return csg(v, [
-    { op: 'sub', geometry: xform(cylinder(0.01, 0.04, 16), mat4.c(at(0.05, 0, 0.0225), alongX)) },
-    { op: 'sub', geometry: xform(cylinder(0.0075, 0.04, 16), mat4.c(at(-0.05, 0, 0.0225), alongX)) },
-  ])
+  return libPumpVolute()
 }
 
 function impeller() {
-  const blades: THREE.BufferGeometry[] = [xform(cylinder(0.014, 0.03, 24), alongZ)]
-  for (let i = 0; i < 6; i++) {
-    const a = (i / 6) * PI * 2
-    blades.push(xform(box(0.03, 0.004, 0.026), mat4.c(mat4.rz(a + 0.35), at(0.027, 0, 0))))
-  }
-  return merge(...blades)
+  return libImpeller()
 }
 
 function fan() {
-  const parts: THREE.BufferGeometry[] = [xform(cylinder(0.035, 0.03, 32), alongZ)]
-  for (let i = 0; i < 6; i++) {
-    const a = (i / 6) * PI * 2
-    const s = new THREE.Shape()
-    s.moveTo(0.03, -0.022)
-    s.quadraticCurveTo(FAN.r * 0.75, -0.04, FAN.r, -0.03)
-    s.lineTo(FAN.r, 0.03)
-    s.quadraticCurveTo(FAN.r * 0.6, 0.042, 0.03, 0.022)
-    s.lineTo(0.03, -0.022)
-    const blade = xform(extrude(s, 0.004, { curveSegments: 8 }), mat4.c(mat4.rz(a), mat4.rx(0.45)))
-    parts.push(blade)
-  }
-  return merge(...parts)
+  return libFan(FAN.r)
 }
 
 function pulley(r: number) {
-  return xform(lathe([[0.012, 0], [r, 0], [r, 0.004], [r - 0.012, 0.011], [r, 0.018], [r, 0.022], [0.012, 0.022]], 48), mat4.c(at(0, 0, -0.011), alongZ))
+  return vPulley(r)
 }
 
 export const CRANK_PULLEY_R = 0.065
@@ -158,37 +125,22 @@ function belt() {
 /* ------------------------------ radiator ------------------------------ */
 
 const TUBES = 12
-export const TUBE_X = Array.from({ length: TUBES }, (_, i) => -RAD.x + 0.02 + (i * (2 * RAD.x - 0.04)) / (TUBES - 1))
+export const TUBE_X = tubeXs({ ...RAD, tubes: TUBES })
 
 function radiatorCore() {
-  const h = RAD.y1 - RAD.y0
-  const zc = (RAD.z0 + RAD.z1) / 2
-  const tubes = TUBE_X.map((x) => csg(bx(x - 0.003, x + 0.003, RAD.y0 - 0.004, RAD.y1 + 0.004, RAD.z0, RAD.z1), [{ op: 'sub', geometry: bx(x - 0.002, x + 0.002, RAD.y0 - 0.01, RAD.y1 + 0.01, RAD.z0 + 0.002, RAD.z1 - 0.002) }]))
-  const fins: THREE.BufferGeometry[] = []
-  for (let i = 0; i < 30; i++) fins.push(xform(box(2 * RAD.x - 0.012, 0.0008, RAD.z1 - RAD.z0 + 0.004), at(0, RAD.y0 + ((i + 0.5) / 30) * h, zc)))
-  const water = merge(...TUBE_X.map((x) => bx(x - 0.0019, x + 0.0019, RAD.y0 - 0.004, RAD.y1 + 0.004, RAD.z0 + 0.0021, RAD.z1 - 0.0021)))
-  return { tubes: merge(...tubes), fins: merge(...fins), water }
+  return libRadiatorCore(RAD)
 }
 
 function tank(y0: number, y1: number) {
-  const o = bx(-RAD.x - 0.012, RAD.x + 0.012, y0, y1, RAD.tankZ0, RAD.tankZ1)
-  const i = bx(-RAD.x - 0.008, RAD.x + 0.008, y0 + 0.004, y1 - 0.004, RAD.tankZ0 + 0.004, RAD.tankZ1 - 0.004)
-  const water = bx(-RAD.x - 0.0077, RAD.x + 0.0077, y0 + 0.0043, y1 - 0.0043 - (y1 > RAD.y1 ? 0.012 : 0), RAD.tankZ0 + 0.0043, RAD.tankZ1 - 0.0043)
-  return { shell: csg(o, [{ op: 'sub', geometry: i }]), water }
+  return radiatorTank(RAD, y0, y1)
 }
 
 function radiatorFrame() {
-  const sides = [-1, 1].map((s) => bx(s * (RAD.x + 0.012) - 0.006, s * (RAD.x + 0.012) + 0.006, RAD.botY0, RAD.topY1, RAD.z0 - 0.004, RAD.z1 + 0.004))
-  return merge(...sides)
+  return libRadiatorFrame(RAD)
 }
 
 function capParts() {
-  const neck = tube(0.02, 0.016, 0.03, 32)
-  const cap = lathe([[0, 0.03], [0.026, 0.03], [0.028, 0.034], [0.028, 0.046], [0, 0.046]], 40)
-  const valve = lathe([[0, 0], [0.015, 0], [0.015, 0.003], [0, 0.003]], 32)
-  const spring = helixSpring(0.009, 0.0009, 1, 4)
-  const overflow = pipe(curve([V(0.02, 0.015, 0), V(0.035, 0.012, 0), V(0.05, -0.02, 0), V(0.05, -0.1, 0)]), 0.004, 0.0025, 24, 10)
-  return { neck, cap, valve, spring, overflow }
+  return radiatorCap()
 }
 
 /* ------------------------------ hoses (shared with the flows) ------------------------------ */

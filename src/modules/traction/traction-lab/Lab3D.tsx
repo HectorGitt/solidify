@@ -2,16 +2,22 @@ import { useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { SRC } from '@/content/citations'
 import { useSimFrame } from '@/core/sim'
-import { box, mat4, tube, xform } from '@/geometry'
+import { box, mat4, xform } from '@/geometry'
 import { reactionOffset } from '@/physics/traction'
 import { PartLabel } from '@/render/Label'
 import { Part, PartMesh } from '@/render/Part'
 import { TRACTOR } from '@/tractor/dims'
 import { AXLE_Y, REAR_Z } from '@/tractor/geometry'
+import { farmlandEffects } from '@/tractor/effects'
 import { Tractor, createTractorPose } from '@/tractor/Tractor'
 import { ForceArrow, Ground, LiveTag, type ArrowState } from '../../chassis/common/three'
-import { slab, wheelGeo } from '../../chassis/common/wheel'
-import { D, REAR_TYRE, live, sinkage, solve, useLab, type LabParams, type Solved } from './model'
+import { strainLink } from '@/parts/lib/chassis'
+import { FARMLAND_REAR, toLeft, wheel, wheelWeight, wheelWeightStack } from '@/parts/lib/wheels'
+import { slab } from '../../chassis/common/wheel'
+import { D, REAR_TYRE, live, sinkage, solve, useLab, type LabParams, type Soil, type Solved } from './model'
+
+/** how much dust each surface throws up (display) */
+const SOIL_DUST: Record<Soil, number> = { firm: 0.35, tilled: 0.8, soft: 0.55 }
 
 const { PI } = Math
 /** arrow scale, m per kN */
@@ -47,8 +53,8 @@ function LoadCar({ wheels }: { wheels: React.RefObject<THREE.Group | null> }) {
     return {
       tongue: slab(-1.0, -0.04, 0, 0.04, 0.08),
       body: slab(-2.6, y0 + 0.32, -1.0, y0 + 0.82, 1.1),
-      cell: xform(tube(0.05, 0.02, 0.18, 24), mat4.c(mat4.t(-0.55, 0, 0), mat4.rz(PI / 2))),
-      wheel: wheelGeo(0.3, 0.16, 'smooth'),
+      cell: xform(strainLink({ span: 0.26, bodyR: 0.04, bodyL: 0.14, eyeLen: 0.06, eyeT: 0.03, eyeR: 0.035 }), mat4.t(-0.55, 0, 0)),
+      wheel: wheel({ radius: 0.3, width: 0.16, pattern: 'smooth' }),
     }
   }, [])
   const y0 = -TRACTOR.drawbar.y + 0.3
@@ -64,7 +70,10 @@ function LoadCar({ wheels }: { wheels: React.RefObject<THREE.Group | null> }) {
           <group key={`${x}${z}`} position={[x, y0, z]}>
             <group ref={x === -1.25 && z > 0 ? wheels : undefined}>
               <PartMesh geometry={g.wheel.tyre} material="rubber" />
-              <PartMesh geometry={g.wheel.rim} material="paintGrey" />
+              <group rotation={[0, z < 0 ? PI : 0, 0]}>
+                <PartMesh geometry={g.wheel.rim} material="paintGrey" />
+                {g.wheel.hub ? <PartMesh geometry={g.wheel.hub} material="steelDark" /> : null}
+              </group>
             </group>
           </group>
         )),
@@ -74,7 +83,7 @@ function LoadCar({ wheels }: { wheels: React.RefObject<THREE.Group | null> }) {
 }
 
 function WheelFBD({ get }: { get: () => Solved }) {
-  const geo = useMemo(() => wheelGeo(TRACTOR.rear.radius, REAR_TYRE.b, 'R1'), [])
+  const geo = useMemo(() => wheel({ ...FARMLAND_REAR, width: REAR_TYRE.b }), [])
   const spin = useRef<THREE.Group>(null)
   const theta = useRef(0)
   useSimFrame((dt) => {
@@ -102,6 +111,7 @@ function WheelFBD({ get }: { get: () => Solved }) {
         <group position={[0, SLR, 0]} ref={spin}>
           <PartMesh geometry={geo.tyre} />
           <PartMesh geometry={geo.rim} material="paintGrey" />
+          {geo.hub ? <PartMesh geometry={geo.hub} material="steelDark" /> : null}
         </group>
       </Part>
       {/* dynamic load on the axle, down */}
@@ -142,7 +152,8 @@ export function Lab3D() {
 
   const G = useMemo(
     () => ({
-      disc: xform(tube(0.3, 0.09, 0.05, 40), mat4.rx(PI / 2)),
+      disc: wheelWeight(),
+      discL: toLeft(wheelWeight()),
       rut: box(1, 0.006, REAR_TYRE.b),
       bar: box(1, 0.008, 1),
     }),
@@ -170,6 +181,7 @@ export function Lab3D() {
     pose.frontAngle += (V / TRACTOR.front.radius) * dt
     pose.engineAngle += ((s.stalled ? 0 : s.op.rpm) / 60) * 2 * PI * dt
     pose.steer = 0
+    pose.effects = farmlandEffects({ Te: s.op.Te, rpm: s.op.rpm, V, slip: s.i, stalled: s.stalled }, SOIL_DUST[useLab.getState().soil])
     live.x = st.x
     live.V = V
     live.V0 = V0
@@ -234,8 +246,8 @@ export function Lab3D() {
             <Tractor pose={pose} trailed={<LoadCar wheels={carWheel} />} labels={false} internals={false} />
             <Part id="rear-ballast" name={`Rear wheel weights (${2 * nDisc} discs)`} role="moving" material="castIron" cut={false} info={{ summary: 'Cast-iron weights on the rear wheel centres (the Ballast slider).', role: 'Adds weight on the driving wheels: more pull for the same slip, less slip loss — but more rolling resistance, so there is an optimum.' }} cites={[SRC.mech502('p7, p10'), SRC.l27('p40–44 ballast')]}>
               <group position={[0, AXLE_Y, 0]} ref={discs}>
-                {Array.from({ length: nDisc }, (_, i) =>
-                  [1, -1].map((sd) => <PartMesh key={`${i}${sd}`} geometry={G.disc} position={[0, 0, sd * (REAR_Z + 0.23 + 0.055 * i)]} />),
+                {wheelWeightStack(FARMLAND_REAR, nDisc).map((z, i) =>
+                  [1, -1].map((sd) => <PartMesh key={`${i}${sd}`} geometry={sd > 0 ? G.disc : G.discL} position={[0, 0, sd * (REAR_Z + z)]} />),
                 )}
               </group>
             </Part>

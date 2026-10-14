@@ -2,12 +2,13 @@ import { useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { SRC, cite } from '@/content/citations'
 import { useSimFrame } from '@/core/sim'
-import { box, cylinder, lathe, mat4, merge, xform } from '@/geometry'
+import { box, cylinder, mat4, xform } from '@/geometry'
 import { splineShaft } from '@/geometry/parts'
 import { doubleHooke, rpmToRad } from '@/physics/joints'
 import { PartLabel } from '@/render/Label'
 import { Part, PartMesh } from '@/render/Part'
-import { J, crossGeometry, crossQuaternion, cupsGeometry, needlesGeometry, pillowBlock, sealsGeometry, shaftGeometry, tubeShaftGeometry, yokeGeometry } from '../shared/cardan'
+import { UJ as J, benchMotor, inertiaWheel, pillowBlockX, ujCross, ujCups, ujNeedles, ujSeals, ujYoke } from '@/parts/lib/driveline'
+import { crossQuaternion, shaftGeometry, tubeShaftGeometry } from '../shared/cardan'
 import { HJ2 } from '../shared/cites'
 import { RIG, effectiveSpec, frames, live, makeGraph, outBodyAngle, pins, useDC } from './model'
 
@@ -51,15 +52,15 @@ export function DoubleCardan3D() {
   fRef.current = f
 
   const g = useMemo(() => {
-    const pb = pillowBlock(J.shaftR, RIG.drop)
+    const pb = pillowBlockX(J.shaftR, RIG.drop)
     const L = RIG.L
     const half = L / 2
     return {
-      yoke: yokeGeometry(),
-      cross: crossGeometry(),
-      cups: cupsGeometry(),
-      needles: needlesGeometry(),
-      seals: sealsGeometry(),
+      yoke: ujYoke(),
+      cross: ujCross(),
+      cups: ujCups(),
+      needles: ujNeedles(),
+      seals: ujSeals(),
       inShaft: shaftGeometry(-0.5, -J.hubEnd),
       tube: tubeShaftGeometry(J.hubEnd - 0.004, half + 0.05, 0.024, 0.0195),
       inner: (() => {
@@ -71,11 +72,8 @@ export function DoubleCardan3D() {
       pb,
       disc: xform(cylinder(RIG.discR, 0.014, 48), mat4.rz(PI / 2)),
       mark: box(0.02, 0.012, 0.014),
-      flywheel: xform(lathe([[J.shaftR, -0.018], [0.1, -0.018], [0.108, -0.01], [0.108, 0.01], [0.1, 0.018], [J.shaftR, 0.018]], 64), mat4.rz(PI / 2)),
-      motor: merge(
-        xform(lathe([[0, -0.07], [0.06, -0.07], [0.066, -0.063], [0.066, 0.063], [0.06, 0.07], [0, 0.07]], 48), mat4.rz(PI / 2)),
-        xform(box(0.11, 0.08, 0.13), mat4.t(0, -RIG.drop + 0.04, 0)),
-      ),
+      flywheel: inertiaWheel({ r: 0.108, rimIn: 0.1, halfWidth: 0.018, bore: J.shaftR }),
+      motor: benchMotor({ r: 0.066, halfLength: 0.07, drop: RIG.drop, foot: [0.11, 0.08, 0.13] }),
     }
   }, [])
 

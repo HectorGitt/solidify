@@ -1,12 +1,13 @@
 import { useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { useSimFrame } from '@/core/sim'
-import { box, cylinder, extrude, mat4, merge, pipe, xform } from '@/geometry'
+import { box, cylinder, extrude, mat4, merge, xform } from '@/geometry'
 import { Flow } from '@/render/Flow'
 import { PartLabel } from '@/render/Label'
 import { Part, PartMesh } from '@/render/Part'
 import { SoilSurface } from '@/render/SoilSurface'
 import { createSoil, roughen, stampRun, type SoilGrid } from '@/render/soil'
+import { dripEmitter, gateValve, pipeRun, pumpSet, screenFilter, sprinklerHead, storageTank } from '@/parts/lib/water'
 import { Particles, halfBulb, halfEllipseBar, hash, plantsGeometry } from '../_shared/fx'
 import { ADV, BORDER, C, DRIP, FIELD, FURROW, SPRINK, SUB, frontX, live, phaseAt, recedeX, sprinklerCatch, useIrr, wetDepth, type IrrParams, type Method } from './model'
 
@@ -138,27 +139,30 @@ export function Scene3D() {
   }, [method])
 
   const sprinklerGeo = useMemo(() => {
-    const main = pipe(line([X0 - 1.5, 0.12, -8.5], [SPRINK.xs[SPRINK.xs.length - 1], 0.12, -8.5]), 0.07, 0.06)
-    const lats = merge(...SPRINK.xs.map((x) => pipe(line([x, 0.1, -8.5], [x, 0.1, 6.3]), 0.045, 0.038)))
+    const main = pipeRun({ a: [X0 - 1.5, 0.12, -8.5], b: [SPRINK.xs[SPRINK.xs.length - 1], 0.12, -8.5], outer: 0.07, inner: 0.06 })
+    const lats = merge(...SPRINK.xs.map((x) => pipeRun({ a: [x, 0.1, -8.5], b: [x, 0.1, 6.3], outer: 0.045, inner: 0.038 })))
     const risers = merge(...SPRINK.xs.flatMap((x) => SPRINK.zs.map((z) => xform(cylinder(0.02, SPRINK.riser, 10), mat4.t(x, SPRINK.riser / 2, z)))))
-    const head = merge(xform(cylinder(0.035, 0.08, 12), mat4.t(0, 0.04, 0)), xform(box(0.22, 0.03, 0.03), mat4.c(mat4.t(0.09, 0.1, 0), mat4.rz(0.45))))
-    const pump = merge(xform(box(0.9, 0.6, 0.6), mat4.t(X0 - 2, 0.3, -8.5)), xform(cylinder(0.22, 0.7, 20), mat4.c(mat4.t(X0 - 2.75, 0.32, -8.5), mat4.rz(Math.PI / 2))))
+    const head = sprinklerHead()
+    const ps = pumpSet({ motorR: 0.22, motorL: 0.7, pumpR: 0.22 })
+    const pump = xform(ps.geometry, mat4.t(X0 - 2.3, 0, -8.5))
     return { main, lats, risers, head, pump }
   }, [])
 
   const dripGeo = useMemo(() => {
-    const main = pipe(line([X0 + 1, 0.05, -8.4], [X0 + 1, 0.05, 6.4]), 0.04, 0.032)
-    const lats = merge(...DRIP.laterals.map((z) => pipe(line([X0 + 1, 0.03, z], [DRIP.x0 + 16 * DRIP.dx + 0.4, 0.03, z]), 0.012, 0.009)))
-    const emitters = merge(...EMITTERS.map(([x, z]) => xform(cylinder(0.022, 0.05, 8), mat4.c(mat4.t(x, 0.03, z), mat4.rx(Math.PI / 2)))))
-    const filter = merge(xform(cylinder(0.18, 0.8, 20), mat4.t(X0 - 1.2, 0.4, -8.4)), xform(cylinder(0.2, 0.06, 20), mat4.t(X0 - 1.2, 0.83, -8.4)))
-    const tank = xform(cylinder(0.3, 0.9, 20), mat4.t(X0 - 1.2, 0.45, -7.4))
-    const valve = merge(xform(box(0.18, 0.18, 0.18), mat4.t(X0 - 0.3, 0.12, -8.4)), xform(cylinder(0.03, 0.2, 8), mat4.t(X0 - 0.3, 0.3, -8.4)))
-    const pump = merge(xform(box(0.7, 0.5, 0.5), mat4.t(X0 - 2.3, 0.25, -8.4)), xform(cylinder(0.18, 0.5, 16), mat4.c(mat4.t(X0 - 2.85, 0.28, -8.4), mat4.rz(Math.PI / 2))))
-    const pipes = pipe(line([X0 - 2.6, 0.2, -8.4], [X0 + 1, 0.2, -8.4]), 0.04, 0.032)
+    const main = pipeRun({ a: [X0 + 1, 0.05, -8.4], b: [X0 + 1, 0.05, 6.4], outer: 0.04, inner: 0.032 })
+    const lats = merge(...DRIP.laterals.map((z) => pipeRun({ a: [X0 + 1, 0.03, z], b: [DRIP.x0 + 16 * DRIP.dx + 0.4, 0.03, z], outer: 0.012, inner: 0.009 })))
+    const emitter = dripEmitter()
+    const emitters = merge(...EMITTERS.map(([x, z]) => xform(emitter, mat4.t(x, 0.03, z))))
+    const filter = xform(screenFilter({ r: 0.18, h: 0.8 }), mat4.t(X0 - 1.2, 0, -8.4))
+    const tank = xform(storageTank({ r: 0.3, h: 0.9, roofRise: 0.08, ring: false, segments: 20 }), mat4.t(X0 - 1.2, 0, -7.4))
+    const valve = xform(gateValve({ size: 0.18 }), mat4.t(X0 - 0.3, 0.2, -8.4))
+    const ps = pumpSet({ motorR: 0.16, motorL: 0.5, pumpR: 0.16 })
+    const pump = xform(ps.geometry, mat4.t(X0 - 2.5, 0, -8.4))
+    const pipes = pipeRun({ a: [X0 - 2.6, 0.2, -8.4], b: [X0 + 1, 0.2, -8.4], outer: 0.04, inner: 0.032 })
     return { main, lats, emitters, filter, tank, valve, pump, pipes }
   }, [])
 
-  const subGeo = useMemo(() => merge(...SUB.drains.map((z) => pipe(line([X0 - 0.5, -SUB.depth, z], [-X0, -SUB.depth, z]), 0.06, 0.05))), [])
+  const subGeo = useMemo(() => merge(...SUB.drains.map((z) => pipeRun({ a: [X0 - 0.5, -SUB.depth, z], b: [-X0, -SUB.depth, z], outer: 0.06, inner: 0.05 }))), [])
 
   // refs
   const upper = useRef<(THREE.Mesh | null)[]>([])

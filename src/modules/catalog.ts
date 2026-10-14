@@ -50,6 +50,7 @@ export const MODULES: ModuleDef[] = [
       { id: 'planetary', title: 'Planetary gear set', summary: 'Lock or brake any member and watch the ratio change.', exam: true },
       { id: 'powershift', title: 'Hydraulic-assist (powershift)', summary: 'Clutch packs, countershaft ranges and the shift-oil circuit.', exam: true },
       { id: 'hydrostatic', title: 'Hydrostatic drive', summary: 'Variable swashplate pump driving a fixed motor; the four pump/motor combinations.', exam: true },
+      { id: 'cvt', title: 'Power-split CVT', summary: 'Planetary set plus variable pump and motor: stepless speed from active standstill to pure gear drive.' },
       { id: 'torque-converter', title: 'Torque converter', summary: 'Impeller, turbine and stator; vortex vs rotary flow.', exam: true },
       { id: 'differential', title: 'Crown wheel, differential & diff lock', summary: 'Straight running vs cornering, one wheel held, diff lock.', exam: true },
       { id: 'final-drives', title: 'Final drives & rear axle', summary: 'Spur and epicyclic reductions, wet brakes in the trumpet housing.' },
@@ -120,6 +121,7 @@ export const MODULES: ModuleDef[] = [
       { id: 'hitches', title: 'Trailed vs semi-mounted vs mounted', summary: 'Which axle gains weight under the same soil force.', exam: true },
       { id: 'stability', title: 'Slopes & overturning', summary: 'Slope limits, rear overturn and ROPS.' },
       { id: 'tractor-types', title: 'Tractor types', summary: 'The twelve tractor types and how they evolved.', exam: true },
+      { id: 'configurator', title: 'Tractor configurator', summary: 'Build a tractor and test it on a job: speed, slip, efficiency, fuel, ground pressure and ruts.' },
     ],
   },
   {
@@ -232,6 +234,20 @@ export const MODULES: ModuleDef[] = [
       { id: 'farmhouse', title: 'Farm dwelling plans', summary: 'The seven plan types with room-size rules, walk-through in 3D.' },
       { id: 'machinery-storage', title: 'Workshop & machinery storage', summary: 'Machinery shed and workshop sizing, drives, parking and the hazard-separation rule.' },
       { id: 'greenhouse', title: 'Greenhouse design & ventilation', summary: 'Glass vs polythene houses with live ventilation-rate and temperature-rise calculation.', exam: true },
+    ],
+  },
+  {
+    id: 'precision',
+    code: 'M16',
+    title: 'Precision farming',
+    courses: [],
+    blurb: 'Satellite guidance, sensors and variable-rate control: putting every pass, seed and drop of spray exactly where it is needed.',
+    scenes: [
+      { id: 'autosteer', title: 'GNSS auto-steer', summary: 'Driver, GNSS, SBAS or RTK: watch cross-track error turn into overlaps and missed strips on the coverage map.' },
+      { id: 'see-and-spray', title: 'See-and-spray weed targeting', summary: 'Cameras on the boom find weeds and fire single nozzles; chemical saved vs blanket spraying.' },
+      { id: 'variable-rate', title: 'Variable-rate application', summary: 'Prescription maps, section control and rate controllers on a spreader and a drill.' },
+      { id: 'yield-map', title: 'Yield mapping', summary: 'Combine yield monitor: mass-flow sensor, moisture and GNSS turned into a yield map.' },
+      { id: 'drone-scan', title: 'Drone field scan', summary: 'Flight planning, image overlap and NDVI from a multispectral camera.' },
     ],
   },
 ]

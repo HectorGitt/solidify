@@ -1,4 +1,5 @@
 import type { SceneDef } from '@/modules/types'
+import { clamp, roundTo } from '@/content/context'
 import { DEFAULTS, L27, TT, TTS, useTyre } from './model'
 import { TyrePanel } from './Panel'
 import { Tyre3D } from './Tyre3D'
@@ -25,6 +26,10 @@ const scene: SceneDef = {
   defaultPreset: 'quarter',
   cites: [TT('p1–7, Figs 2–9'), TT('p15–19 — tire failures'), TTS('p13–15 — wheels and tyres'), L27('p32, p39')],
   reset: () => useTyre.getState().reset(),
+  fromContext: (c) => ({
+    ...(c.wheelLoadKN !== undefined ? { load: roundTo(clamp(c.wheelLoadKN, 4, 40), 0.5) } : {}),
+    ...(c.tyre ? { build: c.tyre } : {}),
+  }),
   applyParams: (p) => useTyre.getState().set(p as Partial<typeof DEFAULTS>),
   tour: [
     {

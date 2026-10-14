@@ -1,6 +1,8 @@
 import * as THREE from 'three'
 import { box, cylinder, extrude, gear, lathe, mat4, merge, tube, xform } from '@/geometry'
-import { bevelGear, bevelPair, rim, splineShaft, tyre } from '@/geometry/parts'
+import { bevelPair, rim, splineShaft, tyre } from '@/geometry/parts'
+import { bevelPinion, clutchDisc, clutchDiscThickness, crownWheel, plateStackZ, pressurePlate } from '@/parts/lib/driveline'
+import { flywheel } from '@/parts/lib/engine'
 import { hollow } from '@/tractor/geometry'
 import { AX, AXLE_X, FACE, HOUSING, M, STUBS, Z, type PtoStd } from './model'
 
@@ -38,21 +40,26 @@ export function engineGeometry() {
   return merge(block, head, cover, sump)
 }
 
-/** Flywheel (with starter ring) and crank stub; axis X at the origin, face at x = 0.47. */
+/**
+ * Engine flywheel from the parts library, starter ring gear included; axis X, clutch face at
+ * x = 0.47 and the disc towards the engine (+X).
+ */
 export function flywheelGeometry() {
-  const fw = toX(
-    lathe(
-      [
-        [0.045, 0.47],
-        [0.165, 0.47],
-        [0.172, 0.476],
-        [0.172, 0.51],
-        [0.045, 0.51],
-      ],
-      64,
-    ),
-  )
-  return fw
+  const fw = flywheel({ r: 0.172, width: 0.04 })
+  // library frame: face at z = 0, disc towards −Z → turn −Z onto +X and move the face to x = 0.47
+  const m = mat4.c(mat4.t(0.47, 0, 0), mat4.ry(-PI / 2))
+  return { disc: xform(fw.disc, m), ring: xform(fw.ring, m) }
+}
+
+/** Z-axis library part → this scene's X axis. */
+const zToX = (g: THREE.BufferGeometry) => xform(g, mat4.ry(PI / 2))
+
+/** Clutch plate (linings, core and hub) centred on x = 0, axis X; hub from hx0 to hx1. */
+function clutchPlateX(bore: number, hubR: number, hx0: number, hx1: number) {
+  const T = clutchDiscThickness({ lining: 0.003, core: 0.002 })
+  const d = clutchDisc({ Ro: 0.13, Ri: 0.075, lining: 0.003, core: 0.002, bore, hubR, hubZ0: hx0 + T / 2, hubZ1: hx1 + T / 2 })
+  const c = (g: THREE.BufferGeometry) => zToX(xform(g, mat4.t(0, 0, -T / 2)))
+  return { friction: merge(c(d.linings), c(d.core)), hub: c(d.hub) }
 }
 
 export function staticGeometry() {
@@ -75,25 +82,23 @@ export function staticGeometry() {
 export function clutchGeometry() {
   return {
     cover: tubeX(0.36, 0.47, 0.162, 0.152, 64),
-    pressurePlate: tubeX(-0.007, 0.007, 0.135, 0.05, 56),
-    disc: merge(tubeX(-0.004, 0.004, 0.13, 0.04, 56)),
-    discHubIn: tubeX(-0.015, 0.015, 0.04, 0.0182, 32),
-    discHubPto: tubeX(-0.015, 0.015, 0.045, 0.0302, 32),
+    pressurePlate: zToX(xform(pressurePlate({ rIn: 0.05, rOut: 0.135, t: 0.014, segments: 56 }), mat4.t(0, 0, -0.007))),
+    /** transmission plate, hub splined to the input shaft */
+    discIn: clutchPlateX(0.0182, 0.04, -0.005, 0.025),
+    /** PTO plate, hub splined to the hollow PTO shaft */
+    discPto: clutchPlateX(0.0302, 0.045, -0.03, 0.0),
     /** independent PTO: drive flange splined to the flywheel */
     driveFlange: tubeX(-0.006, 0.006, 0.11, 0.0302, 56),
   }
 }
 
 export function shaftsGeometry() {
-  const [gp, gg] = (() => {
-    const b = bevelPair(Z.bevel[0], Z.bevel[1])
-    return [b.pinion, b.gear]
-  })()
+  const { pinion: gp, gear: gg } = bevelPair(Z.bevel[0], Z.bevel[1])
   const crownR = pitchR(Z.bevel[1])
   const pinR = pitchR(Z.bevel[0])
-  const crown = bevelGear({ teeth: Z.bevel[1], module: M, faceWidth: 0.02, pitchAngleDeg: gg, bore: 0.025 })
+  const crown = crownWheel({ teeth: Z.bevel[1], module: M, face: 0.02, pitchAngleDeg: gg, bore: 0.025 }).teeth
   crown.translate(0, 0, -crownR / Math.tan((gg * PI) / 180))
-  const pinion = bevelGear({ teeth: Z.bevel[0], module: M, faceWidth: 0.02, pitchAngleDeg: gp })
+  const pinion = bevelPinion({ teeth: Z.bevel[0], module: M, face: 0.02, pitchAngleDeg: gp }).teeth
   pinion.translate(0, 0, -pinR / Math.tan((gp * PI) / 180))
   pinion.rotateY(-PI / 2)
   pinion.translate(AXLE_X, 0, 0)
@@ -114,7 +119,7 @@ export function shaftsGeometry() {
     collar: tubeX(-0.01, 0.01, 0.03, 0.0152, 32),
     lower: shaftX(HOUSING.x0, -0.205, 0.016),
     iptoDrum: tubeX(-0.03, 0.03, 0.052, 0.046, 48),
-    iptoPlates: merge(...[-0.02, -0.01, 0, 0.01, 0.02].map((x) => tubeX(x - 0.0025, x + 0.0025, 0.045, 0.016, 40))),
+    iptoPlates: zToX(plateStackZ({ count: 5, z0: -0.0225, pitch: 0.01, t: 0.005, a: { rOut: 0.045, rIn: 0.016 }, segments: 40 }).all),
   }
 }
 

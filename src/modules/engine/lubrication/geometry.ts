@@ -1,5 +1,6 @@
 import * as THREE from 'three'
 import { box, cam, csg, cylinder, extrude, gear, helixSpring, lathe, mat4, merge, pipe, tube, xform, type CsgOp } from '@/geometry'
+import { conRod as libConRod, crankshaft as libCrankshaft, pistonAssembly } from '@/parts/lib/engine'
 import { BREATHER, CAM, CYL_X, DECK, FILTER, GALLERY, GAUGE, MAIN_X, PISTON_COMP, PUMP, R, RELIEF, ROCKER, ROD, SUMP_OIL_Y } from './model'
 
 const { PI } = Math
@@ -61,27 +62,16 @@ function sumpOil() {
 
 /* ------------------------------ moving parts ------------------------------ */
 
+/** The library crankshaft, laid along X (front, with the timing-gear nose, towards −X). */
+const ALONG_X = mat4.ry(-PI / 2)
+const THROWS = [0, 180, 180, 0]
+
 function crankshaft() {
-  const parts: THREE.BufferGeometry[] = []
-  for (const x of MAIN_X) parts.push(xform(cylinder(0.03, 0.028, 40), mat4.c(at(x, 0), alongX)))
-  parts.push(xform(cylinder(0.025, 0.08, 32), mat4.c(at(X0 + 0.03, 0), alongX)))
-  const web = new THREE.Shape()
-  const cw = 0.072
-  const a0 = PI / 2 + PI - 0.95
-  const a1 = PI / 2 + PI + 0.95
-  web.absarc(0, 0, cw, a0, a1, false)
-  web.lineTo(0.032 * Math.cos(0.35), R + 0.032 * Math.sin(0.35))
-  web.absarc(0, R, 0.032, 0.35, PI - 0.35, false)
-  web.lineTo(cw * Math.cos(a0), cw * Math.sin(a0))
-  const webG = xform(extrude(web, 0.016, { curveSegments: 24 }), mat4.ry(PI / 2))
-  const throws = [0, PI, PI, 0]
-  CYL_X.forEach((x, i) => {
-    const rot = mat4.rx(throws[i])
-    parts.push(xform(webG, mat4.c(at(x - 0.032, 0), rot)))
-    parts.push(xform(webG, mat4.c(at(x + 0.032, 0), rot)))
-    parts.push(xform(cylinder(0.027, 0.05, 32), mat4.c(rot, at(x, R), alongX)))
+  const c = libCrankshaft({ r: R, pinR: 0.027, journalR: 0.03, webT: 0.016, cwR: 0.072, pinLen: 0.048, bossR: 0.032 }, CYL_X.map((x, i) => ({ z: -x, firingDeg: THROWS[i] })), MAIN_X[1] - MAIN_X[0], {
+    nose: { r: 0.025, len: 0.08, inset: 0.003 },
+    tail: null,
   })
-  return merge(...parts)
+  return xform(c.geometry, ALONG_X)
 }
 
 /** Oil drillings inside the crankshaft (main journal → web → crank pin), crank-local, as fluid. */
@@ -95,46 +85,16 @@ function crankDrillings() {
   return merge(...parts)
 }
 
-/** Connecting rod along +Y from the big end (origin) to the small end (y = ROD); dipper below the cap. */
+/** Library connecting rod along +Y from the big end (origin) to the small end (y = ROD), width along X; dipper below the cap. */
 function conRod() {
-  const big = xform(tube(0.042, 0.0272, 0.03, 40), alongX)
-  const small = xform(tube(0.019, 0.0135, 0.03, 32), mat4.c(at(0, ROD), alongX))
-  const shank = new THREE.Shape()
-  shank.moveTo(-0.016, 0.03)
-  shank.lineTo(0.016, 0.03)
-  shank.lineTo(0.01, ROD - 0.016)
-  shank.lineTo(-0.01, ROD - 0.016)
-  shank.lineTo(-0.016, 0.03)
-  const sh = xform(extrude(shank, 0.022), mat4.ry(PI / 2))
-  const shells = xform(tube(0.0272, 0.0262, 0.028, 40), alongX)
+  const r = libConRod({ length: ROD, pinR: 0.027, gudgeonR: 0.0135, width: 0.03 })
+  const x = (g: THREE.BufferGeometry) => xform(g, mat4.ry(PI / 2))
   const dipper = merge(xform(box(0.012, 0.035, 0.012), at(0, -0.055, 0)), xform(box(0.02, 0.006, 0.02), at(0, -0.073, 0.004)))
-  return { body: merge(big, small, sh), shells, dipper }
+  return { body: x(r.body), cap: x(r.cap), bolts: x(r.bolts), shells: x(r.shells), bush: x(r.bush), dipper }
 }
 
-function piston() {
-  const r = 0.0495
-  const top = PISTON_COMP
-  return lathe(
-    [
-      [0, top - 0.012],
-      [0.04, top - 0.012],
-      [r - 0.005, top - 0.02],
-      [r - 0.005, -0.045],
-      [r, -0.045],
-      [r, top - 0.03],
-      [r - 0.003, top - 0.03],
-      [r - 0.003, top - 0.026],
-      [r, top - 0.026],
-      [r, top - 0.019],
-      [r - 0.003, top - 0.019],
-      [r - 0.003, top - 0.016],
-      [r, top - 0.016],
-      [r, top],
-      [0, top],
-    ],
-    48,
-  )
-}
+/** flat-crown piston, 100 mm bore, on a 27 mm gudgeon pin */
+const PISTON = { bore: 0.1, comp: PISTON_COMP, skirt: 0.045, pinR: 0.0135, bowl: null }
 
 function camshaft() {
   const shaft = xform(cylinder(0.012, W - 0.03, 24), mat4.c(at(XM - 0.005, 0), alongX))
@@ -287,6 +247,7 @@ function breatherCan() {
 
 export function buildStatic() {
   const rod = conRod()
+  const pa = pistonAssembly(PISTON)
   const cs = camshaft()
   const st = strainer()
   const fl = filter()
@@ -305,9 +266,15 @@ export function buildStatic() {
     crankshaft: crankshaft(),
     crankOil: crankDrillings(),
     rod: rod.body,
+    rodCap: rod.cap,
+    rodBolts: rod.bolts,
+    rodBush: rod.bush,
     rodShells: rod.shells,
     dipper: rod.dipper,
-    piston: piston(),
+    piston: pa.body,
+    pistonRings: pa.rings.compression,
+    oilRing: pa.rings.oil!,
+    gudgeonPin: pa.pin,
     camshaft: cs.shaft,
     camLobes: cs.lobes,
     camGears: cs.gears,

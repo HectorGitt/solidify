@@ -1,6 +1,7 @@
 import * as THREE from 'three'
 import { box, cylinder, extrude, gear, lathe, mat4, merge, pipe, roundedBox, tube, xform } from '@/geometry'
-import { bevelGear, bevelPair, rim, splineShaft, torus, tyre } from '@/geometry/parts'
+import { bevelGear, bevelPair, splineShaft, torus } from '@/geometry/parts'
+import { FARMLAND_FRONT, FARMLAND_REAR, wheel } from '@/parts/lib/wheels'
 import { LINKAGE, TRACTOR } from './dims'
 
 /**
@@ -27,7 +28,8 @@ export const KINGPIN_Z = FRONT_Z - 0.09
 /** Crown wheel / pinion (straight bevel stand-ins for the spiral bevel set). */
 export const CROWN = { teeth: 37, pinion: 9, module: 0.006 }
 /** Gearbox: input constant-mesh pair and one selected pair (x-ray illustration). */
-export const GEARBOX = { module: 0.005, centre: 0.15, input: [20, 40] as const, selected: [32, 28] as const }
+/** layshaft 140 mm below the input, level with the PTO stub (the PTO is taken off the layshaft); every pair sums to 60 teeth */
+export const GEARBOX = { module: (2 * 0.14) / 60, centre: 0.14, input: [20, 40] as const, selected: [32, 28] as const }
 
 /** Closed solid with a cavity: outer shell plus the inner shell turned inside out. */
 export function hollow(outer: THREE.BufferGeometry, inner: THREE.BufferGeometry) {
@@ -67,23 +69,24 @@ function bonnetShell() {
   const t = 0.012
   const y0 = 0.98
   const top = 1.42
-  const ch = 0.07
+  // rounded crown: large-radius shoulders instead of a chamfer
+  const rc = 0.12
   const s = new THREE.Shape()
   s.moveTo(-hw, y0)
-  s.lineTo(-hw, top - ch)
-  s.lineTo(-hw + ch, top)
-  s.lineTo(hw - ch, top)
-  s.lineTo(hw, top - ch)
+  s.lineTo(-hw, top - rc)
+  s.quadraticCurveTo(-hw, top, -hw + rc, top)
+  s.lineTo(hw - rc, top)
+  s.quadraticCurveTo(hw, top, hw, top - rc)
   s.lineTo(hw, y0)
   s.lineTo(hw - t, y0)
-  s.lineTo(hw - t, top - ch - t * 0.4)
-  s.lineTo(hw - ch - t * 0.4, top - t)
-  s.lineTo(-hw + ch + t * 0.4, top - t)
-  s.lineTo(-hw + t, top - ch - t * 0.4)
+  s.lineTo(hw - t, top - rc)
+  s.quadraticCurveTo(hw - t, top - t, hw - rc, top - t)
+  s.lineTo(-hw + rc, top - t)
+  s.quadraticCurveTo(-hw + t, top - t, -hw + t, top - rc)
   s.lineTo(-hw + t, y0)
   s.closePath()
   const len = 1.28
-  const g = extrude(s, len)
+  const g = extrude(s, len, { curveSegments: 10 })
   g.rotateY(PI / 2)
   g.translate(0.76 + len / 2, 0, 0)
   return g
@@ -149,12 +152,155 @@ function topLink(l: number) {
   return merge(body, rodA, rodB, e0, e1)
 }
 
+/* ------------------------------ detail (closed solids, standing proud of what they sit on) ------------------------------ */
+
+/** lamp facing +X: housing cup and lens, front face at x = 0 */
+function lamp(r: number, depth: number) {
+  const housing = lathe([[0, -depth], [r * 0.7, -depth], [r, -depth * 0.3], [r, 0], [r * 0.86, 0], [r * 0.86, -depth * 0.25], [0, -depth * 0.25]], 24)
+  const lens = lathe([[0, -depth * 0.25], [r * 0.86, -depth * 0.25], [r * 0.84, -depth * 0.1], [0, -depth * 0.05]], 24)
+  return { housing: housing.rotateZ(-PI / 2), lens: lens.rotateZ(-PI / 2) }
+}
+
+function detailGeometry() {
+  // nose: dark backing, bars, chrome surround, headlamps, badge
+  const nx = 2.042
+  const grilleBack = box(0.012, 0.4, 0.58)
+  grilleBack.translate(nx + 0.006, 1.19, 0)
+  const bars: THREE.BufferGeometry[] = []
+  for (let i = 0; i < 6; i++) bars.push(xform(box(0.022, 0.016, 0.54), mat4.t(nx + 0.023, 1.02 + i * 0.036, 0)))
+  const frame = merge(
+    // bars overlap into each other (no edges shared), so the merged surround stays a clean solid
+    xform(box(0.03, 0.03, 0.6), mat4.t(nx + 0.018, 1.405, 0)),
+    xform(box(0.03, 0.03, 0.6), mat4.t(nx + 0.018, 0.985, 0)),
+    xform(box(0.032, 0.452, 0.03), mat4.t(nx + 0.018, 1.195, 0.305)),
+    xform(box(0.032, 0.452, 0.03), mat4.t(nx + 0.018, 1.195, -0.305)),
+  )
+  const lamps = [1, -1].map((sz) => {
+    const l = lamp(0.055, 0.05)
+    l.housing.translate(nx + 0.05, 1.3, sz * 0.19)
+    l.lens.translate(nx + 0.05, 1.3, sz * 0.19)
+    return l
+  })
+  const badge = roundedBox(0.16, 0.06, 0.012, 0.01)
+  badge.rotateY(PI / 2)
+  badge.translate(nx + 0.03, 1.3, 0)
+  // bonnet side louvres and pinstripe (stand proud of the panel)
+  const hw = 0.33
+  const louvres: THREE.BufferGeometry[] = []
+  for (const sz of [1, -1]) for (let i = 0; i < 5; i++) louvres.push(xform(box(0.16, 0.014, 0.008), mat4.t(1.62, 1.1 + i * 0.032, sz * (hw + 0.004))))
+  const stripe = merge(...[1, -1].map((sz) => xform(box(1.18, 0.028, 0.006), mat4.t(1.36, 1.3, sz * (hw + 0.003)))))
+  // exhaust: manifold pipe, muffler, tailpipe (tip at y 2.06, where the smoke leaves)
+  const exPipe = merge(
+    pipe(new THREE.CatmullRomCurve3([new THREE.Vector3(1.45, 1.16, 0.16), new THREE.Vector3(1.45, 1.4, 0.2), new THREE.Vector3(1.45, 1.53, 0.2)]), 0.034, 0.026, 24, 14),
+    xform(cylinder(0.03, 0.24, 18), mat4.t(1.45, 1.94, 0.2)),
+  )
+  const muffler = lathe([[0.028, 1.5], [0.034, 1.5], [0.066, 1.53], [0.066, 1.8], [0.034, 1.84], [0.028, 1.84]], 28)
+  muffler.translate(1.45, 0, 0.2)
+  // instrument pod and gauges (facing the driver, towards -X)
+  const pod = roundedBox(0.1, 0.13, 0.38, 0.03)
+  pod.translate(0.37, 1.335, 0)
+  const bezels: THREE.BufferGeometry[] = []
+  const faces: THREE.BufferGeometry[] = []
+  for (const z of [-0.11, 0, 0.11]) {
+    const b = tube(0.042, 0.032, 0.012, 24)
+    b.rotateZ(PI / 2)
+    b.translate(0.314, 1.34, z)
+    bezels.push(b)
+    const fc = cylinder(0.032, 0.006, 24)
+    fc.rotateZ(PI / 2)
+    fc.translate(0.317, 1.34, z)
+    faces.push(fc)
+  }
+  // seat bolsters and armrests, fuel filler
+  const seatSides = merge(
+    ...[1, -1].map((sz) => xform(roundedBox(0.4, 0.09, 0.06, 0.025), mat4.t(-0.08, 1.31, sz * 0.205))),
+    ...[1, -1].map((sz) => xform(roundedBox(0.32, 0.05, 0.07, 0.02), mat4.t(-0.06, 1.45, sz * 0.27))),
+    ...[1, -1].map((sz) => xform(box(0.04, 0.16, 0.04), mat4.t(-0.18, 1.36, sz * 0.27))),
+  )
+  const filler = merge(xform(cylinder(0.038, 0.035, 20), mat4.t(0.6, 1.385, 0.15)), xform(cylinder(0.045, 0.015, 20), mat4.t(0.6, 1.41, 0.15)))
+  // tail lights on the fenders; hoses down to the rear remote couplers
+  const fz = REAR_Z + (R.width + 0.1) / 2
+  const tail = merge(...[1, -1].map((sz) => xform(roundedBox(0.09, 0.05, 0.03, 0.01), mat4.t(-0.62, AXLE_Y + 0.4, sz * (fz + 0.016)))))
+  const hoses: THREE.BufferGeometry[] = []
+  const couplers: THREE.BufferGeometry[] = []
+  for (const sz of [1, -1]) {
+    for (const dz of [0, 0.07]) {
+      const z = sz * (0.12 + dz)
+      hoses.push(pipe(new THREE.CatmullRomCurve3([new THREE.Vector3(0.0, 1.06, z), new THREE.Vector3(-0.14, 1.06, z), new THREE.Vector3(-0.26, 0.96, z), new THREE.Vector3(-0.27, 0.88, z)]), 0.011, 0, 20, 8))
+      couplers.push(xform(xAxis(cylinder(0.016, 0.06, 12)), mat4.t(-0.27, 0.86, z)), xform(xAxis(cylinder(0.02, 0.02, 12)), mat4.t(-0.31, 0.86, z)))
+    }
+  }
+  // wheel hardware (local wheel frames, outer face +Z)
+  // wheel nuts and hub caps come with the shared wheels (parts library)
+  const rearHub = wheel(FARMLAND_REAR).hub!
+  const frontHub = wheel(FARMLAND_FRONT).hub!
+  // ROPS work lights and beacon
+  const wl = [1, -1].map((sz) => {
+    const l = lamp(0.04, 0.05)
+    l.housing.translate(-0.36, 2.19, sz * 0.3)
+    l.lens.translate(-0.36, 2.19, sz * 0.3)
+    return l
+  })
+  const brackets = merge(...[1, -1].map((sz) => xform(box(0.06, 0.03, 0.03), mat4.t(-0.42, 2.19, sz * 0.3))))
+  const beacon = lathe([[0, 2.29], [0.045, 2.29], [0.045, 2.31], [0.038, 2.36], [0, 2.38]], 20)
+  beacon.translate(-0.42, 0, -0.26)
+  return {
+    grilleBack,
+    grilleBars: merge(...bars),
+    grilleFrame: frame,
+    lampHousings: merge(lamps[0].housing, lamps[1].housing),
+    lampLenses: merge(lamps[0].lens, lamps[1].lens),
+    badge,
+    louvres: merge(...louvres),
+    stripe,
+    exPipe,
+    muffler,
+    pod,
+    bezels: merge(...bezels),
+    gaugeFaces: merge(...faces),
+    seatSides,
+    filler,
+    tail,
+    hoses: merge(...hoses),
+    couplers: merge(...couplers),
+    rearHub,
+    frontHub,
+    workLights: merge(wl[0].housing, wl[1].housing, brackets),
+    workLenses: merge(wl[0].lens, wl[1].lens),
+    beacon,
+    cab: cabGeometry(),
+  }
+}
+
+/** Optional enclosed cab, in place of the ROPS: posts, roof, rails and glass. */
+function cabGeometry() {
+  const x0 = -0.56
+  const x1 = 0.46
+  const hz = 0.455
+  const y0 = 0.98
+  const y1 = 2.28
+  const posts = merge(...[x0, x1].flatMap((x) => [1, -1].map((sz) => xform(roundedBox(0.06, y1 - y0, 0.06, 0.02), mat4.t(x, (y0 + y1) / 2, sz * hz)))))
+  const roof = roundedBox(x1 - x0 + 0.16, 0.1, 2 * hz + 0.14, 0.04)
+  roof.translate((x0 + x1) / 2, y1 + 0.05, 0)
+  const rails = merge(...[1, -1].map((sz) => xform(box(x1 - x0 - 0.06, 0.04, 0.04), mat4.t((x0 + x1) / 2, y0 + 0.42, sz * hz))))
+  const t = 0.008
+  const h = y1 - y0 - 0.06
+  const glass = merge(
+    xform(box(t, h, 2 * hz - 0.07), mat4.t(x1, (y0 + y1) / 2, 0)),
+    xform(box(t, h, 2 * hz - 0.07), mat4.t(x0, (y0 + y1) / 2, 0)),
+    ...[1, -1].map((sz) => xform(box(x1 - x0 - 0.07, h, t), mat4.t((x0 + x1) / 2, (y0 + y1) / 2, sz * hz))),
+  )
+  const lights = merge(...[1, -1].map((sz) => xform(roundedBox(0.05, 0.05, 0.12, 0.015), mat4.t(x1 + 0.07, y1 + 0.03, sz * 0.3))))
+  return { posts, roof, rails, glass, lights }
+}
+
 export function buildTractorGeometry() {
   // ------------------------------------------------------------ wheels (local, axis Z)
-  const rearTyre = zAxis(tyre({ radius: R.radius, width: R.width, rimRadius: R.rimRadius, lugs: 23, lugAngleDeg: 45, pattern: 'R1' }))
-  const rearRim = zAxis(rim(R.rimRadius, R.width * 0.86, 0.11, 0.07))
-  const frontTyre = zAxis(tyre({ radius: F.radius, width: F.width, rimRadius: F.rimRadius, pattern: 'F2' }))
-  const frontRim = zAxis(rim(F.rimRadius, F.width * 0.8, 0.065, 0.035))
+  // the shared wheels: the library's Farmland presets are this tractor's 14.9-28 and 7.50-16
+  const rearTyre = wheel(FARMLAND_REAR).tyre
+  const rearRim = wheel(FARMLAND_REAR).rim
+  const frontTyre = wheel(FARMLAND_FRONT).tyre
+  const frontRim = wheel(FARMLAND_FRONT).rim
 
   // ------------------------------------------------------------ engine (housings)
   const block = shellBox(0.9, 0.5, 0.42, 0.03, 0.03, 1.27, 0.8) // x 0.82–1.72, y 0.55–1.05
@@ -164,19 +310,10 @@ export function buildTractorGeometry() {
   const timingCover = roundedBox(0.08, 0.5, 0.4, 0.03)
   timingCover.translate(1.76, 0.78, 0)
   const bonnet = bonnetShell()
-  const grille = box(0.03, 0.42, 0.64)
-  grille.translate(2.055, 1.19, 0)
   const radiator = box(0.07, 0.36, 0.5)
   radiator.translate(1.96, 1.16, 0)
   const bolster = box(0.3, 0.17, 0.34)
   bolster.translate(1.92, 0.535, 0)
-  const exhaust = pipe(
-    new THREE.CatmullRomCurve3([new THREE.Vector3(1.45, 1.16, 0.16), new THREE.Vector3(1.45, 1.45, 0.2), new THREE.Vector3(1.45, 2.02, 0.2)]),
-    0.034,
-    0.028,
-    32,
-    16,
-  )
   const airCleaner = cylinder(0.065, 0.4, 28)
   airCleaner.translate(1.2, 1.62, -0.18)
   const preCleaner = lathe(
@@ -345,10 +482,8 @@ export function buildTractorGeometry() {
     head,
     timingCover,
     bonnet,
-    grille,
     radiator,
     bolster,
-    exhaust,
     airCleaner: merge(airCleaner, preCleaner),
     clutchHousing,
     gearbox,
@@ -389,6 +524,7 @@ export function buildTractorGeometry() {
     liftArm,
     liftRod,
     rockshaft,
+    detail: detailGeometry(),
   }
 }
 

@@ -10,8 +10,7 @@ import { SoilSurface } from '@/render/SoilSurface'
 import { discNormal } from '@/physics/tillage'
 import { createTractorPose } from '@/tractor/Tractor'
 import { FieldGround, FieldRun, makeSoil, mirror } from '../_shared/field'
-import { bar, hash, plateXY, rod, type P3 } from '../_shared/geom'
-import { concaveDisc, landWheel } from '../_tillage/parts'
+import { bar, concaveDisc, hash, headstockGeometry, landWheel, rod, type P3 } from '@/parts/lib/implements'
 import { freshSoil, treadmill, type Treadmill } from '../_tillage/soil'
 import { LiveTag, Segment } from '../_tillage/three'
 import { BEAM_Y, C, HARROW, HH, HS, RAISED, discOf, live, useDisc } from './model'
@@ -87,9 +86,7 @@ function usePloughGeo() {
     }
     const frame = merge(
       bar([0.1, BEAM_Y, f.z - 0.05], [l.x - 0.5, BEAM_Y, l.z + 0.12], 0.08, 0.1),
-      bar([0, 0, -0.45], [0, 0, 0.45], 0.05, 0.05),
-      plateXY([[-0.06, -0.03], [0.05, -0.03], [0.02, 0.66], [-0.04, 0.66]], 0.016, 0.08),
-      plateXY([[-0.06, -0.03], [0.05, -0.03], [0.02, 0.66], [-0.04, 0.66]], 0.016, -0.08),
+      headstockGeometry({ plateZ: 0.08 }),
       bar([0, 0.6, 0], [f.x * 0.5, BEAM_Y, (f.z + l.z) / 2], 0.05, 0.05),
       bar([0, 0.02, 0.3], [f.x * 0.4, BEAM_Y, f.z * 0.2], 0.05, 0.05),
     )
@@ -155,9 +152,7 @@ function useHarrowGeo() {
       bar([-1.35, 0.15, -1.05], [-1.35, 0.15, 1.05], 0.08, 0.08),
       bar([0, 0.15, -0.6], [-1.4, 0.15, -0.6], 0.08, 0.08),
       bar([0, 0.15, 0.6], [-1.4, 0.15, 0.6], 0.08, 0.08),
-      bar([0, 0, -0.45], [0, 0, 0.45], 0.05, 0.05),
-      plateXY([[-0.06, -0.03], [0.05, -0.03], [0.02, 0.66], [-0.04, 0.66]], 0.016, 0.1),
-      plateXY([[-0.06, -0.03], [0.05, -0.03], [0.02, 0.66], [-0.04, 0.66]], 0.016, -0.1),
+      headstockGeometry(),
       bar([0, 0.6, 0], [-0.55, 0.15, 0], 0.05, 0.05),
     )
     const g = (st.gangAngle * Math.PI) / 180

@@ -1,19 +1,21 @@
 import { useMemo, useRef, type RefObject } from 'react'
 import * as THREE from 'three'
 import { useSimFrame } from '@/core/sim'
-import { cylinder, merge, pipe } from '@/geometry'
+import { merge, pipe } from '@/geometry'
 import { FieldGround, Level, makeSoil, mirror, resetSoil } from '@/modules/implements/_shared/field'
-import { bar, plateXY, plateXZ, rod } from '@/modules/implements/_shared/geom'
+import { aFrameMast, bar, discGang, plateXY, plateXZ } from '@/parts/lib/implements'
 import { PartLabel } from '@/render/Label'
 import { Part, PartMesh } from '@/render/Part'
-import { PROFILES, pressPrint, stampRun } from '@/render/soil'
+import { PROFILES, stampRun } from '@/render/soil'
+import { pressTractor, rutDepths } from '@/tractor/ruts'
 import { TRACTOR } from '@/tractor/dims'
+import { farmlandEffects } from '@/tractor/effects'
 import { Tractor, createTractorPose } from '@/tractor/Tractor'
 import { C, FIELD, IMPLEMENTS, lanePlan, live, operating, pointAt, useField, type FieldParams, type ImplementId } from './model'
 
 const { PI } = Math
 export const pose = createTractorPose({ hitchHeight: 0.6 })
-export const grid = makeSoil({ ...FIELD, cell: 0.12 }, 9)
+export const grid = makeSoil({ ...FIELD, cell: 0.08 }, 9)
 const RAISED = 0.85
 const drive = { s: 0, lastToolX: NaN, lastLane: -1, printAcc: 0, plan: lanePlan(IMPLEMENTS.plough.W), planFor: 'plough' as ImplementId, loops: 0 }
 
@@ -40,7 +42,7 @@ const INFO: Record<Exclude<ImplementId, 'none'>, { summary: string; role: string
 }
 
 function headstock(hw: number) {
-  return [rod([0, hw, 0.43], [0, hw, -0.43], 0.02, 12), bar([0, hw, 0.38], [0.02, hw + 0.61, 0.04], 0.06, 0.014), bar([0, hw, -0.38], [0.02, hw + 0.61, -0.04], 0.06, 0.014)]
+  return [aFrameMast({ at: [0, hw, 0] })]
 }
 
 function implementGeometry(id: Exclude<ImplementId, 'none'>) {
@@ -63,11 +65,7 @@ function implementGeometry(id: Exclude<ImplementId, 'none'>) {
     }
   } else if (id === 'disc') {
     frame.push(bar([0, hw + 0.05, 0], [-1.8, 0.55, 0], 0.1, 0.1), bar([-0.4, 0.55, 1.25], [-0.4, 0.55, -1.25], 0.1, 0.1), bar([-1.4, 0.55, 1.25], [-1.4, 0.55, -1.25], 0.1, 0.1))
-    const gang = () => {
-      const discs: THREE.BufferGeometry[] = [cylinder(0.02, 1.15, 10).rotateX(PI / 2)]
-      for (let k = 0; k < 5; k++) discs.push(cylinder(0.25, 0.012, 32).rotateX(PI / 2).translate(0, 0, -0.5 + k * 0.25))
-      return merge(...discs)
-    }
+    const gang = () => discGang()
     for (const [x, s, a] of [[-0.45, 1, 0.3], [-0.45, -1, -0.3], [-1.45, 1, -0.3], [-1.45, -1, 0.3]] as const) spin.push({ at: [x, 0.17, s * 0.62], yaw: a, geo: gang() })
   } else if (id === 'cultivator') {
     frame.push(bar([0, hw + 0.05, 0], [-1.3, 0.62, 0], 0.08, 0.08), bar([-0.5, 0.62, 1.3], [-0.5, 0.62, -1.3], 0.08, 0.08), bar([-1.1, 0.62, 1.3], [-1.1, 0.62, -1.3], 0.08, 0.08))
@@ -210,13 +208,13 @@ export function Field3D() {
     pose.frontAngle += (V * dt) / TRACTOR.front.radius
     pose.engineAngle += (dt * 2 * PI * (Number.isFinite(d.rpm) ? d.rpm : 0)) / 60
     pose.hitchHeight = RAISED + (spec.hw - RAISED) * lowered
-    // rear-wheel prints
+    pose.effects = farmlandEffects({ Te: d.Te, rpm: d.rpm, V, slip: d.slip, stalled: d.stalled }, 0.85)
+    // tyre ruts: depth from the axle loads, the soil strength and the slip
     drive.printAcc += V * dt
-    if (drive.printAcc > 0.3) {
+    if (drive.printAcc > 0.12) {
       drive.printAcc = 0
-      const sx = -Math.sin(p2.h)
-      const sz = -Math.cos(p2.h)
-      for (const s of [1, -1]) pressPrint(grid, p2.x + s * sx * (TRACTOR.rear.track / 2), p2.z + s * sz * (TRACTOR.rear.track / 2), 0.14, TRACTOR.rear.width / 2, 0.015, 0.8)
+      const slip = Number.isFinite(d.slip) ? d.slip : 0
+      pressTractor(grid, p2.x, p2.z, p2.h, rutDepths(d.Vr, d.Vf, st.CI * 1000, slip), slip)
     }
     // work the soil behind the tool
     if (tool.current && lowered > 0.6) {

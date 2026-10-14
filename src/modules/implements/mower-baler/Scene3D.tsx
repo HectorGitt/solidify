@@ -11,8 +11,8 @@ import { TRACTOR } from '@/tractor/dims'
 import { PTO_STUB_X, PTO_Y } from '@/tractor/geometry'
 import { Tractor, createTractorPose } from '@/tractor/Tractor'
 import { Level } from '../_shared/field'
-import { bar, plateXY, plateXZ, rod } from '../_shared/geom'
-import { Ground, PtoDriveline, wheelGeometry, wrapX, type Treadmill } from '../_appkit/three'
+import { aFrameMast, auger as augerGeo, balerFlywheel, balerNeedle, balerPlunger, bar, cutterBar, knotter, packerFork, pickupReel, pitmanWheel, plateXY, plateXZ, ramCrank as ramCrankGeo, roadWheel, rod, sickle } from '@/parts/lib/implements'
+import { Ground, PtoDriveline, wrapX, type Treadmill } from '../_appkit/three'
 import { BALER, C, HITCH_H, HX, HY, MOWER, PITMAN, PTO_WORLD, RAM_FDC, baler, crankRpmFor, live, useHay } from './model'
 
 const { PI } = Math
@@ -63,43 +63,6 @@ const INFO = {
 
 /* ------------------------------ helpers ------------------------------ */
 
-class Helix extends THREE.Curve<THREE.Vector3> {
-  z0: number
-  z1: number
-  R: number
-  turns: number
-  constructor(z0: number, z1: number, R: number, turns: number) {
-    super()
-    this.z0 = z0
-    this.z1 = z1
-    this.R = R
-    this.turns = turns
-  }
-  getPoint(t: number, target = new THREE.Vector3()) {
-    const a = t * this.turns * 2 * PI
-    return target.set(this.R * Math.cos(a), this.R * Math.sin(a), this.z0 + (this.z1 - this.z0) * t)
-  }
-}
-
-/** Circular arc in the XY plane at z. */
-class Arc extends THREE.Curve<THREE.Vector3> {
-  R: number
-  a0: number
-  a1: number
-  z: number
-  constructor(R: number, a0: number, a1: number, z: number) {
-    super()
-    this.R = R
-    this.a0 = a0
-    this.a1 = a1
-    this.z = z
-  }
-  getPoint(t: number, target = new THREE.Vector3()) {
-    const a = this.a0 + (this.a1 - this.a0) * t
-    return target.set(this.R * Math.cos(a), this.R * Math.sin(a), this.z)
-  }
-}
-
 function stalkGeometry(h = 1) {
   return lathe([[0, 0], [0.006, 0], [0.012, h * 0.4], [0.003, h], [0, h]], 5)
 }
@@ -143,18 +106,8 @@ function Mower() {
   const regOffset = useHay((s) => s.regOffset)
   const g = useMemo(() => {
     const { x, y, zIn, L, pitch, crankZ, crankY, jackY } = MOWER
-    const n = Math.round(L / pitch)
-    const guards: THREE.BufferGeometry[] = [box(0.05, 0.02, L + 0.06).translate(-0.04, y - 0.012, -L / 2)]
-    const ledger: THREE.BufferGeometry[] = []
-    const clips: THREE.BufferGeometry[] = []
-    for (let i = 0; i <= n; i++) {
-      const z = -i * pitch
-      guards.push(plateXZ([[-0.03, z - 0.012], [0.11, z - 0.004], [0.11, z + 0.004], [-0.03, z + 0.012]], 0.022, y - 0.004))
-      ledger.push(box(0.07, 0.004, 0.022).translate(0.035, y + 0.009, z))
-      if (i % 4 === 2) clips.push(box(0.05, 0.006, 0.03).translate(-0.01, y + 0.03, z), box(0.04, 0.004, 0.04).translate(-0.045, y + 0.012, z))
-    }
-    const sections: THREE.BufferGeometry[] = [box(0.022, 0.008, L).translate(-0.012, y + 0.016, -L / 2)]
-    for (let i = 0; i < n; i++) sections.push(plateXZ([[-0.004, -i * pitch - pitch / 2 + 0.003], [0.075, -i * pitch - 0.006], [0.075, -i * pitch + 0.006], [-0.004, -i * pitch + pitch / 2 - 0.003]], 0.004, y + 0.018))
+    const bar0 = cutterBar({ from: 0, to: -L, pitch, y })
+    const knifeG = sickle({ from: 0, to: -L, pitch, y })
     const knifeHead = box(0.06, 0.04, 0.06).translate(-0.005, y + 0.03, 0.03)
     const innerShoe = merge(plateXY([[-0.25, y - 0.03], [0.22, y - 0.03], [0.3, y + 0.05], [-0.25, y + 0.1]], 0.12, 0.02))
     const outerShoe = merge(plateXY([[-0.2, y - 0.03], [0.2, y - 0.03], [0.28, y + 0.06], [-0.2, y + 0.12]], 0.07, -L - 0.07), pipe(new THREE.CatmullRomCurve3([new THREE.Vector3(-0.1, 0.12, -L - 0.04), new THREE.Vector3(-0.45, 0.35, -L - 0.08), new THREE.Vector3(-0.8, 0.3, -L - 0.12)]), 0.012, 0, 24, 8))
@@ -163,19 +116,17 @@ function Mower() {
     const gOut = gear({ teeth: MOWER.gearOut, module: m, width: 0.025, bore: 0.012 })
     gIn.rotateY(PI / 2)
     gOut.rotateY(PI / 2)
-    const crank = merge(cylinder(0.11, 0.03, 32).rotateZ(PI / 2), cylinder(0.012, 0.06, 12).rotateZ(PI / 2).translate(-0.03, PITMAN.r, 0), cylinder(0.02, 0.2, 12).rotateZ(PI / 2).translate(0.1, 0, 0))
+    const crank = pitmanWheel(PITMAN.r)
     const pitman = cylinder(0.016, 1, 10).rotateZ(PI / 2).translate(0.5, 0, 0)
     const caseG = merge(box(0.08, jackY - crankY + 0.24, 0.32).translate(x + 0.14, (jackY + crankY) / 2, crankZ))
     const frame = merge(
-      rod([HX, HY, 0.41], [HX, HY, -0.41], 0.02, 12),
-      bar([HX, HY, 0.36], [HX, HY + 0.61, 0.04], 0.06, 0.012),
-      bar([HX, HY, -0.36], [HX, HY + 0.61, -0.04], 0.06, 0.012),
+      aFrameMast({ at: [HX, HY, 0], pinHalf: 0.41, footZ: 0.36, topX: 0, legT: 0.012 }),
       bar([HX, HY, -0.3], [x + 0.2, jackY + 0.1, crankZ - 0.05], 0.06, 0.06),
       bar([HX, HY + 0.6, 0], [x + 0.2, jackY + 0.15, crankZ], 0.05, 0.05),
       bar([x + 0.16, crankY - 0.05, crankZ - 0.1], [x - 0.05, y + 0.05, zIn + 0.02], 0.06, 0.05),
     )
     const stalk = stalkGeometry(1)
-    return { guards: merge(...guards), ledger: merge(...ledger), clips: merge(...clips), knife: merge(...sections, knifeHead), innerShoe, outerShoe, gIn, gOut, crank, pitman, caseG, frame, stalk }
+    return { guards: bar0.guards, ledger: bar0.ledgers, clips: bar0.clips!, knife: merge(knifeG, knifeHead), innerShoe, outerShoe, gIn, gOut, crank, pitman, caseG, frame, stalk }
   }, [])
 
   const knife = useRef<THREE.Group>(null)
@@ -318,32 +269,15 @@ function MowerCrop() {
 function Baler() {
   const g = useMemo(() => {
     const { pickZ, pickR, cz } = BALER
-    const pw = pickZ[1] - pickZ[0]
-    const tines: THREE.BufferGeometry[] = [cylinder(0.06, pw, 20).rotateX(PI / 2)]
-    for (let i = 0; i < 4; i++)
-      for (let j = 0; j < 9; j++) {
-        const a = (i / 4) * 2 * PI
-        const z = -pw / 2 + ((j + 0.5) / 9) * pw
-        tines.push(rod([0.06 * Math.cos(a), 0.06 * Math.sin(a), z], [pickR * Math.cos(a + 0.3), pickR * Math.sin(a + 0.3), z], 0.005, 6))
-      }
-    const bands: THREE.BufferGeometry[] = []
-    for (let j = 0; j <= 9; j++) {
-      const z = pickZ[0] + (j / 9) * pw
-      bands.push(pipe(new Arc(pickR - 0.02, 0.2, PI * 1.1, z), 0.006, 0, 12, 6))
-    }
+    const pick = pickupReel({ width: pickZ[1] - pickZ[0], r: pickR, z0: pickZ[0] })
     const augerLen = cz - CH.w / 2 - pickZ[0]
-    const auger = merge(cylinder(0.05, augerLen, 16).rotateX(PI / 2), pipe(new Helix(-augerLen / 2, augerLen / 2, 0.15, 4), 0.02, 0, 120, 8))
-    const ram = merge(box(RAM.len, CH.h - 0.02, CH.w - 0.02).translate(RAM.len / 2, 0, 0), box(0.02, CH.h * 0.6, 0.03).translate(0.01, -CH.h * 0.18, -CH.w / 2 + 0.03))
-    const ramCrank = merge(cylinder(RAM.r + 0.06, 0.05, 36).rotateX(PI / 2), cylinder(0.03, 0.12, 12).rotateX(PI / 2).translate(RAM.r, 0, -0.06))
+    const auger = augerGeo({ tubeR: 0.05, flightR: 0.15, z0: -augerLen / 2, z1: augerLen / 2, turns: 4, wire: 0.02 })
+    const ram = balerPlunger(RAM.len, CH.h - 0.02, CH.w - 0.02)
     const ramRod = box(1, 0.06, 0.05).translate(0.5, 0, 0)
-    const flywheel = merge(cylinder(0.3, 0.07, 40).rotateZ(PI / 2), cylinder(0.025, 0.5, 12).rotateZ(PI / 2).translate(0.2, 0, 0))
-    const packer = merge(bar([0, 0, 0], [0, -0.5, -0.05], 0.03, 0.03), rod([0, -0.5, -0.05], [0, -0.62, 0.08], 0.01, 6), rod([0.05, -0.5, -0.05], [0.05, -0.62, 0.08], 0.01, 6))
-    const knotter = merge(box(0.5, 0.08, 0.5).translate(0, 0.04, 0), cylinder(0.12, 0.04, 20).rotateX(PI / 2).translate(0, 0.16, 0.12), box(0.12, 0.2, 0.06).translate(0.18, 0.12, -0.2))
-    const needle = pipe(new THREE.CatmullRomCurve3([new THREE.Vector3(0, 0, 0), new THREE.Vector3(0.35, 0.12, 0), new THREE.Vector3(0.55, 0.45, 0), new THREE.Vector3(0.58, 0.75, 0)]), 0.012, 0, 24, 6)
     const baleBox = box(1, 1, 1)
     const straw = box(0.06, 0.04, 0.1)
-    const wheel = wheelGeometry(BALER.wheelR, 0.2)
-    return { chamber: chamberGeometry(), tines: merge(...tines), bands: merge(...bands), auger, ram, ramCrank, ramRod, flywheel, packer, knotter, needle, baleBox, straw, wheel }
+    const wheel = roadWheel(BALER.wheelR, 0.2)
+    return { chamber: chamberGeometry(), tines: pick.tines, bands: pick.bands, auger, ram, ramCrank: ramCrankGeo(RAM.r), ramRod, flywheel: balerFlywheel(), packer: packerFork(), knotter: knotter(), needle: balerNeedle(), baleBox, straw, wheel }
   }, [])
 
   const pick = useRef<THREE.Group>(null)

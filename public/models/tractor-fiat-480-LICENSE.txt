@@ -1,0 +1,8 @@
+"Tractor Fiat 480 Low Poly Model" by usama_javaid
+https://sketchfab.com/3d-models/tractor-fiat-480-low-poly-model-8dd257c888c84a86b73fd927e450a1b5
+Author: https://sketchfab.com/usama_javaid
+Licence: Creative Commons Attribution 4.0 International (CC BY 4.0)
+http://creativecommons.org/licenses/by/4.0/
+
+Used in Solidify as the exterior of the tractor in the field scenes. Modified: rescaled,
+re-pivoted wheels and placed on Solidify's tractor dimensions; the driver figure may be hidden.

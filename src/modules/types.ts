@@ -39,6 +39,7 @@ export interface SceneDef {
   Panel?: ComponentType
   camera: CameraPose
   cutPresets?: CutPreset[]
+  /** cut preset applied on entry; leave undefined to open the scene whole (uncut) */
   defaultPreset?: string
   /** world units between hatch lines on section caps */
   hatchScale?: number
@@ -54,9 +55,21 @@ export interface SceneDef {
   reset?: () => void
   /** part id the camera keeps following (e.g. 'tractor' in field scenes), preserving its offset */
   follow?: string
+  /**
+   * Live values handed to a detail scene when you drill down from here, in shared units:
+   * rpm, slip (0–1), pullKN, wheelLoadKN, speedKmh, CI (kPa), tyre ('bias' | 'radial').
+   */
+  context?: () => SceneContext
+  /** settings for this scene from the context of the scene you came from (null = ignore) */
+  fromContext?: (ctx: SceneContext) => Record<string, unknown> | null
+  /** side-by-side comparison of a few variants of the current settings */
+  compare?: CompareDef
   /** async work before the scene mounts (e.g. building CSG geometry in the worker) */
   prepare?: () => Promise<unknown>
 }
+
+/** shared live values passed between scenes on drill-down */
+export type SceneContext = Partial<{ rpm: number; slip: number; pullKN: number; wheelLoadKN: number; speedKmh: number; CI: number; tyre: 'bias' | 'radial' }>
 
 export interface SceneEntry {
   id: string
@@ -77,4 +90,25 @@ export interface ModuleDef {
   courses: string[]
   blurb: string
   scenes: SceneEntry[]
+}
+
+export interface CompareMetric {
+  label: string
+  value: number
+  unit?: string
+  digits?: number
+  /** which way is better (highlights the best variant) */
+  better?: 'high' | 'low'
+  /** shown instead of the number (e.g. "spins") */
+  text?: string
+}
+
+export interface CompareDef {
+  title: string
+  /** the current settings */
+  current: () => Record<string, unknown>
+  /** each variant overrides some of the current settings */
+  variants: { label: string; params: Record<string, unknown> }[]
+  /** pure: readouts for a full set of settings */
+  metrics: (p: Record<string, unknown>) => CompareMetric[]
 }

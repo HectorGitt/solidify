@@ -9,7 +9,7 @@ import type { MaterialKey } from '@/render/materials'
 import { Part, PartMesh } from '@/render/Part'
 import { useLive } from '@/ui/live'
 import { POWER } from '../common/anim'
-import { meshPhase } from '../common/geo'
+import { meshPhase } from '@/parts/lib/shapes'
 import { DC, DISC_T, DUAL_PRIMARY, DUAL_STAGE2, GAP_X, PEDAL_RATIO, SP, WP } from './dims'
 import { BOX, FORK, IP, PEDAL, getClutchGeometry } from './geometry'
 import {

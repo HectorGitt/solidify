@@ -2,10 +2,9 @@ import { useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { useSimFrame } from '@/core/sim'
 import { box, cylinder, lathe, merge } from '@/geometry'
-import { rim, tyre } from '@/geometry/parts'
 import { SRC } from '@/content/citations'
 import { Part, PartMesh } from '@/render/Part'
-import { rod } from '../_shared/geom'
+import { rod, roadWheel } from '@/parts/lib/implements'
 
 /**
  * Helpers shared by the sprayer, spreader and mower–baler scenes. These scenes use a
@@ -83,15 +82,8 @@ export function CropRows({ mill, rows, pitch = 0.3, x0 = -12, x1 = 5, height = 0
   return <instancedMesh ref={ref} args={[geo, mat, count]} castShadow={false} frustumCulled={false} />
 }
 
-/** Implement road wheel: tyre + rim, axis along Z. */
-export function wheelGeometry(radius: number, width: number) {
-  const t = tyre({ radius, width, rimRadius: radius * 0.58, pattern: 'F2' })
-  const r = rim(radius * 0.58, width * 0.9, radius * 0.18, width * 0.1)
-  const m = new THREE.Matrix4().makeRotationX(Math.PI / 2)
-  t.applyMatrix4(m)
-  r.applyMatrix4(m)
-  return { tyre: t, rim: r }
-}
+/** Implement road wheel: tyre + rim, axis along Z (the parts library's roadWheel). */
+export const wheelGeometry = roadWheel
 
 /**
  * PTO driveline (telescoping shaft with a Hooke's joint at each end) between two points. The

@@ -234,6 +234,9 @@ export function Lube3D() {
           {CYL_X.map((x, i) => (
             <group key={x} ref={(o) => void (rods.current[i] = o)}>
               <PartMesh geometry={g.rod} />
+              <PartMesh geometry={g.rodCap} />
+              <PartMesh geometry={g.rodBolts} material="steelDark" />
+              <PartMesh geometry={g.rodBush} material="bronze" />
               <PartMesh geometry={g.rodShells} material="bearing" />
               {!force ? <PartMesh geometry={g.dipper} material="steel" /> : null}
             </group>
@@ -243,6 +246,9 @@ export function Lube3D() {
           {CYL_X.map((x, i) => (
             <group key={x} ref={(o) => void (pistons.current[i] = o)}>
               <PartMesh geometry={g.piston} />
+              <PartMesh geometry={g.pistonRings} material="steelDark" />
+              <PartMesh geometry={g.oilRing} material="castIron" />
+              <PartMesh geometry={g.gudgeonPin} material="steel" />
             </group>
           ))}
         </Part>

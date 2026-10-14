@@ -5,7 +5,8 @@ import { mat4, xform } from '@/geometry'
 import { cvBallCentre, doubleHooke, rad, rpmToRad, tripodeSolve, type TripodeState } from '@/physics/joints'
 import { PartLabel } from '@/render/Label'
 import { Part, PartMesh } from '@/render/Part'
-import { J, crossGeometry, crossQuaternion, cupsGeometry, needlesGeometry, sealsGeometry, shaftGeometry, yokeGeometry, yawQuat } from '../shared/cardan'
+import { UJ as J, ujCross, ujCups, ujNeedles, ujSeals, ujYoke } from '@/parts/lib/driveline'
+import { crossQuaternion, shaftGeometry, yawQuat } from '../shared/cardan'
 import { HJ2 } from '../shared/cites'
 import { frames, outBodyAngle, pins } from '../double-cardan/model'
 import { CV } from './dims'
@@ -46,15 +47,15 @@ export function CVJoints3D() {
 
   const hw = useMemo(
     () => ({
-      yoke: yokeGeometry(),
-      cross: crossGeometry(),
-      cups: cupsGeometry(),
-      needles: needlesGeometry(),
-      seals: sealsGeometry(),
+      yoke: ujYoke(),
+      cross: ujCross(),
+      cups: ujCups(),
+      needles: ujNeedles(),
+      seals: ujSeals(),
       inShaft: shaftGeometry(-0.5, -J.hubEnd),
       outShaft: shaftGeometry(J.hubEnd, 0.4),
       weissOut: xform(g.weissYoke, mat4.c(mat4.rx(PI / 2), mat4.ry(PI))),
-      tractaJaw: yokeGeometry(),
+      tractaJaw: ujYoke(),
     }),
     [g],
   )

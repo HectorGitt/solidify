@@ -7,7 +7,7 @@ import { box } from '@/geometry'
 import { Flow } from '@/render/Flow'
 import { PartLabel } from '@/render/Label'
 import { Part, PartMesh } from '@/render/Part'
-import { placeBevel } from './bevel'
+import { placeBevelGear as placeBevel } from '@/parts/lib/driveline'
 import { getDiffGeometry } from './geometry'
 import { APEX, CROWN_ANGLES, DIFF_ANGLES, DIM, R_CROWN, R_PINION, R_SIDE, R_SPIDER, live, radps, rpm, useDiff } from './model'
 

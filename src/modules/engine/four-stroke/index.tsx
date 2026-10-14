@@ -2,6 +2,7 @@ import { SRC } from '@/content/citations'
 import type { SceneDef } from '@/modules/types'
 import { Engine3D } from './Engine3D'
 import { prepareEngineGeometry } from './geometry'
+import { clamp, roundTo } from '@/content/context'
 import { DIM, DEFAULTS, useEngine } from './model'
 import { EnginePanel } from './Panel'
 
@@ -31,6 +32,7 @@ const scene: SceneDef = {
   cites: [SRC.l3_509('four-stroke cycle, CI vs SI'), SRC.l4_509('parts, valve timing'), SRC.tb509('Ch 2, Figs 2.1–2.3'), SRC.thermo509('air-standard cycles'), SRC.misc509('worked examples 9–17')],
   reset: () => useEngine.getState().reset(),
   prepare: prepareEngineGeometry,
+  fromContext: (c) => (c.rpm !== undefined && c.rpm > 0 ? { rpm: roundTo(clamp(c.rpm, 400, 2800), 10) } : null),
   applyParams: (p) => useEngine.getState().set(p as Partial<typeof DEFAULTS>),
   tour: [
     {

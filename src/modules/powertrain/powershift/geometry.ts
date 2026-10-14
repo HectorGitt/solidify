@@ -1,6 +1,7 @@
 import * as THREE from 'three'
 import { cylinder, mat4, merge, pipe, xform, type V2 } from '@/geometry'
-import { axial, boxFrom, casing, dogRing, internalSplinePlate, shaftZ, spur } from '../common/geo'
+import { clutchPlate } from '@/parts/lib/driveline'
+import { axial, boxFrom, casing, dogRing, shaftZ, spur } from '@/parts/lib/shapes'
 import { CS_Y, M, PACK, ST, Z } from './dims'
 
 /** Powershift unit geometry (worker-safe). */
@@ -63,8 +64,8 @@ function pack(z0: number, dir: 1 | -1, drumIn: number) {
     dir,
   )
   // discs: friction-lined, external teeth into the drum; plates: steel, internal teeth on the hub (PT p4)
-  const disc = dogRing(30, PACK.Ro, 0.081, PACK.Ri, DISC_T)
-  const plate = internalSplinePlate(24, 0.074, 0.0445, 0.0415, PLATE_T)
+  const disc = clutchPlate({ rOut: PACK.Ro, rIn: PACK.Ri, t: DISC_T, n: 30, depth: 0.081 - PACK.Ro, teeth: 'outer' })
+  const plate = clutchPlate({ rOut: 0.074, rIn: 0.0445, t: PLATE_T, n: 24, depth: 0.003, teeth: 'inner' })
   const discs: THREE.BufferGeometry[] = []
   const plates: THREE.BufferGeometry[] = []
   for (let k = 0; k < PACK.discs; k++) {

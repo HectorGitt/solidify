@@ -1,7 +1,8 @@
 import { useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { useSimFrame } from '@/core/sim'
-import { box, cylinder, mat4, merge, roundedBox, tube, xform } from '@/geometry'
+import { box, cylinder, mat4, merge, roundedBox, xform } from '@/geometry'
+import { dropArm, knuckleArm, linkRod, trackRodAdjuster } from '@/parts/lib/steeringBox'
 import { PartLabel } from '@/render/Label'
 import { Part, PartMesh } from '@/render/Part'
 import { TRACTOR } from '@/tractor/dims'
@@ -33,7 +34,6 @@ function orientX(o: THREE.Object3D | null, a: THREE.Vector3, b: THREE.Vector3, s
   if (stretch) o.scale.set(L, 1, 1)
 }
 
-const unitX = (r: number) => xform(cylinder(r, 1, 14), mat4.c(mat4.t(0.5, 0, 0), mat4.rz(Math.PI / 2)))
 const v3 = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z)
 const COL_BOTTOM = v3(0.406, 1.297, 0)
 const COL_AXIS = v3(-Math.sin(0.62), Math.cos(0.62), 0)
@@ -43,26 +43,19 @@ export function Steering3D() {
   const G = useMemo(() => {
     const boxTop = v3(BOX.x, BOX.y + 0.09, BOX.z)
     const d = boxTop.clone().sub(COL_BOTTOM)
-    const shaft = xform(unitX(0.014), new THREE.Matrix4().compose(COL_BOTTOM, new THREE.Quaternion().setFromUnitVectors(v3(1, 0, 0), d.clone().normalize()), v3(d.length(), 1, 1)))
+    const shaft = xform(linkRod(0.014), new THREE.Matrix4().compose(COL_BOTTOM, new THREE.Quaternion().setFromUnitVectors(v3(1, 0, 0), d.clone().normalize()), v3(d.length(), 1, 1)))
     const rockerLen = BOX.armZ - BOX.z + 0.02
     return {
       shaft,
       housing: roundedBox(0.13, 0.17, 0.12, 0.02),
       rocker: xform(cylinder(0.022, rockerLen, 20), mat4.c(mat4.t(0, 0, rockerLen / 2), mat4.rx(Math.PI / 2))),
-      drop: merge(xform(box(0.04, BOX.dropArm, 0.025), mat4.t(0, -BOX.dropArm / 2, 0)), xform(cylinder(0.035, 0.035, 20), mat4.rx(Math.PI / 2)), xform(new THREE.SphereGeometry(0.022, 16, 12), mat4.t(0, -BOX.dropArm, 0))),
-      drag: merge(unitX(0.014), xform(unitX(0.02), mat4.c(mat4.t(0.03, 0, 0), mat4.t(0, 0, 0)))),
-      ball: new THREE.SphereGeometry(0.024, 16, 12),
-      steerArm: merge(xform(box(0.045, 0.03, ARMS.steerLen), mat4.t(0, ARMS.steerY - FRONT_Y, -ARMS.steerLen / 2)), xform(new THREE.SphereGeometry(0.022, 16, 12), mat4.t(0, ARMS.steerY - FRONT_Y, -ARMS.steerLen))),
-      trackArm: (s: number) => {
-        const a = AXLE.arm
-        const b = AXLE.beta
-        const m = new THREE.Matrix4().makeRotationY(Math.PI + s * b)
-        return merge(xform(xform(box(a, 0.03, 0.035), mat4.t(a / 2, 0, 0)), new THREE.Matrix4().multiplyMatrices(mat4.t(0, ARMS.trackY - FRONT_Y, 0), m)), xform(new THREE.SphereGeometry(0.02, 14, 10), mat4.t(-a * Math.cos(b), ARMS.trackY - FRONT_Y, -s * a * Math.sin(b))))
-      },
-      rod: unitX(0.013),
-      sleeve: xform(tube(0.021, 0.011, 0.16, 20), mat4.rz(Math.PI / 2)),
-      clamp: merge(...[-0.07, 0.07].map((x) => xform(box(0.02, 0.05, 0.05), mat4.t(x, 0, 0)))),
-      gauge: unitX(0.006),
+      drop: dropArm({ length: BOX.dropArm, bossR: 0.035, endR: 0.022, thick: 0.025, holeR: 0.022, ballR: 0.022, ballZ: 0 }),
+      steerArm: knuckleArm({ length: ARMS.steerLen, angle: Math.PI / 2, y: ARMS.steerY - FRONT_Y, w: 0.045, ballR: 0.022 }),
+      // track-rod arm on side s (±1) points back and inboard, at the Ackermann angle β
+      trackArm: (s: number) => knuckleArm({ length: AXLE.arm, angle: Math.PI - s * AXLE.beta, y: ARMS.trackY - FRONT_Y, ballR: 0.02 }),
+      rod: linkRod(0.013),
+      ...trackRodAdjuster(),
+      gauge: linkRod(0.006),
       marker: merge(box(0.4, 0.012, 0.022), xform(box(0.03, 0.02, 0.05), mat4.t(0.19, 0, 0))),
     }
   }, [])

@@ -8,9 +8,11 @@ export function PartLabel({ partId, at, text }: { partId: string; at: [number, n
   const name = useParts((s) => s.parts[partId]?.name)
   const hidden = useView((s) => s.hidden.includes(partId))
   const isolated = useView((s) => s.isolatedId)
-  if (!labels || hidden || (isolated && isolated !== partId)) return null
+  if (!labels) return null
+  // isolating or hiding parts happens mid-render: hide with CSS, since unmounting an Html root then makes React warn
+  const show = !hidden && !(isolated && isolated !== partId)
   return (
-    <Html position={at} zIndexRange={[20, 0]} style={{ pointerEvents: 'none' }}>
+    <Html position={at} zIndexRange={[20, 0]} style={{ pointerEvents: 'none', display: show ? undefined : 'none' }}>
       <div className="part-label">
         <span style={{ display: 'inline-block', width: 5, height: 5, borderRadius: 3, background: 'var(--color-accent)', marginRight: 5, verticalAlign: 1 }} />
         {text ?? name ?? partId}

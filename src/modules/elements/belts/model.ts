@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { VBELT_SECTIONS, type VBeltSection } from '@/parts/lib/elements'
 import {
   beltMassPerMetre,
   beltSpeed,
@@ -20,12 +21,8 @@ export type Layout = 'open' | 'crossed' | 'idler'
 export type Kind = 'flat' | 'v'
 export type Section = 'Z' | 'A' | 'B'
 
-/** V-belt sections (Fenner): top width, depth, groove pitch e (m). */
-export const SECTIONS: Record<Section, { top: number; h: number; e: number; pitchW: number }> = {
-  Z: { top: 0.01, h: 0.006, e: 0.012, pitchW: 0.0085 },
-  A: { top: 0.013, h: 0.008, e: 0.015, pitchW: 0.011 },
-  B: { top: 0.017, h: 0.011, e: 0.019, pitchW: 0.014 },
-}
+/** V-belt sections (Fenner): top width, depth, groove pitch e (m) — the parts library's table. */
+export const SECTIONS: Record<Section, VBeltSection> = VBELT_SECTIONS
 
 /** Fenner Table 5 (page F13): arc-of-contact correction factor against (D − d)/C. */
 export const ARC_TABLE: [number, number][] = [

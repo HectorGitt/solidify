@@ -91,6 +91,30 @@ export const PINION_PHASE = ELEMENT_X.map((xe) => {
   return ((u - Math.round(u)) * p) / ELEMENT.sleeveR
 })
 
+/**
+ * Pose of pump element i for a pump-camshaft angle and rack position: tappet, plunger and spring
+ * heights, plunger/sleeve rotation, and whether it is delivering. Shared by this scene and the
+ * whole-tractor view.
+ */
+export function elementPose(cam: number, rack: number, i: number) {
+  const s = plungerState(cam - ELEMENT_PHASE[i], rack, ELEMENT)
+  const springY0 = TAPPET_Y0 + DIM.tappetH + s.lift
+  return {
+    ...s,
+    x: ELEMENT_X[i],
+    tappetY: TAPPET_Y0 + s.lift,
+    plungerY: PLUNGER_Y0 + s.lift,
+    plungerTop: PLUNGER_TOP0 + s.lift,
+    springY0,
+    springLen: DIM.springTop - springY0,
+    /** plunger and sleeve rotation set by the rack */
+    rot: -Math.min(ELEMENT.maxRotation, rack / ELEMENT.sleeveR),
+  }
+}
+
+/** Lift-pump plunger height: an eccentric (e = 3 mm) on the pump camshaft under a spring-returned plunger. */
+export const feedPlungerY = (cam: number) => LAYOUT.camY + 0.003 * Math.cos(cam) + 0.012
+
 /** Rack travel range, m. 0 = stop; 10 mm = maximum (excess fuel for starting). */
 export const RACK_MAX = 0.01
 

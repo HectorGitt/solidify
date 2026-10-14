@@ -1,6 +1,7 @@
 import * as THREE from 'three'
 import { create } from 'zustand'
 import { PITCH, chainSpeed, chordalVariation, designPower, drivenSpeed, pitchDiameter, speedRatio, strandRating, strandsNeeded, type PitchKey } from '@/physics/elements'
+import { rollerChainDims } from '@/parts/lib/elements'
 import { beltLoop, type BeltLoop } from '../_shared/loop'
 
 const { PI, sin } = Math
@@ -49,10 +50,8 @@ interface Store extends ChainParams {
 
 export const useChains = create<Store>((set) => ({ ...DEFAULTS, set: (p) => set(p), reset: () => set(DEFAULTS) }))
 
-/** Roller-chain proportions from the pitch (close to ISO 606 B-series). */
-export function chainDims(p: number) {
-  return { p, roller: 0.63 * p, inner: 0.62 * p, pin: 0.31 * p, bush: 0.45 * p, h: 0.86 * p, tp: 0.12 * p, transverse: 1.09 * p }
-}
+/** Roller-chain proportions from the pitch (close to ISO 606 B-series): the parts library's. */
+export const chainDims = rollerChainDims
 
 export const pitchRadius = (z: number, p: number) => pitchDiameter(z, p) / 2
 

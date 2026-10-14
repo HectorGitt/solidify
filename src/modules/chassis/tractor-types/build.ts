@@ -1,7 +1,9 @@
 import * as THREE from 'three'
-import { box, cylinder, extrude, merge, roundedBox, roundedRect, tube } from '@/geometry'
+import { box, cylinder, extrude, merge, roundedBox, tube } from '@/geometry'
 import type { MaterialKey } from '@/render/materials'
-import { bar, wheelGeo } from '../common/wheel'
+import { operatorSeatMerged } from '@/parts/lib/chassis'
+import { toLeft, trackLoop, wheel, wheelStations } from '@/parts/lib/wheels'
+import { bar } from '../common/wheel'
 import type { TypeId } from './model'
 
 /**
@@ -44,18 +46,23 @@ interface WheelSet {
   zs?: number[]
 }
 
+/** Wheel sets from the parts library; rims and hubs on the −Z side face outward. */
 function wheels(sets: WheelSet[]) {
   const tyres: G[] = []
   const rims: G[] = []
+  const hubs: G[] = []
   for (const s of sets) {
-    const g = wheelGeo(s.r, s.w, s.pattern ?? 'R1')
-    const zs = s.zs ?? (s.duals ? [s.track / 2, s.track / 2 + s.w * 1.15, -s.track / 2, -s.track / 2 - s.w * 1.15] : [s.track / 2, -s.track / 2])
+    const spec = { radius: s.r, width: s.w, pattern: s.pattern ?? 'R1' }
+    const g = wheel(spec)
+    const zs = s.zs ?? wheelStations(s.track, spec, s.duals)
     for (const z of zs) {
+      const side = (q: G) => (z < 0 ? toLeft(q) : q)
       tyres.push(at(g.tyre, s.x, s.r, z))
-      rims.push(at(g.rim, s.x, s.r, z))
+      rims.push(at(side(g.rim), s.x, s.r, z))
+      if (g.hub) hubs.push(at(side(g.hub), s.x, s.r, z))
     }
   }
-  return { tyres: merge(...tyres), rims: merge(...rims) }
+  return { tyres: merge(...tyres), rims: merge(...rims), hubs: hubs.length ? merge(...hubs) : null }
 }
 
 /** Two-post ROPS frame at x, top at yTop, posts ±half apart from yBase. */
@@ -78,7 +85,7 @@ function cab(x0: number, x1: number, y0: number, y1: number, w: number) {
 }
 
 function seatAndWheel(sx: number, sy: number, wx: number, wy: number) {
-  const seat = merge(blk(sx - 0.2, sx + 0.2, sy, sy + 0.08, 0.45, 0.03), blk(sx - 0.24, sx - 0.18, sy, sy + 0.45, 0.45, 0.03))
+  const seat = at(operatorSeatMerged(), sx, sy, 0)
   const sw = tube(0.19, 0.17, 0.03, 32)
   sw.rotateZ(Math.PI / 2 + 0.6)
   sw.translate(wx, wy, 0)
@@ -86,32 +93,11 @@ function seatAndWheel(sx: number, sy: number, wx: number, wy: number) {
   return merge(seat, sw, col)
 }
 
-/** Track loop (stadium outline with a hole), with sprocket and idler, centred at (cx, h/2). */
-function trackLoop(cx: number, len: number, h: number, w: number, z: number) {
-  const outer = roundedRect(len, h, h / 2)
-  const t = 0.07
-  const inner = roundedRect(len - 2 * t, h - 2 * t, (h - 2 * t) / 2)
-  const hole = new THREE.Path(inner.getPoints(24))
-  outer.holes.push(hole)
-  const belt = extrude(outer, w, { curveSegments: 24 })
-  belt.translate(cx, h / 2, z)
-  const wheelsG: G[] = []
-  const rr = (h - 2 * t) / 2 - 0.01
-  for (const x of [cx - len / 2 + h / 2, cx + len / 2 - h / 2]) {
-    const c = cylinder(rr, w * 0.8, 24)
-    c.rotateX(Math.PI / 2)
-    wheelsG.push(at(c, x, h / 2, z))
-  }
-  for (let i = 1; i <= 3; i++) {
-    const x = cx - len / 2 + h / 2 + (i * (len - h)) / 4
-    const c = cylinder(0.11, w * 0.7, 16)
-    c.rotateX(Math.PI / 2)
-    wheelsG.push(at(c, x, t + 0.11, z))
-  }
-  // grousers on the ground run
-  const gr: G[] = []
-  for (let x = cx - len / 2 + h / 2; x <= cx + len / 2 - h / 2; x += 0.16) gr.push(blk(x - 0.025, x + 0.025, -0.02, 0.0, w, 0))
-  return { belt: merge(belt, ...gr), rollers: merge(...wheelsG) }
+/** One crawler track side from the parts library (links, shoes, sprocket, idler, rollers), centred on z. */
+function crawlerTrack(cx: number, span: number, z: number) {
+  const t = trackLoop({ xs: cx - span / 2, xi: cx + span / 2, rollers: 5 })
+  const m = (g: G) => at(g, 0, 0, z)
+  return { chain: m(t.chain), shoes: m(t.shoes), wheels: m(merge(t.sprocket, t.idler, t.rollers)) }
 }
 
 /** Loader bucket: back, bottom and sides, opening forward, lip at (x, 0). */
@@ -121,8 +107,10 @@ function bucket(x: number, y: number, w: number, depth = 0.55, h = 0.5) {
 
 const P = (key: string, name: string, material: MaterialKey, geo: G, summary: string, fn: string, role: PartSpec['role'] = 'housing'): PartSpec => ({ key, name, material, geo, summary, fn, role })
 
-function common(w: { tyres: G; rims: G }, tyreNote: string): PartSpec[] {
-  return [P('tyres', 'Tyres', 'rubber', w.tyres, 'Tyres.', tyreNote, 'moving'), P('rims', 'Wheel rims', 'paintYellow', w.rims, 'Wheel rims.', 'Carry the tyres on the hubs.', 'moving')]
+function common(w: { tyres: G; rims: G; hubs: G | null }, tyreNote: string): PartSpec[] {
+  const parts = [P('tyres', 'Tyres', 'rubber', w.tyres, 'Tyres.', tyreNote, 'moving'), P('rims', 'Wheel rims', 'paintYellow', w.rims, 'Wheel rims.', 'Carry the tyres on the hubs.', 'moving')]
+  if (w.hubs) parts.push(P('hubs', 'Wheel nuts and hub caps', 'steelDark', w.hubs, 'Wheel nuts and hub caps.', 'Clamp each wheel disc to its axle hub.', 'moving'))
+  return parts
 }
 
 export function buildType(id: TypeId): PartSpec[] {
@@ -232,13 +220,14 @@ export function buildType(id: TypeId): PartSpec[] {
       ]
     }
     case 'crawler': {
-      const tl = trackLoop(0.9, 2.5, 0.68, 0.45, 0.8)
-      const tr = trackLoop(0.9, 2.5, 0.68, 0.45, -0.8)
+      const tl = crawlerTrack(0.9, 1.75, 0.8)
+      const tr = crawlerTrack(0.9, 1.75, -0.8)
       const c = cab(-0.3, 0.8, 1.45, 2.85, 1.2)
       const blade = merge(blk(2.55, 2.68, 0.02, 1.0, 2.6, 0.02), bar([1.6, 0.5, 0.8], [2.55, 0.35, 0.8], 0.1), bar([1.6, 0.5, -0.8], [2.55, 0.35, -0.8], 0.1))
       return [
-        P('tracks', 'Tracks', 'steelDark', merge(tl.belt, tr.belt), 'Steel tracks with grousers.', 'Spread the weight over a long contact patch: low ground pressure and high traction in soft soil. Steel tracks from the 1930s; rubber belts (Challenger) from the 1990s.', 'moving'),
-        P('rollers', 'Sprocket, idler and rollers', 'steel', merge(tl.rollers, tr.rollers), 'Drive sprocket, idler and track rollers.', 'The sprocket drives the track; the rollers carry the weight onto it. Steering is by slowing or braking one track.', 'moving'),
+        P('tracks', 'Tracks', 'steelDark', merge(tl.shoes, tr.shoes), 'Steel track shoes with grousers.', 'Spread the weight over a long contact patch: low ground pressure and high traction in soft soil. Steel tracks from the 1930s; rubber belts (Challenger) from the 1990s.', 'moving'),
+        P('track-chain', 'Track chain', 'forged', merge(tl.chain, tr.chain), 'Track chain: links, pins and bushings.', 'An endless roller chain under the shoes; the sprocket teeth drive on its bushings.', 'moving'),
+        P('rollers', 'Sprocket, idler and rollers', 'steel', merge(tl.wheels, tr.wheels), 'Drive sprocket, idler and track rollers.', 'The sprocket drives the track; the rollers carry the weight onto it. Steering is by slowing or braking one track.', 'moving'),
         P('body', 'Engine and hull', 'paintYellow', merge(blk(-0.3, 2.3, 0.6, 1.45, 1.05, 0.06), blk(0.9, 2.3, 1.45, 1.75, 0.8, 0.06)), 'Engine and hull.', 'Low-mounted, heavy body between the track frames.'),
         P('cab', 'ROPS cab', 'paintBlack', c.frame, 'ROPS cab.', 'Rollover and falling-object protection.', 'static'),
         P('glass', 'Cab glass', 'glass', c.glass, 'Glazing.', 'Operator view.', 'static'),

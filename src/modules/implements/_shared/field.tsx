@@ -3,9 +3,10 @@ import * as THREE from 'three'
 import { useSimFrame } from '@/core/sim'
 import { box } from '@/geometry'
 import { PartMesh } from '@/render/Part'
-import { createSoil, pressPrint, roughen, type SoilGrid } from '@/render/soil'
+import { createSoil, roughen, type SoilGrid } from '@/render/soil'
 import { SoilSurface } from '@/render/SoilSurface'
 import { TRACTOR } from '@/tractor/dims'
+import { STATIC_FRONT, STATIC_REAR, pressTractor, rutDepths } from '@/tractor/ruts'
 import { Tractor, type TractorPose } from '@/tractor/Tractor'
 import { smooth } from './geom'
 
@@ -105,13 +106,15 @@ export function FieldRun({ grid, pose, speed, start, end, hitchWork, hitchRaised
     pose.rearAngle += dx / TRACTOR.rear.rolling
     pose.frontAngle += dx / TRACTOR.front.radius
     pose.engineAngle += dt * 2 * Math.PI * 30
+    // implements: moderate load at work, light when raised (display values)
+    pose.effects = { load: 0.45 + 0.4 * lowered, rpm: 2050, ratedRpm: 2250, speed: v, slip: 0.03 + 0.09 * lowered, dust: 0.75 }
     if (ptoRpm) pose.ptoAngle += (dt * 2 * Math.PI * ptoRpm()) / 60
     if (tractor.current) tractor.current.position.set(st.X, 0, z)
     if (prints && dx > 0) {
-      for (const s of [1, -1]) {
-        pressPrint(grid, st.X, z + s * TRACTOR.rear.track / 2, 0.14, TRACTOR.rear.width / 2, 0.012, 0.8)
-        pressPrint(grid, st.X + TRACTOR.wheelbase, z + s * TRACTOR.front.track / 2, 0.08, TRACTOR.front.width / 2, 0.008, 0.6)
-      }
+      // working: the draft moves weight onto the rear axle and the wheels slip more (typical values on tilled soil)
+      const transfer = 4000 * lowered
+      const slip = 0.03 + 0.09 * lowered
+      pressTractor(grid, st.X, z, 0, rutDepths(STATIC_REAR + transfer, STATIC_FRONT - transfer, 860e3, slip), slip)
     }
     const L = pose.linkage?.L
     onStep?.({ X: st.X, dx, dt, hitchX: st.X + (L?.x ?? HITCH_X0), hitchY: L?.y ?? pose.hitchHeight, lowered })

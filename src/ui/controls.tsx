@@ -5,6 +5,7 @@ export function fmt(v: number, digits = 3) {
   if (!Number.isFinite(v)) return '—'
   const a = Math.abs(v)
   if (a !== 0 && (a >= 1e6 || a < 1e-3)) return v.toExponential(2)
+  if (digits < 1) return Math.round(v).toLocaleString('en-GB')
   return Number(v.toPrecision(digits)).toLocaleString('en-GB', { maximumFractionDigits: 6 })
 }
 

@@ -11,6 +11,9 @@ import { Part, PartMesh } from '@/render/Part'
 import { TRACTOR } from '@/tractor/dims'
 import { REAR_Z } from '@/tractor/geometry'
 import { Tractor, createTractorPose } from '@/tractor/Tractor'
+import { farmlandEffects } from '@/tractor/effects'
+import { absorberCasing, absorberWater, strainLink, vanedRotor, type AbsorberSpec } from '@/parts/lib/chassis'
+import { mat4, xform } from '@/geometry'
 import { boxAt, cyl, dial, eye, needle, rodBetween, tubeAt, wheelZ } from './bits'
 import { LiveTag } from './bits3d'
 import { C, CYL, DILLON, RUN, dampingTau, fluctuation, live, solveCached, stopRun, useDrawbar } from './model'
@@ -22,6 +25,9 @@ const HY = PIN.y
 /** Hitch-line stations along −X. */
 const X = { pin: PIN.x, meterEnd: PIN.x - 0.42, capFront: -1.25, capRear: -1.95, carFront: -2.05 }
 const CAR = { wheelR: 0.42, front: -2.75, rear: -4.85, track: 0.82 }
+/** chassis-dyno water-brake absorber (parts library), axis along Z in this scene */
+const ABSORBER: AbsorberSpec = { R: 0.34, half: 0.25, cav: 0.27, bore: 0.06, fins: [-0.17, 0, 0.17], finTip: 0.24, wall: 0.04 }
+const toZ = mat4.ry(-Math.PI / 2)
 const DRUM = { r: UPPSALA.drumR, w: 0.55, y: -UPPSALA.drumR }
 const TRAIN = { gb1: -1.75, gb2: -2.45, dyno: -3.15, vst: -3.8, motor: -4.4 }
 const PIT = { x0: -0.95, x1: 1.75, z0: -4.95, z1: 1.25, floor: -1.8 }
@@ -120,7 +126,7 @@ function HitchLine() {
     const x1 = X.meterEnd
     const mid = (x0 + x1) / 2
     return {
-      link: merge(cyl('x', 0.035, 0.2, mid, HY), eye(x0 - 0.02, HY, -0.08, 0.03, 0.03), eye(x1 + 0.02, HY, 0.08, 0.03, 0.03), cyl('y', 0.012, 0.06, mid, HY + 0.05)),
+      link: xform(strainLink({ span: x0 - x1 - 0.04 }), mat4.t(mid, HY, 0)),
       cable: rodBetween([mid, HY + 0.08, 0], [mid - 0.3, 0.9, 0.2], 0.006),
       readout: boxAt(0.32, 0.18, 0.2, mid - 0.45, 0.98, 0.25),
       readoutFace: boxAt(0.14, 0.05, 0.004, mid - 0.45, 1.0, 0.352),
@@ -235,9 +241,10 @@ function TestCar() {
                   wheels.current[i * 2 + j] = el
                 }}
               >
+                <PartMesh geometry={g.w.tyre} />
                 <group rotation={[0, s > 0 ? 0 : Math.PI, 0]}>
-                  <PartMesh geometry={g.w.tyre} />
                   <PartMesh geometry={g.w.rim} material="paintGrey" />
+                  {g.w.hub ? <PartMesh geometry={g.w.hub} material="steelDark" /> : null}
                 </group>
               </group>
             </group>
@@ -318,9 +325,10 @@ function ChassisDyno() {
     const shaft = (z0: number, z1: number) => merge(cyl('z', 0.045, Math.abs(z1 - z0), 0, 0, (z0 + z1) / 2), cyl('z', 0.09, 0.03, 0, 0, z1 + 0.03), ...[0, 1, 2, 3].map((i) => cyl('z', 0.012, 0.04, 0.065 * Math.cos((i * TAU) / 4), 0.065 * Math.sin((i * TAU) / 4), z1 + 0.05)))
     const gb1 = merge(boxAt(0.55, 0.7, 0.42, 0.1, yA - 0.1, TRAIN.gb1), cyl('z', 0.12, 0.46, 0, yA, TRAIN.gb1), boxAt(0.6, 0.05, 0.5, 0.1, yA - 0.47, TRAIN.gb1))
     const gb2 = merge(boxAt(0.5, 0.55, 0.42, 0, yA, TRAIN.gb2), boxAt(0.14, 0.12, 0.12, 0, yA + 0.32, TRAIN.gb2), boxAt(0.55, 0.05, 0.5, 0, yA - 0.3, TRAIN.gb2))
-    const dynoCase = merge(tubeAt('z', 0.34, 0.27, 0.42, 0, yA, TRAIN.dyno, 48), tubeAt('z', 0.34, 0.06, 0.04, 0, yA, TRAIN.dyno + 0.23, 48), tubeAt('z', 0.34, 0.06, 0.04, 0, yA, TRAIN.dyno - 0.23, 48), boxAt(0.5, 0.06, 0.5, 0, yA - 0.37, TRAIN.dyno))
-    const rotorGeo = merge(cyl('z', 0.23, 0.06, 0, 0, 0.09), cyl('z', 0.23, 0.06, 0, 0, -0.09), cyl('z', 0.08, 0.12, 0, 0, 0), ...[0, 1, 2, 3, 4, 5, 6, 7].map((i) => boxAt(0.02, 0.18, 0.24, 0.13 * Math.cos((i * TAU) / 8), 0.13 * Math.sin((i * TAU) / 8), 0).rotateZ(0)))
-    const water = cyl('z', 0.265, 0.38, 0, yA, TRAIN.dyno, 40)
+    const dynoCase = merge(xform(absorberCasing(ABSORBER, 48), mat4.c(mat4.t(0, yA, TRAIN.dyno), toZ)), boxAt(0.5, 0.06, 0.5, 0, yA - 0.37, TRAIN.dyno))
+    const rotor = vanedRotor({ r: 0.23, t: 0.05, vanes: 12, vaneR: 0.15, vaneLen: 0.12 })
+    const rotorGeo = merge(xform(rotor, mat4.c(mat4.t(0, 0, 0.09), toZ)), xform(rotor, mat4.c(mat4.t(0, 0, -0.09), toZ)), cyl('z', 0.08, 0.12, 0, 0, 0))
+    const water = xform(absorberWater(ABSORBER, 40), mat4.c(mat4.t(0, yA, TRAIN.dyno), toZ))
     const vst = merge(boxAt(0.42, 0.42, 0.38, 0, yA, TRAIN.vst), boxAt(0.46, 0.05, 0.44, 0, yA - 0.235, TRAIN.vst))
     const motor = merge(cyl('z', 0.24, 0.5, 0, yA, TRAIN.motor, 40), ...[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((i) => boxAt(0.02, 0.03, 0.46, 0.25 * Math.cos((i * TAU) / 10), yA + 0.25 * Math.sin((i * TAU) / 10), TRAIN.motor)), boxAt(0.4, 0.06, 0.4, 0, yA - 0.27, TRAIN.motor))
     // pendulum frame: two beams under the machinery, hung from bearings on the drum axis
@@ -345,7 +353,7 @@ function ChassisDyno() {
     const scaleDial = dial(0.16, 0.1)
     const anchor = merge(boxAt(0.25, 0.7, 0.35, -2.5, 0.35, 0), cyl('z', 0.03, 0.4, -2.45, HY, 0))
     const chain = merge(rodBetween([X.pin, HY, 0], [X.meterEnd, HY, 0], 0.012), rodBetween([X.meterEnd - 0.3, HY, 0], [-2.45, HY, 0], 0.012))
-    const restraintLink = merge(cyl('x', 0.035, 0.2, X.meterEnd - 0.15, HY), eye(X.meterEnd, HY, -0.06, 0.03, 0.03), eye(X.meterEnd - 0.3, HY, 0.06, 0.03, 0.03))
+    const restraintLink = xform(strainLink({ span: 0.3, eyeLen: 0.06, connector: false }), mat4.t(X.meterEnd - 0.15, HY, 0))
     const pipeIn = new THREE.CatmullRomCurve3([new THREE.Vector3(PIT.x1, -0.6, TRAIN.dyno + 0.1), new THREE.Vector3(0.8, -0.3, TRAIN.dyno + 0.1), new THREE.Vector3(0.2, -0.15, TRAIN.dyno + 0.1), new THREE.Vector3(0.05, yA + 0.32, TRAIN.dyno + 0.1)])
     const pipeOut = new THREE.CatmullRomCurve3([new THREE.Vector3(0.05, yA - 0.32, TRAIN.dyno - 0.1), new THREE.Vector3(0.4, -1.4, TRAIN.dyno - 0.1), new THREE.Vector3(1.0, -1.5, TRAIN.dyno - 0.1), new THREE.Vector3(PIT.x1, -1.2, TRAIN.dyno - 0.1)])
     const pipes = merge(...[pipeIn, pipeOut].map((c) => new THREE.TubeGeometry(c, 32, 0.035, 10, false)).map((t) => t.toNonIndexed()))
@@ -469,6 +477,7 @@ export function Scene3D() {
     live.wheelRevs += (pt.V0 / (Math.PI * 1.26)) * dt
     pose.rearAngle += (pt.V0 / TRACTOR.rear.rolling) * dt
     if (st.mode === 'car') pose.frontAngle += (pt.V / TRACTOR.front.radius) * dt
+    pose.effects = farmlandEffects({ Te: pt.Te, rpm: pt.rpm, V: st.mode === 'car' ? pt.V : 0, slip: pt.slip, stalled: pt.stalled }, 0.3)
 
     // automated test run (TESTS p1: pull vs speed in one gear at open throttle)
     const run = live.run

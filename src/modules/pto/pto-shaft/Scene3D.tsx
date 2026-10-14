@@ -2,14 +2,15 @@ import { useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { useSimFrame } from '@/core/sim'
 import { DriveGraph, hookeJoint } from '@/core/drive'
-import { box, cylinder, extrude, mat4, merge, roundedBox, xform } from '@/geometry'
+import { box, cylinder, mat4, merge, roundedBox, xform } from '@/geometry'
 import { rim, tyre } from '@/geometry/parts'
 import { PTO_STANDARDS } from '@/physics/linkageControl'
 import { PartLabel } from '@/render/Label'
 import { Part, PartMesh } from '@/render/Part'
 import { LINKAGE } from '@/tractor/dims'
 import { Tractor, createTractorPose } from '@/tractor/Tractor'
-import { J, crossGeometry, cupsGeometry, crossQuaternion, yokeGeometry } from '../shared/cardan'
+import { UJ as J, lemonTube, ujCross, ujCups, ujYoke } from '@/parts/lib/driveline'
+import { crossQuaternion } from '../shared/cardan'
 import { C, END, J1, MOWER_J2, driveline, live, overlap, tubeLengths, usePtoShaft } from './model'
 
 const INFO = {
@@ -35,18 +36,6 @@ function basis(ax: THREE.Vector3, ay: THREE.Vector3, out: THREE.Quaternion) {
   return out.setFromRotationMatrix(m4)
 }
 
-/** Lemon-profile tube along +X from 0 to 1 (scaled to length). */
-function lemon(a: number, b: number, wall: number) {
-  const pts = (A: number, B: number) => Array.from({ length: 40 }, (_, i) => {
-    const t = (i / 40) * Math.PI * 2
-    const c = Math.cos(t)
-    return new THREE.Vector2(A * Math.sign(c) * Math.abs(c) ** 0.8, B * Math.sin(t))
-  })
-  const s = new THREE.Shape(pts(a, b))
-  s.holes.push(new THREE.Path(pts(a - wall, b - wall).reverse()))
-  return xform(extrude(s, 1), mat4.ry(Math.PI / 2))
-}
-
 export function PtoShaft3D() {
   const mode = usePtoShaft((s) => s.mode)
   const guards = usePtoShaft((s) => s.guards)
@@ -62,12 +51,12 @@ export function PtoShaft3D() {
     guardTubeIn.rotateZ(-Math.PI / 2)
     guardTubeIn.translate(0.5, 0, 0)
     return {
-      yoke: yokeGeometry(),
-      cross: crossGeometry(),
-      cups: cupsGeometry(),
+      yoke: ujYoke(),
+      cross: ujCross(),
+      cups: ujCups(),
       hub: xform(cylinder(0.03, 0.09, 24), mat4.c(mat4.t(-J.hubEnd - 0.03, 0, 0), mat4.rz(Math.PI / 2))),
-      outer: lemon(0.03, 0.02, 0.004),
-      inner: lemon(0.024, 0.0145, 0.004),
+      outer: lemonTube(0.03, 0.02, 0.004),
+      inner: lemonTube(0.024, 0.0145, 0.004),
       cone,
       guardTube,
       guardTubeIn,

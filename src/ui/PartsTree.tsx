@@ -1,8 +1,16 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { buildTree, useParts, type PartNode } from '@/parts/registry'
 import { useView } from '@/render/view'
 import { focusPart } from './camera'
 import { Icon } from './icons'
+import { useInside } from './inside'
+
+/** true if `id` is `node` or lies inside it */
+function contains(nodeId: string, id: string | null) {
+  const parts = useParts.getState().parts
+  for (let p = id; p; p = parts[p]?.parentId ?? null) if (p === nodeId) return true
+  return false
+}
 
 function Row({ node, depth }: { node: PartNode; depth: number }) {
   const [open, setOpen] = useState(depth < 1)
@@ -13,6 +21,11 @@ function Row({ node, depth }: { node: PartNode; depth: number }) {
   const toggleHidden = useView((s) => s.toggleHidden)
   const selected = selectedId === node.id
   const hasKids = node.children.length > 0
+  // looking inside a part: open the tree down to it and its own parts
+  const insideId = useInside((s) => s.id)
+  useEffect(() => {
+    if (insideId && contains(node.id, insideId)) setOpen(true)
+  }, [insideId, node.id])
   return (
     <li>
       <div

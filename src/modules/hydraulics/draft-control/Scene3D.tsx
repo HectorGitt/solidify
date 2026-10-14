@@ -3,6 +3,7 @@ import * as THREE from 'three'
 import { SRC } from '@/content/citations'
 import { useSimFrame } from '@/core/sim'
 import { box, cylinder, helixSpring, mat4, merge, tube, xform } from '@/geometry'
+import { spoolValve, type SpoolValveSpec } from '@/parts/lib/hydraulics'
 import { HITCH_VMAX, hitchToWorld, soilDir, soilResistance, traceAt } from '@/physics/linkageControl'
 import { Flow } from '@/render/Flow'
 import { PartLabel } from '@/render/Label'
@@ -33,6 +34,23 @@ const SPRING_L = 0.17
 /** spring capsule, fixed end at x0, rocker end toward −X */
 const SPRING_X0 = -0.21
 const SPRING_Y = 1.11
+/** control valve: the shared spool valve (pressure port on top, ram and tank ports underneath); spool moves ±25 mm */
+const VALVE_SPEC: SpoolValveSpec = {
+  length: 0.17,
+  h: 0.075,
+  w: 0.1,
+  boreR: 0.017,
+  ports: [
+    { x: 0.085, up: true },
+    { x: 0.135, up: false },
+    { x: 0.035, up: false },
+  ],
+  lands: [
+    [0.065, 0.085],
+    [0.115, 0.135],
+    [0.165, 0.185],
+  ],
+}
 
 export function Draft3D() {
   const flows = useDraft((s) => s.flows)
@@ -48,11 +66,10 @@ export function Draft3D() {
       plunger: xform(cylinder(0.009, 1, 12), mat4.c(mat4.t(-0.5, 0, 0), mat4.rz(Math.PI / 2))),
       rocker: merge(box(0.03, 0.27, 0.05), xform(cylinder(0.02, 0.07, 16), mat4.rx(Math.PI / 2))),
       senseRod: xform(cylinder(0.006, 0.2, 10), mat4.c(mat4.t(SPRING_X0 + 0.1, SPRING_Y + 0.02, 0.03), mat4.rz(Math.PI / 2))),
-      valveBody: box(0.17, 0.075, 0.1),
-      spool: merge(
-        xform(cylinder(0.008, 0.17, 16), mat4.rz(Math.PI / 2)),
-        ...[-0.05, 0, 0.05].map((x) => xform(cylinder(0.016, 0.02, 20), mat4.c(mat4.t(x, 0, 0), mat4.rz(Math.PI / 2)))),
-      ),
+      ...(() => {
+        const v = spoolValve(VALVE_SPEC)
+        return { valveBody: v.body, spool: v.spool }
+      })(),
     }
   }, [])
   const valvePos: [number, number, number] = [0.07, 1.105, 0]

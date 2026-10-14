@@ -148,3 +148,13 @@ export function peakTractiveEfficiency(Bn: number, k: BrixiusCoeffs = BRIXIUS.bi
   }
   return best
 }
+
+/* ------------------------------ rut depth (appended) ------------------------------ */
+
+/**
+ * Display model of rut depth (m) from the mobility number and slip (beyond notes): soft soil and
+ * heavy wheels (low Bn) sink in; slip digs deeper. Matches the traction lab's sinkage.
+ */
+export function rutDepth(Bn: number, slip: number) {
+  return Math.min(0.08, 0.5 / Math.max(Bn, 5) + 0.03 * Math.max(0, slip))
+}

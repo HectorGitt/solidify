@@ -8,7 +8,8 @@ import { PartLabel } from '@/render/Label'
 import { Part, PartMesh } from '@/render/Part'
 import { InstancedPartMesh } from '../../elements/_shared/InstancedPartMesh'
 import { P504 } from './cites'
-import { PathTable, boxShell, hopper, prism, screwFlight, sweepRing, thickPolyline, uTrough } from './geom'
+import { auger, boxShell, centrifugalFan, conveyorPulley, cyclone, elevatorBucket, electricMotor, flatBelt, gearbox, hopper, legStand, prism, rotaryValve, thickPolyline, troughedBelt, troughingIdlers, uTrough } from '@/parts/lib/processing'
+import { PathTable } from './geom'
 import { analyse, live, pitchOf, useConv } from './model'
 
 const { PI, sin, cos, random } = Math
@@ -70,63 +71,16 @@ function BeltConveyor() {
   const a = useMemo(() => analyse(p), [p])
   const B = p.B
   const geo = useMemo(() => {
-    const lp = loopPath(new THREE.Vector2(-BELT_C, 0), BELT_R, new THREE.Vector2(BELT_C, 0), BELT_R)
-    const table = new PathTable(lp.path, 480)
-    const pts = table.pts.slice(0, -1)
-    const section = (_: number, q: THREE.Vector3): [number, number][] => {
-      const k = q.y > 0 ? Math.max(0, Math.min(1, (BELT_C - Math.abs(q.x) - 0.08) / 0.45)) : 0
-      const be = p.trough * k
-      const ue = B / 6 + (B / 3) * cos(be)
-      const we = (B / 3) * sin(be)
-      return [
-        [-ue, we + BELT_T],
-        [-B / 6, BELT_T],
-        [B / 6, BELT_T],
-        [ue, we + BELT_T],
-        [ue, we],
-        [B / 6, 0],
-        [-B / 6, 0],
-        [-ue, we],
-      ]
-    }
-    const band = sweepRing(pts, section)
-    const ri = 0.045
-    const roll = cylinder(ri, B / 3 - 0.01, 20)
-    const rollReturn = cylinder(ri, B * 1.05, 20)
-    const be = p.trough
-    const sets: THREE.BufferGeometry[] = []
-    const xs = [-1.2, -0.8, -0.4, 0, 0.4, 0.8, 1.2]
-    for (const x of xs) {
-      sets.push(xform(roll, mat4.c(mat4.t(x, -ri, 0), mat4.rx(PI / 2))))
-      for (const s of [-1, 1]) {
-        const um = B / 6 + (B / 6) * cos(be)
-        const wm = (B / 6) * sin(be)
-        const nn = [sin(be), -cos(be)]
-        const cu = um + nn[0] * ri + 0.005
-        const cw = wm + nn[1] * ri
-        sets.push(xform(roll, mat4.c(mat4.t(x, cw, s * cu), mat4.rx(s * (PI / 2 - be)))))
-      }
-    }
-    const carry = merge(...sets)
-    const ret = merge(...[-1.2, -0.4, 0.4, 1.2].map((x) => xform(rollReturn, mat4.c(mat4.t(x, 0, 0), mat4.rx(PI / 2)))))
-    const pulley = lathe(
-      [
-        [0.02, -B / 2 - 0.03],
-        [BELT_R - 0.02, -B / 2 - 0.03],
-        [BELT_R, -B / 2 - 0.01],
-        [BELT_R, B / 2 + 0.01],
-        [BELT_R - 0.02, B / 2 + 0.03],
-        [0.02, B / 2 + 0.03],
-      ],
-      48,
-    )
-    const pulleyZ = xform(pulley, mat4.rx(PI / 2))
-    const shaft = xform(cylinder(0.025, B + 0.5, 20), mat4.rx(PI / 2))
+    const band = troughedBelt({ c: BELT_C, r: BELT_R, B, t: BELT_T, trough: p.trough })
+    const { carry, ret, ri } = troughingIdlers({ B, trough: p.trough, xs: [-1.2, -0.8, -0.4, 0, 0.4, 0.8, 1.2], returnXs: [-1.2, -0.4, 0.4, 1.2] })
+    const { drum: pulleyZ, shaft } = conveyorPulley({ r: BELT_R, width: B + 0.02 })
     const stringer = box(2 * BELT_C + 0.3, 0.08, 0.05)
-    const hop = hopper(Math.min(0.55, B * 0.8), Math.min(0.2, B * 0.3), 0.35)
-    const chute = boxShell(0.35, B * 0.9, 0.5, 0.01)
-    return { table, band, carry, ret, pulleyZ, shaft, stringer, hop, chute, ri }
-  }, [B, p.trough]) // eslint-disable-line react-hooks/exhaustive-deps
+    const hop = hopper({ top: Math.min(0.55, B * 0.8), bottom: Math.min(0.2, B * 0.3), h: 0.35, wall: 0.015 })
+    const chute = boxShell({ w: 0.35, d: B * 0.9, h: 0.5, t: 0.01 })
+    const gb = gearbox({ w: 0.3, h: 0.26, d: 0.28 })
+    const motor = electricMotor({ r: 0.11, length: 0.32 })
+    return { band, carry, ret, pulleyZ, shaft, stringer, hop, chute, ri, gb, motor }
+  }, [B, p.trough])
 
   // load particles: in the trough from the hopper to the head pulley, then over the head
   const N = 320
@@ -229,8 +183,8 @@ function BeltConveyor() {
           <InstancedPartMesh ref={mesh} geometry={clump} count={N} />
         </Part>
         <Part id="belt-drive" name="Motor and gearbox" role="housing" material="paintBlue" info={INFO.drive} cites={C.beltP} explode={[0, 0, -0.3]}>
-          <PartMesh geometry={useMemo(() => box(0.3, 0.26, 0.28), [])} position={[-BELT_C, 0, -B / 2 - 0.45]} />
-          <PartMesh geometry={useMemo(() => xform(cylinder(0.11, 0.32, 24), mat4.rx(PI / 2)), [])} position={[-BELT_C + 0.02, 0, -B / 2 - 0.78]} material="paintGreen" />
+          <PartMesh geometry={geo.gb} position={[-BELT_C, 0, -B / 2 - 0.45]} />
+          <PartMesh geometry={geo.motor} position={[-BELT_C + 0.02, 0, -B / 2 - 0.8]} material="paintGreen" />
         </Part>
       </group>
       <Part id="chute" name="Discharge chute" role="housing" material="galvanised" info={INFO.chute} explode={[-0.3, 0, 0]}>
@@ -277,8 +231,10 @@ function ChainConveyor() {
     const flight = xform(box(0.012, 0.13, W - 0.03), mat4.t(0, 0.09, 0))
     const spr = sprocket(CH_TEETH, CH_PITCH, 0.026, 0.035, 0.02)
     const shaft = xform(cylinder(0.02, W + 0.3, 16), mat4.rx(PI / 2))
-    const leg = box(0.06, CH_FLOOR, 0.06)
-    return { table, n, trough, link, flight, spr, shaft, yc, leg, H }
+    const legs = legStand({ x: 1.6, z: W / 2 + 0.05, h: CH_FLOOR, leg: 0.06, positions: [-1.6, 0, 1.6].flatMap((x) => [-1, 1].map((s) => [x, s * (W / 2 + 0.05)] as [number, number])) })
+    const gb = gearbox({ w: 0.28, h: 0.24, d: 0.26 })
+    const motor = electricMotor({ r: 0.1, length: 0.3 })
+    return { table, n, trough, link, flight, spr, shaft, yc, legs, H, gb, motor }
   }, [W])
 
   const links = useRef<THREE.InstancedMesh>(null)
@@ -347,7 +303,7 @@ function ChainConveyor() {
     <Part id="chain-conv" name="Scraper-flight chain conveyor" role="moving" material="steel" info={INFO.chain} cites={C.chain}>
       <Part id="chain-trough" name="Trough (casing)" role="housing" material="paintGreen" info={INFO.chainTrough} cites={C.chain} explode={[0, -0.25, 0]}>
         <PartMesh geometry={geo.trough} />
-        {[-1.6, 0, 1.6].map((x) => [-1, 1].map((s) => <PartMesh key={`${x}${s}`} geometry={geo.leg} position={[x, CH_FLOOR / 2, s * (W / 2 + 0.05)]} />))}
+        <PartMesh geometry={geo.legs} />
       </Part>
       <Part id="chain" name="Roller chain" role="moving" material="steelDark" cut={false} info={INFO.chain} cites={C.chain}>
         <InstancedPartMesh ref={links} geometry={geo.link} count={geo.n + 2} />
@@ -373,7 +329,8 @@ function ChainConveyor() {
         <InstancedPartMesh ref={loadRef} geometry={clump} count={NL} />
       </Part>
       <Part id="chain-drive" name="Motor and gearbox" role="housing" material="paintBlue" info={INFO.drive} explode={[0, 0, 0.3]}>
-        <PartMesh geometry={useMemo(() => box(0.28, 0.24, 0.26), [])} position={[CH_X, geo.yc, W / 2 + 0.35]} />
+        <PartMesh geometry={geo.gb} position={[CH_X, geo.yc, W / 2 + 0.35]} />
+        <PartMesh geometry={geo.motor} position={[CH_X, geo.yc, W / 2 + 0.7]} rotation={[0, PI, 0]} material="paintGreen" />
       </Part>
     </Part>
   )
@@ -390,25 +347,15 @@ function ScrewConveyor() {
   const d = Math.min(D * 0.6, p.d)
   const pitch = pitchOf({ D, flight: p.flight })
   const geo = useMemo(() => {
-    const rIn = p.flight === 'ribbon' ? d / 2 + 0.35 * (D / 2 - d / 2) : d / 2
-    const flight = screwFlight(rIn, D / 2, pitch, SC_L, 0.008)
-    const arms =
-      p.flight === 'ribbon'
-        ? merge(
-            ...Array.from({ length: Math.floor(SC_L / (pitch / 2)) }, (_, i) => {
-              const x = -SC_L / 2 + (i + 0.5) * (pitch / 2)
-              const ang = (2 * PI * x) / pitch - PI / 2
-              return xform(box(0.012, rIn - d / 2 + 0.01, 0.02), mat4.c(mat4.rx(ang), mat4.t(x, d / 2 + (rIn - d / 2) / 2, 0)))
-            }),
-          )
-        : null
-    const shaft = xform(cylinder(d / 2, SC_L + 0.4, 24), mat4.rz(PI / 2))
-    const trough = uTrough(D / 2 + 0.012, 0.006, SC_L + 0.1, D / 2 + 0.06)
+    const { flight, arms, shaft } = auger({ D, d, pitch, L: SC_L, ribbon: p.flight === 'ribbon' })
+    const trough = uTrough({ r: D / 2 + 0.012, t: 0.006, L: SC_L + 0.1, hs: D / 2 + 0.06 })
     const plate = box(0.012, D + 0.2, D + 0.06)
-    const inlet = boxShell(D * 0.9, D * 0.9, 0.3, 0.008)
-    const outlet = boxShell(D * 0.8, D * 0.8, 0.25, 0.008)
-    const leg = box(0.06, 1, 0.06)
-    return { flight, arms, shaft, trough, plate, inlet, outlet, leg }
+    const inlet = boxShell({ w: D * 0.9, d: D * 0.9, h: 0.3, t: 0.008 })
+    const outlet = boxShell({ w: D * 0.8, d: D * 0.8, h: 0.25, t: 0.008 })
+    const legs = legStand({ x: 1.3, z: D / 2 + 0.04, h: SC_Y - D / 2, leg: 0.06 })
+    const gb = gearbox({ w: 0.25, h: 0.25, d: 0.3 })
+    const motor = electricMotor({ r: 0.1, length: 0.3 })
+    return { flight, arms, shaft, trough, plate, inlet, outlet, legs, gb, motor }
   }, [D, d, pitch, p.flight])
 
   const rot = useRef<THREE.Group>(null)
@@ -454,7 +401,7 @@ function ScrewConveyor() {
         <PartMesh geometry={geo.trough} position={[0, SC_Y, 0]} />
         <PartMesh geometry={geo.plate} position={[-SC_L / 2 - 0.06, SC_Y, 0]} material="paintGrey" />
         <PartMesh geometry={geo.plate} position={[SC_L / 2 + 0.06, SC_Y, 0]} material="paintGrey" />
-        {[-1.3, 1.3].map((x) => [-1, 1].map((s) => <PartMesh key={`${x}${s}`} geometry={geo.leg} position={[x, (SC_Y - D / 2) / 2, s * (D / 2 + 0.04)]} scale={[1, SC_Y - D / 2, 1]} />))}
+        <PartMesh geometry={geo.legs} />
       </Part>
       <group position={[0, SC_Y, 0]}>
         <group ref={rot}>
@@ -477,7 +424,8 @@ function ScrewConveyor() {
         <InstancedPartMesh ref={loadRef} geometry={clump} count={NL} />
       </Part>
       <Part id="screw-drive" name="Motor and gearbox" role="housing" material="paintBlue" info={INFO.drive} explode={[-0.3, 0, 0]}>
-        <PartMesh geometry={useMemo(() => box(0.3, 0.25, 0.25), [])} position={[-SC_L / 2 - 0.3, SC_Y, 0]} />
+        <PartMesh geometry={geo.gb} position={[-SC_L / 2 - 0.3, SC_Y, 0]} rotation={[0, PI / 2, 0]} />
+        <PartMesh geometry={geo.motor} position={[-SC_L / 2 - 0.3, SC_Y, -0.36]} material="paintGreen" />
       </Part>
     </Part>
   )
@@ -488,21 +436,6 @@ function ScrewConveyor() {
 const BK_Y0 = 0.5
 const BK_Y1 = 3.4
 
-function bucketGeometry(w: number) {
-  const prof: [number, number][] = [
-    [0.02, 0.004],
-    [-0.12, 0.004],
-    [-0.125, 0.06],
-    [-0.095, 0.115],
-    [-0.03, 0.15],
-    [0.03, 0.16],
-  ]
-  const shell = prism(thickPolyline(prof, 0.006), w)
-  const fill = prof.map(([x, y]) => new THREE.Vector2(x, y))
-  const side = prism(fill, 0.006)
-  return merge(shell, xform(side, mat4.t(0, 0, w / 2)), xform(side, mat4.t(0, 0, -w / 2)))
-}
-
 function BucketElevator() {
   const p = useConv()
   const a = useMemo(() => analyse(p), [p])
@@ -511,39 +444,19 @@ function BucketElevator() {
   const geo = useMemo(() => {
     const lp = loopPath(new THREE.Vector2(0, BK_Y0), R, new THREE.Vector2(0, BK_Y1), R)
     const table = new PathTable(lp.path, 900)
-    const pts = table.pts.slice(0, -1)
-    const band = sweepRing(pts, () => [
-      [-0.15, 0],
-      [0.15, 0],
-      [0.15, 0.008],
-      [-0.15, 0.008],
-    ])
+    const band = flatBelt({ a: [0, BK_Y0], b: [0, BK_Y1], r: R + 0.004, width: 0.3, t: 0.008 })
     const nb = Math.floor(table.length / spacing)
-    const bucket = bucketGeometry(0.26)
+    const bucket = elevatorBucket({ w: 0.26 })
     const heap = xform(new THREE.SphereGeometry(0.06, 10, 6, 0, 2 * PI, 0, PI / 2), mat4.c(mat4.t(-0.06, 0.075, 0), mat4.rz(-PI / 2)))
-    const pulley = xform(
-      lathe(
-        [
-          [0.02, -0.17],
-          [R - 0.01, -0.17],
-          [R, -0.15],
-          [R, 0.15],
-          [R - 0.01, 0.17],
-          [0.02, 0.17],
-        ],
-        40,
-      ),
-      mat4.rx(PI / 2),
-    )
-    const shaft = xform(cylinder(0.03, 0.7, 16), mat4.rx(PI / 2))
+    const { drum: pulley, shaft } = conveyorPulley({ r: R, width: 0.3, chamfer: 0.01, shaftR: 0.03, shaftLength: 0.7 })
     const legH = BK_Y1 - BK_Y0 - 0.9
-    const leg = boxShell(0.24, 0.38, legH, 0.006)
-    const hood = boxShell(2 * R + 0.62, 0.42, 0.8, 0.008)
+    const leg = boxShell({ w: 0.24, d: 0.38, h: legH, t: 0.006 })
+    const hood = boxShell({ w: 2 * R + 0.62, d: 0.42, h: 0.8, t: 0.008 })
     const roof = box(2 * R + 0.62, 0.012, 0.42)
-    const bootB = boxShell(2 * R + 0.62, 0.42, 0.75, 0.008)
+    const bootB = boxShell({ w: 2 * R + 0.62, d: 0.42, h: 0.75, t: 0.008 })
     const floor = box(2 * R + 0.62, 0.012, 0.42)
-    const spout = boxShell(0.3, 0.3, 1.0, 0.008)
-    const inlet = boxShell(0.24, 0.3, 0.6, 0.008)
+    const spout = boxShell({ w: 0.3, d: 0.3, h: 1.0, t: 0.008 })
+    const inlet = boxShell({ w: 0.24, d: 0.3, h: 0.6, t: 0.008 })
     return { table, band, nb, bucket, heap, pulley, shaft, leg, legH, hood, roof, bootB, floor, spout, inlet }
   }, [R, spacing])
 
@@ -691,27 +604,6 @@ function BucketElevator() {
 
 /* =============================== PNEUMATIC =============================== */
 
-export function cycloneShell(scale = 1) {
-  const s = scale
-  return lathe(
-    [
-      [0.07 * s, 1.5 * s],
-      [0.08 * s, 1.5 * s],
-      [0.36 * s, 2.3 * s],
-      [0.36 * s, 3.1 * s],
-      [0.13 * s, 3.1 * s],
-      [0.13 * s, 3.45 * s],
-      [0.12 * s, 3.45 * s],
-      [0.12 * s, 2.7 * s],
-      [0.13 * s, 2.7 * s],
-      [0.13 * s, 3.09 * s],
-      [0.35 * s, 3.09 * s],
-      [0.35 * s, 2.3 * s],
-    ],
-    48,
-  )
-}
-
 function Pneumatic() {
   const p = useConv()
   const suction = p.mode === 'suction'
@@ -722,16 +614,16 @@ function Pneumatic() {
       : [V3(-1.75, 0.8), V3(-0.9, 0.8), V3(0.6, 0.8), V3(1.0, 1.2), V3(1.05, 2.6), V3(1.35, 2.95, -0.28), V3(CX - 0.1, 2.95, -0.28)]
     const duct = new THREE.CatmullRomCurve3(pts, false, 'centripetal', 0.3)
     const ductG = pipe(duct, 0.065, 0.055, 120, 18)
-    const cyc = cycloneShell()
-    const fanCase = xform(cylinder(0.32, 0.22, 40), mat4.rx(PI / 2))
+    const c = cyclone({ rBarrel: 0.36, rApex: 0.08, hBarrel: 0.8, hCone: 0.8, rFinder: 0.13, depth: 0.4, above: 0.35 })
+    const cyc = xform(c.body, mat4.t(0, 1.5, 0))
+    const cycTop = xform(merge(c.roof, c.finder), mat4.t(0, 1.5, 0))
+    const fan = centrifugalFan({ r: 0.26, width: 0.22 })
     const nozzle = tube(0.11, 0.06, 0.15, 24)
-    const impeller = merge(...Array.from({ length: 8 }, (_, i) => xform(box(0.24, 0.02, 0.16), mat4.c(mat4.rz((i * PI) / 4), mat4.t(0.13, 0, 0)))), xform(cylinder(0.05, 0.18, 16), mat4.rx(PI / 2)))
-    const motor = xform(cylinder(0.12, 0.3, 24), mat4.rx(PI / 2))
-    const hop = hopper(0.5, 0.16, 0.4)
-    const lock = xform(cylinder(0.12, 0.22, 32), mat4.rx(PI / 2))
-    const rotor = merge(...Array.from({ length: 6 }, (_, i) => xform(box(0.2, 0.012, 0.2), mat4.rz((i * PI) / 6))))
+    const motor = electricMotor({ r: 0.12, length: 0.3 })
+    const hop = hopper({ top: 0.5, bottom: 0.16, h: 0.4, wall: 0.015 })
+    const valve = rotaryValve({ r: 0.1, width: 0.22 })
     const outlet = pipe(new THREE.CatmullRomCurve3([V3(CX, 3.4), V3(CX, 3.75), V3(CX + 0.3, 3.95), V3(CX + 0.9, 3.95)]), 0.065, 0.055, 40, 16)
-    const bin = boxShell(0.5, 0.5, 0.7, 0.01)
+    const bin = boxShell({ w: 0.5, d: 0.5, h: 0.7, t: 0.01 })
     const leg = box(0.05, 1.5, 0.05)
     const heap = lathe(
       [
@@ -741,7 +633,7 @@ function Pneumatic() {
       ],
       32,
     )
-    return { duct, ductG, cyc, fanCase, nozzle, impeller, motor, hop, lock, rotor, outlet, bin, leg, heap }
+    return { duct, ductG, cyc, cycTop, fanCase: fan.housing, nozzle, impeller: fan.impeller, motor, hop, lock: valve.casing, rotor: valve.rotor, outlet, bin, leg, heap }
   }, [suction])
 
   const spiralDown = useMemo(() => {
@@ -782,7 +674,7 @@ function Pneumatic() {
       <Part id="fan" name="Fan (blower)" role="housing" material="paintBlue" info={INFO.fan} cites={C.pneu} explode={[-0.3, 0, 0]}>
         <group position={fanPos}>
           <PartMesh geometry={geo.fanCase} />
-          <PartMesh geometry={geo.motor} position={[0, 0, -0.3]} material="paintGreen" />
+          <PartMesh geometry={geo.motor} position={[0, 0, -0.29]} material="paintGreen" />
           <Part id="impeller" name="Fan impeller" role="moving" material="steel" info={INFO.fan}>
             <group ref={fanRef} position={[0, 0, 0]}>
               <PartMesh geometry={geo.impeller} />
@@ -801,7 +693,7 @@ function Pneumatic() {
         </>
       ) : (
         <Part id="airlock" name="Hopper and rotary airlock" role="housing" material="galvanised" info={INFO.airlock} cites={C.pneu} explode={[0, 0.3, 0]}>
-          <PartMesh geometry={geo.hop} position={[-0.9, 1.15, 0]} />
+          <PartMesh geometry={geo.hop} position={[-0.9, 1.16, 0]} />
           <PartMesh geometry={geo.lock} position={[-0.9, 1.0, 0]} material="castIron" />
           <group ref={lockRef} position={[-0.9, 1.0, 0.0]}>
             <PartMesh geometry={geo.rotor} material="steel" />
@@ -814,6 +706,7 @@ function Pneumatic() {
       </Part>
       <Part id="cyclone" name="Cyclone collector" role="housing" material="galvanised" info={INFO.cyclone} cites={[...C.pneu, ...C.sep]} explode={[0.3, 0, 0]}>
         <PartMesh geometry={geo.cyc} position={[CX, 0, 0]} />
+        <PartMesh geometry={geo.cycTop} position={[CX, 0, 0]} />
         {[0, 1, 2, 3].map((i) => (
           <PartMesh key={i} geometry={geo.leg} position={[CX + 0.3 * cos((i * PI) / 2 + PI / 4), 1.5 / 2 + 0.75, 0.3 * sin((i * PI) / 2 + PI / 4)]} material="paintGrey" />
         ))}

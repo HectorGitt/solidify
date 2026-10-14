@@ -1,7 +1,7 @@
 import { useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { useSimFrame } from '@/core/sim'
-import { box, cylinder, extrude, extrudeTwisted, helixSpring, lathe, merge, pipe, roundedBox, roundedRect, tube } from '@/geometry'
+import { box, cylinder, lathe, merge, pipe } from '@/geometry'
 import { jetSpeed } from '@/physics/application'
 import { Flow } from '@/render/Flow'
 import { PartLabel } from '@/render/Label'
@@ -10,7 +10,7 @@ import { Part, PartMesh } from '@/render/Part'
 import { TRACTOR } from '@/tractor/dims'
 import { Tractor, createTractorPose } from '@/tractor/Tractor'
 import { Level } from '../_shared/field'
-import { bar, hash, rod } from '../_shared/geom'
+import { aFrameMast, bar, hash, lineStrainer, nozzleParts, nozzleRow, pistonPump, pressureGauge, rod, sectionValves, sprayBoomFrame, sprayPipe, sprayRegulator, sprayTank } from '@/parts/lib/implements'
 import { CropRows, Ground, PtoDriveline, type Treadmill, type V3 } from '../_appkit/three'
 import {
   BOOM_WORLD_X,
@@ -112,9 +112,7 @@ function useSprayerGeometry(n: number, s: number) {
     const top = MAST_TOP
     const frame = merge(
       // lower-link pins and mast
-      rod([0, 0, 0.47], [0, 0, -0.47], 0.014),
-      bar([0, 0, 0.4], [top[0] - 0.03, top[1], 0.05], 0.05, 0.05),
-      bar([0, 0, -0.4], [top[0] - 0.03, top[1], -0.05], 0.05, 0.05),
+      aFrameMast({ pinHalf: 0.47, pinR: 0.014, footZ: 0.4, topX: top[0] - 0.03, topY: top[1], topZ: 0.05, legW: 0.05, legT: 0.05, topPinR: 0 }),
       box(0.06, 0.08, 0.16).translate(top[0] - 0.03, top[1], 0),
       // main frame rails
       bar([fx0, 0.04, 0.42], [fx1, 0.18, 0.42], 0.06, 0.06),
@@ -130,43 +128,42 @@ function useSprayerGeometry(n: number, s: number) {
       // control post
       bar([LAYOUT.ctrl.x, 0.04, LAYOUT.ctrl.z], [LAYOUT.ctrl.x, 0.95, LAYOUT.ctrl.z], 0.04, 0.04),
     )
-    const tank = roundedBox(T.w, T.h, T.d, 0.14).translate(T.x, T.y, 0)
-    const liquid = roundedBox(T.w - 0.02, 1, T.d - 0.02, 0.06)
-    const filler = merge(lathe([[0.075, 0], [0.09, 0], [0.09, 0.05], [0.075, 0.05]], 28).translate(T.x + 0.15, T.y + T.h / 2 - 0.01, 0.2), cylinder(0.095, 0.02, 28).translate(T.x + 0.15, T.y + T.h / 2 + 0.05, 0.2))
-    const basket = lathe([[0.06, -0.16], [0.07, -0.16], [0.075, 0], [0.065, 0], [0.055, -0.15]], 24).translate(T.x + 0.15, T.y + T.h / 2 + 0.03, 0.2)
+    const tk = sprayTank({ w: T.w, h: T.h, d: T.d })
+    const tank = tk.tank.translate(T.x, T.y, 0)
+    const liquid = tk.liquid
+    const filler = tk.filler.translate(T.x, T.y, 0)
+    const basket = tk.basket.translate(T.x, T.y, 0)
     const agitator = merge(rod([T.x + 0.38, T.y - T.h / 2 + 0.05, 0.3], [T.x + 0.1, T.y - T.h / 2 + 0.05, 0.3], 0.008, 10), lathe([[0, 0], [0.012, 0], [0.004, 0.03], [0, 0.03]], 12).rotateZ(PI / 2).translate(T.x + 0.1, T.y - T.h / 2 + 0.05, 0.3))
 
     // pump: crankcase, two vertical cylinders, head with air chamber
     const P = PUMP
-    const cylX = [P.x - 0.045, P.x + 0.045]
-    const cyl = (x: number) => tube(P.bore / 2 + 0.008, P.bore / 2, 0.075, 32).translate(x, P.y + 0.08, 0)
-    const crankcase = merge(roundedBox(0.2, 0.09, 0.11, 0.02).translate(P.x, P.y, 0), cyl(cylX[0]), cyl(cylX[1]), box(0.18, 0.03, 0.07).translate(P.x, P.y + 0.13, 0))
-    const airChamber = lathe([[0, 0], [0.03, 0], [0.042, 0.03], [0.042, 0.08], [0.025, 0.11], [0, 0.115]], 28).translate(P.x, P.y + 0.145, 0)
-    const shaft = merge(rod([P.x - 0.12, 0, 0], [P.x + 0.13, 0, 0], 0.011), ...cylX.map((x) => cylinder(0.024, 0.02, 24).rotateZ(PI / 2).translate(x, 0.012, 0)))
-    const piston = cylinder(P.bore / 2 - 0.0005, 0.032, 28)
-    const conrod = bar([0, 0, 0], [0, 0.05, 0], 0.012, 0.008)
+    const { cylX, crankcase, airChamber, shaft, piston, conrod } = pistonPump(P)
 
     // line strainer (clear bowl filter)
     const S = LAYOUT.strainer
-    const strHead = merge(box(0.08, 0.035, 0.08).translate(S.x, S.y + 0.09, S.z), rod([S.x - 0.07, S.y + 0.09, S.z], [S.x + 0.07, S.y + 0.09, S.z], 0.013))
-    const strBowl = lathe([[0, 0], [0.028, 0], [0.034, 0.02], [0.034, 0.075], [0, 0.075]], 28).translate(S.x, S.y, S.z)
-    const strMesh = tube(0.02, 0.016, 0.06, 20).translate(S.x, S.y + 0.04, S.z)
+    const ls = lineStrainer(S.x, S.y, S.z)
+    const strHead = ls.head
+    const strBowl = ls.bowl
+    const strMesh = ls.element
 
     // relief valve, gauge, section manifold on the control post
     const cx = LAYOUT.ctrl.x + 0.05
     const cz = LAYOUT.ctrl.z
     const ry = 0.55
-    const regBody = merge(lathe([[0.008, 0], [0.03, 0], [0.03, 0.03], [0.022, 0.04], [0.022, 0.13], [0.008, 0.13]], 32).translate(cx, ry, cz), rod([cx - 0.06, ry + 0.015, cz], [cx + 0.06, ry + 0.015, cz], 0.012))
-    const regKnob = cylinder(0.026, 0.025, 6).translate(cx, ry + 0.15, cz)
-    const regSpring = helixSpring(0.014, 0.0025, 1, 7)
-    const poppet = lathe([[0, 0], [0.012, 0], [0.006, 0.018], [0.006, 0.03], [0, 0.03]], 20)
+    const reg = sprayRegulator(cx, ry, cz)
+    const regBody = reg.body
+    const regKnob = reg.knob
+    const regSpring = reg.spring
+    const poppet = reg.poppet
     const gaugeY = 0.85
-    const gauge = merge(cylinder(0.05, 0.03, 36).rotateX(PI / 2).translate(cx, gaugeY, cz + 0.03), rod([cx, gaugeY - 0.05, cz], [cx, ry + 0.17, cz], 0.006))
-    const gaugeFace = cylinder(0.045, 0.002, 36).rotateX(PI / 2).translate(cx, gaugeY, cz + 0.046)
-    const needle = box(0.004, 0.04, 0.002).translate(0, 0.016, 0)
+    const gg = pressureGauge(cx, gaugeY, cz, ry + 0.17)
+    const gauge = gg.gauge
+    const gaugeFace = gg.face
+    const needle = gg.needle
     const manY = 0.72
-    const manifold = merge(box(0.06, 0.05, 0.22).translate(cx, manY, cz - 0.02), ...[0, 1, 2].map((k) => cylinder(0.012, 0.03, 12).translate(cx, manY + 0.04, cz - 0.09 + k * 0.07)))
-    const lever = merge(box(0.012, 0.012, 0.07).translate(0, 0, 0.035), cylinder(0.01, 0.014, 12).translate(0, 0, 0.07))
+    const sv = sectionValves(cx, manY, cz)
+    const manifold = sv.block
+    const lever = sv.lever
 
     // hoses
     const tb = T.y - T.h / 2
@@ -178,33 +175,12 @@ function useSprayerGeometry(n: number, s: number) {
 
     // boom (built at spray-pipe height y = 0, boom x = 0; positioned by the scene)
     const W = n * s
-    const half = W / 2
-    const members: THREE.BufferGeometry[] = []
-    const topY = (z: number) => 0.32 - 0.2 * Math.min(1, Math.max(0, (Math.abs(z) - 0.6) / Math.max(0.1, half - 0.6)))
-    members.push(rod([0.05, 0.05, -half - 0.05], [0.05, 0.05, half + 0.05], 0.018, 12))
-    const nSeg = Math.max(2, Math.round(W / 0.5))
-    for (let i = 0; i < nSeg; i++) {
-      const za = -half + (W * i) / nSeg
-      const zb = -half + (W * (i + 1)) / nSeg
-      members.push(rod([0.05, topY(za), za], [0.05, topY(zb), zb], 0.015, 10))
-      members.push(rod([0.05, 0.05, za], [0.05, topY(za), za], 0.01, 8))
-      members.push(rod([0.05, 0.05, za], [0.05, topY(zb), zb], 0.008, 8))
-    }
-    members.push(rod([0.05, 0.05, half], [0.05, topY(half), half], 0.01, 8))
-    // centre carriage
-    members.push(box(0.08, 0.36, 0.8).translate(0.1, 0.17, 0))
-    const boomFrame = merge(...members)
-    const sprayPipe = merge(rod([0, 0, -half], [0, 0, half], 0.011, 12), cylinder(0.014, 0.02, 12).rotateX(PI / 2).translate(0, 0, -half), cylinder(0.014, 0.02, 12).rotateX(PI / 2).translate(0, 0, half))
-    const bodies: THREE.BufferGeometry[] = []
-    const tips: THREE.BufferGeometry[] = []
-    for (let i = 0; i < n; i++) {
-      const z = nozzleZ(i, n, s)
-      bodies.push(lathe([[0, -0.04], [0.009, -0.04], [0.009, 0.02], [0.016, 0.02], [0.016, 0.04], [0, 0.04]], 14).translate(0, -0.01, z))
-      tips.push(lathe([[0, -0.07], [0.006, -0.07], [0.012, -0.055], [0.012, -0.05], [0, -0.05]], 14).translate(0, 0, z))
-    }
+    const boomFrame = sprayBoomFrame(W)
+    const pipeG = sprayPipe(W)
+    const nozzles = nozzleRow(Array.from({ length: n }, (_, i) => nozzleZ(i, n, s)))
     const liftFrame = merge(bar([LAYOUT.boomX + 0.1, 0.05, 0.38], [LAYOUT.boomX + 0.1, 1.15, 0.38], 0.05, 0.05), bar([LAYOUT.boomX + 0.1, 0.05, -0.38], [LAYOUT.boomX + 0.1, 1.15, -0.38], 0.05, 0.05), bar([LAYOUT.boomX + 0.1, 1.15, 0.4], [LAYOUT.boomX + 0.1, 1.15, -0.4], 0.05, 0.05), bar([LAYOUT.frameX[1], 0.18, 0.38], [LAYOUT.boomX + 0.1, 0.18, 0.38], 0.05, 0.05), bar([LAYOUT.frameX[1], 0.18, -0.38], [LAYOUT.boomX + 0.1, 0.18, -0.38], 0.05, 0.05))
 
-    return { frame, tank, liquid, filler, basket, agitator, crankcase, airChamber, shaft, piston, conrod, cylX, strHead, strBowl, strMesh, regBody, regKnob, regSpring, poppet, gauge, gaugeFace, needle, manifold, lever, suction, suction2, delivery, bypass, regToMan, boomFrame, sprayPipe, bodies: merge(...bodies), tips: merge(...tips), liftFrame, cx, cz, ry, gaugeY, manY, W }
+    return { frame, tank, liquid, filler, basket, agitator, crankcase, airChamber, shaft, piston, conrod, cylX, strHead, strBowl, strMesh, regBody, regKnob, regSpring, poppet, gauge, gaugeFace, needle, manifold, lever, suction, suction2, delivery, bypass, regToMan, boomFrame, sprayPipe: pipeG, bodies: nozzles.bodies, tips: nozzles.tips, liftFrame, cx, cz, ry, gaugeY, manY, W }
   }, [n, s])
 }
 
@@ -294,53 +270,10 @@ function NozzleDemo() {
   const kind = useSprayer((s) => s.kind)
   const q3 = useSprayer((s) => s.q3)
   const g = useMemo(() => {
-    const vert = (geo: THREE.BufferGeometry) => geo.rotateX(PI / 2)
-    const body = lathe(
-      [
-        [0.0062, 0],
-        [0.011, 0],
-        [0.011, 0.018],
-        [0.0135, 0.018],
-        [0.0135, 0.03],
-        [0.009, 0.034],
-        [0.009, 0.05],
-        [0.0062, 0.05],
-      ],
-      40,
-    )
-    const strainer = merge(tube(0.0058, 0.0048, 0.022, 28).translate(0, 0.016, 0), cylinder(0.0058, 0.0008, 28).translate(0, 0.0055, 0))
-    const gasket = tube(0.0058, 0.0035, 0.0012, 32).translate(0, -0.0006, 0)
-    // whirl plate: a swirl core with two slanted (helical) slots
-    const wp: THREE.Vector2[] = []
-    for (let i = 0; i < 72; i++) {
-      const a = (i / 72) * 2 * PI
-      const notch = Math.abs(Math.sin(a)) < 0.2 && Math.cos(a) !== 0
-      const r = notch ? 0.0044 : 0.0058
-      wp.push(new THREE.Vector2(r * Math.cos(a), r * Math.sin(a)))
-    }
-    const whirl = vert(extrudeTwisted(wp, [], 0.003, 1.1, 6)).translate(0, -0.0027, 0)
-    const discShape = new THREE.Shape().absarc(0, 0, 0.0058, 0, 2 * PI, false)
-    const hole = new THREE.Path().absarc(0, 0, 0.0009, 0, 2 * PI, true)
-    discShape.holes.push(hole)
-    const disc = vert(extrude(discShape, 0.0016, { curveSegments: 32 })).translate(0, -0.0051, 0)
-    const fanShape = new THREE.Shape().absarc(0, 0, 0.0058, 0, 2 * PI, false)
-    const slot = roundedRect(0.0032, 0.0008, 0.0004)
-    fanShape.holes.push(new THREE.Path(slot.getPoints(12).reverse()))
-    const fanTip = merge(vert(extrude(fanShape, 0.0045, { curveSegments: 32 })).translate(0, -0.0035, 0), lathe([[0.0016, -0.0058], [0.0058, -0.0058], [0.0058, -0.0012], [0.0016, -0.0012]], 32).translate(0, -0.0025, 0))
-    const cap = lathe(
-      [
-        [0.0025, -0.009],
-        [0.0145, -0.009],
-        [0.0145, 0.016],
-        [0.0118, 0.016],
-        [0.0118, -0.0065],
-        [0.0025, -0.0065],
-      ],
-      40,
-    )
+    const parts = nozzleParts()
     const stand = merge(cylinder(0.12, 0.03, 32).translate(0, -NOZZLE_DEMO.y + 0.015, 0), rod([0, -NOZZLE_DEMO.y + 0.03, 0], [0, -0.13, 0], 0.02), box(0.03, 0.03, 0.16).translate(0, -0.12, 0))
     const plaque = box(0.18, 0.1, 0.012)
-    return { body, strainer, gasket, whirl, disc, fanTip, cap, stand, plaque }
+    return { ...parts, stand, plaque }
   }, [])
 
   const drops = useRef<THREE.InstancedMesh>(null)

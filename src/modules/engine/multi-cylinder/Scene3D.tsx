@@ -10,7 +10,7 @@ import { PartLabel } from '@/render/Label'
 import { createDynamicCutMaterial } from '@/render/materials'
 import { Part, PartMesh } from '@/render/Part'
 import { useView } from '@/render/view'
-import { conRod, crankshaft, mainJournalZ, piston } from './crank'
+import { crankshaft, mainJournalZ } from './crank'
 import { CRANK, DECK, INJ_X, blockLength, getMultiGeometry } from './geometry'
 import { DIM, SC, STROKE_COLOR, currentLayout, cylZ, cylinderState, live, useMulti } from './model'
 
@@ -47,12 +47,12 @@ const INFO = {
     role: 'Its shape fixes where every piston is at any moment, and therefore the firing order the engine can use. In a four-cylinder engine pistons 1 & 4 travel together, and so do 2 & 3; a two-cylinder crank has its pins 180° apart.',
   },
   flywheel: {
-    summary: 'Flywheel.',
+    summary: 'Flywheel with starter ring gear.',
     role: 'Multi-cylinder engines need a smaller, lighter flywheel than a single: the power strokes come more often, so there is less to carry the crankshaft through.',
   },
   pulley: { summary: 'Crankshaft pulley (front).', role: 'Drives the fan, water pump and alternator.' },
   rods: { summary: 'Connecting rods.', role: 'Link each piston to its crank pin.' },
-  pistons: { summary: 'Pistons with gudgeon pins.', role: 'Each one is driven down by its own power stroke in turn.' },
+  pistons: { summary: 'Pistons with rings and gudgeon pins.', role: 'Each one is driven down by its own power stroke in turn.' },
   gas: {
     summary: 'Gas in each cylinder, coloured by stroke.',
     role: 'Blue = intake, green = compression, orange = power (bright at the moment of firing), grey = exhaust — the same colours as the firing chart.',
@@ -71,8 +71,8 @@ export function Multi3D() {
   const L = blockLength(n)
 
   const crank = useMemo(() => crankshaft(CRANK, layout.firing.map((f, i) => ({ z: cylZ(i + 1, n), firingDeg: f })), DIM.pitch), [n, layout])
-  const pist = useMemo(() => piston({ bore: DIM.bore, comp: DIM.pistonComp, skirt: DIM.pistonSkirt }), [])
-  const rod = useMemo(() => conRod(DIM.rodL, CRANK.pinR + 0.0003, DIM.bore * 0.14 + 0.0002, 0.026), [])
+  const pist = g.piston
+  const rod = g.rod
   const shells = useMemo(() => {
     const zs = mainJournalZ(Array.from({ length: n }, (_, i) => cylZ(i + 1, n)), DIM.pitch)
     const t = tube(CRANK.journalR + 0.0024, CRANK.journalR + 0.0003, 0.028, 36)
@@ -190,8 +190,9 @@ export function Multi3D() {
             <Part id="crankshaft" name="Crankshaft" material="forged" info={INFO.crankshaft} cites={C.crank} explode={[0, -0.14, 0]}>
               <PartMesh geometry={crank.geometry} />
             </Part>
-            <Part id="flywheel" name="Flywheel" material="castIron" info={INFO.flywheel} cites={[SRC.tb509('p11')]} explode={[0, -0.14, -0.12]}>
-              <PartMesh geometry={g.flywheel} position={[0, 0, crank.back]} />
+            <Part id="flywheel" name="Flywheel & ring gear" material="castIron" info={INFO.flywheel} cites={[SRC.tb509('p11')]} explode={[0, -0.14, -0.12]}>
+              <PartMesh geometry={g.flywheel.disc} position={[0, 0, crank.back]} />
+              <PartMesh geometry={g.flywheel.ring} material="steelDark" position={[0, 0, crank.back]} />
             </Part>
             <Part id="pulley" name="Crankshaft pulley" material="castIron" info={INFO.pulley} explode={[0, -0.14, 0.1]}>
               <PartMesh geometry={g.pulley} position={[0, 0, crank.front - 0.03]} />
@@ -201,7 +202,11 @@ export function Multi3D() {
         <Part id="conrods" name="Connecting rods" material="forged" role="moving" info={INFO.rods} cites={C.parts} explode={[0, -0.04, 0]}>
           {zs.map((_, i) => (
             <group key={i} ref={(el) => void (rods.current[i] = el)}>
-              <PartMesh geometry={rod} />
+              <PartMesh geometry={rod.body} />
+              <PartMesh geometry={rod.cap} />
+              <PartMesh geometry={rod.bolts} material="steelDark" />
+              <PartMesh geometry={rod.shells} material="bearing" />
+              <PartMesh geometry={rod.bush} material="bronze" />
             </group>
           ))}
         </Part>
@@ -209,6 +214,8 @@ export function Multi3D() {
           {zs.map((_, i) => (
             <group key={i} ref={(el) => void (pistons.current[i] = el)}>
               <PartMesh geometry={pist.body} />
+              <PartMesh geometry={pist.rings.compression} material="steelDark" />
+              {pist.rings.oil ? <PartMesh geometry={pist.rings.oil} material="castIron" /> : null}
               <PartMesh geometry={pist.pin} material="steel" />
             </group>
           ))}

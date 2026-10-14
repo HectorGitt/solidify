@@ -1,54 +1,25 @@
-import * as THREE from 'three'
-import { cylinder, extrudeTwisted, mat4, merge, xform } from '@/geometry'
-import { axial, internalGear, ringZ, shaftZ, spur } from '../common/geo'
+import { bandBrake, planetCarrier, plateStackZ } from '@/parts/lib/driveline'
+import { axial, internalGear, ringZ, shaftZ, spur } from '@/parts/lib/shapes'
 import { PG, RC, RP, RR, RS } from './model'
 
 /**
- * Planetary set geometry (worker-safe). Gears lie in XY, shafts along Z (common/geo convention).
+ * Planetary set geometry (worker-safe). Gears lie in XY, shafts along Z (parts-library convention).
  * Set 1 is centred on z = 0; set 2 of the compound train reuses the gears at SET2_Z.
  */
 
-const { PI } = Math
+
 const W = PG.width
 const HW = W / 2
-
-/** Carrier plate: a four-armed spider (PT p5 figure) with the pins on its lobes. */
-function spiderPlate(thickness: number, bore: number) {
-  const pts: THREE.Vector2[] = []
-  const N = 160
-  for (let i = 0; i < N; i++) {
-    const a = (2 * PI * i) / N
-    const f = Math.pow((1 + Math.cos(PG.n * a)) / 2, 3)
-    const r = 0.047 + (RC + 0.021 - 0.047) * f
-    pts.push(new THREE.Vector2(r * Math.cos(a), r * Math.sin(a)))
-  }
-  const holes: THREE.Vector2[][] = []
-  if (bore > 0) {
-    const h: THREE.Vector2[] = []
-    for (let i = 0; i < 40; i++) {
-      const a = (-2 * PI * i) / 40
-      h.push(new THREE.Vector2(bore * Math.cos(a), bore * Math.sin(a)))
-    }
-    holes.push(h)
-  }
-  return extrudeTwisted(pts, holes, thickness)
-}
 
 const PLATE_T = 0.008
 const PLATE_GAP = 0.004
 export const PLATE_Z = HW + PLATE_GAP + PLATE_T / 2
 
 function carrier(shaftTo: number) {
-  const front = xform(spiderPlate(PLATE_T, 0.022), mat4.t(0, 0, PLATE_Z))
-  const back = xform(spiderPlate(PLATE_T, 0), mat4.t(0, 0, -PLATE_Z))
-  const pins: THREE.BufferGeometry[] = []
-  const pinLen = 2 * (PLATE_Z - PLATE_T / 2)
-  for (let i = 0; i < PG.n; i++) {
-    const a = (2 * PI * i) / PG.n
-    pins.push(xform(cylinder(0.0105, pinLen, 20), mat4.c(mat4.t(RC * Math.cos(a), RC * Math.sin(a), 0), mat4.rx(PI / 2))))
-  }
+  // four-armed spider plates (PT p5 figure) with the pins on their lobes
+  const c = planetCarrier({ n: PG.n, rc: RC, pinR: 0.0105, plateT: PLATE_T, plateZ: PLATE_Z, rHub: 0.047, lobeClear: 0.021, frontBore: 0.022 })
   const shaft = shaftZ(0.022, shaftTo, -PLATE_Z - PLATE_T / 2, 32)
-  return { plates: merge(front, back), pins: merge(...pins), shaft }
+  return { plates: c.plates, pins: c.pins, shaft }
 }
 
 /** Ring gear, drum and hollow ring shaft (towards +Z). */
@@ -84,14 +55,9 @@ function lockClutch(z0: number) {
     64,
   )
   const hub = ringZ(0.042, 0.018, z0 + 0.008, z0 + 0.048, 48)
-  const steel: THREE.BufferGeometry[] = []
-  const friction: THREE.BufferGeometry[] = []
-  for (let k = 0; k < 7; k++) {
-    const z = z0 + 0.01 + k * 0.0052
-    if (k % 2 === 0) steel.push(ringZ(0.0675, 0.05, z, z + 0.0034, 64))
-    else friction.push(ringZ(0.062, 0.0425, z, z + 0.0034, 64))
-  }
-  return { drum, hub, steel: merge(...steel), friction: merge(...friction) }
+  // steel plates (in the drum) alternating with friction plates (on the hub)
+  const pack = plateStackZ({ count: 7, z0: z0 + 0.01, pitch: 0.0052, t: 0.0034, a: { rOut: 0.0675, rIn: 0.05 }, b: { rOut: 0.062, rIn: 0.0425 }, segments: 64 })
+  return { drum, hub, steel: pack.a, friction: pack.b! }
 }
 
 function brakeDrum(r: number, t: number, bore: number) {
@@ -99,11 +65,7 @@ function brakeDrum(r: number, t: number, bore: number) {
 }
 
 /** Band brake (stationary) round a drum of radius r, with an anchor lug. */
-function band(r: number, width: number) {
-  const b = ringZ(r + 0.006, r + 0.002, -width / 2, width / 2, 72)
-  const lug = xform(new THREE.BoxGeometry(0.03, 0.03, width), mat4.t(0, r + 0.018, 0))
-  return merge(b, lug)
-}
+const band = (r: number, width: number) => bandBrake({ r, width })
 
 /** Cast housing round one set: shell plus end walls with shaft bores. */
 function housing(zFront: number, zRear: number, frontBore: number, rearBore: number) {

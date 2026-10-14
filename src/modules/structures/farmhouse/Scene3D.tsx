@@ -3,7 +3,7 @@ import * as THREE from 'three'
 import { box, mat4, merge, xform } from '@/geometry'
 import { PartLabel } from '@/render/Label'
 import { Part, PartMesh } from '@/render/Part'
-import { gableRoof, walls, type Opening, type Side } from '../_shared/build'
+import { gableRoof, walls, type Opening, type Side } from '@/parts/lib/structures'
 import { C, ENCLOSED, evaluate, planById, useHouse, type Plan, type Room } from './model'
 
 const T = 0.1 // half of a 200 mm wall: each room draws its own leaf
@@ -96,14 +96,14 @@ export function Scene3D() {
   const g = useMemo(() => {
     const rooms = plan.rooms.map((r) => ({
       floor: box(r.w, 0.1, r.d),
-      walls: ENCLOSED(r.kind) ? walls(r.w, r.d, st.wallH, T, openingsFor(plan, r)) : null,
+      walls: ENCLOSED(r.kind) ? walls({ w: r.w, d: r.d, h: st.wallH, t: T, openings: openingsFor(plan, r) }) : null,
       beds: beds(r, occByRoom.get(r) ?? 0),
     }))
     const roofs = plan.roofs.map((f) => {
       const alongX = f.w > f.d
       const span = alongX ? f.d : f.w
       const len = alongX ? f.w : f.d
-      return { geo: gableRoof(span, len, st.pitch, thatch ? 0.6 : 0.45, thatch ? 0.25 : 0.06).geometry, x: f.x + f.w / 2, z: f.z + f.d / 2, rot: alongX ? Math.PI / 2 : 0 }
+      return { geo: gableRoof({ span, length: len, pitchDeg: st.pitch, overhang: thatch ? 0.6 : 0.45, t: thatch ? 0.25 : 0.06 }).geometry, x: f.x + f.w / 2, z: f.z + f.d / 2, rot: alongX ? Math.PI / 2 : 0 }
     })
     const plinth = box(maxX - minX + 0.6, Math.max(0.02, st.plinth), maxZ - minZ + 0.6)
     // yard boundary wall with a gate (courtyard type)

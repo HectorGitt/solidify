@@ -35,7 +35,7 @@ const INFO = {
   sleeve: { summary: 'Stationary stator sleeve (reaction shaft).', role: 'Fixed to the transmission case; takes the stator reaction torque.' },
   shaft: { summary: 'Turbine (output) shaft.', role: 'To the range gears (a simple planetary set — reverse is needed because the converter turns only one way) and the final drive.' },
   housing: { summary: 'Converter (bell) housing.', role: 'Stationary casing between engine and transmission; sectioned here.' },
-  flywheel: { summary: 'Engine flywheel / flex plate.', role: 'Drives the converter cover.' },
+  flywheel: { summary: 'Flex plate (drive plate) with the starter ring gear.', role: 'Bolted to the crankshaft; drives the converter cover. A converter needs no heavy flywheel: its own oil-filled mass smooths the engine.' },
   oil: { summary: 'Converter oil.', role: 'Oil flow lubricates, oil pressure engages, and oil velocity drives the turbine.' },
 }
 
@@ -92,8 +92,10 @@ export function Tc3D() {
           <Part id="cover" name="Front cover" material="steelDark" cut info={INFO.cover} cites={C} explode={[0, 0, -0.18]}>
             <PartMesh geometry={g.cover} />
           </Part>
-          <Part id="flywheel" name="Engine flywheel" material="castIron" info={INFO.flywheel} explode={[0, 0, -0.26]}>
-            <PartMesh geometry={g.flywheel} />
+          <Part id="flywheel" name="Flex plate & ring gear" material="steel" info={INFO.flywheel} explode={[0, 0, -0.26]}>
+            <PartMesh geometry={g.flywheel.plate} />
+            <PartMesh geometry={g.flywheel.ring} material="steelDark" />
+            <PartMesh geometry={g.flywheel.crank} material="forged" />
           </Part>
         </group>
         <group ref={turbine}>

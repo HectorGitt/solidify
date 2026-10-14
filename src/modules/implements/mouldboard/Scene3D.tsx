@@ -2,6 +2,7 @@ import { useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { useSimFrame } from '@/core/sim'
 import { box, merge } from '@/geometry'
+import { bar, coulterDisc, coulterShank, hash, headstock, jointer, mouldboardBottom } from '@/parts/lib/implements'
 import { Flow } from '@/render/Flow'
 import { PartLabel } from '@/render/Label'
 import { Part, PartMesh } from '@/render/Part'
@@ -10,10 +11,8 @@ import { SoilSurface } from '@/render/SoilSurface'
 import { TRACTOR } from '@/tractor/dims'
 import { createTractorPose } from '@/tractor/Tractor'
 import { FieldGround, FieldRun, makeSoil, mirror } from '../_shared/field'
-import { bar, hash, plateXY } from '../_shared/geom'
 import { freshSoil, treadmill, type Treadmill } from '../_tillage/soil'
 import { LiveTag, Segment } from '../_tillage/three'
-import { buildBottom, coulterDisc, coulterShank } from './bottom'
 import { BEAM_Y, C, HS, RAISED, bottomX, draftOf, landsideZ, live, shownSuction, useMb } from './model'
 
 const INFO = {
@@ -48,7 +47,7 @@ function usePloughGeo() {
   return useMemo(() => {
     const vs = shownSuction(st.vSuction, st.exaggerate)
     const hs = shownSuction(st.hSuction, st.exaggerate)
-    const b = buildBottom(st.width, st.depth, st.board, vs, hs, HS + BEAM_Y)
+    const b = mouldboardBottom(st.width, st.depth, st.board, vs, hs, HS + BEAM_Y)
     const n = st.bottoms
     const pts = Array.from({ length: n }, (_, i) => [bottomX(i) - 0.5, landsideZ(i, st.width) - 0.07] as const)
     const f = pts[0]
@@ -59,17 +58,12 @@ function usePloughGeo() {
     const len = Math.hypot(dx, dz) || 1
     const beam = bar([f[0] - (dx / len) * ext + 0.3, BEAM_Y, f[1] - (dz / len) * ext], [l[0] + (dx / len) * 0.15, BEAM_Y, l[1] + (dz / len) * 0.15], 0.07, 0.1)
     // headstock: cross shaft between the lower pins, two mast plates up to the top-link pin, brace to the beam
-    const cross = bar([0, 0, -0.45], [0, 0, 0.45], 0.05, 0.05)
-    const mast = merge(
-      plateXY([[-0.06, -0.03], [0.05, -0.03], [0.02, 0.66], [-0.04, 0.66]], 0.016, 0.08),
-      plateXY([[-0.06, -0.03], [0.05, -0.03], [0.02, 0.66], [-0.04, 0.66]], 0.016, -0.08),
-    )
+    const { cross, mast } = headstock({ plateZ: 0.08 })
     const tie = merge(bar([0, 0.05, -0.3], [f[0] + 0.3, BEAM_Y, f[1]], 0.05, 0.05), bar([0, 0.05, 0.3], [f[0] + 0.3, BEAM_Y, f[1]], 0.05, 0.05), bar([-0.02, 0.6, 0], [f[0] + 0.1, BEAM_Y, (f[1] + l[1]) / 2], 0.05, 0.05))
     const coulter = coulterDisc(0.2)
     const shank = coulterShank([0.0, 0.24, 0.01], [0.05, HS + BEAM_Y - 0.03, 0.01])
     // jointer: small twisted plate skimming the top corner of the slice (drawn at the surface)
-    const jointer = merge(plateXY([[0.06, 0], [-0.12, 0.0], [-0.14, 0.06], [0.02, 0.03]], 0.008, -0.03), bar([-0.04, 0.05, -0.02], [-0.02, HS + BEAM_Y - st.depth, 0.0], 0.02, 0.025))
-    return { b, beam, cross, mast, tie, coulter, shank, jointer }
+    return { b, beam, cross, mast, tie, coulter, shank, jointer: jointer(HS + BEAM_Y - st.depth) }
   }, [st.width, st.depth, st.board, st.vSuction, st.hSuction, st.exaggerate, st.bottoms])
 }
 

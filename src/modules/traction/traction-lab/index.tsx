@@ -1,8 +1,11 @@
 import { SRC } from '@/content/citations'
 import type { SceneDef } from '@/modules/types'
 import { Lab3D } from './Lab3D'
-import { DEFAULTS, useLab } from './model'
+import { clamp, cleanContext, roundTo, soilFromCI } from '@/content/context'
+import { DEFAULTS, SOILS, solve, useLab } from './model'
 import { LabPanel } from './Panel'
+import { pickParams } from '@/content/compare'
+import type { LabParams } from './model'
 
 type V = [number, number, number]
 const view = { position: [1.2, 3.0, 9.0] as V, target: [-0.6, 0.7, 0] as V }
@@ -27,6 +30,37 @@ const scene: SceneDef = {
   ],
   cites: [SRC.mech502('eqs 2.1–2.15, Fig 2.2'), SRC.l27('eqs 1–27, Tables 2 and 5'), SRC.tests502('drawbar tests'), SRC.mac502('eq 6.5, App. II')],
   reset: () => useLab.getState().reset(),
+  context: () => {
+    const p = useLab.getState()
+    const s = solve(p)
+    return cleanContext({ rpm: s.op.rpm, slip: s.i, pullKN: p.pull, wheelLoadKN: s.Vr / 2 / 1000, speedKmh: s.op.V * 3.6, CI: SOILS[p.soil].CI / 1000, tyre: p.tyre })
+  },
+  fromContext: (c) => ({
+    ...(c.pullKN !== undefined ? { pull: roundTo(clamp(c.pullKN, 0.5, 40), 0.25) } : {}),
+    ...(c.CI !== undefined ? { soil: soilFromCI(c.CI) } : {}),
+    ...(c.tyre ? { tyre: c.tyre } : {}),
+  }),
+  compare: {
+    title: 'bias vs radial tyres, with and without ballast',
+    current: () => pickParams(DEFAULTS, useLab.getState()),
+    variants: [
+      { label: 'Bias', params: { tyre: 'bias', ballast: 0 } },
+      { label: 'Radial', params: { tyre: 'radial', ballast: 0 } },
+      { label: 'Radial + 600 kg', params: { tyre: 'radial', ballast: 600 } },
+    ],
+    metrics: (p) => {
+      const s = solve(p as unknown as LabParams)
+      const dead = s.spin || s.stalled
+      const t = s.spin ? 'spins' : s.stalled ? 'stalls' : undefined
+      return [
+        { label: 'Wheel slip', value: s.i * 100, unit: '%', digits: 1, better: 'low', text: s.spin ? 'spins' : undefined },
+        { label: 'Speed', value: dead ? 0 : s.op.V * 3.6, unit: 'km/h', digits: 2, better: 'high', text: t },
+        { label: 'Motion resistance', value: s.R / 1000, unit: 'kN', digits: 2, better: 'low' },
+        { label: 'Tractive efficiency', value: dead ? 0 : s.op.etaT * 100, unit: '%', digits: 0, better: 'high', text: t },
+        { label: 'Drawbar power', value: dead ? 0 : s.op.Qd / 1000, unit: 'kW', digits: 1, better: 'high', text: t },
+      ]
+    },
+  },
   applyParams: (p) => useLab.getState().set(p as Partial<typeof DEFAULTS>),
   tour: [
     {

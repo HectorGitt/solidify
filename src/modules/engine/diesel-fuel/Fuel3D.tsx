@@ -18,11 +18,10 @@ import {
   ELEMENT_X,
   INJ_Y,
   LAYOUT,
+  elementPose,
+  feedPlungerY,
   PINION_PHASE,
-  PLUNGER_TOP0,
-  PLUNGER_Y0,
   RACK_X0,
-  TAPPET_Y0,
   linePressure,
   live,
   phaseOf,
@@ -159,28 +158,26 @@ export function Fuel3D() {
     rackRef.current?.position.set(RACK_X0 + st.rack, DIM.sleeveY, DIM.rackPitchZ)
 
     for (let i = 0; i < 4; i++) {
-      const ai = a - ELEMENT_PHASE[i]
-      const s = plungerState(ai, st.rack, ELEMENT)
-      const x = ELEMENT_X[i]
-      tappets.current[i]?.position.set(x, TAPPET_Y0 + s.lift, 0)
+      const s = elementPose(a, st.rack, i)
+      const x = s.x
+      tappets.current[i]?.position.set(x, s.tappetY, 0)
       const pl = plungers.current[i]
       if (pl) {
-        pl.position.set(x, PLUNGER_Y0 + s.lift, 0)
+        pl.position.set(x, s.plungerY, 0)
         pl.rotation.set(0, rot, 0)
       }
       sleeves.current[i]?.rotation.set(0, rot, 0)
       const sp = springs.current[i]
       if (sp) {
-        const y0 = TAPPET_Y0 + DIM.tappetH + s.lift
-        sp.position.set(x, y0, 0)
-        sp.scale.set(1, DIM.springTop - y0, 1)
+        sp.position.set(x, s.springY0, 0)
+        sp.scale.set(1, s.springLen, 1)
       }
       const delivering = s.delivering && !st.air
       deliveries.current[i] = delivering ? 1 : Math.max(0, deliveries.current[i] - dt / 0.004)
       dvalves.current[i]?.position.set(x, delivering ? 0.0012 : 0, 0)
       const col = columns.current[i]
       if (col) {
-        const top = PLUNGER_TOP0 + s.lift
+        const top = s.plungerTop
         col.position.set(x, top, 0)
         col.scale.set(1, Math.max(1e-4, 0.142 - top), 1)
       }
@@ -207,7 +204,7 @@ export function Fuel3D() {
     }
 
     // lift pump: eccentric on the camshaft (e = 3 mm) under a spring-returned plunger
-    const fy = LAYOUT.camY + 0.003 * Math.cos(a) + 0.012
+    const fy = feedPlungerY(a)
     feedPl.current?.position.set(LAYOUT.feed.x, fy, 0)
     if (feedSp.current) {
       feedSp.current.position.set(LAYOUT.feed.x, fy + 0.03, 0)
@@ -456,6 +453,8 @@ export function Fuel3D() {
           <PartMesh geometry={g.liner} material="steelDark" />
           <Part id="piston-stub" name="Piston near TDC" material="aluminium" role="moving">
             <PartMesh geometry={g.piston} />
+            <PartMesh geometry={g.pistonRings} material="steelDark" />
+            <PartMesh geometry={g.pistonPin} material="steel" />
           </Part>
         </Part>
 

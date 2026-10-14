@@ -7,7 +7,8 @@ import { Part, PartMesh } from '@/render/Part'
 import { HAZARD_SEPARATION, MACHINES, WORKSHOP } from '@/physics/structures'
 import { TRACTOR } from '@/tractor/dims'
 import { Tractor, createTractorPose } from '@/tractor/Tractor'
-import { gableRoof, ringFlat, tint, walls } from '../_shared/build'
+import { column, gableRoof, kingPostTruss, ringSlab, walls } from '@/parts/lib/structures'
+import { tint } from '../_shared/build'
 import { C, design, live, useStorage } from './model'
 
 const { PI } = Math
@@ -16,19 +17,6 @@ const NOSE = 2.6
 
 const cyl = (r: number, h: number, m: THREE.Matrix4, seg = 20) => xform(cylinder(r, h, seg), m)
 const bx = (w: number, h: number, d: number, x: number, y: number, z: number) => xform(box(w, h, d), mat4.t(x, y, z))
-
-/** Timber truss spanning `span` along Z (king-post), base at y = 0. */
-function truss(span: number, pitchDeg: number) {
-  const rise = (span / 2) * Math.tan((pitchDeg * PI) / 180)
-  const raf = Math.hypot(span / 2, rise)
-  const a = Math.atan2(rise, span / 2)
-  return merge(
-    bx(0.08, 0.12, span, 0, 0.06, 0),
-    xform(box(0.08, 0.12, raf), mat4.c(mat4.t(0, rise / 2 + 0.06, -span / 4), mat4.rx(-a))),
-    xform(box(0.08, 0.12, raf), mat4.c(mat4.t(0, rise / 2 + 0.06, span / 4), mat4.rx(a))),
-    bx(0.08, rise, 0.1, 0, rise / 2 + 0.06, 0),
-  )
-}
 
 function trailerGeo() {
   const m = MACHINES.trailer
@@ -74,18 +62,25 @@ export function Scene3D() {
   const g = useMemo(() => {
     const t = 0.15
     const ws = D.workshop
-    const workshopWalls = walls(ws.w, D.depth, H, t, [
-      { side: '+z', at: 0, width: D.door.w, height: D.door.h },
-      { side: '-x', at: D.depth / 4, width: D.fireDoor.w, height: D.fireDoor.h },
-      { side: '-z', at: benchX - (ws.x0 + ws.x1) / 2, width: 2.4, height: 2.3, sill: 1.15 },
-    ])
+    const workshopWalls = walls({
+      w: ws.w,
+      d: D.depth,
+      h: H,
+      t,
+      openings: [
+        { side: '+z', at: 0, width: D.door.w, height: D.door.h },
+        { side: '-x', at: D.depth / 4, width: D.fireDoor.w, height: D.fireDoor.h },
+        { side: '-z', at: benchX - (ws.x0 + ws.x1) / 2, width: 2.4, height: 2.3, sill: 1.15 },
+      ],
+    })
     const shedLen = D.length - ws.w
     const shedBack = bx(shedLen, H, 0.06, ws.x1 + shedLen / 2, H / 2, zBack + 0.03)
     const shedEnd = bx(0.06, H, D.depth - 0.06, D.length / 2 - 0.03, H / 2, 0.03)
     const lines = [ws.x1, ...D.bays.map((b) => b.x1)]
-    const posts = merge(...lines.flatMap((x) => [zFront - 0.12, zBack + 0.18].map((z) => cyl(0.1, H, mat4.t(Math.min(x, D.length / 2 - 0.15), H / 2, z), 12))))
-    const roof = gableRoof(D.depth, D.length, 15, 0.6, 0.06).geometry
-    const tr = truss(D.depth, 15)
+    const post = column({ h: H, size: 0.2, round: true })
+    const posts = merge(...lines.flatMap((x) => [zFront - 0.12, zBack + 0.18].map((z) => xform(post, mat4.t(Math.min(x, D.length / 2 - 0.15), 0, z)))))
+    const roof = gableRoof({ span: D.depth, length: D.length, pitchDeg: 15, overhang: 0.6, t: 0.06 }).geometry
+    const tr = xform(kingPostTruss({ span: D.depth, pitchDeg: 15 }), mat4.ry(PI / 2))
     const trusses = merge(...[D.workshop.x0 + 0.2, ...lines].map((x) => xform(tr, mat4.t(Math.min(x, D.length / 2 - 0.2), 0, 0))))
     const floorWs = bx(ws.w, 0.15, D.depth, (ws.x0 + ws.x1) / 2, 0.075, 0)
     const floorShed = bx(shedLen, 0.2, D.depth + 0.6, ws.x1 + shedLen / 2, 0.1, 0.3)
@@ -104,20 +99,26 @@ export function Scene3D() {
     const welder = bx(0.5, 0.8, 0.6, 0, 0.4, 0)
     // fuel store
     const fs = 3
-    const fWalls = walls(fs, fs, 2.4, 0.15, [
-      { side: '+z', at: 0, width: 1.0, height: 2.0 },
-      { side: '-z', at: -0.8, width: 0.6, height: 2.3, sill: 1.95 },
-      { side: '-z', at: 0.8, width: 0.6, height: 0.4, sill: 0.15 },
-      { side: '+x', at: 0, width: 0.6, height: 2.3, sill: 1.95 },
-      { side: '-x', at: 0, width: 0.6, height: 0.4, sill: 0.15 },
-    ])
+    const fWalls = walls({
+      w: fs,
+      d: fs,
+      h: 2.4,
+      t: 0.15,
+      openings: [
+        { side: '+z', at: 0, width: 1.0, height: 2.0 },
+        { side: '-z', at: -0.8, width: 0.6, height: 2.3, sill: 1.95 },
+        { side: '-z', at: 0.8, width: 0.6, height: 0.4, sill: 0.15 },
+        { side: '+x', at: 0, width: 0.6, height: 2.3, sill: 1.95 },
+        { side: '-x', at: 0, width: 0.6, height: 0.4, sill: 0.15 },
+      ],
+    })
     const fFloor = bx(fs, 0.15, fs, 0, 0.075, 0)
     const bund = bx(1.0, 0.15, 0.15, 0, 0.225, fs / 2 - 0.075)
-    const fRoof = gableRoof(fs, fs, 10, 0.3, 0.05).geometry
+    const fRoof = gableRoof({ span: fs, length: fs, pitchDeg: 10, overhang: 0.3, t: 0.05 }).geometry
     const drums = merge(...[-0.8, -0.1, 0.6].map((x) => cyl(0.29, 0.88, mat4.t(x, 0.15 + 0.44, -0.75), 20)))
     const sign = bx(0.6, 0.4, 0.03, 0.9, 1.6, fs / 2 + 0.02)
-    const ring = ringFlat(HAZARD_SEPARATION + 1.5 + 0.2, HAZARD_SEPARATION + 1.5 - 0.2, 0.04)
-    const pad = ringFlat(st.turnR + 0.2, st.turnR - 0.2, 0.03, 96)
+    const ring = ringSlab({ rOuter: HAZARD_SEPARATION + 1.5 + 0.2, rInner: HAZARD_SEPARATION + 1.5 - 0.2, h: 0.04 })
+    const pad = ringSlab({ rOuter: st.turnR + 0.2, rInner: st.turnR - 0.2, h: 0.03 })
     const stripes = merge(...[0, 1, 2, 3].map((i) => bx(0.12, 0.02, D.stall.l, (i - 1.5) * D.stall.w, 0, 0)))
     return { workshopWalls, shedBack, shedEnd, posts, roof, trusses, floorWs, floorShed, bench, vice, lifting, hoist, cabinet, ext, buckets, sand, welder, fWalls, fFloor, bund, fRoof, drums, sign, ring, pad, stripes, unit: box(1, 1, 1), trailer: trailerGeo(), plough: ploughGeo(), harrow: harrowGeo() }
   }, [D, H, st.liftSpan, st.turnR, zBack, zFront, benchX])
@@ -173,7 +174,7 @@ export function Scene3D() {
           <PartMesh geometry={g.pad} position={[0, 0.03, padZ]} />
         </Part>
         <Part id="parking" name="Large-vehicle stalls" role="static" material="concrete" info={{ summary: 'Large-vehicle parking.', role: 'Stalls 12 × 60 ft (≈ 3.7 × 18.3 m) each.' }} cites={[C.ln('p22')]}>
-          <PartMesh geometry={g.unit} position={[parkX, 0.02, driveZ + st.driveW / 2 + D.stall.l / 2]} scale={[3 * D.stall.w, 0.04, D.stall.l]} receiveShadow />
+          <PartMesh geometry={g.unit} position={[parkX, 0.025, driveZ + st.driveW / 2 + D.stall.l / 2]} scale={[3 * D.stall.w, 0.05, D.stall.l]} receiveShadow />
           <PartMesh geometry={g.stripes} position={[parkX, 0.05, driveZ + st.driveW / 2 + D.stall.l / 2]} material="paintYellow" />
         </Part>
       </Part>

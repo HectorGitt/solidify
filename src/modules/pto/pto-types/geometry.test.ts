@@ -9,12 +9,14 @@ describe('PTO-types schematic geometry is watertight and outward-facing', () => 
   const sh = shaftsGeometry()
   const cases: [string, THREE.BufferGeometry][] = [
     ['engine', engineGeometry()],
-    ['flywheel', flywheelGeometry()],
+    ['flywheel', flywheelGeometry().disc],
+    ['flywheel ring gear', flywheelGeometry().ring],
     ['gearbox shell', st.gearbox],
     ['bell housing', st.bell],
     ['trumpet', st.trumpet],
     ['PTO shield', st.shield],
-    ['clutch disc', cl.disc],
+    ['clutch disc linings', cl.discIn.friction],
+    ['clutch disc hub', cl.discIn.hub],
     ['pressure plate', cl.pressurePlate],
     ['hollow PTO shaft', sh.hollow],
     ['layshaft', sh.lay],

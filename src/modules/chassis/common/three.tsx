@@ -4,6 +4,7 @@ import * as THREE from 'three'
 import type { Citation } from '@/content/citations'
 import { useSimFrame } from '@/core/sim'
 import { box, cylinder } from '@/geometry'
+import { adjustableDrawbar } from '@/parts/lib/chassis'
 import { Part, PartMesh } from '@/render/Part'
 
 /** Per-frame state of a force arrow, in the parent frame (XY plane, angle from +X). */
@@ -111,21 +112,7 @@ export function Ground({ length = 9, width = 4, x = 0, depth = 0.06, cut = false
  * x′ / y′ change (cheap).
  */
 export function AdjustableDrawbar({ xd, yd, id = 'drawbar', cites }: { xd: number; yd: number; id?: string; cites?: Citation[] }) {
-  const g = useMemo(() => {
-    const bar = new THREE.Vector3(0.25, 0.42, 0)
-    const pin = new THREE.Vector3(-xd, yd, 0)
-    const d = new THREE.Vector3().subVectors(pin, bar)
-    const L = d.length()
-    const beam = box(L, 0.05, 0.1)
-    beam.rotateZ(Math.atan2(d.y, d.x))
-    beam.translate((bar.x + pin.x) / 2, (bar.y + pin.y) / 2, 0)
-    const hangH = Math.abs(0.62 - yd) + 0.06
-    const hanger = box(0.04, hangH, 0.14)
-    hanger.translate(-Math.min(xd, 0.45), (0.62 + yd) / 2, 0)
-    const p = cylinder(0.022, 0.16, 16)
-    p.translate(-xd, yd, 0)
-    return { beam, hanger, pin: p }
-  }, [xd, yd])
+  const g = useMemo(() => adjustableDrawbar(xd, yd), [xd, yd])
   return (
     <Part
       id={id}

@@ -210,4 +210,18 @@ export const ERRATA: Erratum[] = [
     says: '4 mm glass weighs 2.8 kg/m².',
     correct: 'Glass is about 2500 kg/m³, so 4 mm glass weighs about 10 kg/m².',
   },
+  {
+    id: 'bond-exponent',
+    topic: "Bond's law exponent (AEE504 size reduction)",
+    where: { course: 'AEE504', file: 'AGE 504 note 2, reduction.doc' },
+    says: 'In the general law dE/dL = −C/Lⁿ, Bond’s law is given as n = 1.',
+    correct: 'Rittinger is n = 2, Kick n = 1 and Bond n = 1.5, giving E = 10·Wi(1/√x₂ − 1/√x₁).',
+  },
+  {
+    id: 'screen-balance',
+    topic: 'Screen mass balance (AEE504 separation)',
+    where: { course: 'AEE504', file: 'seperation 504.docx', where: 'eq 3' },
+    says: 'B/F has X_A − X_B in the numerator.',
+    correct: 'From the material balances, B/F = (X_F − X_D)/(X_B − X_D), i.e. the numerator uses the feed composition X_F, not X_B.',
+  },
 ]

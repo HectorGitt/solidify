@@ -3,21 +3,12 @@ import * as THREE from 'three'
 import { SRC } from '@/content/citations'
 import { DriveGraph, hookeJoint } from '@/core/drive'
 import { useSimFrame } from '@/core/sim'
-import { cylinder, extrude, lathe, mat4, merge, box, xform } from '@/geometry'
+import { cylinder, extrude, mat4, box, xform } from '@/geometry'
 import { PartLabel } from '@/render/Label'
 import { Part, PartMesh } from '@/render/Part'
 import { hookeAcceleration, hookeVelocityRatio, inertiaFromWeight, rad, rpmToRad } from '@/physics/joints'
-import {
-  J,
-  crossGeometry,
-  cupsGeometry,
-  needlesGeometry,
-  pillowBlock,
-  sealsGeometry,
-  shaftGeometry,
-  yawQuat,
-  yokeGeometry,
-} from '../shared/cardan'
+import { UJ as J, benchMotor, inertiaWheel, pillowBlockX, ujCross, ujCups, ujNeedles, ujSeals, ujYoke } from '@/parts/lib/driveline'
+import { shaftGeometry, yawQuat } from '../shared/cardan'
 import { HJ2 } from '../shared/cites'
 import { RIG, jointPose, live, useHooke, type JointPose } from './model'
 
@@ -78,31 +69,15 @@ const INFO = {
 export function HookeScene3D() {
   const delta = useHooke((s) => s.delta)
   const g = useMemo(() => {
-    const pb = pillowBlock(J.shaftR, RIG.drop)
+    const pb = pillowBlockX(J.shaftR, RIG.drop)
     const disc = xform(cylinder(RIG.discR, 0.014, 48), mat4.rz(PI / 2))
-    const motor = merge(
-      xform(
-        lathe(
-          [
-            [0, -0.075],
-            [0.064, -0.075],
-            [0.07, -0.068],
-            [0.07, 0.068],
-            [0.064, 0.075],
-            [0, 0.075],
-          ],
-          48,
-        ),
-        mat4.rz(PI / 2),
-      ),
-      xform(box(0.12, 0.08 - 0.002, 0.14), mat4.t(0, -RIG.drop + 0.04, 0)),
-    )
+    const motor = benchMotor({ r: 0.07, halfLength: 0.075, drop: RIG.drop, foot: [0.12, 0.078, 0.14] })
     return {
-      yoke: yokeGeometry(),
-      cross: crossGeometry(),
-      cups: cupsGeometry(),
-      needles: needlesGeometry(),
-      seals: sealsGeometry(),
+      yoke: ujYoke(),
+      cross: ujCross(),
+      cups: ujCups(),
+      needles: ujNeedles(),
+      seals: ujSeals(),
       inShaft: shaftGeometry(-RIG.shaftLen - 0.04, -J.hubEnd),
       outShaft: shaftGeometry(J.hubEnd, RIG.shaftLen),
       pb,
@@ -110,20 +85,7 @@ export function HookeScene3D() {
       markIn: box(0.02, 0.012, 0.014),
       markOut: box(0.046, 0.012, 0.014),
       motor,
-      flywheel: xform(
-        lathe(
-          [
-            [J.shaftR, -0.02],
-            [0.11, -0.02],
-            [0.12, -0.012],
-            [0.12, 0.012],
-            [0.11, 0.02],
-            [J.shaftR, 0.02],
-          ],
-          64,
-        ),
-        mat4.rz(PI / 2),
-      ),
+      flywheel: inertiaWheel({ r: 0.12, rimIn: 0.11, halfWidth: 0.02, bore: J.shaftR }),
     }
   }, [])
 

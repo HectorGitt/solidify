@@ -333,6 +333,7 @@ function PtoSetup({
           <Part id="cart-frame" name="Cart frame & wheels" material="paintYellow" role="static" info={{ summary: 'Wheeled cart.', role: 'Makes the dynamometer portable — the point of a shop-type unit.' }} cites={[C.pto]} cut={false}>
             <PartMesh geometry={c.frame} />
             <PartMesh geometry={c.wheels} material="rubber" />
+            <PartMesh geometry={c.rims} material="paintGrey" />
             <PartMesh geometry={c.handle} material="steelDark" />
           </Part>
           <Part id="cart-arm" name="Torque arm & load cylinder" material="forged" role="static" info={INFO.cartArm} cites={[C.pto]} cut={false}>

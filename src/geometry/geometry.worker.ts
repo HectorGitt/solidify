@@ -7,14 +7,20 @@ import { pack } from './serialize'
  * lazily so a scene only pays for its own geometry code.
  */
 const FILES = import.meta.glob<{ buildStatic: () => unknown }>('/src/modules/*/*/geometry.ts')
+/** shared machines (e.g. the tractor's full engine): src/tractor/<name>.geometry.ts → "tractor/<name>" */
+const SHARED = import.meta.glob<{ buildStatic: () => unknown }>('/src/tractor/*.geometry.ts')
 
 /** Builder key "<moduleId>/<folder>" → that scene's geometry.ts `buildStatic`. */
-const BUILDERS: Record<string, () => Promise<() => unknown>> = Object.fromEntries(
-  Object.entries(FILES).map(([path, load]) => {
+const BUILDERS: Record<string, () => Promise<() => unknown>> = Object.fromEntries([
+  ...Object.entries(FILES).map(([path, load]) => {
     const key = path.replace('/src/modules/', '').replace('/geometry.ts', '')
-    return [key, () => load().then((m) => m.buildStatic)]
+    return [key, () => load().then((m) => m.buildStatic)] as const
   }),
-)
+  ...Object.entries(SHARED).map(([path, load]) => {
+    const key = path.replace('/src/', '').replace('.geometry.ts', '')
+    return [key, () => load().then((m) => m.buildStatic)] as const
+  }),
+])
 
 self.onmessage = async (e: MessageEvent<{ id: number; builder: string }>) => {
   const { id, builder } = e.data

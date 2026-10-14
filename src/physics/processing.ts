@@ -311,3 +311,64 @@ export function flowCrossings(routes: XY[][]) {
 export function handlingEffort(legs: { mass: number; dist: number }[]) {
   return legs.reduce((s, l) => s + l.mass * l.dist, 0)
 }
+
+/* ============================== Preservation & Food Kinetics (N536) ============================== */
+
+/** Microbial death kinetics (D-value): D = 2.303 / k. */
+export function dValue(k: number) {
+  return 2.303 / k
+}
+
+/** Thermal death time for a given log reduction: t = D * log10(Ni / N). */
+export function timeForReduction(D: number, Ni: number, N: number) {
+  return D * Math.log10(Ni / N)
+}
+
+/** z-value: degrees for the TDT curve to traverse one log cycle. z = (T1 - T2) / log10(D2 / D1) */
+export function zValue(T1: number, D1: number, T2: number, D2: number) {
+  return (T2 - T1) / Math.log10(D1 / D2)
+}
+
+/**
+ * Cooling load (kW) = m * (Ca * dTa + hl + Cb * dTb)
+ * m: mass rate (kg/s). Ca, Cb: specific heat above/below freezing (kJ/kg·K). hl: latent heat (kJ/kg).
+ */
+export function coolingLoadKw(m: number, Ca: number, dTa: number, hl: number, Cb: number, dTb: number) {
+  return m * (Ca * dTa + hl + Cb * dTb)
+}
+
+/** 
+ * Plank freezing time (s).
+ * rho (kg/m³), HL (J/kg), Tf (freezing point, °C), Tinf (medium temp, °C).
+ * P, R: shape factors (slab: 1/2, 1/8; cylinder: 1/4, 1/16; sphere: 1/6, 1/24).
+ * a (m): characteristic dimension. hc (W/m²·K). k (W/m·K).
+ */
+export function plankFreezingTime(rho: number, HL: number, Tf: number, Tinf: number, P: number, a: number, hc: number, R: number, k: number) {
+  return (rho * HL / (Tf - Tinf)) * ((P * a / hc) + (R * a * a / k))
+}
+
+/* ============================== Milling & Extraction ============================== */
+
+/**
+ * Palm oil mass balance per 1000 kg FFB.
+ * Empty bunches 234 kg; fruits 666 kg.
+ * Out: fibre 180, shell 73, kernels 67, sludge 180, CPO 225.
+ */
+export function palmOilMassBalance(ffbKg: number) {
+  const f = ffbKg / 1000
+  return {
+    ffb: ffbKg,
+    emptyBunches: 234 * f,
+    fruits: 666 * f,
+    fibre: 180 * f,
+    shell: 73 * f,
+    kernels: 67 * f,
+    sludge: 180 * f,
+    cpo: 225 * f
+  }
+}
+
+/** Rice milling yield. */
+export function millingYield(milledMass: number, paddyMass: number) {
+  return (milledMass / paddyMass) * 100
+}

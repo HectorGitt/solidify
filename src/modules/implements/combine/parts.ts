@@ -1,7 +1,7 @@
 import * as THREE from 'three'
-import { box, cylinder, lathe, mat4, merge, pipe, tube, xform, type V2 } from '@/geometry'
-import { loopPath, rim, tyre } from '@/geometry/parts'
-import { bar, plateXY, rod } from '../_shared/geom'
+import { cylinder, lathe, mat4, merge, tube, xform, type V2 } from '@/geometry'
+import { loopPath } from '@/geometry/parts'
+import { auger, augerFlight, bar, bladedRotor, concave, cutterBar, cylZ, elevatorSlat, headerAuger, louvreSieve, plateXY, reelBat, reelSpider, rod, sickle, slab as libSlab, strawWalker, threshingDrum, walkerCrank, wheelParts } from '@/parts/lib/implements'
 import { D, WALKER_PHASE } from './model'
 
 /**
@@ -9,41 +9,28 @@ import { D, WALKER_PHASE } from './model'
  * Axes: see model.ts (side view in XY, +X forward, width along Z).
  */
 const { PI } = Math
-const alongZ = mat4.rx(PI / 2)
 const alongX = mat4.rz(PI / 2)
+/** height of the ledger plates on the cutter bar */
+const CUT_Y = 0.09
 
 /** Box between two corners in side view, spanning z0…z1. */
 export function slab(x0: number, y0: number, x1: number, y1: number, z0: number, z1: number) {
-  return xform(box(Math.abs(x1 - x0), Math.abs(y1 - y0), Math.abs(z1 - z0)), mat4.t((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2))
+  return libSlab(x0, y0, x1, y1, z0, z1)
 }
 
 /** Solid or hollow cylinder along Z from z0 to z1, centred at (x, y). */
 export function shaftZ(x: number, y: number, r: number, z0: number, z1: number, seg = 24) {
-  return xform(cylinder(r, Math.abs(z1 - z0), seg), mat4.c(mat4.t(x, y, (z0 + z1) / 2), alongZ))
+  return cylZ(x, y, r, z0, z1, seg)
 }
 
 /** Helical auger flight (round-section flight approximation) along Z. */
 export function flight(x: number, y: number, R: number, z0: number, z1: number, turns: number, wire = 0.03) {
-  class Helix extends THREE.Curve<THREE.Vector3> {
-    constructor() {
-      super()
-    }
-    getPoint(t: number, target = new THREE.Vector3()) {
-      const a = t * turns * 2 * PI
-      return target.set(x + R * Math.cos(a), y + R * Math.sin(a), z0 + (z1 - z0) * t)
-    }
-  }
-  return pipe(new Helix(), wire, 0, Math.max(48, Math.round(Math.abs(turns) * 28)), 8)
+  return augerFlight({ x, y, R, z0, z1, turns, wire })
 }
 
 /** Wheel: tyre + rim, axle along Z, centred on the origin. */
 export function wheel(radius: number, width: number, lugs: number, pattern: 'R1' | 'F2') {
-  const rr = radius * 0.6
-  const t = tyre({ radius, width, rimRadius: rr, pattern, lugs })
-  t.rotateX(PI / 2)
-  const r = rim(rr, width * 0.9, 0.12, 0.05)
-  r.rotateX(PI / 2)
-  return { tyre: t, rim: r }
+  return wheelParts({ radius, width, pattern, lugs, rimRadius: radius * 0.6, hubR: 0.12, dish: 0.05 })
 }
 
 /* ------------------------------ Header ------------------------------ */
@@ -77,66 +64,30 @@ export function headerGeometry() {
 export function cutterBarGeometry() {
   const H = D.header
   const hw = H.width / 2 - 0.02
-  const parts = [slab(H.cutterX - 0.07, 0.07, H.cutterX, 0.1, -hw, hw)]
-  const pitch = 0.0762
-  for (let z = -hw + pitch / 2; z < hw; z += pitch) {
-    parts.push(bar([H.cutterX - 0.06, 0.1, z], [H.cutterX + 0.12, 0.085, z], 0.018, 0.016))
-  }
-  return merge(...parts)
+  const c = cutterBar({ from: -hw, to: hw, y: CUT_Y })
+  return xform(merge(c.guards, c.ledgers, ...(c.clips ? [c.clips] : [])), mat4.t(H.cutterX + 0.005, 0, 0))
 }
 
 /** Reciprocating knife: back and triangular sections. */
 export function knifeGeometry() {
   const H = D.header
   const hw = H.width / 2 - 0.05
-  const pitch = 0.0762
-  const parts = [slab(H.cutterX - 0.005, 0.104, H.cutterX + 0.015, 0.112, -hw, hw)]
-  for (let z = -hw + pitch / 2; z < hw - pitch / 2; z += pitch) {
-    const s = new THREE.Shape([new THREE.Vector2(H.cutterX, z - pitch / 2 + 0.003), new THREE.Vector2(H.cutterX + 0.075, z - 0.006), new THREE.Vector2(H.cutterX + 0.075, z + 0.006), new THREE.Vector2(H.cutterX, z + pitch / 2 - 0.003)])
-    const g = new THREE.ExtrudeGeometry(s, { depth: 0.004, bevelEnabled: false })
-    g.rotateX(PI / 2)
-    g.translate(0, 0.108, 0)
-    parts.push(g)
-  }
-  return merge(...parts)
+  return xform(sickle({ from: -hw, to: hw, y: CUT_Y }), mat4.t(H.cutterX + 0.005, 0, 0))
 }
 
 /** Header auger: tube, opposite-hand flights moving crop to the centre, retractable fingers. */
 export function headerAugerGeometry() {
-  const A = D.auger
-  const hw = D.header.width / 2 - 0.08
-  const parts = [shaftZ(0, 0, A.tube, -hw, hw, 28)]
-  const fz = D.feeder.halfWidth
-  // flights: left side (z > 0) and right side (z < 0) of opposite hand
-  parts.push(flight(0, 0, A.r - 0.03, fz, hw, 5.5))
-  parts.push(flight(0, 0, A.r - 0.03, -fz, -hw, 5.5))
-  for (let k = 0; k < 6; k++) {
-    const a = (k / 6) * 2 * PI
-    const z = -fz + 0.15 + (k % 3) * ((2 * fz - 0.3) / 2)
-    parts.push(rod([0, 0, z], [Math.cos(a) * (A.r + 0.06), Math.sin(a) * (A.r + 0.06), z], 0.011, 8))
-  }
-  return merge(...parts)
+  return headerAuger({ halfWidth: D.header.width / 2 - 0.08, centreHalf: D.feeder.halfWidth, tubeR: D.auger.tube, r: D.auger.r })
 }
 
 /** Pick-up reel: centre shaft and spiders (rotate with the reel). */
 export function reelSpiderGeometry() {
-  const R = D.reel
-  const hw = D.header.width / 2 - 0.1
-  const parts = [shaftZ(0, 0, 0.06, -hw, hw, 24)]
-  for (const z of [-hw + 0.05, 0, hw - 0.05])
-    for (let k = 0; k < R.bats; k++) {
-      const a = (k / R.bats) * 2 * PI
-      parts.push(rod([0, 0, z], [R.r * Math.cos(a), R.r * Math.sin(a), z], 0.02, 8))
-    }
-  return merge(...parts)
+  return reelSpider({ halfWidth: D.header.width / 2 - 0.1, r: D.reel.r, bats: D.reel.bats })
 }
 
 /** One reel bat (tube along Z) with tines hanging down (kept vertical by the reel eccentric). */
 export function reelBatGeometry() {
-  const hw = D.header.width / 2 - 0.1
-  const parts = [shaftZ(0, 0, 0.025, -hw, hw, 12)]
-  for (let z = -hw + 0.05; z < hw; z += 0.16) parts.push(rod([0, 0, z], [0.04, -0.3, z], 0.006, 6))
-  return merge(...parts)
+  return reelBat({ halfWidth: D.header.width / 2 - 0.1 })
 }
 
 /** Reel support arms from the header back to the reel ends (fixed). */
@@ -177,76 +128,22 @@ export function feederSprocketsGeometry() {
 
 /** One slat of the chain-and-slat elevator (local: x along the chain, y outward). */
 export function slatGeometry() {
-  const hw = D.feeder.halfWidth - 0.04
-  return merge(slab(-0.02, 0, 0.02, 0.035, -hw, hw), slab(-0.03, -0.01, 0.03, 0.01, hw - 0.02, hw + 0.02), slab(-0.03, -0.01, 0.03, 0.01, -hw - 0.02, -hw + 0.02))
+  return elevatorSlat(D.feeder.halfWidth - 0.04)
 }
 
 /* ------------------------------ Threshing unit ------------------------------ */
 
 export function cylinderGeometry() {
-  const Cy = D.cyl
-  const hw = Cy.halfWidth
-  const parts = [shaftZ(0, 0, 0.04, -hw - 0.15, hw + 0.15, 20)]
-  for (const z of [-hw + 0.02, -hw / 3, hw / 3, hw - 0.02]) parts.push(xform(tube(Cy.r - 0.035, 0.04, 0.02, 40), mat4.c(mat4.t(0, 0, z), alongZ)))
-  for (let k = 0; k < Cy.bars; k++) {
-    const a = (k / Cy.bars) * 2 * PI
-    const c = Math.cos(a)
-    const s = Math.sin(a)
-    // rasp bar with ribs (alternate bars have opposite rib angles in practice)
-    const g = slab(-0.025, -0.022, 0.025, 0.022, -hw, hw)
-    const ribs: THREE.BufferGeometry[] = [g]
-    for (let z = -hw + 0.06; z < hw - 0.03; z += 0.09) ribs.push(xform(slab(-0.006, 0.022, 0.006, 0.034, -0.04, 0.04), mat4.c(mat4.t(0, 0, z), mat4.ry(0.5 * (k % 2 ? 1 : -1)))))
-    const bar0 = merge(...ribs)
-    parts.push(xform(bar0, new THREE.Matrix4().makeRotationZ(a - PI / 2).setPosition((Cy.r - 0.035) * c, (Cy.r - 0.035) * s, 0)))
-  }
-  return merge(...parts)
+  return threshingDrum({ r: D.cyl.r, halfWidth: D.cyl.halfWidth, bars: D.cyl.bars })
 }
 
 /** Concave: transverse bars on an arc below the cylinder, side plates (radius set by the clearance). */
 export function concaveGeometry(clearanceMm: number) {
-  const Cy = D.cyl
-  const hw = Cy.halfWidth + 0.01
-  const R = Cy.r + clearanceMm / 1000 + 0.012
-  const a0 = (-28 * PI) / 180
-  const a1 = (-148 * PI) / 180
-  const parts: THREE.BufferGeometry[] = []
-  const n = 16
-  for (let i = 0; i <= n; i++) {
-    const a = a0 + ((a1 - a0) * i) / n
-    parts.push(xform(slab(-0.008, -0.012, 0.008, 0.012, -hw, hw), new THREE.Matrix4().makeRotationZ(a + PI / 2).setPosition(R * Math.cos(a), R * Math.sin(a), 0)))
-  }
-  // side plates: thick arcs
-  const arc: V2[] = []
-  for (let i = 0; i <= 24; i++) {
-    const a = a0 + ((a1 - a0) * i) / 24
-    arc.push([(R - 0.015) * Math.cos(a), (R - 0.015) * Math.sin(a)])
-  }
-  for (let i = 24; i >= 0; i--) {
-    const a = a0 + ((a1 - a0) * i) / 24
-    arc.push([(R + 0.07) * Math.cos(a), (R + 0.07) * Math.sin(a)])
-  }
-  parts.push(plateXY(arc, 0.015, hw), plateXY(arc, 0.015, -hw - 0.015))
-  // wires through the bars (the slots let grain and chaff fall through)
-  for (let z = -hw + 0.1; z < hw; z += 0.1) {
-    const pts: THREE.Vector3[] = []
-    for (let i = 0; i <= 12; i++) {
-      const a = a0 + ((a1 - a0) * i) / 12
-      pts.push(new THREE.Vector3(R * Math.cos(a), R * Math.sin(a), z))
-    }
-    parts.push(pipe(new THREE.CatmullRomCurve3(pts), 0.004, 0, 24, 6))
-  }
-  return merge(...parts)
+  return concave({ r: D.cyl.r, halfWidth: D.cyl.halfWidth, clearance: clearanceMm / 1000 })
 }
 
 export function beaterGeometry() {
-  const B = D.beater
-  const hw = D.cyl.halfWidth
-  const parts = [shaftZ(0, 0, 0.05, -hw - 0.1, hw + 0.1, 20)]
-  for (let k = 0; k < 4; k++) {
-    const a = (k / 4) * 2 * PI
-    parts.push(xform(slab(0.04, -0.008, B.r, 0.008, -hw, hw), mat4.rz(a)))
-  }
-  return merge(...parts)
+  return bladedRotor({ r: D.beater.r, halfWidth: D.cyl.halfWidth, blades: 4 })
 }
 
 /* ------------------------------ Separating and cleaning ------------------------------ */
@@ -258,36 +155,12 @@ export const walkerWidth = (2 * D.cyl.halfWidth) / W.n
 
 /** One straw walker: a stepped (saw-tooth) trough, side view extruded across its width. */
 export function walkerGeometry() {
-  const pts: V2[] = []
-  const steps = 5
-  const L = (W.x0 - W.x1) / steps
-  pts.push([W.x0, walkerBase(W.x0)])
-  pts.push([W.x1, walkerBase(W.x1)])
-  for (let i = 0; i < steps; i++) {
-    const xr = W.x1 + i * L
-    const xf = xr + L
-    pts.push([xr, walkerBase(xr) + 0.24])
-    pts.push([xf - 0.02, walkerBase(xf) + 0.1])
-  }
-  const t = walkerWidth - 0.02
-  return plateXY(pts, t, -t / 2)
+  return strawWalker({ x0: W.x0, x1: W.x1, base: walkerBase, width: walkerWidth })
 }
 
 /** Crankshaft carrying the walkers, local origin on its axis; throws at the walker phases. */
 export function walkerCrankGeometry() {
-  const hw = D.cyl.halfWidth
-  const r = W.crankR
-  const parts = [shaftZ(0, 0, 0.03, -hw - 0.08, -hw + 0.02, 16), shaftZ(0, 0, 0.03, hw - 0.02, hw + 0.08, 16)]
-  for (let k = 0; k < W.n; k++) {
-    const zc = -hw + walkerWidth * (k + 0.5)
-    const a = WALKER_PHASE[k]
-    const px = r * Math.cos(a)
-    const py = r * Math.sin(a)
-    parts.push(rod([px, py, zc - walkerWidth / 2 + 0.01], [px, py, zc + walkerWidth / 2 - 0.01], 0.022, 12))
-    parts.push(bar([0, 0, zc - walkerWidth / 2 + 0.005], [px * 1.3 + 1e-4, py * 1.3, zc - walkerWidth / 2 + 0.005], 0.012, 0.05))
-    parts.push(bar([0, 0, zc + walkerWidth / 2 - 0.005], [px * 1.3 + 1e-4, py * 1.3, zc + walkerWidth / 2 - 0.005], 0.012, 0.05))
-  }
-  return merge(...parts)
+  return walkerCrank({ halfWidth: D.cyl.halfWidth, r: W.crankR, phases: WALKER_PHASE.slice(0, W.n) })
 }
 
 /** Grain pan (under the concave) and return pan (under the walkers) — move with the shoe. */
@@ -298,17 +171,11 @@ export function pansGeometry() {
 
 /** Adjustable-louvre sieve (chaffer or lower sieve) in its frame. */
 export function sieveGeometry(x0: number, x1: number, y: number, pitch: number, tilt: number) {
-  const hw = D.cyl.halfWidth + 0.03
-  const parts = [slab(x1, y - 0.04, x0, y + 0.03, hw, hw + 0.015), slab(x1, y - 0.04, x0, y + 0.03, -hw - 0.015, -hw), slab(x1 - 0.015, y - 0.04, x1, y + 0.03, -hw, hw), slab(x0, y - 0.04, x0 + 0.015, y + 0.03, -hw, hw)]
-  for (let x = x1 + pitch; x < x0 - pitch / 2; x += pitch) parts.push(xform(slab(-pitch * 0.45, -0.002, pitch * 0.45, 0.002, -hw, hw), new THREE.Matrix4().makeRotationZ(tilt).setPosition(x, y, 0)))
-  return merge(...parts)
+  return louvreSieve({ x0, x1, y, pitch, tilt, halfWidth: D.cyl.halfWidth + 0.03 })
 }
 
 export function fanRotorGeometry() {
-  const hw = D.cyl.halfWidth + 0.02
-  const parts = [shaftZ(0, 0, 0.035, -hw - 0.1, hw + 0.1, 16)]
-  for (let k = 0; k < 6; k++) parts.push(xform(slab(0.05, -0.006, D.fan.r, 0.006, -hw, hw), mat4.rz((k / 6) * 2 * PI)))
-  return merge(...parts)
+  return bladedRotor({ r: D.fan.r, halfWidth: D.cyl.halfWidth + 0.02, blades: 6, hubR: 0.05, shaftR: 0.035, bladeT: 0.012, seg: 16 })
 }
 
 export function fanHousingGeometry() {
@@ -334,7 +201,7 @@ export function fanHousingGeometry() {
 export function crossAugerGeometry() {
   const z0 = D.cyl.halfWidth
   const z1 = -D.body.hw - 0.12
-  return merge(shaftZ(0, 0, 0.03, z1, z0, 16), flight(0, 0, 0.085, z1 + 0.02, z0 - 0.02, 7, 0.016))
+  return auger({ tubeR: 0.03, flightR: 0.085, z0: z1, z1: z0, turns: 7, wire: 0.016, inset: 0.02 })
 }
 
 export function troughGeometry(x: number, y: number) {
@@ -432,8 +299,7 @@ export function engineGeometry() {
 }
 
 export function strawChopperGeometry() {
-  const hw = D.body.hw - 0.05
-  return merge(shaftZ(0, 0, 0.06, -hw, hw, 16), ...[0, 1, 2, 3, 4, 5].map((k) => xform(slab(0.05, -0.005, 0.22, 0.005, -hw, hw), mat4.rz((k / 6) * 2 * PI))))
+  return bladedRotor({ r: 0.22, halfWidth: D.body.hw - 0.05, blades: 6, hubR: 0.05, shaftR: 0.06, shaftExtra: 0, bladeT: 0.01, seg: 16 })
 }
 
 export function axlesGeometry() {

@@ -1,6 +1,25 @@
 import * as THREE from 'three'
 import { describe, expect, it } from 'vitest'
-import { arrowSolid, boxShell, hopper, prism, screwFlight, sweepRing, thickPolyline, uTrough } from './geom'
+import {
+  auger,
+  boxShell,
+  centrifugalFan,
+  conveyorPulley,
+  cyclone,
+  elevatorBucket,
+  electricMotor,
+  gearbox,
+  hopper,
+  prism,
+  rotaryValve,
+  screwFlight,
+  sweepRing,
+  thickPolyline,
+  troughedBelt,
+  troughingIdlers,
+  uTrough,
+} from '@/parts/lib/processing'
+import { arrowSolid } from './geom'
 
 function openEdges(g: THREE.BufferGeometry, eps = 1e-6) {
   const ng = g.index ? g.toNonIndexed() : g
@@ -52,11 +71,22 @@ describe('processing geometry helpers are closed and outward-facing', () => {
           [-0.1, 0.01],
         ]).toNonIndexed(),
     ],
-    ['hopper', () => hopper(0.6, 0.15, 0.5)],
-    ['uTrough', () => uTrough(0.1, 0.005, 1, 0.12)],
-    ['screwFlight', () => screwFlight(0.03, 0.1, 0.2, 0.8, 0.006)],
-    ['boxShell', () => boxShell(0.3, 0.2, 1, 0.01), 0.3 * 0.2 - 0.28 * 0.18],
+    ['hopper', () => hopper({ top: 0.6, bottom: 0.15, h: 0.5 })],
+    ['uTrough', () => uTrough({ r: 0.1, t: 0.005, L: 1, hs: 0.12 })],
+    ['screwFlight', () => screwFlight({ rIn: 0.03, rOut: 0.1, pitch: 0.2, L: 0.8, t: 0.006 })],
+    ['auger shaft', () => auger({ D: 0.2, d: 0.06, pitch: 0.2, L: 0.8 }).shaft],
+    ['boxShell', () => boxShell({ w: 0.3, d: 0.2, h: 1, t: 0.01 }), 0.3 * 0.2 - 0.28 * 0.18],
     ['thick polyline prism', () => prism(thickPolyline([[0, 0], [0.1, 0], [0.1, 0.1]], 0.01), 0.2)],
+    ['troughed belt', () => troughedBelt({ c: 1.6, r: 0.16, B: 0.6, t: 0.012, trough: 0.35 }).toNonIndexed()],
+    ['conveyor pulley drum', () => conveyorPulley({ r: 0.16, width: 0.62 }).drum],
+    ['troughing idlers (one roll set)', () => troughingIdlers({ B: 0.6, trough: 0.35, xs: [0], returnXs: [0] }).carry],
+    ['elevator bucket', () => elevatorBucket({ w: 0.26 })],
+    ['cyclone body', () => cyclone({ rBarrel: 0.36, rApex: 0.08, hBarrel: 0.8, hCone: 0.8 }).body],
+    ['cyclone roof', () => cyclone({ rBarrel: 0.36, rApex: 0.08, hBarrel: 0.8, hCone: 0.8 }).roof],
+    ['fan impeller hub', () => centrifugalFan({ r: 0.3, width: 0.22 }).impeller],
+    ['airlock rotor', () => rotaryValve({ r: 0.1, width: 0.2 }).rotor],
+    ['electric motor', () => electricMotor({ r: 0.11, length: 0.32 })],
+    ['gearbox', () => gearbox({ w: 0.3, h: 0.26, d: 0.28 })],
     ['arrow', () => arrowSolid(1, 0.3, 0.02)],
   ]
   for (const [name, make, expected] of cases) {

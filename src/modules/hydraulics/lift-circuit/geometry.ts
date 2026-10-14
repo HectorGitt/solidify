@@ -1,10 +1,9 @@
-import { box, csg, cylinder, gear, helixSpring, lathe, mat4, merge, tube, xform, type V2 } from '@/geometry'
+import { box, csg, cylinder, lathe, mat4, xform, type V2 } from '@/geometry'
+import { filterCan, gearPump, ram, reliefValve, spoolValve, type GearPumpSpec, type SpoolValveSpec } from '@/parts/lib/hydraulics'
 import { BARREL_LEN, C, RAM_BORE, ROD_LEN } from './model'
 
 const { PI } = Math
-const AXIS_X = mat4.rz(-PI / 2)
 const AXIS_Z = mat4.rx(PI / 2)
-const alongX = (profile: V2[], seg = 48) => xform(lathe(profile, seg), AXIS_X)
 
 /** Layout (tractor frame, metres). */
 export const L = {
@@ -53,183 +52,68 @@ function reservoirOil() {
   return xform(box(h.x1 - h.x0 - 2 * w, L.oilY - h.y0 - w, 2 * h.z - 2 * w), mat4.t((h.x0 + h.x1) / 2, (h.y0 + w + L.oilY) / 2, 0))
 }
 
-/** Control-valve body: block with the spool bore and three ports (P top, A and T underneath). */
-function valveBody() {
-  const v = L.valve
-  const body = xform(box(v.x1 - v.x0, v.h, v.w), mat4.t((v.x0 + v.x1) / 2, v.y, 0))
-  const port = (x: number, up: boolean) => xform(cylinder(0.0085, v.h / 2 + 0.01, 20), mat4.t(x, v.y + (up ? 1 : -1) * (v.h / 4 + 0.005), 0))
-  return csg(body, [
-    { op: 'sub', geometry: xform(cylinder(v.boreR, v.x1 - v.x0 + 0.02, 40), mat4.c(mat4.t((v.x0 + v.x1) / 2, v.y, 0), mat4.rz(PI / 2))) },
-    { op: 'sub', geometry: port(L.portP, true) },
-    { op: 'sub', geometry: port(L.portA, false) },
-    { op: 'sub', geometry: port(L.portT, false) },
-  ])
+/*
+ * Pump, control valve, relief valve, filter and ram are the shared parts library's builders
+ * (src/parts/lib/hydraulics.ts) — the same ones the whole-tractor view uses — placed here in the
+ * scene's tractor frame.
+ */
+
+/** Gear pump: m 4 mm, 10 teeth, 40 mm wide, in a 160 × 110 × 60 mm block. */
+const PUMP_M = 0.004
+const PUMP_Z = 10
+export const PUMP_C = PUMP_M * PUMP_Z
+export const PUMP_SPEC: GearPumpSpec = { module: PUMP_M, teeth: PUMP_Z, width: 0.04, block: [0.16, 0.11, 0.06], cavityDepth: 0.04 }
+
+export const VALVE_SPEC: SpoolValveSpec = {
+  length: L.valve.x1 - L.valve.x0,
+  h: L.valve.h,
+  w: L.valve.w,
+  boreR: L.valve.boreR,
+  ports: [
+    { x: L.portP - L.valve.x0, up: true },
+    { x: L.portA - L.valve.x0, up: false },
+    { x: L.portT - L.valve.x0, up: false },
+  ],
 }
 
-/** Spool with three lands, along +X, centred on x = 0 (moves ±0.03). */
-function spool() {
-  const r = L.valve.boreR - 0.0004
-  const n = 0.008
-  const len = L.valve.x1 - L.valve.x0 + 0.08
-  const x0 = -len / 2
-  const lands: [number, number][] = [
-    [0.03, 0.075],
-    [0.105, 0.15],
-    [0.18, 0.225],
-  ]
-  const pts: V2[] = [
-    [0, x0],
-    [n, x0],
-  ]
-  for (const [a, b] of lands) pts.push([n, x0 + a], [r, x0 + a], [r, x0 + b], [n, x0 + b])
-  pts.push([n, x0 + len], [0, x0 + len])
-  return alongX(pts, 40)
-}
-
-/** Relief valve: body with an internal seat, side inlet (below the seat) and outlet (above), poppet and spring. */
+/** Relief-valve seat height (tractor frame). */
 export const RELIEF_SEAT = 0.86
+
+function pumpParts() {
+  const p = gearPump(PUMP_SPEC)
+  return { body: xform(p.body, mat4.t(L.pump.x, L.pump.y, 0)), gear: p.gear }
+}
+
+function valveParts() {
+  const v = spoolValve(VALVE_SPEC)
+  return { body: xform(v.body, mat4.t((L.valve.x0 + L.valve.x1) / 2, L.valve.y, 0)), spool: v.spool }
+}
+
 function reliefParts() {
   const r = L.relief
-  const ri = r.r - 0.006
-  const ys = RELIEF_SEAT
-  const shell = lathe(
-    [
-      [0, r.y0],
-      [r.r, r.y0],
-      [r.r, r.y1],
-      [0, r.y1],
-      [0, r.y1 - 0.008],
-      [ri, r.y1 - 0.008],
-      [ri, ys + 0.006],
-      [0.009, ys + 0.006],
-      [0.009, ys],
-      [ri, ys],
-      [ri, r.y0 + 0.008],
-      [0, r.y0 + 0.008],
-    ],
-    40,
-  )
-  const side = (y: number, dx: number) => xform(cylinder(0.0075, 0.03, 16), mat4.c(mat4.t(r.x + dx, y, 0), mat4.rz(PI / 2)))
-  const body = csg(xform(shell, mat4.t(r.x, 0, 0)), [
-    { op: 'sub', geometry: side(0.835, -r.r) },
-    { op: 'sub', geometry: side(0.95, r.r) },
-  ])
-  const poppet = lathe(
-    [
-      [0, -0.012],
-      [0.012, 0],
-      [0.017, 0.004],
-      [0.017, 0.014],
-      [0, 0.014],
-    ],
-    32,
-  )
-  const spring = helixSpring(0.011, 0.0018, 1, 7)
-  return { body, poppet, spring }
+  const v = reliefValve({ r: r.r, height: r.y1 - r.y0, seat: RELIEF_SEAT - r.y0 })
+  return { body: xform(v.body, mat4.t(r.x, r.y0, 0)), poppet: v.poppet, spring: v.spring }
 }
 
 function filterParts() {
   const f = L.filter
-  const can = lathe(
-    [
-      [0.01, f.y0],
-      [f.r, f.y0],
-      [f.r, f.y1],
-      [0.012, f.y1],
-      [0.012, f.y1 - 0.006],
-      [f.r - 0.005, f.y1 - 0.006],
-      [f.r - 0.005, f.y0 + 0.006],
-      [0.01, f.y0 + 0.006],
-    ],
-    40,
-  )
-  const element = xform(tube(f.r - 0.012, 0.018, f.y1 - f.y0 - 0.03, 40), mat4.t(0, (f.y0 + f.y1) / 2, 0))
-  return { can: xform(can, mat4.t(f.x, 0, 0)), element: xform(element, mat4.t(f.x, 0, 0)) }
-}
-
-/** Gear pump block with a figure-of-eight cavity, and its two gears (axes along Z). */
-const PUMP_M = 0.004
-const PUMP_Z = 10
-export const PUMP_C = PUMP_M * PUMP_Z
-function pumpParts() {
-  const p = L.pump
-  const blk = xform(box(0.16, 0.11, 0.06), mat4.t(p.x, p.y, 0))
-  const cav = (dx: number) => xform(cylinder(PUMP_M * (PUMP_Z / 2 + 1) + 0.0012, 0.04, 40), mat4.c(mat4.t(p.x + dx, p.y, 0), AXIS_Z))
-  const body = csg(blk, [
-    { op: 'sub', geometry: cav(-PUMP_C / 2) },
-    { op: 'sub', geometry: cav(PUMP_C / 2) },
-    { op: 'sub', geometry: xform(cylinder(0.008, 0.06, 16), mat4.t(p.x, p.y - 0.04, 0)) },
-    { op: 'sub', geometry: xform(cylinder(0.008, 0.06, 16), mat4.t(p.x, p.y + 0.04, 0)) },
-  ])
-  const g = gear({ teeth: PUMP_Z, module: PUMP_M, width: 0.038, bore: 0.006 })
-  return { body, gear: g }
-}
-
-/** Ram: barrel (closed cap, open rod end) built along +X from the pivot. */
-function ramParts() {
-  const R = RAM_BORE / 2
-  const Ro = R + 0.01
-  const barrel = alongX(
-    [
-      [0, -0.02],
-      [Ro, -0.02],
-      [Ro, BARREL_LEN],
-      [R, BARREL_LEN],
-      [R, 0],
-      [0, 0],
-    ],
-    56,
-  )
-  const lug = xform(xform(cylinder(0.022, 0.06, 24), AXIS_Z), mat4.t(-0.035, 0, 0))
-  const piston = alongX(
-    [
-      [0, 0],
-      [R - 0.0005, 0],
-      [R - 0.0005, 0.035],
-      [0, 0.035],
-    ],
-    48,
-  )
-  const seal = alongX(
-    [
-      [R - 0.006, 0.012],
-      [R - 0.0002, 0.012],
-      [R - 0.0002, 0.022],
-      [R - 0.006, 0.022],
-    ],
-    48,
-  )
-  const rod = alongX(
-    [
-      [0, 0.035],
-      [0.017, 0.035],
-      [0.017, ROD_LEN],
-      [0, ROD_LEN],
-    ],
-    32,
-  )
-  const oil = alongX(
-    [
-      [0, 0],
-      [R - 0.0003, 0],
-      [R - 0.0003, 1],
-      [0, 1],
-    ],
-    48,
-  )
-  return { barrel: merge(barrel, lug), piston, seal, rod, oil }
+  const c = filterCan({ r: f.r, height: f.y1 - f.y0 })
+  const at = mat4.t(f.x, f.y0, 0)
+  return { can: xform(c.can, at), element: xform(c.element, at) }
 }
 
 export function buildStatic() {
   return {
     housing: housing(),
     oil: reservoirOil(),
-    valveBody: valveBody(),
-    spool: spool(),
+    ...(() => {
+      const v = valveParts()
+      return { valveBody: v.body, spool: v.spool }
+    })(),
     relief: reliefParts(),
     filter: filterParts(),
     pump: pumpParts(),
-    ram: ramParts(),
+    ram: ram({ bore: RAM_BORE, barrelLen: BARREL_LEN, rodLen: ROD_LEN }),
     rockshaft: xform(cylinder(0.028, 2 * L.shaftZ + 0.04, 32), AXIS_Z),
     bar: box(1, 1, 1),
     rod: xform(cylinder(0.5, 1, 16), mat4.t(0, 0.5, 0)),

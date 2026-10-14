@@ -27,6 +27,8 @@ export function Toolbar({ scene }: { scene: SceneDef }) {
   const setExplode = useView((s) => s.setExplode)
   const xray = useView((s) => s.xray)
   const setXray = useView((s) => s.setXray)
+  const faultMode = useView((s) => s.faultMode)
+  const setFaultMode = useView((s) => s.setFaultMode)
   const labels = useView((s) => s.labels)
   const setLabels = useView((s) => s.setLabels)
   const [openCut, setOpenCut] = useState(false)
@@ -86,6 +88,9 @@ export function Toolbar({ scene }: { scene: SceneDef }) {
         </div>
         <IconButton label="X-ray housings" onClick={() => setXray(!xray)} active={xray}>
           <Icon.xray />
+        </IconButton>
+        <IconButton label="Faults: tint parts with common faults (click one for symptoms and remedies)" onClick={() => setFaultMode(!faultMode)} active={faultMode}>
+          <Icon.wrench />
         </IconButton>
         <IconButton label="Part labels" onClick={() => setLabels(!labels)} active={labels}>
           <Icon.label />

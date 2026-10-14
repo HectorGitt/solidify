@@ -63,10 +63,10 @@ export function n(v: number, digits = 4) {
   if (!Number.isFinite(v)) return '\\text{—}'
   const a = Math.abs(v)
   if (a !== 0 && (a >= 1e6 || a < 1e-3)) {
-    const [m, e] = v.toExponential(digits - 1).split('e')
+    const [m, e] = v.toExponential(Math.max(0, digits - 1)).split('e')
     return `${m}\\times10^{${parseInt(e, 10)}}`
   }
-  const s = Number(v.toPrecision(digits)).toString()
+  const s = digits < 1 ? String(Math.round(v)) : Number(v.toPrecision(digits)).toString()
   // thin-space thousands
   const [int, frac] = s.split('.')
   const withSep = int.replace(/\B(?=(\d{3})+(?!\d))/g, '\\,')

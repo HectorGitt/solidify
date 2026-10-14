@@ -1,7 +1,8 @@
 import { useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { useSimFrame } from '@/core/sim'
-import { box, cylinder, extrudeTwisted, helixSpring, lathe, merge, roundedBox, tube, xform, mat4 } from '@/geometry'
+import { box, cylinder, merge, roundedBox, tube, xform, mat4 } from '@/geometry'
+import { coilSpring, dashpot } from '@/parts/lib/chassis'
 import { PartLabel } from '@/render/Label'
 import { Part, PartMesh } from '@/render/Part'
 import { rk4Step, smdDeriv } from '@/physics/vibration'
@@ -43,31 +44,13 @@ export function Scene3D() {
   const m = useSmd((s) => s.m)
 
   const g = useMemo(() => {
-    const cup = lathe(
-      [
-        [0, RIG.baseTop],
-        [0.032, RIG.baseTop],
-        [0.032, RIG.baseTop + 0.17],
-        [0.027, RIG.baseTop + 0.17],
-        [0.027, RIG.baseTop + 0.01],
-        [0, RIG.baseTop + 0.01],
-      ],
-      48,
-    )
-    const gland = lathe(
-      [
-        [0.0075, RIG.baseTop + 0.165],
-        [0.034, RIG.baseTop + 0.165],
-        [0.034, RIG.baseTop + 0.18],
-        [0.0075, RIG.baseTop + 0.18],
-      ],
-      48,
-    )
-    const oil = xform(cylinder(0.0268, 0.155, 40), mat4.t(0, RIG.baseTop + 0.01 + 0.0775, 0))
-    const circle = (r: number, cx = 0, cy = 0, n = 40) => Array.from({ length: n }, (_, i) => new THREE.Vector2(cx + r * Math.cos((2 * Math.PI * i) / n), cy + r * Math.sin((2 * Math.PI * i) / n)))
-    const holes = [0, 1, 2, 3].map((i) => circle(0.0032, 0.015 * Math.cos((i * Math.PI) / 2 + 0.6), 0.015 * Math.sin((i * Math.PI) / 2 + 0.6), 16).reverse())
-    const piston = extrudeTwisted(circle(0.0262), holes, 0.014)
-    piston.rotateX(Math.PI / 2)
+    // dashpot from the parts library, its cup standing on the base
+    const dp = dashpot()
+    const onBase = mat4.t(0, RIG.baseTop, 0)
+    const cup = xform(dp.cup, onBase)
+    const gland = xform(dp.gland, onBase)
+    const oil = xform(dp.oil, onBase)
+    const piston = dp.piston
     const rodLen = RIG.massRest - RIG.pistonRest
     const rod = xform(cylinder(0.0065, rodLen, 20), mat4.t(0, rodLen / 2, 0))
     const base = xform(roundedBox(0.58, 0.04, 0.3, 0.01), mat4.t(0, 0.02, 0))
@@ -82,7 +65,7 @@ export function Scene3D() {
       xform(cylinder(0.055, 0.012, 40), mat4.t(0, RIG.beamY + 0.04 + 0.106, 0)),
     )
     const stinger = xform(cylinder(0.004, 1, 12), mat4.t(0, 0.5, 0))
-    const springGeo = helixSpring(0.034, 0.0048, 1, 9)
+    const springGeo = coilSpring({ coilR: 0.034, wireR: 0.0048, turns: 9 })
     const ruler = xform(box(0.012, 0.32, 0.05), mat4.t(RIG.rulerX, RIG.massRest + RIG.massH / 2, 0))
     const ticks: THREE.BufferGeometry[] = []
     for (let i = -6; i <= 6; i++) {

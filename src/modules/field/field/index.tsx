@@ -1,5 +1,6 @@
 import type { CameraPose, SceneDef } from '@/modules/types'
-import { C, DEFAULTS, resetLive, useField, type FieldParams } from './model'
+import { cleanContext } from '@/content/context'
+import { C, DEFAULTS, live, resetLive, useField, type FieldParams } from './model'
 import { FieldPanel } from './Panel'
 import { Field3D, resetScene } from './Scene3D'
 
@@ -29,6 +30,7 @@ const scene: SceneDef = {
     resetLive()
     resetScene()
   },
+  context: () => cleanContext({ rpm: live.rpm, slip: live.slip, pullKN: live.P / 1000, speedKmh: live.V * 3.6, CI: useField.getState().CI, tyre: 'bias' }),
   applyParams: (p) => useField.getState().set(p as Partial<FieldParams>),
   tour: [
     {

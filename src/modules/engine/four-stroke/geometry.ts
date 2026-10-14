@@ -5,8 +5,6 @@ import {
   csg,
   cylinder,
   extrude,
-  gear,
-  helixSpring,
   lathe,
   mat4,
   merge,
@@ -14,12 +12,35 @@ import {
   roundedRect,
   tube,
   xform,
-  type V2,
 } from '@/geometry'
-import { BOWL, CAM_X, CAM_Y, CROWN_TDC, DIM, PUSHROD_X, tappetLifts } from './model'
+import { BOWL, CAM_X, CAM_Y, CROWN_TDC, DIM, PUSHROD_X, ROCKER_RATIO, VALVE_TIMING } from './model'
+import {
+  CRANK_REF,
+  bowlGas,
+  conRod as libConRod,
+  crankshaft as libCrankshaft,
+  cylinderLiner,
+  flywheel as libFlywheel,
+  gasColumn,
+  gudgeonPin as libGudgeonPin,
+  injector as libInjector,
+  lobeLift as libLobeLift,
+  piston as libPiston,
+  pistonRings,
+  pushrod as libPushrod,
+  rocker as libRocker,
+  rockerPedestal as libRockerPedestal,
+  tappet as libTappet,
+  timingGears as libTimingGears,
+  valve as libValve,
+  valveRetainer,
+  valveSpring as libValveSpring,
+  vPulley,
+  type PistonSpec,
+} from '@/parts/lib/engine'
 
 const { PI } = Math
-const along = {
+export const along = {
   /** rotate a Y-axis solid so its axis lies along Z */
   z: mat4.rx(PI / 2),
   /** rotate a Y-axis solid so its axis lies along X */
@@ -64,13 +85,13 @@ export const INJECTOR = (() => {
 
 /* ------------------------------ block ------------------------------ */
 
-const BLOCK_X0 = -0.108
-const BLOCK_X1 = 0.082
-const BLOCK_Z = 0.07
-const CASE_X = 0.132
-const CASE_Z = 0.08
-const CASE_TOP = 0.13
-const SPLIT_Y = -0.025
+export const BLOCK_X0 = -0.108
+export const BLOCK_X1 = 0.082
+export const BLOCK_Z = 0.07
+export const CASE_X = 0.132
+export const CASE_Z = 0.08
+export const CASE_TOP = 0.13
+export const SPLIT_Y = -0.025
 
 function blockGeometry() {
   const upper = xform(box(BLOCK_X1 - BLOCK_X0, CROWN_TDC - CASE_TOP, 2 * BLOCK_Z), mat4.t((BLOCK_X0 + BLOCK_X1) / 2, (CROWN_TDC + CASE_TOP) / 2, 0))
@@ -100,28 +121,18 @@ function blockGeometry() {
 }
 
 /** Coolant filling the block water jacket. */
-function jacketCoolant() {
+export function jacketCoolant() {
   return xform(tube(DIM.jacketOuter - 0.0003, DIM.linerOuter, 0.155 - 0.0006, 48), mat4.t(0, CROWN_TDC - 0.0115 - 0.155 / 2, 0))
 }
 
-function liner() {
-  const top = CROWN_TDC
-  const bottom = 0.1
-  return lathe(
-    [
-      [DIM.bore / 2, bottom],
-      [DIM.linerOuter - 0.0002, bottom],
-      [DIM.linerOuter - 0.0002, top],
-      [DIM.bore / 2, top],
-    ],
-    64,
-  )
+export function liner() {
+  return cylinderLiner({ bore: DIM.bore, outer: DIM.linerOuter, y0: 0.1, y1: CROWN_TDC })
 }
 
 /* ------------------------------ head ------------------------------ */
 
-const HEAD_X0 = BLOCK_X0
-const HEAD_X1 = BLOCK_X1
+export const HEAD_X0 = BLOCK_X0
+export const HEAD_X1 = BLOCK_X1
 
 function headGeometry() {
   const H = DIM.headHeight
@@ -174,78 +185,51 @@ function rockerCover() {
 }
 
 /* ------------------------------ valve train ------------------------------ */
+/* The engine parts themselves live in the shared library (src/parts/lib/engine.ts); these wrappers
+   size them to this engine and keep the names the tractor's engine imports. */
 
-function valve(headR: number) {
-  const s = DIM.valveStemR
-  const L = DIM.valveTip
-  return lathe(
-    [
-      [0, 0],
-      [headR, 0],
-      [headR, 0.0022],
-      [headR - 0.0035, 0.0052],
-      [s + 0.0025, 0.014],
-      [s, 0.022],
-      [s, L],
-      [0, L],
-    ],
-    40,
-  )
+const PISTON: PistonSpec = { bore: DIM.bore, comp: DIM.pistonComp, skirt: DIM.pistonSkirt, bowl: BOWL }
+
+export function valve(headR: number) {
+  return libValve({ headR, stemR: DIM.valveStemR, length: DIM.valveTip })
 }
 
 /** Spring of unit length along Y (scaled to the live installed length). */
 export const SPRING_SEAT = DIM.headHeight
 export const SPRING_FREE = DIM.valveTip - 0.012 - DIM.headHeight
-function valveSpring() {
-  return helixSpring(0.0125, 0.0021, 1, 6)
+export function valveSpring() {
+  return libValveSpring()
 }
 
-function retainer() {
-  return lathe([[DIM.valveStemR, 0], [0.0155, 0.0], [0.0155, 0.003], [0.0085, 0.009], [DIM.valveStemR, 0.009]], 32)
+export function retainer() {
+  return valveRetainer({ stemR: DIM.valveStemR })
 }
 
-function rocker() {
+export function rocker() {
   // side profile in XY, pivot at origin, pushrod end at −armPush, valve end at +armValve
-  const s = new THREE.Shape()
-  const a = DIM.rockerArmPush
-  const b = DIM.rockerArmValve
-  s.moveTo(-a - 0.006, -0.002)
-  s.lineTo(-a - 0.006, 0.006)
-  s.quadraticCurveTo(-a * 0.4, 0.013, 0, 0.012)
-  s.quadraticCurveTo(b * 0.55, 0.011, b + 0.002, 0.004)
-  s.quadraticCurveTo(b + 0.008, 0.0, b + 0.004, -0.007)
-  s.lineTo(b - 0.006, -0.008)
-  s.quadraticCurveTo(b * 0.5, -0.006, 0, -0.011)
-  s.quadraticCurveTo(-a * 0.5, -0.008, -a - 0.006, -0.002)
-  const pivot = new THREE.Path()
-  pivot.absarc(0, 0, 0.0062, 0, PI * 2, true)
-  s.holes.push(pivot)
-  return extrude(s, 0.012, { curveSegments: 16 })
+  return libRocker({ armPush: DIM.rockerArmPush, armValve: DIM.rockerArmValve })
 }
 
 function rockerShaft() {
   return xform(cylinder(0.0058, 0.14, 24), along.z)
 }
 
-function rockerPedestal() {
-  return box(0.014, DIM.rockerY - DIM.headHeight, 0.012)
+export function rockerPedestal() {
+  return libRockerPedestal({ height: DIM.rockerY - DIM.headHeight })
 }
 
-function tappet() {
-  return lathe([[0, 0], [DIM.tappetR, 0], [DIM.tappetR, DIM.tappetH], [0.006, DIM.tappetH], [0.004, DIM.tappetH - 0.004], [0, DIM.tappetH - 0.004]], 32)
+export function tappet() {
+  return libTappet({ r: DIM.tappetR, h: DIM.tappetH })
 }
 
 /** Pushrod of unit length along Y. */
-function pushrod() {
-  return lathe([[0, 0], [0.0035, 0.0], [0.0042, 0.02], [0.0042, 0.98], [0.0035, 1], [0, 1]], 16)
+export function pushrod() {
+  return libPushrod()
 }
 
 /** Lobe profile from the valve-timing curve: cam angle φ ↔ crank angle 2φ. */
-function lobeLift(which: 'inlet' | 'exhaust') {
-  return (phi: number) => {
-    const deg = ((phi * 2 * 180) / PI) % 720
-    return tappetLifts(deg < 0 ? deg + 720 : deg)[which]
-  }
+export function lobeLift(which: 'inlet' | 'exhaust') {
+  return libLobeLift(which, { timing: VALVE_TIMING, rockerRatio: ROCKER_RATIO })
 }
 
 function camshaft() {
@@ -258,191 +242,58 @@ function camshaft() {
 
 /* ------------------------------ crank train ------------------------------ */
 
-function crankshaft() {
-  const R = DIM.crankR
-  // web profile in XY (crank local frame: pin at +Y)
-  const web = new THREE.Shape()
-  const cw = 0.079
-  const a0 = PI / 2 + PI - 0.95
-  const a1 = PI / 2 + PI + 0.95
-  web.absarc(0, 0, cw, a0, a1, false)
-  web.lineTo(0.034 * Math.cos(0.35), R + 0.034 * Math.sin(0.35))
-  web.absarc(0, R, 0.034, 0.35, PI - 0.35, false)
-  web.lineTo(cw * Math.cos(a0), cw * Math.sin(a0))
-  const webs = [0.022, -0.022].map((z) => xform(extrude(web, 0.014, { curveSegments: 32 }), mat4.t(0, 0, z)))
-  const pin = xform(cylinder(0.028, 0.032, 40), mat4.c(mat4.t(0, R, 0), along.z))
-  const mains = [
-    xform(cylinder(0.03, 0.066, 40), mat4.c(mat4.t(0, 0, 0.062), along.z)),
-    xform(cylinder(0.03, 0.066, 40), mat4.c(mat4.t(0, 0, -0.062), along.z)),
-  ]
-  const nose = xform(cylinder(0.02, 0.055, 32), mat4.c(mat4.t(0, 0, 0.12), along.z))
-  const tail = xform(lathe([[0, 0], [0.04, 0], [0.04, 0.012], [0.03, 0.012], [0.03, 0.03], [0, 0.03]], 40), mat4.c(mat4.t(0, 0, -0.095), mat4.rx(-PI / 2)))
-  return merge(...webs, pin, ...mains, nose, tail)
+export function crankshaft() {
+  return libCrankshaft({ ...CRANK_REF, r: DIM.crankR }, [{ z: 0, firingDeg: 0 }], 0.124, {
+    outerMainLen: 0.066,
+    nose: { r: 0.02, len: 0.055, inset: 0.0025 },
+    tail: { r: 0.04, t: 0.012, spigotR: 0.03, spigotLen: 0.018 },
+  }).geometry
 }
 
-function flywheel() {
-  const g = lathe(
-    [
-      [0.03, 0],
-      [0.15, 0],
-      [0.15, 0.042],
-      [0.12, 0.042],
-      [0.11, 0.016],
-      [0.06, 0.016],
-      [0.055, 0.03],
-      [0.03, 0.03],
-    ],
-    96,
-  )
-  return xform(g, mat4.rx(-PI / 2)) // axis along −Z → faces the block
+/** the shared library flywheel (with its ring gear) at this engine's size */
+export function flywheel() {
+  return libFlywheel({ r: 0.15 }).disc
 }
 
-function ringGear() {
-  return gear({ teeth: 108, module: 0.0029, width: 0.016, bore: 0.15, flankPoints: 4 })
+export function ringGear() {
+  // placed by the scene 8 mm behind the flywheel face; the library seats it 10 mm in
+  return xform(libFlywheel({ r: 0.15 }).ring, mat4.t(0, 0, 0.002))
 }
 
-function timingGears() {
-  const crank = gear({ teeth: DIM.crankTeeth, module: DIM.timingModule, width: 0.014, bore: 0.02 })
-  const camG = gear({ teeth: DIM.camTeeth, module: DIM.timingModule, width: 0.014, bore: 0.0105 })
-  return { crank, cam: camG }
+export function timingGears() {
+  return libTimingGears({ module: DIM.timingModule, crankTeeth: DIM.crankTeeth, camTeeth: DIM.camTeeth })
 }
 
-function pulley() {
-  return xform(
-    lathe([[0.02, 0], [0.072, 0], [0.072, 0.004], [0.058, 0.012], [0.072, 0.02], [0.072, 0.024], [0.02, 0.024]], 64),
-    mat4.rx(PI / 2),
-  )
+export function pulley() {
+  return vPulley({ r: 0.072 })
 }
 
-function conRod() {
-  const L = DIM.rodL
-  const big = 0.043
-  const bore = 0.0305
-  const s = new THREE.Shape()
-  // start on the split line at the right, go up the big end, shank, small end, back down
-  s.moveTo(big, 0)
-  s.absarc(0, 0, big, 0, 1.18, false)
-  s.lineTo(0.0115, L - 0.03)
-  s.absarc(0, L, 0.021, -1.0, PI + 1.0, false)
-  s.lineTo(-0.0115, L - 0.03)
-  s.lineTo(-big * Math.cos(1.18), big * Math.sin(1.18))
-  s.absarc(0, 0, big, PI - 1.18, PI, false)
-  s.lineTo(-bore, 0)
-  s.absarc(0, 0, bore, PI, 0, true)
-  s.lineTo(big, 0)
-  const small = new THREE.Path()
-  small.absarc(0, L, 0.0145, 0, PI * 2, true)
-  s.holes.push(small)
-  const body = extrude(s, 0.028, { curveSegments: 40 })
-  const capS = new THREE.Shape()
-  capS.moveTo(big, 0)
-  capS.lineTo(bore, 0)
-  capS.absarc(0, 0, bore, 0, -PI, true)
-  capS.lineTo(-big, 0)
-  capS.absarc(0, 0, big, PI, PI * 2, false)
-  const cap = extrude(capS, 0.028, { curveSegments: 40 })
-  const boltHoles = [0.0365, -0.0365].map((x) => ({ op: 'sub' as const, geometry: xform(cylinder(0.0042, 0.1, 16), mat4.t(x, 0, 0)) }))
-  const bolts = merge(...[0.0365, -0.0365].map((x) => xform(cylinder(0.0039, 0.066, 16), mat4.t(x, -0.004, 0))))
-  const shells = lathe(
-    [
-      [0.028, -0.0135],
-      [bore - 0.0001, -0.0135],
-      [bore - 0.0001, 0.0135],
-      [0.028, 0.0135],
-    ],
-    48,
-  )
-  return {
-    body: csg(body, boltHoles),
-    cap: csg(cap, boltHoles),
-    bolts,
-    shells: xform(shells, along.z),
-    bush: xform(tube(0.0145, 0.014, 0.028, 32), mat4.c(mat4.t(0, L, 0), along.z)),
-  }
+export function conRod() {
+  return libConRod({ length: DIM.rodL, pinR: CRANK_REF.pinR, gudgeonR: 0.014, width: 0.028 })
 }
 
-function piston() {
-  const R = DIM.bore / 2 - 0.0004
-  const top = DIM.pistonComp
-  const bottom = -DIM.pistonSkirt
-  const d = 0.0042
-  // ring grooves, bottom to top: oil, second compression, top compression
-  const grooves: [number, number][] = [
-    [top - 0.026, 0.004],
-    [top - 0.017, 0.0026],
-    [top - 0.009, 0.0026],
-  ]
-  // CCW in the (r, y) half-plane: cavity ceiling → inner skirt → skirt bottom → outer wall → crown → bowl → axis
-  const prof: V2[] = [
-    [0, top - 0.03],
-    [0.022, top - 0.03],
-    [R - 0.0055, top - 0.036],
-    [R - 0.0055, bottom],
-    [R, bottom],
-  ]
-  for (const [gy, w] of grooves) prof.push([R, gy - w / 2], [R - d, gy - w / 2], [R - d, gy + w / 2], [R, gy + w / 2])
-  prof.push([R, top])
-  for (let i = 1; i < BOWL.length; i++) prof.push([BOWL[i][0], top - BOWL[i][1]])
-  const body = lathe(prof, 72)
-  const boss = xform(cylinder(0.019, 2 * (R - 0.004), 32), along.z)
-  const slot = xform(box(0.08, 0.086, 0.031), mat4.t(0, -0.017, 0))
-  const pinHole = xform(cylinder(0.014, 0.2, 32), along.z)
-  return csg(body, [
-    { op: 'add', geometry: boss },
-    { op: 'sub', geometry: slot },
-    { op: 'sub', geometry: pinHole },
-  ])
+export function piston() {
+  return libPiston(PISTON)
 }
 
-function rings() {
-  const R = DIM.bore / 2
-  const top = DIM.pistonComp
-  const ring = (y: number, h: number) => lathe([[R - 0.0040, y - h / 2], [R - 0.00005, y - h / 2], [R - 0.00005, y + h / 2], [R - 0.0040, y + h / 2]], 72)
-  return {
-    compression: merge(ring(top - 0.009, 0.0024), ring(top - 0.017, 0.0024)),
-    oil: ring(top - 0.026, 0.0038),
-  }
+export function rings() {
+  const r = pistonRings(PISTON)
+  return { compression: r.compression, oil: r.oil! }
 }
 
-function gudgeonPin() {
-  return xform(tube(0.0139, 0.008, 2 * (DIM.bore / 2 - 0.006), 32), along.z)
+export function gudgeonPin() {
+  return libGudgeonPin(PISTON)
 }
 
 /** Gas in the bowl (moves with the piston) and a unit-height column above the crown. */
-function gas() {
-  const bowl = lathe(BOWL.map(([r, d]) => [Math.max(0, r - 0.0002), -d + 0.0002] as V2).reverse(), 48)
-  const column = lathe([[0, 0], [DIM.bore / 2 - 0.0002, 0], [DIM.bore / 2 - 0.0002, 1], [0, 1]], 64)
-  return { bowl, column }
+export function gas() {
+  return { bowl: bowlGas(BOWL), column: gasColumn(DIM.bore) }
 }
 
 /* ------------------------------ injector ------------------------------ */
 
-function injector() {
-  const L = 0.14
-  const body = lathe(
-    [
-      [0.0, 0],
-      [0.0035, 0],
-      [0.0042, 0.012],
-      [0.0085, 0.02],
-      [0.0085, 0.085],
-      [0.0115, 0.088],
-      [0.0115, 0.12],
-      [0.006, 0.124],
-      [0.006, L],
-      [0.003, L],
-      [0.003, 0.124],
-      // inner bore for the needle & spring
-      [0.0042, 0.12],
-      [0.0042, 0.03],
-      [0.0019, 0.012],
-      [0, 0.006],
-    ],
-    32,
-  )
-  const needle = lathe([[0, 0.0065], [0.0019, 0.0125], [0.0026, 0.03], [0.0026, 0.07], [0, 0.07]], 20)
-  const spring = xform(helixSpring(0.0031, 0.0007, 1, 9), mat4.t(0, 0, 0))
-  return { body, needle, spring }
+export function injector() {
+  return libInjector()
 }
 
 /* ------------------------------ manifolds, sump ------------------------------ */

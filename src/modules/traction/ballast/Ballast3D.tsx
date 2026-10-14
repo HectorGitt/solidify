@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
-import { box, tube } from '@/geometry'
+import { box } from '@/geometry'
+import { suitcaseWeight, wheelWeight, wheelWeightStack } from '@/parts/lib/wheels'
 import { useSimFrame } from '@/core/sim'
 import { PartLabel } from '@/render/Label'
 import { Part, PartMesh } from '@/render/Part'
-import { buildTyre } from '../tyre/build'
+import { buildTyre, rimSpec } from '../tyre/build'
 import { cavityFill } from './liquid'
 import { BAL, MIXES, TT, TTS, derive, live, resetTest, useBallast } from './model'
 
@@ -25,12 +26,12 @@ export function Ballast3D() {
 
   const parts = useMemo(
     () => ({
-      weight: tube(0.26, 0.09, 0.03, 48),
+      weight: wheelWeight({ r: 0.26, bore: 0.165, t: 0.03 }),
       chalk: box(0.05, 0.012, 0.16),
       arm: box(1, 0.006, 1),
       mark: box(0.06, 0.008, 0.5),
       soil: box(7, 0.2, 3),
-      suitcase: box(0.4, 0.25, 0.055),
+      suitcase: suitcaseWeight({ length: 0.4, height: 0.25, thickness: 0.055 }),
       support: box(0.1, 0.08, 1.1),
     }),
     [],
@@ -169,19 +170,22 @@ export function Ballast3D() {
               </Part>
               <Part id="rim" name="Rim & wheel disc" material="paintGrey" role="housing" info={{ summary: 'Rim and dished wheel centre.' }} cites={[TTS('p13–17')]}>
                 <PartMesh geometry={g.rim} />
+                {g.hub ? <PartMesh geometry={g.hub} material="steelDark" /> : null}
               </Part>
               <Part id="valve" name="Valve" material="brass" role="static" cut={false} info={{ summary: 'Valve stem.', role: 'Fill to 75 % — water up to the valve with the valve at the top. Check pressure with a liquid-type gauge with the valve at the bottom, or add about ½ psi per foot of liquid above the gauge.' }} cites={[TT('p7'), TT('p12, Fig 20')]}>
                 <PartMesh geometry={g.valve} />
               </Part>
-              <Part id="weights" name="Cast-iron wheel weights" material="castIron" role="static" info={{ summary: `${st.weights} × ≈40 kg cast-iron discs per wheel (${d.castKg} kg on the axle).`, role: 'Removable ballast bolted to the wheel centre: quick to add or take off and makes puncture repair easier. Usually 2–3 per wheel.', details: 'Average wheel weights are 40–140 lb. Usual practice: liquid first, then cast iron as required.' }} cites={[TTS('p15 — weights'), TT('p11–12, Fig 19')]} explode={[0, 0.3, 0]}>
-                {Array.from({ length: st.weights }, (_, i) => (
-                  <PartMesh key={i} geometry={parts.weight} position={[0, 0.1 + 0.031 * i, 0]} />
-                ))}
-              </Part>
+
               <Part id="chalk" name="Chalk mark" material="paintYellow" role="static" cut={false} info={{ summary: 'Chalk reference mark on the side of the tyre.', role: 'Slip test: mark the ground where the chalk mark comes down, count 10 loaded revolutions and mark again; then pull the tractor back over the same distance without load and count the revolutions.' }} cites={[TT('p9–10')]}>
                 <PartMesh geometry={parts.chalk} position={[0, g.hw * 0.93, g.rimR + 0.62 * (R - g.rimR)]} />
               </Part>
             </group>
+            {/* wheel weights (wheel frame, axle Z): stacked on the centre disc, outside the hub nuts */}
+            <Part id="weights" name="Cast-iron wheel weights" material="castIron" role="static" info={{ summary: `${st.weights} × ≈40 kg cast-iron discs per wheel (${d.castKg} kg on the axle).`, role: 'Removable ballast bolted to the wheel centre: quick to add or take off and makes puncture repair easier. Usually 2–3 per wheel.', details: 'Average wheel weights are 40–140 lb. Usual practice: liquid first, then cast iron as required.' }} cites={[TTS('p15 — weights'), TT('p11–12, Fig 19')]} explode={[0, 0, 0.3]}>
+              {wheelWeightStack(rimSpec(d.size, g.beadY), st.weights, 0.03).map((z, i) => (
+                <PartMesh key={i} geometry={parts.weight} position={[0, 0, z]} />
+              ))}
+            </Part>
           </group>
           <group ref={liquidRef}>
             {liquid ? (

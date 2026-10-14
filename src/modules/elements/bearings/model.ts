@@ -3,7 +3,8 @@ import { ROTATION_FACTOR, cageSpeed, equivalentLoad, lifeHours, ratingLife } fro
 
 const { PI } = Math
 
-export type BearingType = 'ball' | 'roller' | 'taper' | 'needle' | 'thrust' | 'journal'
+export type { BearingType } from '@/parts/lib/elements'
+import type { BearingType } from '@/parts/lib/elements'
 
 export interface TypeSpec {
   label: string

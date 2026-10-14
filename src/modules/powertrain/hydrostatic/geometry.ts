@@ -1,7 +1,7 @@
 import * as THREE from 'three'
 import { cylinder, extrudeTwisted, lathe, mat4, merge, pipe, xform } from '@/geometry'
 import { rim, tyre } from '@/geometry/parts'
-import { axial, ringZ, shaftZ } from '../common/geo'
+import { axial, ringZ, shaftZ } from '@/parts/lib/shapes'
 import { DIM, UNIT } from './model'
 
 /** Cheap (no CSG) geometry, built once on the main thread. Unit-local frames: axis along Z. */

@@ -2,8 +2,10 @@ import { useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { SRC } from '@/content/citations'
 import { useSimFrame } from '@/core/sim'
-import { box, cylinder, extrude, helixSpring, mat4, merge, roundedBox, xform } from '@/geometry'
-import { rim, torus, tyre } from '@/geometry/parts'
+import { box, cylinder, extrude, mat4, merge, roundedBox, xform } from '@/geometry'
+import { torus } from '@/geometry/parts'
+import { coilSpring, operatorSeat, seatSuspension, telescopicDamper } from '@/parts/lib/chassis'
+import { FARMLAND_FRONT, FARMLAND_REAR, wheel as roadWheel } from '@/parts/lib/wheels'
 import { profileAt, rk4Step, seatDeriv } from '@/physics/vibration'
 import { PartLabel } from '@/render/Label'
 import { Part, PartMesh } from '@/render/Part'
@@ -56,10 +58,9 @@ export function Scene3D() {
   const ground = useSeat((s) => s.ground)
   const g = useMemo(() => {
     const along = mat4.rx(Math.PI / 2)
-    const rearTyre = xform(tyre({ radius: T.rearR, width: 0.378, rimRadius: 0.356, lugs: 22, lugAngleDeg: 45, pattern: 'R1' }), along)
-    const rearRim = xform(rim(0.356, 0.36, 0.1, 0.05), along)
-    const frontTyre = xform(tyre({ radius: T.frontR, width: 0.19, rimRadius: 0.203, pattern: 'F2' }), along)
-    const frontRim = xform(rim(0.203, 0.17, 0.06, 0.02), along)
+    // Farmland 14.9-28 rear and 7.50-16 front wheels from the parts library
+    const rear = roadWheel({ ...FARMLAND_REAR, radius: T.rearR })
+    const front = roadWheel({ ...FARMLAND_FRONT, radius: T.frontR })
     const body = merge(
       xform(roundedBox(1.0, 0.5, 0.62, 0.05), mat4.t(-0.05, 0.72, 0)),
       xform(cylinder(0.12, 1.25, 32), mat4.c(mat4.t(0, T.rearAxleY, 0), along)),
@@ -74,17 +75,13 @@ export function Scene3D() {
     const platform = xform(box(0.95, 0.04, 0.95), mat4.t(-0.18, T.platformY - 0.02, 0))
     const column = xform(cylinder(0.03, 0.62, 16), mat4.c(mat4.t(0.4, 1.28, 0), mat4.rz(0.45)))
     const wheel = xform(torus(0.19, 0.014, 10, 40), mat4.c(mat4.t(0.24, 1.58, 0), mat4.rz(0.45), mat4.rx(Math.PI / 2)))
-    // --- seat suspension (in seat-group frame: origin on the platform at the seat point)
-    const basePlate = xform(box(0.38, 0.03, 0.42), mat4.t(0, 0.015, 0))
-    const stops = merge(...[-0.13, 0.13].map((x) => xform(cylinder(0.022, 0.03, 20), mat4.t(x, 0.045, 0.17))))
-    const bar = box(0.34, 0.022, 0.018)
-    const springGeo = helixSpring(0.034, 0.005, 1, 7)
-    const damperBody = xform(cylinder(0.018, 0.08, 20), mat4.t(0, 0.07, 0))
-    const damperRod = xform(cylinder(0.007, 1, 12), mat4.t(0, -0.5, 0))
-    const pan = xform(roundedBox(0.44, 0.04, 0.46, 0.012), mat4.t(0, 0.02, 0))
-    const back = xform(roundedBox(0.05, 0.5, 0.44, 0.02), mat4.c(mat4.t(-0.24, 0.3, 0), mat4.rz(0.18)))
-    const cushion = xform(roundedBox(0.44, 0.07, 0.46, 0.03), mat4.t(0, 0.075, 0))
-    const backCushion = xform(roundedBox(0.06, 0.44, 0.42, 0.025), mat4.c(mat4.t(-0.19, 0.33, 0), mat4.rz(0.18)))
+    // --- seat suspension and seat (parts library; seat-group frame: origin on the platform at the seat point)
+    const { basePlate, stops, bar } = seatSuspension()
+    const springGeo = coilSpring({ coilR: 0.034, wireR: 0.005, turns: 7 })
+    const damper = telescopicDamper({ bodyR: 0.018, bodyL: 0.08, rodR: 0.007, base: 0.03 })
+    const damperBody = damper.body
+    const damperRod = damper.rod
+    const { pan, back, cushion, backCushion } = operatorSeat()
     // --- operator (seat-group frame, sitting on the cushion top at y ≈ 0.11)
     const ys = 0.11
     const torso = capsule(V(-0.08, ys + 0.14, 0), V(-0.03, ys + 0.48, 0), 0.15)
@@ -104,7 +101,7 @@ export function Scene3D() {
     const trousers = merge(...legs)
     const skin = merge(head, neck)
     // --- ground strip (one 64 m period; local x 0…64)
-    return { rearTyre, rearRim, frontTyre, frontRim, body, hood, grille, engine, frontAxle, exhaust, fender, platform, column, wheel, basePlate, stops, bar, springGeo, damperBody, damperRod, pan, back, cushion, backCushion, clothes, trousers, skin }
+    return { rear, front, body, hood, grille, engine, frontAxle, exhaust, fender, platform, column, wheel, basePlate, stops, bar, springGeo, damperBody, damperRod, pan, back, cushion, backCushion, clothes, trousers, skin }
   }, [])
 
   const groundGeo = useMemo(() => {
@@ -237,16 +234,22 @@ export function Scene3D() {
             <Part id="rear-wheels" name="Rear wheels" material="rubber" role="moving" info={{ summary: 'Rear tyres 14.9-28: the tractor’s main “springs”.', role: 'Tyre stiffness and the body mass set the bounce frequency (≈ 3 Hz here).' }} cut={false}>
               {[-1, 1].map((sz, i) => (
                 <group key={sz} ref={(el) => el && (rearW.current[i] = el)} position={[0, T.rearAxleY, sz * 0.71]}>
-                  <PartMesh geometry={g.rearTyre} />
-                  <PartMesh geometry={g.rearRim} material="paintYellow" />
+                  <PartMesh geometry={g.rear.tyre} />
+                  <group rotation={[0, sz < 0 ? Math.PI : 0, 0]}>
+                    <PartMesh geometry={g.rear.rim} material="paintYellow" />
+                    {g.rear.hub ? <PartMesh geometry={g.rear.hub} material="steelDark" /> : null}
+                  </group>
                 </group>
               ))}
             </Part>
             <Part id="front-wheels" name="Front wheels" material="rubber" role="moving" cut={false} info={{ summary: 'Front tyres.', role: 'Meet each bump one wheelbase before the rear wheels, pitching the tractor.' }}>
               {[-1, 1].map((sz, i) => (
                 <group key={sz} ref={(el) => el && (frontW.current[i] = el)} position={[T.wheelbase, T.frontR, sz * 0.71]}>
-                  <PartMesh geometry={g.frontTyre} />
-                  <PartMesh geometry={g.frontRim} material="paintYellow" />
+                  <PartMesh geometry={g.front.tyre} />
+                  <group rotation={[0, sz < 0 ? Math.PI : 0, 0]}>
+                    <PartMesh geometry={g.front.rim} material="paintYellow" />
+                    {g.front.hub ? <PartMesh geometry={g.front.hub} material="steelDark" /> : null}
+                  </group>
                 </group>
               ))}
             </Part>

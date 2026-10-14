@@ -1,64 +1,16 @@
 import { useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { useSimFrame } from '@/core/sim'
-import { cylinder, extrude, lathe, mat4, merge, tube, xform } from '@/geometry'
-import { sprocket } from '@/geometry/parts'
+import { chainSprocket, linkPlate, rollerChain } from '@/parts/lib/elements'
 import { Part, PartMesh } from '@/render/Part'
 import { A503 } from '../_shared/cites'
 import { InstancedPartMesh } from '../_shared/InstancedPartMesh'
-import { chainDims, rollerPositions, sprocketAngle, type ChainLoop } from './model'
+import { rollerPositions, sprocketAngle, type ChainLoop } from './model'
 
-const { PI } = Math
-const along = mat4.rx(PI / 2)
-
-/** Waisted (figure-of-eight) link plate with two holes, pitch p apart, in XY, thickness along Z. */
-export function linkPlate(p: number, h: number, holeR: number, t: number) {
-  const r = h / 2
-  const w = h * 0.36
-  const a = (52 * PI) / 180
-  const s = new THREE.Shape()
-  s.moveTo(-p / 2 + r * Math.cos(a), r * Math.sin(a))
-  s.absarc(-p / 2, 0, r, a, 2 * PI - a, false)
-  s.quadraticCurveTo(0, -w, p / 2 - r * Math.cos(a), -r * Math.sin(a))
-  s.absarc(p / 2, 0, r, PI + a, 3 * PI - a, false)
-  s.quadraticCurveTo(0, w, -p / 2 + r * Math.cos(a), r * Math.sin(a))
-  for (const x of [-p / 2, p / 2]) {
-    const hole = new THREE.Path()
-    hole.absarc(x, 0, holeR, 0, 2 * PI, true)
-    s.holes.push(hole)
-  }
-  return extrude(s, t, { curveSegments: 14 })
-}
-
-export function chainGeometry(p: number, strands: 1 | 2) {
-  const d = chainDims(p)
-  const span = (strands - 1) * d.transverse
-  return {
-    d,
-    roller: xform(tube(d.roller / 2, d.bush / 2 + 0.0001, d.inner * 0.94, 20), along),
-    bush: xform(tube(d.bush / 2, d.pin / 2 + 0.00005, d.inner + 2 * d.tp, 16), along),
-    pin: xform(lathe([[0, -(span + d.inner) / 2 - 2 * d.tp - 0.0012], [d.pin / 2, -(span + d.inner) / 2 - 2 * d.tp - 0.0012], [d.pin / 2 * 1.12, -(span + d.inner) / 2 - 2 * d.tp - 0.0006], [d.pin / 2 * 1.12, (span + d.inner) / 2 + 2 * d.tp + 0.0006], [d.pin / 2, (span + d.inner) / 2 + 2 * d.tp + 0.0012], [0, (span + d.inner) / 2 + 2 * d.tp + 0.0012]], 12), along),
-    inner: linkPlate(p, d.h * 0.96, d.bush / 2, d.tp),
-    outer: linkPlate(p, d.h, d.pin / 2, d.tp),
-    zInner: d.inner / 2 + d.tp / 2,
-    zOuter: d.inner / 2 + d.tp * 1.5 + 0.0002,
-    span,
-  }
-}
-
-/** Simplex or duplex sprocket (axis Z) with hub. */
-export function sprocketGeometry(z: number, p: number, strands: 1 | 2, bore = 0.012) {
-  const d = chainDims(p)
-  const w = d.inner * 0.88
-  const R = p / (2 * Math.sin(PI / z))
-  const rings: THREE.BufferGeometry[] = []
-  for (let k = 0; k < strands; k++) rings.push(xform(sprocket(z, p, d.roller, w, bore), mat4.t(0, 0, (k - (strands - 1) / 2) * d.transverse)))
-  const hubR = Math.min(R - d.roller, Math.max(bore * 2.2, R * 0.35))
-  const hubL = (strands - 1) * d.transverse + w + 0.03
-  const hub = xform(tube(hubR, bore, hubL, 32), mat4.c(mat4.t(0, 0, -0.012), along))
-  const key = xform(cylinder(bore * 0.3, hubL, 8), mat4.c(mat4.t(0, bore, -0.012), along))
-  return merge(...rings, hub, key)
-}
+/** Chain and sprocket geometry: the shared parts library's (src/parts/lib/elements.ts). */
+export { linkPlate }
+export const chainGeometry = rollerChain
+export const sprocketGeometry = chainSprocket
 
 const INFO = {
   chain: { summary: 'Roller chain: alternate inner (roller) links and outer (pin) links.', role: 'Transmits power without slip, compactly; needs lubrication, is noisier and dearer than a belt.' },

@@ -157,3 +157,68 @@ export const PROFILES = {
   /** narrow tine slot (chisel / subsoiler / planter opener) */
   slot: (depth: number, width: number) => (dz: number) => (Math.abs(dz) < width / 2 ? -depth : Math.abs(dz) < width ? depth * 0.15 : NaN),
 }
+
+/* ------------------------------ tyre ruts (appended) ------------------------------ */
+
+export interface TyrePrintOpts {
+  /** wheel slip 0…1: deepens nothing here, but smears the lug pattern out */
+  slip?: number
+  /** lug pitch along the travel (m); 0 = no lugs. Lugs need cells ≤ pitch/5 to show. */
+  lugPitch?: number
+  /** lugs as a forward-pointing chevron (R-1 tractor tyre) */
+  chevron?: boolean
+  /** displaced soil pushed up beside the rut, as a fraction of the rut depth */
+  berm?: number
+  compaction?: number
+}
+
+/**
+ * Press one tyre contact patch into the soil: a flat-bottomed U across the tread, lug bars
+ * imprinted in a ground-fixed pattern (so repeated stamps line up), and low berms of displaced
+ * soil at the sides. `h` is the heading (forward = (cos h, 0, −sin h)). Ruts only get deeper;
+ * berms only rise on ground that is not already part of a rut.
+ */
+export function pressTyre(g: SoilGrid, x: number, z: number, h: number, halfLength: number, halfWidth: number, depth: number, o: TyrePrintOpts = {}) {
+  if (depth <= 0) return
+  const ch = Math.cos(h)
+  const sh = Math.sin(h)
+  const reach = Math.hypot(halfLength, halfWidth * 1.6)
+  const i0 = Math.max(0, Math.floor((x - reach - g.x0) / g.cell))
+  const i1 = Math.min(g.nx - 1, Math.ceil((x + reach - g.x0) / g.cell))
+  const k0 = Math.max(0, Math.floor((z - reach - g.z0) / g.cell))
+  const k1 = Math.min(g.nz - 1, Math.ceil((z + reach - g.z0) / g.cell))
+  const pitch = o.lugPitch ?? 0
+  const lugs = pitch > 0 && g.cell <= pitch / 5
+  const lugAmp = lugs ? 0.35 * depth * Math.max(0, 1 - (o.slip ?? 0) / 0.3) : 0
+  const berm = (o.berm ?? 0.25) * depth
+  const comp = o.compaction ?? 0.8
+  for (let k = k0; k <= k1; k++) {
+    const cz = g.z0 + k * g.cell
+    for (let i = i0; i <= i1; i++) {
+      const cx = g.x0 + i * g.cell
+      const dx = cx - x
+      const dz = cz - z
+      const a = dx * ch - dz * sh // along the travel
+      const c = dx * sh + dz * ch // across, + = right
+      if (Math.abs(a) > halfLength) continue
+      const j = idx(g, i, k)
+      const u = Math.abs(c) / halfWidth
+      if (u <= 1) {
+        let d = depth * (1 - 0.55 * u ** 4)
+        if (lugAmp > 0) {
+          // ground-fixed lug bars: position along the heading in world terms
+          const s = cx * ch - cz * sh - (o.chevron === false ? 0 : Math.abs(c) * 0.7)
+          const f = s / pitch - Math.floor(s / pitch)
+          if (f < 0.32) d += lugAmp
+        }
+        if (g.height[j] > -d) g.height[j] = -d
+        g.compacted[j] = Math.max(g.compacted[j], comp)
+      } else if (u <= 1.6 && berm > 0 && g.compacted[j] < 0.05) {
+        const b = berm * Math.sin(((u - 1) / 0.6) * Math.PI)
+        if (g.height[j] < b) g.height[j] = b
+        g.disturbed[j] = Math.max(g.disturbed[j], 0.3)
+      }
+    }
+  }
+  g.version++
+}

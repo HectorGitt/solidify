@@ -174,6 +174,7 @@ export function Tyre3D() {
           </Part>
           <Part id="rim" name="Rim & wheel disc" material="paintGrey" role="housing" info={{ summary: 'Steel rim and dished centre disc.', role: 'The rim is the part of the wheel that gives metal support to the tyre. The dished disc bolts to the rim lugs; repositioning or reversing it changes the track width.' }} cites={[TT('p4 — rim'), TTS('p13–17 — wheels and tyres')]} explode={[0, -0.3, 0]}>
             <PartMesh geometry={g.rim} />
+            {g.hub ? <PartMesh geometry={g.hub} material="steelDark" /> : null}
           </Part>
           <Part id="arrow" name="Directional arrow" material="paintYellow" role="static" cut={false} info={{ summary: st.reversed ? 'Arrow points BACKWARDS — this tyre is mounted the wrong way round.' : 'Arrow shows forward rotation.', role: 'Directional drive tyres must turn the way the arrow points: the V of the tread points downward when viewed from the front. Reversing the tread damages the bars under heavy pull — only ground-driven implements (planters, spreaders) run the V reversed.', details: 'The arrow is moulded into the sidewall; coloured here for clarity.' }} cites={[TT('p5, Fig 8')]}>
             <group position={[arrowR * Math.sin(arrowPhi), g.hw * 0.97 + 0.008, arrowR * Math.cos(arrowPhi)]} rotation={[0, st.reversed ? arrowPhi : arrowPhi + PI, 0]}>

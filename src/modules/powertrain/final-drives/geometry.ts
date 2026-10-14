@@ -1,11 +1,14 @@
-import { cylinder, mat4, merge, xform, type V2 } from '@/geometry'
-import { bevelGear, bevelPair, hexBolt } from '@/geometry/parts'
-import { axial, casing, internalGear, ringZ, shaftZ, spur } from '../common/geo'
-import { BEVEL, EPI, EPI_RC, EPI_RING_R, SPUR, SPUR_C, stations } from './model'
+import { merge, xform, mat4 } from '@/geometry'
+import { bevelPair } from '@/geometry/parts'
+import { bevelPinion, crownWheel } from '@/parts/lib/driveline'
+import { axleBrakeDisc, diffLockPlates, epicyclicCarrier, epicyclicGears, wheelHub } from '@/parts/lib/finalDrive'
+import { casing, ringZ, shaftZ, shellZ as shell, spur } from '@/parts/lib/shapes'
+import { BEVEL, EPI, EPI_RING_R, SPUR, SPUR_C, stations } from './model'
 
 /**
  * Cheap (no CSG) final-drive geometry in the LOCAL frame of model.ts (half-shaft axis = +Z).
- * Built once on the main thread and cached.
+ * Built once on the main thread and cached. Gears, carrier, hub and brake discs come from the
+ * shared parts library (the same builders as the tractor's MF axle).
  */
 const { PI } = Math
 const rad = (d: number) => (d * PI) / 180
@@ -15,25 +18,12 @@ export const R_PINION = (BEVEL.zPinion * BEVEL.module) / 2
 export const R_CROWN = (BEVEL.zCrown * BEVEL.module) / 2
 export const APEX = { pinion: R_PINION / Math.tan(rad(ANGLES.pinion)), crown: R_CROWN / Math.tan(rad(ANGLES.gear)) }
 
-function ccw(pts: V2[]) {
-  let a = 0
-  for (let i = 0; i < pts.length; i++) a += pts[i][0] * pts[(i + 1) % pts.length][1] - pts[(i + 1) % pts.length][0] * pts[i][1]
-  return a > 0 ? pts : pts.slice().reverse()
-}
-
-/** Hollow revolved shell from an outer (r, z) polyline and a wall thickness (closed ends optional). */
-const shell = (pts: V2[], seg = 64) => axial(ccw(pts), seg)
-
 export function buildFinalGeometry() {
-  const pinion = merge(
-    bevelGear({ teeth: BEVEL.zPinion, module: BEVEL.module, faceWidth: BEVEL.face, pitchAngleDeg: ANGLES.pinion }),
-    xform(cylinder(0.022, 0.24, 24), mat4.c(mat4.t(0, 0, -0.12), mat4.rx(PI / 2))),
-  )
-  const crown = merge(
-    bevelGear({ teeth: BEVEL.zCrown, module: BEVEL.module, faceWidth: BEVEL.face, pitchAngleDeg: ANGLES.gear, bore: 0.09 }),
-    ringZ(0.138, 0.09, -0.016, 0, 72),
-  )
-  const crownBolts = merge(...Array.from({ length: 10 }, (_, k) => xform(hexBolt(0.01, 0.03), mat4.c(mat4.rz((2 * PI * k) / 10), mat4.t(0.112, 0, -0.016), mat4.rx(-PI / 2)))))
+  const p = bevelPinion({ teeth: BEVEL.zPinion, module: BEVEL.module, face: BEVEL.face, pitchAngleDeg: ANGLES.pinion, shaftR: 0.022, shaftLen: 0.24 })
+  const pinion = merge(p.teeth, p.shaft!)
+  const cw = crownWheel({ teeth: BEVEL.zCrown, module: BEVEL.module, face: BEVEL.face, pitchAngleDeg: ANGLES.gear, bore: 0.09, backing: { rOut: 0.138, depth: 0.016 }, bolts: { n: 10, r: 0.112, z: -0.016 } })
+  const crown = merge(cw.teeth, cw.ring!)
+  const crownBolts = cw.bolts!
   // differential cage (detail in the Differential scene), local z axis
   const cage = shell([
     [0.03, -0.09],
@@ -65,9 +55,9 @@ export function buildFinalGeometry() {
     xform(ringZ(0.06, 0.03, -0.37, -0.19, 40), mat4.ry(PI / 2)),
   )
   const halfShaft = (z1: number) => shaftZ(0.022, 0.05, z1, 24)
-  const disc = (r: number, z: number, w = 0.012) => merge(ringZ(r, 0.03, z - w / 2, z + w / 2, 64))
-  const lining = (r: number, z: number, w = 0.012) => merge(ringZ(r - 0.003, r * 0.55, z - w / 2 - 0.003, z - w / 2, 64), ringZ(r - 0.003, r * 0.55, z + w / 2, z + w / 2 + 0.003, 64))
-  const hub = (z: number) => merge(ringZ(0.13, 0.0, z, z + 0.02, 64), ...Array.from({ length: 8 }, (_, k) => xform(cylinder(0.008, 0.05, 12), mat4.c(mat4.rz((2 * PI * k) / 8), mat4.t(0.1, 0, z + 0.035), mat4.rx(PI / 2)))))
+  const disc = (r: number, z: number, w = 0.012) => axleBrakeDisc(r, z, w).disc
+  const lining = (r: number, z: number, w = 0.012) => axleBrakeDisc(r, z, w).lining
+  const hub = wheelHub
   const trumpet = (z0: number, z1: number, r0 = 0.07) => shell([[0.05, z0], [r0 + 0.01, z0], [0.06, z0 + 0.06], [0.06, z1], [0.07, z1], [0.07, z1 + 0.012], [0.05, z1 + 0.012]], 48)
 
   // ---------- straight axle
@@ -94,16 +84,8 @@ export function buildFinalGeometry() {
   }
 
   // ---------- epicyclic sets (Fig 35b outboard, A2.15 inboard)
-  const sunG = spur(EPI.sun, EPI.module, EPI.width, 0.022)
-  const planetG = spur(EPI.planet, EPI.module, EPI.width * 0.95, 0.012)
-  const ringG = internalGear(EPI.ring, EPI.module, EPI.width, EPI_RING_R + 0.022)
-  const carrier = (z: number, toHub: number) =>
-    merge(
-      ringZ(EPI_RC + 0.025, 0.0, z + EPI.width / 2 + 0.002, z + EPI.width / 2 + 0.016, 64),
-      ringZ(EPI_RC + 0.025, 0.026, z - EPI.width / 2 - 0.012, z - EPI.width / 2 - 0.002, 64),
-      ...Array.from({ length: EPI.planets }, (_, k) => xform(shaftZ(0.0115, z - EPI.width / 2 - 0.002, z + EPI.width / 2 + 0.002, 16), mat4.t(EPI_RC * Math.cos((2 * PI * k) / EPI.planets), EPI_RC * Math.sin((2 * PI * k) / EPI.planets), 0))),
-      shaftZ(0.035, z + EPI.width / 2 + 0.016, toHub, 32),
-    )
+  const { sun: sunG, planet: planetG, ring: ringG } = epicyclicGears(EPI)
+  const carrier = (z: number, toHub: number) => epicyclicCarrier(EPI, z, toHub)
   const ep = stations('epicyclic')
   const epiOut = {
     shaft: halfShaft(ep.reduction + EPI.width / 2),
@@ -142,7 +124,7 @@ export function buildFinalGeometry() {
     disc: disc(0.185, mf.brake, 0.01),
     lining: lining(0.185, mf.brake, 0.01),
     brakePiston: ringZ(0.185, 0.12, mf.brake - 0.019, mf.brake - 0.0095, 64),
-    lockPlates: merge(...Array.from({ length: 6 }, (_, k) => ringZ(0.058, 0.032, 0.122 + k * 0.0045, 0.1245 + k * 0.0045, 48))),
+    lockPlates: diffLockPlates(0.122),
     lockPiston: ringZ(0.058, 0.032, 0.15, 0.155, 48),
   }
   return { pinion, crown, crownBolts, cage, centre, straight, spurSet, spurPinion, spurGear, sunG, planetG, ringG, epiOut, mfSet }

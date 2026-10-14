@@ -1,7 +1,7 @@
 import { useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { useSimFrame } from '@/core/sim'
-import { box, cylinder, lathe, merge, mat4, xform } from '@/geometry'
+import { box, lathe, merge, mat4, xform } from '@/geometry'
 import { sprocket } from '@/geometry/parts'
 import { Flow } from '@/render/Flow'
 import { PartLabel } from '@/render/Label'
@@ -9,8 +9,7 @@ import { Part, PartMesh } from '@/render/Part'
 import { PROFILES, stampRun } from '@/render/soil'
 import { createTractorPose } from '@/tractor/Tractor'
 import { FieldGround, FieldRun, makeSoil } from '../_shared/field'
-import { bar, plateXY, rod } from '../_shared/geom'
-import { landWheel, pathRod, shovel, steelWheel } from '../_tillage/parts'
+import { bar, cellPlate, flutedRoller, headstockGeometry, landWheel, pathRod, plantHopper, plateXY, rod, runnerOpener, seedAgitator, shovel, steelWheel } from '@/parts/lib/implements'
 import { Particles } from '../_tillage/three'
 import { C, H, RAISED, live, plantOf, usePlant, type Kind } from './model'
 
@@ -42,9 +41,7 @@ function useDrillGeo(kind: Kind, rows: number, spacing: number, D: number) {
     const partition = fert ? plateXY([[bx - 0.005, 0.3], [bx + 0.005, 0.3], [bx + 0.005, 0.74], [bx - 0.005, 0.74]], Wb - 0.02) : null
     const lid = plateXY([[bx - 0.34, 0.75], [bx + 0.34, 0.75], [bx + 0.34, 0.78], [bx - 0.34, 0.78]], Wb + 0.02)
     const frame = merge(
-      bar([0, 0, -0.45], [0, 0, 0.45], 0.05, 0.05),
-      plateXY([[-0.06, -0.03], [0.05, -0.03], [0.02, 0.66], [-0.04, 0.66]], 0.016, 0.1),
-      plateXY([[-0.06, -0.03], [0.05, -0.03], [0.02, 0.66], [-0.04, 0.66]], 0.016, -0.1),
+      headstockGeometry(),
       bar([0, 0.6, 0], [bx, 0.25, 0], 0.05, 0.05),
       bar([-0.2, 0.05, -Wb / 2], [-0.2, 0.05, Wb / 2], 0.07, 0.07),
       bar([0, 0, 0.3], [-0.2, 0.05, 0.3], 0.05, 0.05),
@@ -52,17 +49,9 @@ function useDrillGeo(kind: Kind, rows: number, spacing: number, D: number) {
       bar([-0.2, 0.05, -Wb / 2], [bx, 0.25, -Wb / 2], 0.05, 0.05),
       bar([-0.2, 0.05, Wb / 2], [bx, 0.25, Wb / 2], 0.05, 0.05),
     )
-    const roller = xform(cylinder(0.03, 0.05, 16), mat4.rx(Math.PI / 2))
-    const flutes: THREE.BufferGeometry[] = []
-    for (let k = 0; k < 8; k++) {
-      const f = box(0.012, 0.012, 0.05)
-      f.translate(0.03 * Math.cos((k * Math.PI) / 4), 0.03 * Math.sin((k * Math.PI) / 4), 0)
-      flutes.push(f)
-    }
-    const fluted = merge(roller, ...flutes)
+    const fluted = flutedRoller()
     const rollers = merge(...zs.map((z) => xform(fluted, mat4.t(0, 0, z))), rod([0, 0, -Wb / 2], [0, 0, Wb / 2], 0.01, 8))
-    const paddle = box(0.08, 0.01, 0.02)
-    const agitator = merge(rod([0, 0, -Wb / 2 + 0.02], [0, 0, Wb / 2 - 0.02], 0.008, 8), ...zs.map((z, i) => xform(paddle, mat4.c(mat4.t(0, 0, z), mat4.rz(i)))))
+    const agitator = seedAgitator(Wb / 2 - 0.02, zs)
     const tubes: THREE.BufferGeometry[] = []
     const openers: THREE.BufferGeometry[] = []
     const curves: THREE.CatmullRomCurve3[] = []
@@ -142,16 +131,12 @@ function usePlanterGeo(rows: number, sp: number, cells: number, D: number) {
   return useMemo(() => {
     const W = rows * sp
     const zs = Array.from({ length: rows }, (_, i) => -W / 2 + sp / 2 + i * sp)
-    const hopper = lathe([[0.06, 0], [0.16, 0.2], [0.16, 0.42], [0.145, 0.42], [0.145, 0.21], [0.05, 0.015]], 32)
-    const ring = lathe([[0.03, 0], [0.1, 0], [0.1, 0.012], [0.03, 0.012]], 40)
-    const notch = box(0.02, 0.014, 0.014)
-    const plate = merge(ring, ...Array.from({ length: cells }, (_, k) => xform(notch, mat4.c(mat4.ry((k * 2 * Math.PI) / cells), mat4.t(0.1, 0.006, 0)))))
-    const opener = plateXY([[0.1, 0.1], [-0.15, 0.1], [-0.2, -0.0], [0.0, 0.0]], 0.02)
+    const hopper = plantHopper()
+    const plate = cellPlate(cells)
+    const opener = runnerOpener()
     const press = landWheel(0.15, 0.08, 'smooth')
     const frame = merge(
-      bar([0, 0, -0.45], [0, 0, 0.45], 0.05, 0.05),
-      plateXY([[-0.06, -0.03], [0.05, -0.03], [0.02, 0.66], [-0.04, 0.66]], 0.016, 0.1),
-      plateXY([[-0.06, -0.03], [0.05, -0.03], [0.02, 0.66], [-0.04, 0.66]], 0.016, -0.1),
+      headstockGeometry(),
       bar([-0.15, 0.05, -W / 2], [-0.15, 0.05, W / 2], 0.1, 0.1),
       bar([0, 0.6, 0], [-0.15, 0.05, 0], 0.05, 0.05),
       ...zs.map((z) => merge(bar([-0.15, 0.05, z + 0.08], [-0.75, -0.1, z + 0.08], 0.03, 0.05), bar([-0.15, 0.05, z - 0.08], [-0.75, -0.1, z - 0.08], 0.03, 0.05))),

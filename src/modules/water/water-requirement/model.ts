@@ -42,16 +42,7 @@ export interface ReqParams {
 export const EXAM_EVENT = { Qsource: 0.175, Qfield: 0.105, hours: 8, areaHa: 2, Qrunoff: 0.05, runoffHours: 3, dHead: 1.8, dTail: 1.2, root: 1.8, whc: 20, depletion: 0.6 }
 export const ILE_IFE = { T: 21.2, p: 8.75, kc: 1.06, RH: 84, Rs: 549, Tmax: 30.8, Tmin: 15.6, E: 540 }
 
-export const DEFAULTS: ReqParams = {
-  etMethod: 'bc',
-  ...ILE_IFE,
-  adjusted: false,
-  ECi: 1.2,
-  ECd: 8,
-  ...EXAM_EVENT,
-  evap: 0.05,
-  speed: 2,
-}
+export const DEFAULTS: ReqParams = { etMethod: 'bc', ...ILE_IFE, adjusted: false, ECi: 1.2, ECd: 8, ...EXAM_EVENT, evap: 0.05, speed: 2 }
 
 interface Store extends ReqParams {
   set: (p: Partial<ReqParams>) => void
@@ -63,18 +54,21 @@ export const useReq = create<Store>((set) => ({ ...DEFAULTS, set: (p) => set(p),
 export function derive(p: ReqParams) {
   const bc = blaneyCriddle({ T: p.T, p: p.p, kc: p.kc, RH: p.adjusted ? p.RH : undefined })
   const jh = jensenHaise({ T: p.T, Rs: p.Rs, Tmax: p.Tmax, Tmin: p.Tmin, E: p.E })
+  /** monthly B–C value spread over a 31-day month (July in the worked problem) */
   const etDay = p.etMethod === 'bc' ? bc.ET / 31 : jh.ETmm
   const ev = surfaceEvent({ Qsource: p.Qsource, Qfield: p.Qfield, hours: p.hours, area: p.areaHa * 1e4, Qrunoff: p.Qrunoff, runoffHours: p.runoffHours, dHead: p.dHead, dTail: p.dTail, root: p.root, whc: p.whc / 100, depletion: p.depletion })
   const LR = leachingRequirement(p.ECi, p.ECd)
-  // water beneficially used: stored water plus deep percolation up to the leaching need
+  // beneficially used: stored water plus deep percolation up to the leaching need
   const leach = Math.min(ev.deep, LR * ev.Wd)
   const Wu = ev.Ws + leach
-  // consumptive use between irrigations = the root-zone deficit that is refilled; net depletion adds deep percolation and evaporation
+  // consumptive use between irrigations = the refilled deficit; net depletion adds deep percolation and evaporation
   const Wcu = Math.min(ev.Ws, ev.Wn)
   const evapLoss = p.evap * ev.Wd
   const WdNet = Wcu + ev.deep + evapLoss
-  const interval = (p.whc / 100) * p.root * p.depletion * 1000 / Math.max(0.1, etDay)
-  return { bc, jh, etDay, ev, LR, leach, Wu, Eu: Wu / ev.Wd, Wcu, WdNet, Ecu: Wcu / WdNet, evapLoss, interval }
+  /** taw: total available water in the root zone, mm */
+  const taw = (p.whc / 100) * p.root * 1000
+  const interval = (taw * p.depletion) / Math.max(0.1, etDay)
+  return { bc, jh, etDay, ev, LR, leach, Wu, Eu: Wu / ev.Wd, Wcu, WdNet, Ecu: Wcu / WdNet, evapLoss, taw, interval }
 }
 
 /* ------------------------------ live ------------------------------ */

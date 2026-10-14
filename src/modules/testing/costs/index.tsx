@@ -15,7 +15,7 @@ const scene: SceneDef = {
   camera: overview,
   follow: 'tractor',
   extent: 90,
-  floorY: 0,
+  floorY: -0.2,
   hatchScale: 0.6,
   timeScale: 1,
   cutPresets: [

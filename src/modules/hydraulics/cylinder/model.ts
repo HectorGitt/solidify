@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { cite } from '@/content/citations'
 import { cylinder, ramSizing, strokeTime } from '@/physics/hydraulics'
+import { DC_VALVE } from '@/parts/lib/hydraulics'
 
 /** The two AEE502 marking guides that carry the hydraulics questions. */
 export const MG1617 = (where?: string) => cite('AEE502', 'AEE 502-2016-2017- Marking Guide-draft-new.docx', where)
@@ -125,4 +126,4 @@ export interface LiveCyl {
 export const live: LiveCyl = { x: 0, phase: 'holding', v: 0, pCap: 0, pRod: 0, qIn: 0, qOut: 0, valve: 0 }
 
 /** Direction-control valve (4-port, 3-position, closed centre) placed beside the cylinder. */
-export const VALVE = { x: -0.15, h: 0.15, portA: -0.02, portB: 0.04, portP: 0.01, portT: -0.05, shift: 0.015 }
+export const VALVE = { x: -0.15, ...DC_VALVE }

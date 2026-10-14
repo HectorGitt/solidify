@@ -1,5 +1,6 @@
 import * as THREE from 'three'
 import { box, csg, cylinder, extrude, extrudeTwisted, gear, helixSpring, lathe, mat4, merge, tube, xform, type CsgOp, type V2 } from '@/geometry'
+import { flywheel as libFlywheel } from '@/parts/lib/engine'
 import { CRANK_Y, DR, GOV, GY, OB } from './model'
 
 const { PI } = Math
@@ -140,10 +141,14 @@ function engineBlock() {
 
 function crankParts() {
   const shaft = xform(cylinder(0.02, 0.46, 32), mat4.c(at(0.33, 0), alongX))
-  const flywheel = xform(lathe([[0.02, 0], [0.15, 0], [0.15, 0.045], [0.125, 0.045], [0.115, 0.018], [0.05, 0.018], [0.045, 0.03], [0.02, 0.03]], 96), mat4.c(at(0.38, 0), alongX))
+  // library flywheel (with its starter ring gear), flat face at x = 0.38, disc towards +X
+  const fw = libFlywheel({ r: 0.15, width: 0.045, boreR: 0.02 })
+  const onX = mat4.c(at(0.38, 0), mat4.ry(-PI / 2))
+  const flywheel = xform(fw.disc, onX)
+  const ring = xform(fw.ring, onX)
   const drum = xform(lathe([[0.02, 0], [0.085, 0], [0.085, 0.045], [0.078, 0.045], [0.078, 0.008], [0.02, 0.008]], 72), mat4.c(at(0.48, 0), alongX))
   const crankGear = xform(gear({ teeth: 30, module: 0.003, width: 0.02, bore: 0.02 }), mat4.ry(PI / 2))
-  return { shaft: merge(shaft, flywheel), drum, crankGear }
+  return { shaft: merge(shaft, flywheel), ring, drum, crankGear }
 }
 
 /** Prony-type brake on the drum: shoes, arm along +Z and a hanging unit weight (scaled with the load). */
@@ -281,6 +286,7 @@ export function buildStatic() {
     dryDust: dr.dust,
     block: engineBlock(),
     crank: cr.shaft,
+    flywheelRing: cr.ring,
     drum: cr.drum,
     crankGear: cr.crankGear,
     brake: br.brake,

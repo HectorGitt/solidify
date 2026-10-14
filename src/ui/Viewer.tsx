@@ -1,5 +1,8 @@
 import { useEffect, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { ChallengeHud, ChallengeMenu } from '@/challenges/ChallengeHud'
+import { challengesFor } from '@/challenges/registry'
+import { useChallenge } from '@/challenges/store'
 import { useSim } from '@/core/sim'
 import { findModule } from '@/modules/catalog'
 import type { SceneDef } from '@/modules/types'
@@ -14,6 +17,17 @@ import { PartsTree } from './PartsTree'
 import { Stage } from './Stage'
 import { Toolbar } from './Toolbar'
 import { TourPlayer, useTour } from './TourPlayer'
+import { restoreCamera, useTrail } from './trail'
+import { active, useFade } from './navigate'
+import { describeContext } from '@/content/context'
+import { SeenIn } from './SeenIn'
+import { ComparePanel } from './Compare'
+import { dropInside, exitInside, useInside } from './inside'
+import { TelemetryTag } from './TelemetryTag'
+import { PowerPath, PowerPathButton } from './PowerPath'
+import { WholeButton, WholePanel } from './WholePanel'
+import { useParts } from '@/parts/registry'
+import { focusPart } from './camera'
 import { onSceneReady } from '@/study/bridge'
 import { SceneMark } from '@/study/ui/badges'
 import { StudyLinks } from '@/study/ui/StudyShell'
@@ -43,6 +57,16 @@ export function Viewer() {
   const academic = useAcademic()
   const startTour = useTour((s) => s.start)
   const stopTour = useTour((s) => s.stop)
+  const [search, setSearch] = useSearchParams()
+  const [notice, setNotice] = useState<string | null>(null)
+  const [power, setPower] = useState(false)
+  const fade = useFade((s) => s.fade)
+  useEffect(() => {
+    if (!notice) return
+    const t = window.setTimeout(() => setNotice(null), 6000)
+    return () => window.clearTimeout(t)
+  }, [notice])
+  const challengeId = search.get('challenge')
 
   useEffect(() => {
     setLeftOpen(wide)
@@ -53,7 +77,9 @@ export function Viewer() {
     let alive = true
     setScene(null)
     setError(null)
+    setPower(false)
     stopTour()
+    useChallenge.getState().stop()
     if (!entry?.load) return
     entry
       .load()
@@ -67,17 +93,80 @@ export function Viewer() {
         v.resetView()
         v.setPresets(def.cutPresets ?? DEFAULT_CUT_PRESETS)
         v.applyPreset(def.defaultPreset ?? (def.cutPresets ?? DEFAULT_CUT_PRESETS)[0].id)
+        // no default preset: open whole (the first preset stays selected for the cut button)
+        if (def.defaultPreset === undefined) v.setCut({ enabled: false })
         useSim.setState({ playing: true, timeScale: def.timeScale ?? 1 / 50, time: 0 })
         def.reset?.()
         onSceneReady(entry?.id ?? def.id, def)
         setScene(def)
+        const route = `${mod?.id}/${entry?.id}`
+        active.scene = def
+        dropInside()
+        active.route = route
+        // arriving from another scene: carried-over live values, and the part to select
+        const arrival = useTrail.getState().consumeArrival(route)
+        if (arrival?.context && def.fromContext) {
+          const p = def.fromContext(arrival.context)
+          if (p && Object.keys(p).length) {
+            def.applyParams?.(p)
+            setNotice(`Carried over: ${describeContext(arrival.context)}`)
+          }
+        }
+        if (arrival?.selectName) {
+          const name = arrival.selectName
+          window.setTimeout(() => {
+            const hit = Object.values(useParts.getState().parts).find((x) => x.name === name)
+            if (hit) {
+              useView.getState().select(hit.id)
+              focusPart(hit.id)
+            }
+          }, 450)
+        }
+        window.setTimeout(() => useFade.getState().set(0), 120)
+        // coming back up a drill-down trail: put the camera and selection back
+        const stop = useTrail.getState().consumeRestore(route)
+        if (stop) {
+          window.setTimeout(() => {
+            restoreCamera(stop.camera)
+            if (stop.selected) useView.getState().select(stop.selected)
+          }, 350)
+        }
         document.title = `${def.title} · Solidify`
       })
-      .catch((e: unknown) => alive && setError(String(e)))
+      .catch((e: unknown) => {
+        useFade.getState().set(0)
+        if (alive) setError(String(e))
+      })
     return () => {
       alive = false
     }
   }, [entry, stopTour])
+
+  // a challenge link (#/m/…?challenge=id) starts it once the scene is ready
+  useEffect(() => {
+    if (!scene || !challengeId || !entry) return
+    let alive = true
+    challengesFor(mod?.id ?? '', entry.id).then((list) => {
+      const c = list.find((x) => x.id === challengeId)
+      if (!alive || !c) return
+      useChallenge.getState().start(c, scene.applyParams)
+      useSim.setState({ playing: true })
+      setSearch({}, { replace: true })
+    })
+    return () => {
+      alive = false
+    }
+  }, [scene, challengeId, entry, mod?.id, setSearch])
+
+  // leaving the viewer: no active scene for search / drill-down to come back to
+  useEffect(
+    () => () => {
+      active.scene = null
+      dropInside()
+      active.route = ''
+    },
+    [],
+  )
 
   // keyboard shortcuts
   useEffect(() => {
@@ -139,10 +228,20 @@ export function Viewer() {
           ))}
         </select>
         <div className="ml-auto flex items-center gap-1.5">
+          <button
+            onClick={() => window.dispatchEvent(new Event('solidify:search'))}
+            className="hidden items-center gap-1.5 rounded-md border border-line-2 px-2 py-1 text-[12px] text-mute hover:text-ink md:flex"
+            title="Search every part and scene (Ctrl/⌘ K)"
+          >
+            <Icon.target width={13} height={13} /> Search parts <kbd className="rounded border border-line-2 px-1 text-[10px]">Ctrl K</kbd>
+          </button>
+          {scene ? <WholeButton /> : null}
+          {scene ? <PowerPathButton onStart={() => setPower(true)} /> : null}
           <StudyLinks compact className="hidden lg:flex" />
           <div className="hidden md:block">
             <AudienceSwitch compact />
           </div>
+          {scene && entry ? <ChallengeMenu moduleId={mod.id} sceneId={entry.id} scene={scene} /> : null}
           {scene?.tour?.length ? (
             <button
               onClick={() => (tourActive ? stopTour() : startTour())}
@@ -161,6 +260,13 @@ export function Viewer() {
         </div>
       </header>
 
+      <TrailBar
+        current={entry?.title ?? ''}
+        onBack={(route) => {
+          useFade.getState().set(1)
+          window.setTimeout(() => navigate(`/m/${route}`), 220)
+        }}
+      />
       <div className="relative flex min-h-0 flex-1">
         {leftOpen ? (
           <aside className={`${wide ? 'relative' : 'absolute inset-y-0 left-0 z-20 shadow-2xl'} flex w-64 shrink-0 flex-col border-r border-line bg-panel`}>
@@ -206,6 +312,8 @@ export function Viewer() {
             <div className="absolute inset-0 grid place-items-center text-[13px] text-mute">{entry?.load ? 'Building the model…' : 'This scene is coming soon.'}</div>
           ) : null}
           {error ? <div className="absolute inset-0 grid place-items-center text-danger">{error}</div> : null}
+          {/* dive-in transition between scenes */}
+          <div className="pointer-events-none absolute inset-0 z-30 bg-bg transition-opacity duration-300" style={{ opacity: fade }} />
           {scene ? (
             <>
               {wide || !tourActive ? (
@@ -216,6 +324,26 @@ export function Viewer() {
               <div className="pointer-events-none absolute bottom-16 left-3 z-10">
                 <TourPlayer scene={scene} />
               </div>
+              {power ? null : <TelemetryTag />}
+              {power ? (
+                <div className="pointer-events-none absolute inset-x-0 bottom-16 z-20 flex justify-center">
+                  <PowerPath onClose={() => setPower(false)} />
+                </div>
+              ) : null}
+              <div className="pointer-events-none absolute right-3 top-3 z-10">
+                <ChallengeHud />
+              </div>
+              <InsidePill />
+              <WholePanel />
+              {notice ? (
+                <div className="pointer-events-auto absolute left-1/2 top-3 z-20 -translate-x-1/2 rounded-full border border-accent/40 bg-panel/95 px-3 py-1 text-[12px] text-ink shadow-xl">
+                  <span className="text-accent">↳ </span>
+                  {notice}
+                  <button className="ml-2 text-dim hover:text-ink" onClick={() => setNotice(null)} aria-label="Dismiss">
+                    ×
+                  </button>
+                </div>
+              ) : null}
               <div className="pointer-events-none absolute inset-x-0 bottom-3 z-10 flex justify-center">
                 <Toolbar scene={scene} />
               </div>
@@ -228,16 +356,83 @@ export function Viewer() {
             <div className="border-b border-line px-4 py-3">
               <h1 className="text-[15px] font-semibold leading-snug text-ink">{scene.title}</h1>
               <p className="mt-1 text-[12.5px] leading-relaxed text-mute">{scene.summary}</p>
+              {mod && entry ? <SeenIn route={`${mod.id}/${entry.id}`} /> : null}
               {academic && entry?.exam ? (
                 <div className="mt-2">
                   <Badge tone="warn">Frequently examined</Badge>
                 </div>
               ) : null}
             </div>
-            <div className="min-h-0 flex-1 overflow-y-auto">{scene.Panel ? <scene.Panel /> : null}</div>
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              <ComparePanel key={scene.id} scene={scene} />
+              {scene.Panel ? <scene.Panel /> : null}
+            </div>
           </aside>
         ) : null}
       </div>
+    </div>
+  )
+}
+
+/** While looking inside a part in place: what you are in, and the way back out. */
+function InsidePill() {
+  const name = useInside((s) => s.name)
+  const id = useInside((s) => s.id)
+  const loading = useInside((s) => s.loading)
+  const mode = useInside((s) => s.mode)
+  if (!id || mode === 'whole') return null
+  return (
+    <div className="pointer-events-auto absolute bottom-20 left-1/2 z-20 flex -translate-x-1/2 items-center gap-2 whitespace-nowrap rounded-full border border-accent/40 bg-panel/95 py-1 pl-3 pr-1 text-[12px] text-ink shadow-xl">
+      <span>
+        Inside the <b>{name.toLowerCase()}</b> <span className="text-dim">{loading ? '· building it…' : '· slow motion · click any part'}</span>
+      </span>
+      <button onClick={exitInside} className="rounded-full bg-accent px-2.5 py-0.5 font-medium text-accent-ink hover:brightness-110">
+        Back
+      </button>
+    </div>
+  )
+}
+
+/** Drill-down breadcrumbs: where you came from, and the way back. */
+function TrailBar({ current, onBack }: { current: string; onBack: (route: string) => void }) {
+  const stops = useTrail((s) => s.stops)
+  const back = useTrail((s) => s.back)
+  const clear = useTrail((s) => s.clear)
+  if (!stops.length) return null
+  const last = stops[stops.length - 1]
+  return (
+    <div className="flex h-9 shrink-0 items-center gap-1.5 overflow-x-auto border-b border-line bg-panel-2/60 px-2 text-[12px]">
+      <button
+        onClick={() => {
+          const s = back()
+          if (s) onBack(s.route)
+        }}
+        className="flex shrink-0 items-center gap-1 rounded-md border border-accent/40 px-2 py-0.5 font-medium text-accent hover:bg-accent/10"
+      >
+        <Icon.back width={13} height={13} /> Back to {last.title}
+      </button>
+      <nav aria-label="Drill-down trail" className="flex min-w-0 items-center gap-1 text-mute">
+        {stops.map((s, i) => (
+          <span key={i} className="flex shrink-0 items-center gap-1">
+            <button
+              onClick={() => {
+                const st = back(i)
+                if (st) onBack(st.route)
+              }}
+              className="rounded px-1 hover:bg-panel-3 hover:text-ink"
+              title={s.via ? `Opened from: ${s.via}` : undefined}
+            >
+              {s.title}
+            </button>
+            <span className="text-dim">›</span>
+            {s.via ? <span className="text-dim">{s.via} ›</span> : null}
+          </span>
+        ))}
+        <span className="shrink-0 font-medium text-ink">{current}</span>
+      </nav>
+      <button onClick={clear} aria-label="Clear the trail" className="ml-auto grid h-6 w-6 shrink-0 place-items-center rounded text-dim hover:bg-panel-3 hover:text-ink">
+        <Icon.close width={12} height={12} />
+      </button>
     </div>
   )
 }

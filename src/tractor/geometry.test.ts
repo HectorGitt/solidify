@@ -39,16 +39,21 @@ function volume(g: THREE.BufferGeometry) {
 }
 
 
+/** every geometry in the build, nested groups (detail, cab) flattened to "group.name" */
+function flatten(o: Record<string, unknown>, prefix = ''): [string, THREE.BufferGeometry][] {
+  return Object.entries(o).flatMap(([k, v]) => (v instanceof THREE.BufferGeometry ? [[prefix + k, v] as [string, THREE.BufferGeometry]] : flatten(v as Record<string, unknown>, prefix + k + '.')))
+}
+
 describe('shared tractor geometry', () => {
-  const G = buildTractorGeometry()
-  for (const [name, g] of Object.entries(G)) {
+  const G = flatten(buildTractorGeometry())
+  for (const [name, g] of G) {
     it(`${name} is closed and outward-facing`, () => {
       expect(openEdges(g)).toBe(0)
       expect(volume(g)).toBeGreaterThan(0)
     })
   }
   it('stays inside the triangle budget (≈150k per scene)', () => {
-    const tris = Object.values(G).reduce((n, g) => n + g.getAttribute('position').count / 3, 0)
-    expect(tris).toBeLessThan(120_000)
+    const tris = G.reduce((n, [, g]) => n + g.getAttribute('position').count / 3, 0)
+    expect(tris).toBeLessThan(140_000)
   })
 })

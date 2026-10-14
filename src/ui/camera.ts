@@ -6,6 +6,16 @@ import { partObjects } from '@/parts/registry'
 let controls: CameraControlsImpl | null = null
 
 export let trackedPartId: string | null = null
+export let isRecording = false
+
+/** keep the camera on a part as it moves (null stops) */
+export function setTracked(id: string | null) {
+  trackedPartId = id
+}
+
+export function setIsRecording(v: boolean) {
+  isRecording = v
+}
 
 export function setCameraControls(c: CameraControlsImpl | null) {
   if (controls) controls.removeEventListener('controlstart', onUserControl)

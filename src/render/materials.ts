@@ -247,6 +247,8 @@ export interface MaterialOptions {
   intersection: boolean
   /** override base colour (e.g. gas temperature) — creates an uncached material */
   color?: string
+  /** system colour mixed into the base colour (colour-by-system views) */
+  tint?: string
 }
 
 function baseMaterial(def: MaterialDef, highlight: Highlight) {
@@ -274,11 +276,20 @@ function baseMaterial(def: MaterialDef, highlight: Highlight) {
 
 export function getMaterial(key: MaterialKey, opts: MaterialOptions): THREE.Material {
   const def: MaterialDef = MATERIALS[key]
-  const cacheKey = `${key}|${opts.variant}|${opts.highlight}|${opts.intersection ? 'I' : 'U'}`
+  const cacheKey = `${key}|${opts.variant}|${opts.highlight}|${opts.intersection ? 'I' : 'U'}|${opts.tint ?? ''}`
   const hit = cache.get(cacheKey)
   if (hit) return hit
 
   const m = baseMaterial(def, opts.highlight)
+  if (opts.tint) {
+    // keep the material's character (metal, rubber…) but read as its system's colour
+    const t = new THREE.Color(opts.tint)
+    m.color.lerp(t, 0.55)
+    if (opts.highlight === 'none') {
+      m.emissive = t
+      m.emissiveIntensity = 0.12
+    }
+  }
   if (opts.variant === 'xray') {
     m.transparent = true
     m.opacity = 0.1

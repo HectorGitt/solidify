@@ -54,7 +54,7 @@ const INFO = {
     role: 'Disc webs fill most of the crankcase, keeping its volume small so the crankcase compression is high enough to push the charge through the transfer port.',
   },
   flywheel: {
-    summary: 'Flywheel with fan vanes and magneto magnet.',
+    summary: 'Flywheel with fan vanes, magneto magnet and starter ring gear.',
     role: 'Comparatively small, because there is a power stroke every revolution. The vanes blow cooling air over the fins and the magnet induces the spark current as it sweeps past the armature.',
   },
   coil: { summary: 'Flywheel-magneto armature (coil).', role: 'Primary and secondary windings on an iron core; the passing magnet induces the high voltage for the plug (see the Ignition scene).' },
@@ -107,7 +107,7 @@ export function TwoStroke3D() {
   const col = useMemo(() => new THREE.Color(), [])
   const coilPos = useMemo(() => {
     const a = (COIL_DEG * PI) / 180
-    return [-0.087 * Math.sin(a), 0.087 * Math.cos(a), FLYWHEEL_Z - 0.009] as [number, number, number]
+    return [-0.089 * Math.sin(a), 0.089 * Math.cos(a), FLYWHEEL_Z - 0.009] as [number, number, number]
   }, [])
   const lead = useMemo(
     () =>
@@ -187,6 +187,7 @@ export function TwoStroke3D() {
               <PartMesh geometry={g.plug.shell} />
               <PartMesh geometry={g.plug.insulator} material="ceramic" />
               <PartMesh geometry={g.plug.centre} material="steelDark" />
+              <PartMesh geometry={g.plug.terminal} material="brass" />
               <PartMesh geometry={g.plug.ground} material="steelDark" />
               <mesh ref={spark} geometry={sparkGeo} material={sparkMat} position={[0, g.plug.sparkY, 0]} visible={false} />
             </Part>
@@ -238,6 +239,7 @@ export function TwoStroke3D() {
             <Part id="flywheel" name="Flywheel, fan & magnet" material="aluminium" info={INFO.flywheel} cites={[...C.l3, SRC.tb509('Fig 7.1 air cooling')]} explode={[0, -0.1, -0.1]}>
               <group position={[0, 0, FLYWHEEL_Z]}>
                 <PartMesh geometry={g.flywheel.disc} />
+                <PartMesh geometry={g.flywheel.ring} material="steelDark" />
                 <PartMesh geometry={g.flywheel.fan} />
                 <group rotation={[0, 0, (MAGNET_DEG * PI) / 180]}>
                   <PartMesh geometry={g.flywheel.magnet} material="paintBlack" />
@@ -248,7 +250,9 @@ export function TwoStroke3D() {
         </Part>
         <Part id="conrod" name="Connecting rod" material="forged" role="moving" info={INFO.rod} explode={[0, -0.04, 0.1]}>
           <group ref={rod}>
-            <PartMesh geometry={g.rod} />
+            <PartMesh geometry={g.rod.body} />
+            <PartMesh geometry={g.rod.bearing} material="bearing" />
+            <PartMesh geometry={g.rod.bush} material="bronze" />
           </group>
         </Part>
         <Part id="piston-assembly" name="Deflector piston" role="moving" material="aluminium" info={INFO.piston} cites={[...C.addn, ...C.tb]} explode={[0, 0.08, 0.1]}>

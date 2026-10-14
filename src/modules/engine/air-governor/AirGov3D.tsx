@@ -211,6 +211,7 @@ export function AirGov3D() {
         <Part id="crankshaft" name="Crankshaft, gear & flywheel" material="forged" role="moving" info={INFO.engine} cites={C.gov}>
           <group ref={crankRef} position={[0, CRANK_Y, 0]}>
             <PartMesh geometry={g.crank} material="castIron" />
+            <PartMesh geometry={g.flywheelRing} material="steelDark" />
             <PartMesh geometry={g.drum} material="steelDark" />
             <PartMesh geometry={g.crankGear} material="steelDark" position={[GOV.gearX, 0, 0]} />
           </group>

@@ -1,7 +1,7 @@
 import * as THREE from 'three'
-import { finalize, merge, type V2 } from '@/geometry'
-import { rim } from '@/geometry/parts'
+import { finalize, mat4, merge, xform, type V2 } from '@/geometry'
 import type { TyreSize } from '@/physics/tyres'
+import { valveStem, wheelRim } from '@/parts/lib/wheels'
 import { BUILDS, TREADS, type Build, type Tread } from './model'
 import { latheSector } from './sector'
 
@@ -35,6 +35,8 @@ export interface TyreGeo {
   lugs: THREE.BufferGeometry | null
   beads: THREE.BufferGeometry
   rim: THREE.BufferGeometry
+  /** wheel nuts and hub cap on the rim's centre disc */
+  hub: THREE.BufferGeometry | null
   valve: THREE.BufferGeometry
   lugH: number
   /** half section width used for the carcass, and the axial position of the beads */
@@ -190,8 +192,12 @@ export function buildTyre(size: TyreSize, build: Build, tread: Tread, peel: bool
   const yb = C[0].y + 0.004
   const beads = merge(latheSector(beadProfile(yb), 0, 2 * PI, 72), latheSector(beadProfile(-yb), 0, 2 * PI, 72))
 
-  const rimGeo = rim(r0, 2 * (Math.abs(yb) - 0.022), 0.16, 0.06)
-  const valve = finalize(new THREE.CylinderGeometry(0.006, 0.006, 0.05, 12).translate(0, r0 - 0.03, 0).rotateZ(-PI / 2))
+  // rim, disc and hub from the parts library, turned from the wheel frame (axle Z) to the lathe frame (axle Y)
+  const wr = wheelRim(rimSpec(size, Math.abs(yb)))
+  const toLathe = mat4.rx(-PI / 2)
+  const rimGeo = xform(wr.rim, toLathe)
+  const hubGeo = wr.hub ? xform(wr.hub, toLathe) : null
+  const valve = valveStem(r0)
 
   const outerPhi0 = layers[0].phi0
   const outerLen = peel ? 2 * PI - (PEEL_OUTER_END - PEEL_START) : 2 * PI
@@ -199,7 +205,12 @@ export function buildTyre(size: TyreSize, build: Build, tread: Tread, peel: bool
   const lugs = lugGeometry(tread, Rt, hw, lugH, outerPhi0, outerLen, opts.reversed ?? false)
   const inner = -np * plyT - linerT
   const cavity: V2[] = C.map((c, i) => [c.x + Nm[i].x * inner, c.y + Nm[i].y * inner])
-  return { R, W, rimR: r0, layers, lugs, beads, rim: rimGeo, valve, lugH, hw, beadY: Math.abs(yb), cavity }
+  return { R, W, rimR: r0, layers, lugs, beads, rim: rimGeo, hub: hubGeo, valve, lugH, hw, beadY: Math.abs(yb), cavity }
+}
+
+/** Wheel spec (parts library) of the rim a size-coded tyre sits on; beadY = axial position of the beads. */
+export function rimSpec(size: TyreSize, beadY: number) {
+  return { radius: size.overallDiaMm / 2000, width: size.widthMm / 1000, rimRadius: size.rimMm / 2000, rimWidth: 2 * (beadY - 0.022), hubR: 0.16, dish: 0.06 }
 }
 
 /** Short ribbons tracing cords on a layer's outer surface over φ ∈ [phiA, phiB]. */

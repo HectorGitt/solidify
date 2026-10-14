@@ -1,13 +1,13 @@
 import { useMemo, useRef, type ReactNode } from 'react'
 import * as THREE from 'three'
 import { useSimFrame } from '@/core/sim'
-import { box, cylinder, extrude, lathe, merge } from '@/geometry'
+import { box, cylinder, lathe, merge } from '@/geometry'
 import { InstancedPartMesh } from '@/modules/traction/tracks/InstancedPartMesh'
 import { PartLabel } from '@/render/Label'
 import { Part, PartMesh } from '@/render/Part'
 import { PROFILES, createSoil, heightAt, pressPrint, roughen, stampRun } from '@/render/soil'
 import { FieldGround } from '../_shared/field'
-import { bar, plateXY, rod } from '../_shared/geom'
+import { anchorLink, dozerBlade, rootPlough, type DozerAttachment } from '@/parts/lib/implements'
 import { Particles } from '../_appkit/three'
 import { C, PLOT, STAGES, STRIP_HALF, VEG, live, useClearing, type Method, type Stage, type Vegetation } from './model'
 
@@ -173,54 +173,9 @@ function crawlerGeometry() {
   return { frame, body, seat, rops, grouser: merge(grouser.translate(0, 0.035, 0), shoe) }
 }
 
-type Attach = 'straight' | 'pusher' | 'rake' | 'shear' | 'none'
+type Attach = DozerAttachment
 
-function attachmentGeometry(a: Attach) {
-  const W = 3.2
-  const arms = [1, -1].flatMap((s) => [bar([-0.2, 0.42, s * 1.0], [1.95, 0.45, s * 1.1], 0.12, 0.12), rod([0.8, 1.6, s * 0.5], [1.85, 1.0, s * 0.6], 0.06, 12)])
-  if (a === 'none') return { blade: merge(box(0.3, 0.3, 0.3).translate(1.75, 0.6, 0)), extra: null as THREE.BufferGeometry | null }
-  if (a === 'shear') {
-    // V-plan blade, angled; stinger on the leading point splits the tree
-    const pts: [number, number][] = [[0, 0], [0.1, 0], [0.1, 0.9], [0, 0.9]]
-    const half = (s: number) => {
-      const g = extrude(new THREE.Shape(pts.map(([x, y]) => new THREE.Vector2(x, y))), W / 2 + 0.2)
-      g.rotateY(s * (PI / 2 - 0.55))
-      return g.translate(2.6, 0.05, 0)
-    }
-    const stinger = merge(lathe([[0, 0], [0.12, 0.05], [0.04, 0.9], [0, 0.95]], 6).rotateZ(-PI / 2).translate(2.6, 0.35, 0))
-    return { blade: merge(half(1), half(-1), box(0.6, 0.06, 0.4).translate(2.4, 0.05, 0), ...arms), extra: stinger }
-  }
-  // curved mouldboard blade
-  const prof: [number, number][] = []
-  for (let i = 0; i <= 10; i++) {
-    const t = i / 10
-    prof.push([2.1 - 0.25 * Math.sin(t * PI * 0.9), 0.05 + 1.15 * t])
-  }
-  for (let i = 10; i >= 0; i--) prof.push([prof[i][0] - 0.06, prof[i][1]])
-  const mould = plateXY(prof, a === 'rake' ? 0.05 : W, 0).translate(0, 0, a === 'rake' ? 0 : -W / 2)
-  if (a === 'rake') {
-    // slatted rake: vertical curved teeth, soil falls through
-    const teeth: THREE.BufferGeometry[] = []
-    for (let z = -W / 2; z <= W / 2 + 1e-6; z += 0.27) teeth.push(plateXY(prof.map(([x, y]) => [x + 0.1, y] as [number, number]), 0.05, z - 0.025), plateXY([[2.15, 0.05], [2.45, -0.1], [2.15, 0.15]], 0.05, z - 0.025))
-    return { blade: merge(...teeth, box(0.08, 0.1, W + 0.1).translate(1.95, 0.75, 0), box(0.08, 0.1, W + 0.1).translate(1.92, 1.15, 0), ...arms), extra: null }
-  }
-  const blade = merge(mould, ...arms)
-  if (a === 'pusher') {
-    const tines: THREE.BufferGeometry[] = []
-    for (let z = -W / 2 + 0.1; z <= W / 2; z += 0.4) tines.push(plateXY([[2.05, 0.08], [2.45, -0.05], [2.05, 0.3]], 0.06, z - 0.03))
-    const pusher = merge(bar([1.9, 1.2, 0.9], [2.6, 3.4, 0.4], 0.12, 0.12), bar([1.9, 1.2, -0.9], [2.6, 3.4, -0.4], 0.12, 0.12), bar([2.6, 3.4, 0.9], [2.6, 3.4, -0.9], 0.14, 0.14), bar([0.9, 1.9, 0], [2.5, 3.3, 0], 0.1, 0.1))
-    return { blade: merge(blade, ...tines), extra: pusher }
-  }
-  return { blade, extra: null }
-}
-
-function rootPloughGeometry() {
-  const frame = merge(bar([0, 0.6, 0], [-1.6, 0.9, 0], 0.14, 0.14), bar([-1.6, 0.9, 1.3], [-1.6, 0.9, -1.3], 0.14, 0.14), ...[1, -1].map((s) => bar([-0.2, 0.6, 0], [-1.6, 0.9, s * 1.2], 0.1, 0.1)))
-  const standards = merge(...[1, -1].map((s) => plateXY([[-1.45, 0.85], [-1.75, 0.85], [-1.9, -0.4], [-1.6, -0.4]], 0.05, s * 1.0 - 0.025)))
-  // horizontal V blade undercutting the roots, with lifting fins
-  const blade = merge(...[1, -1].map((s) => bar([-1.6, -0.4, 0], [-2.2, -0.36, s * 1.4], 0.25, 0.03)), ...[-0.9, -0.3, 0.3, 0.9].map((z) => plateXY([[-1.85, -0.38], [-2.0, -0.38], [-2.05, -0.25]], 0.02, z)))
-  return { frame, standards, blade }
-}
+const attachmentGeometry = (a: Attach) => dozerBlade(a)
 
 /* ------------------------------ crawler component ------------------------------ */
 
@@ -518,7 +473,7 @@ function Trees() {
 function Chain() {
   const N = 90
   const links = useRef<THREE.InstancedMesh>(null)
-  const geo = useMemo(() => lathe([[0.07, -0.02], [0.1, -0.02], [0.1, 0.02], [0.07, 0.02]], 10).scale(1.4, 1, 1), [])
+  const geo = useMemo(anchorLink, [])
   const o = useMemo(() => new THREE.Object3D(), [])
   const a = useMemo(() => new THREE.Vector3(), [])
   const b = useMemo(() => new THREE.Vector3(), [])
@@ -546,7 +501,7 @@ function Chain() {
 }
 
 function RootPlough() {
-  const g = useMemo(rootPloughGeometry, [])
+  const g = useMemo(rootPlough, [])
   return (
     <Part id="root-plough" name="Root plough" role="static" material="paintYellow" info={INFO.plough} cites={CITE.plough} explode={[-0.6, 0, 0]}>
       <group position={[-1.75, 0, 0]}>

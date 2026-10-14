@@ -35,10 +35,10 @@ const { PI } = Math
  * Static phase of the cam gear so its tooth spaces meet the crank gear's teeth on the line of
  * centres (crank turns +θ, cam −θ/2): φ0 = 1.5γ + π − π/z_cam, γ = direction crank → cam.
  */
-const CAM_GEAR_PHASE = 1.5 * Math.atan2(CAM_Y, CAM_X) + PI - PI / DIM.camTeeth
+export const CAM_GEAR_PHASE = 1.5 * Math.atan2(CAM_Y, CAM_X) + PI - PI / DIM.camTeeth
 
 /** Info for every part (content lives with the scene; citations point back to the notes). */
-const INFO = {
+export const INFO = {
   engine: {
     summary: 'Single-cylinder, four-stroke, direct-injection tractor diesel, 100 mm bore × 124 mm stroke.',
     details: 'Cutaway convention: stationary castings are sectioned and hatched by material; moving parts are left whole so you can watch them work.',

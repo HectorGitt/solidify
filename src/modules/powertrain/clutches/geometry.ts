@@ -1,7 +1,9 @@
 import * as THREE from 'three'
-import { box, cylinder, extrude, mat4, merge, xform, type V2 } from '@/geometry'
-import { axial, coilZ, dogRing, internalSplinePlate, ringZ, shaftZ, spur } from '../common/geo'
-import { DC, DISC_T, SP, WP, WP_STACK } from './dims'
+import { box, cylinder, mat4, merge, xform, type V2 } from '@/geometry'
+import { bellevilleSpring, clutchDisc, clutchPlate, pressurePlate, releaseBearing, releaseLever } from '@/parts/lib/driveline'
+import { flywheel } from '@/parts/lib/engine'
+import { axial, coilZ, dogRing, ringZ, shaftZ, spur } from '@/parts/lib/shapes'
+import { DC, SP, WP, WP_STACK } from './dims'
 
 /** Clutch geometry (worker-safe). Axis Z, flywheel face at z = 0, gearbox towards +Z. */
 
@@ -9,83 +11,25 @@ const { PI } = Math
 
 /* ------------------------------ shared pieces ------------------------------ */
 
-function flywheel() {
-  const body = axial(
-    [
-      [0.045, -0.055],
-      [SP.flyR, -0.055],
-      [SP.flyR, 0.022],
-      [0.172, 0.022],
-      [0.172, 0],
-      [0.07, 0],
-      [0.07, -0.014],
-      [0.045, -0.014],
-    ],
-    96,
-  )
-  const ring = xform(spur(SP.ringTeeth, SP.ringModule, 0.016, SP.flyR - 0.0005, 2), mat4.t(0, 0, -0.047))
-  const crank = merge(axial([[0, -0.075], [0.075, -0.075], [0.075, -0.055], [0, -0.055]], 48), shaftZ(0.045, -0.24, -0.075, 40))
-  return { body, ring, crank }
+/**
+ * Engine flywheel from the parts library (starter ring gear included; 136 teeth at the default
+ * 2.9 mm module on r = 190 mm), its friction face at z = 0. The crank flange meets the boss.
+ */
+function flywheelSet() {
+  const fw = flywheel({ r: SP.flyR, width: 0.055 })
+  const boss = 0.03 * (SP.flyR / 0.15)
+  const crank = merge(axial([[0, -boss - 0.02], [0.075, -boss - 0.02], [0.075, -boss], [0, -boss]], 48), shaftZ(0.045, -0.24, -boss - 0.02, 40))
+  return { body: fw.disc, ring: fw.ring, crank }
 }
 
 /** Friction disc: hub, steel core and a lining on each face. z = 0 is the flywheel face. */
-function disc(Ro: number, Ri: number, hubZ0: number, hubZ1: number, bore: number) {
-  const hub = axial(
-    [
-      [bore, hubZ0],
-      [0.05, hubZ0],
-      [0.05, hubZ1],
-      [bore, hubZ1],
-    ],
-    48,
-  )
-  const core = ringZ(Ro - 0.004, 0.05, SP.lining, SP.lining + SP.core, 96)
-  const linings = merge(ringZ(Ro, Ri, 0, SP.lining, 96), ringZ(Ro, Ri, SP.lining + SP.core, DISC_T, 96))
-  return { hub, core, linings }
-}
+const disc = (Ro: number, Ri: number, hubZ0: number, hubZ1: number, bore: number) => clutchDisc({ Ro, Ri, lining: SP.lining, core: SP.core, bore, hubR: 0.05, hubZ0, hubZ1 })
 
 /** Pressure plate with lugs for the lever struts (z from 0 to thickness). */
-function pressurePlate(rIn: number, rOut: number, t: number, lugs: number, lugR: number) {
-  const plate = ringZ(rOut, rIn, 0, t, 96)
-  const parts = [plate]
-  for (let i = 0; i < lugs; i++) {
-    const a = (2 * PI * i) / lugs
-    parts.push(xform(box(0.02, 0.016, 0.022), mat4.c(mat4.rz(a), mat4.t(lugR, 0, t + 0.011))))
-  }
-  return merge(...parts)
-}
+const pressurePlateL = (rIn: number, rOut: number, t: number, lugs: number, lugR: number) => pressurePlate({ rIn, rOut, t, lugs, lugR })
 
 /** Release lever drawn in its radial plane (X = radius, Z = axial), pivot at the origin. */
-function lever(rIn: number, rPivot: number, rOut: number, zIn: number, zOut: number) {
-  const s = new THREE.Shape()
-  const a = rIn - rPivot
-  const b = rOut - rPivot
-  s.moveTo(a, zIn - 0.005)
-  s.lineTo(a + 0.006, zIn - 0.006)
-  s.lineTo(0, -0.008)
-  s.lineTo(b, zOut - 0.006)
-  s.lineTo(b + 0.004, zOut + 0.004)
-  s.lineTo(0, 0.008)
-  s.lineTo(a, zIn + 0.006)
-  const g = extrude(s, 0.012, { curveSegments: 4 })
-  // extruded along Z in its XY plane → lay the shape's Y onto world Z (radial plane XZ)
-  return xform(g, mat4.rx(PI / 2))
-}
-
-function releaseBearing() {
-  const races = axial(
-    [
-      [SP.bearingIn, 0],
-      [SP.bearingOut, 0],
-      [SP.bearingOut, 0.018],
-      [SP.bearingIn, 0.018],
-    ],
-    64,
-  )
-  const sleeve = ringZ(0.04, 0.033, 0.018, 0.07, 48)
-  const collar = ringZ(0.05, 0.04, 0.03, 0.04, 48)
-  return { races, carrier: merge(sleeve, collar) }
-}
+const lever = (rIn: number, rPivot: number, rOut: number, zIn: number, zOut: number) => releaseLever({ rIn, rPivot, rOut, zIn, zOut })
 
 function bellHousing(zEnd: number) {
   return axial(
@@ -151,19 +95,18 @@ function pedalSet() {
 
 function single() {
   const d = disc(SP.Ro, SP.Ri, -0.012, 0.026, SP.shaftR + 0.001)
-  const pp = pressurePlate(SP.ppIn, SP.ppOut, SP.ppT, SP.levers, SP.leverOut)
+  const pp = pressurePlateL(SP.ppIn, SP.ppOut, SP.ppT, SP.levers, SP.leverOut)
+  // pressed-steel cover, its flange bolted to the flywheel face (z = 0)
   const cover = axial(
     [
-      [0.172, 0.022],
-      [0.19, 0.022],
-      [0.19, 0.028],
-      [0.168, 0.028],
+      [0.162, 0],
+      [0.19, 0],
+      [0.19, 0.006],
+      [0.168, 0.006],
       [0.168, SP.coverZ + 0.006],
       [0.07, SP.coverZ + 0.006],
       [0.07, SP.coverZ],
       [0.162, SP.coverZ],
-      [0.162, 0.028],
-      [0.172, 0.028],
     ],
     96,
   )
@@ -181,7 +124,7 @@ function single() {
 function dual() {
   const primary = disc(DC.pRo, DC.pRi, -0.012, 0.024, SP.shaftR + 0.001)
   const secondary = disc(DC.sRo, DC.sRi, -0.008, 0.026, DC.ptoOut + 0.001)
-  const pp1 = pressurePlate(0.082, 0.145, DC.ppT, 3, 0.145)
+  const pp1 = pressurePlateL(0.082, 0.145, DC.ppT, 3, 0.145)
   const pp2 = ringZ(0.14, 0.076, 0, DC.spT, 96)
   const falseFly = axial(
     [
@@ -196,15 +139,7 @@ function dual() {
   )
   // dished Belleville spring between the secondary pressure plate and the cover
   const z0 = DC.spZ + DC.spT
-  const belleville = axial(
-    [
-      [0.08, z0 + 0.012],
-      [0.138, z0 + 0.001],
-      [0.138, z0 + 0.003],
-      [0.08, z0 + 0.0145],
-    ],
-    96,
-  )
+  const belleville = bellevilleSpring({ rIn: 0.08, rOut: 0.138, rise: 0.011, t: 0.0022, z0: z0 + 0.001 })
   const cover = axial(
     [
       [0.158, DC.ffZ1],
@@ -264,8 +199,9 @@ function ipto() {
     ],
     96,
   )
-  const fr = internalSplinePlate(24, WP.fOut, WP.hubR + 0.003, WP.hubR + 0.0003, WP.plateT)
-  const st = dogRing(30, WP.sOut, WP.drumIn - 0.0005, WP.sIn, WP.steelT)
+  // friction plates splined to the hub, steel inter-plates lugged into the drum
+  const fr = clutchPlate({ rOut: WP.fOut, rIn: WP.hubR + 0.003, t: WP.plateT, n: 24, depth: 0.0027, teeth: 'inner' })
+  const st = clutchPlate({ rOut: WP.sOut, rIn: WP.sIn, t: WP.steelT, n: 30, depth: WP.drumIn - 0.0005 - WP.sOut, teeth: 'outer' })
   const drum = axial(
     [
       [WP.drumIn, 0.014],
@@ -280,15 +216,7 @@ function ipto() {
   const output = shaftZ(0.025, IP.packEnd + 0.01, 0.34, 32)
   const ptoStub = xform(box(0.03, 0.03, 0.06), mat4.t(0, 0, 0.36))
   // dished Belleville spring between piston and pack: returns the piston when the oil is released
-  const belleville = axial(
-    [
-      [0.058, 0.0025],
-      [0.094, 0],
-      [0.094, 0.0015],
-      [0.058, 0.004],
-    ],
-    64,
-  )
+  const belleville = bellevilleSpring({ rIn: 0.058, rOut: 0.094, rise: 0.0025, t: 0.0015, segments: 64 })
   const pad = box(0.06, 0.012, 0.04)
   const valve = merge(xform(box(0.07, 0.07, 0.06), mat4.t(0, 0, 0)), xform(cylinder(0.008, 0.06, 16), mat4.t(0, -0.06, 0)))
   const spool = xform(cylinder(0.011, 0.09, 20), mat4.rz(PI / 2))
@@ -310,8 +238,8 @@ function ipto() {
 
 export function buildStatic() {
   return {
-    flywheel: flywheel(),
-    bearing: releaseBearing(),
+    flywheel: flywheelSet(),
+    bearing: releaseBearing({ rIn: SP.bearingIn, rOut: SP.bearingOut }),
     bell: bellHousing(0.24),
     box: gearboxStub(0.24),
     fork: fork(),

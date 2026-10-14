@@ -1,15 +1,12 @@
 import * as THREE from 'three'
-import { box, cylinder, extrudeTwisted, lathe, mat4, merge, tube, xform, type V2 } from '@/geometry'
-import { rim, torus, tyre } from '@/geometry/parts'
+import { box, cylinder, extrudeTwisted, lathe, mat4, merge, tube, xform } from '@/geometry'
+import { rim, tyre } from '@/geometry/parts'
+import { annulusOil, cylinderBarrel, cylinderCap, oilColumn, pistonRod, rodGland, sealedPiston } from '@/parts/lib/hydraulics'
+import { ballJoint, steeringWheel } from '@/parts/lib/steeringBox'
 import { AX, CYL, GEROTOR, L_AT_LEFT_LOCK, L_AT_RIGHT_LOCK, rotorProfile } from './model'
 
-/**
- * Cheap geometry for the steering scene (no CSG) — built once on the main thread.
- * Lathe solids are along +Y; AXIS_X turns them to lie along +X.
- */
+/** Cheap geometry for the steering scene (no CSG) — built once on the main thread. */
 const { PI } = Math
-const AXIS_X = mat4.rz(-PI / 2)
-const alongX = (p: V2[], seg = 40) => xform(lathe(p, seg), AXIS_X)
 
 /** Layout (metres). */
 export const LAY = {
@@ -27,48 +24,30 @@ export const LAY = {
 
 export const RAM_ROD = L_AT_LEFT_LOCK - 0.05
 export const RAM_BARREL = L_AT_RIGHT_LOCK - RAM_ROD + 0.06
+/** piston width and the gland's depth inside the barrel */
+export const PISTON_W = 0.025
+export const GLAND_IN = 0.02
 
+/**
+ * Double-acting steering cylinder from the shared parts library: barrel with welded cap and eye
+ * (pin 30 mm behind the cap face, at the local origin's −X), sealed piston, rod (from the piston's
+ * rod face), screwed gland at the rod end, and unit oil columns. Axis +X.
+ */
 function cylinderParts() {
   const R = CYL.bore / 2
   const Ro = R + 0.007
-  const barrel = merge(
-    alongX([
-      [0, -0.015],
-      [Ro, -0.015],
-      [Ro, RAM_BARREL],
-      [CYL.rod / 2 + 0.001, RAM_BARREL],
-      [CYL.rod / 2 + 0.001, RAM_BARREL - 0.02],
-      [R, RAM_BARREL - 0.02],
-      [R, 0],
-      [0, 0],
-    ]),
-    xform(xform(cylinder(0.016, 0.04, 20), mat4.rx(PI / 2)), mat4.t(-0.03, 0, 0)),
-  )
-  const piston = alongX([
-    [0, 0],
-    [R - 0.0004, 0],
-    [R - 0.0004, 0.025],
-    [0, 0.025],
-  ])
-  const rod = alongX([
-    [0, 0.025],
-    [CYL.rod / 2, 0.025],
-    [CYL.rod / 2, RAM_ROD],
-    [0, RAM_ROD],
-  ])
-  const unitOil = alongX([
-    [0, 0],
-    [R - 0.0003, 0],
-    [R - 0.0003, 1],
-    [0, 1],
-  ])
-  const annOil = alongX([
-    [CYL.rod / 2 + 0.0003, 0],
-    [R - 0.0003, 0],
-    [R - 0.0003, 1],
-    [CYL.rod / 2 + 0.0003, 1],
-  ])
-  return { barrel, piston, rod, unitOil, annOil }
+  const rodR = CYL.rod / 2
+  const cap = cylinderCap({ Ro, capT: 0.015, eye: { len: 0.031, halfH: 0.016, holeR: 0.008, thick: 0.03 }, segments: 40 })
+  const piston = sealedPiston({ R, width: PISTON_W, grooveD: 0.003, segments: 40 })
+  return {
+    barrel: merge(cylinderBarrel({ R, Ro, length: RAM_BARREL, segments: 40 }), cap.cap),
+    gland: rodGland({ rodR, R, Ro, x0: RAM_BARREL - GLAND_IN, x1: RAM_BARREL, out: 0.01, segments: 40 }),
+    piston: piston.piston,
+    seals: merge(piston.seals, piston.wearRing),
+    rod: pistonRod({ rodR, length: RAM_ROD, start: PISTON_W, eye: false, segments: 40 }).rod,
+    unitOil: oilColumn(R - 0.0003, 40),
+    annOil: annulusOil(rodR, R, 40),
+  }
 }
 
 /** Metering unit: housing shell (cutaway-able), gerotor stator ring with rollers, rotor, spool sleeve. */
@@ -133,13 +112,16 @@ export function buildSteeringParts() {
     stub: xform(cylinder(0.03, AX.wheelZ - AX.kpZ, 24), mat4.rx(PI / 2)),
     bar: box(1, 1, 1),
     rodBar: xform(cylinder(0.5, 1, 14), mat4.t(0, 0.5, 0)),
-    ballJoint: lathe(Array.from({ length: 11 }, (_, i): V2 => [0.022 * Math.sin((PI * i) / 10), -0.022 * Math.cos((PI * i) / 10)]), 16),
+    ballJoint: ballJoint(0.022, 16),
     cyl: cylinderParts(),
     mu: meteringUnit(),
     column: cylinder(0.016, LAY.wheelY - LAY.mu.y - 0.06, 20),
-    rimRing: xform(torus(0.2, 0.014, 12, 64), mat4.rx(PI / 2)),
-    spokes: merge(...[0, 1, 2].map((k) => xform(box(0.2, 0.014, 0.022), mat4.c(mat4.ry((2 * PI * k) / 3), mat4.t(0.1, 0, 0))))),
-    hub: cylinder(0.035, 0.04, 24),
+    ...(() => {
+      // steering wheel turns about Y: the library builds it about X
+      const w = steeringWheel({ R: 0.2, rimR: 0.014, spokeR: 0.009, hubR: 0.035, hubL: 0.04 })
+      const up = mat4.rz(PI / 2)
+      return { rimRing: xform(w.rim, up), spokes: xform(w.spokes, up), hub: xform(w.hub, up) }
+    })(),
     pump: merge(box(0.13, 0.11, 0.1), xform(cylinder(0.065, 0.025, 40), mat4.c(mat4.t(0.09, 0, 0), mat4.rz(PI / 2)))),
     tank: lathe(
       [

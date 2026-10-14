@@ -46,8 +46,8 @@ export const YC = 0.79 - DIM.rail - DIM.carrierR
 export const RAIL_Y = DIM.yb + DIM.rail
 export const ROLLER_Y = RAIL_Y + DIM.rollerR
 
-export type ShoeType = 'standard' | 'open' | 'snow' | 'multi' | 'rubber'
-export type ChainType = 'flush' | 'interlocking'
+export type { ChainType, ShoeType } from '@/parts/lib/wheels'
+import type { ChainType, ShoeType } from '@/parts/lib/wheels'
 export type Misalign = 'aligned' | 'yaw' | 'offset' | 'tilt'
 
 export const SHOES: Record<ShoeType, { label: string; text: string }> = {

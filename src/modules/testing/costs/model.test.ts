@@ -17,6 +17,20 @@ describe('lands plan for the field-capacity scene', () => {
       expect(Math.hypot(b.x - a.x, b.z - a.z)).toBeLessThan(0.26)
     }
   })
+  it('steer sign matches the turn: + (left) when the heading grows', () => {
+    const a: PathPoint = { x: 0, z: 0, dx: 0, dz: 0, r: 0, steer: 0 }
+    const b: PathPoint = { ...a }
+    let turns = 0
+    for (let s = 0; s < plan.length; s += 0.5) {
+      pointAt(plan, s, a)
+      pointAt(plan, s + 0.05, b)
+      if (!a.r || !b.r) continue
+      const dh = Math.atan2(Math.sin(Math.atan2(-b.dz, b.dx) - Math.atan2(-a.dz, a.dx)), Math.cos(Math.atan2(-b.dz, b.dx) - Math.atan2(-a.dz, a.dx)))
+      expect(Math.sign(dh)).toBe(Math.sign(a.steer))
+      turns++
+    }
+    expect(turns).toBeGreaterThan(0)
+  })
   it('distance is monotonic in time and reaches the full length', () => {
     let prev = -1
     for (let t = 0; t <= plan.total; t += plan.total / 500) {

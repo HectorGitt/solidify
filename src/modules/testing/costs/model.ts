@@ -179,7 +179,8 @@ export function pointAt(plan: Plan, s: number, out: PathPoint): PathPoint {
   out.dx = g.dir * Math.cos(phi)
   out.dz = -g.sigma * Math.sin(phi)
   out.r = g.r
-  out.steer = -g.sigma * g.dir
+  // heading atan2(σ·sin φ, dir·cos φ) grows (a left turn) when σ·dir > 0
+  out.steer = g.sigma * g.dir
   return out
 }
 

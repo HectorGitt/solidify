@@ -3,6 +3,7 @@ import { useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { useSimFrame } from '@/core/sim'
 import { box, cylinder, merge } from '@/geometry'
+import { cabMount } from '@/parts/lib/chassis'
 import { PartLabel } from '@/render/Label'
 import { Part, PartMesh } from '@/render/Part'
 import { useView } from '@/render/view'
@@ -56,7 +57,7 @@ function cabGeometry() {
     box(x1 - x0 - 0.08, top - floor - 0.58, 0.01).translate((x0 + x1) / 2, (top + floor + 0.5) / 2, hw),
     box(x1 - x0 - 0.08, top - floor - 0.58, 0.01).translate((x0 + x1) / 2, (top + floor + 0.5) / 2, -hw),
   )
-  const mounts = merge(...[[x0, hw], [x0, -hw], [x1, hw], [x1, -hw]].map(([x, z]) => cylinder(0.05, 0.06, 16).translate(x, floor + 0.47, z)))
+  const mounts = merge(...[[x0, hw], [x0, -hw], [x1, hw], [x1, -hw]].map(([x, z]) => cabMount(0.05, 0.06).translate(x, floor + 0.47, z)))
   return { frame, glass, mounts }
 }
 

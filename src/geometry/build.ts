@@ -35,11 +35,14 @@ export function buildGeometry<T>(builder: string, fallback: () => T): Promise<T>
     p = Promise.resolve(fallback())
   } else {
     p = (async () => {
-      try {
-        const cached = await get(KEY(builder))
-        if (cached) return unpack(cached as Packed) as T
-      } catch (e) {
-        // ignore IDB errors on read
+      // in development the build id lasts as long as the server, so a cache would serve stale shapes
+      if (!import.meta.env.DEV) {
+        try {
+          const cached = await get(KEY(builder))
+          if (cached) return unpack(cached as Packed) as T
+        } catch (e) {
+          // ignore IDB errors on read
+        }
       }
 
       return new Promise<Packed>((resolve, reject) => {
@@ -49,7 +52,7 @@ export function buildGeometry<T>(builder: string, fallback: () => T): Promise<T>
       })
         .then(async (packed) => {
           try {
-            await set(KEY(builder), packed)
+            if (!import.meta.env.DEV) await set(KEY(builder), packed)
           } catch (e) {
             // ignore IDB errors on write
           }

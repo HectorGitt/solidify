@@ -262,7 +262,8 @@ export function PtoTypes3D() {
         {/* ---------------- engine side: flywheel and clutches ---------------- */}
         <Part id="flywheel" name="Flywheel & clutch cover" material="castIron" role="moving" info={INFO.flywheel} cites={C.clutch} explode={[0.12, 0, 0]}>
           <group {...bodyGroup('engine', 'top')}>
-            <PartMesh geometry={G.flywheel} />
+            <PartMesh geometry={G.flywheel.disc} />
+            <PartMesh geometry={G.flywheel.ring} material="steelDark" />
             <Part id="clutch-cover" name="Clutch cover" material="steelDark" cut info={INFO.flywheel} cites={C.clutch}>
               <PartMesh geometry={G.clutch.cover} />
             </Part>
@@ -284,8 +285,8 @@ export function PtoTypes3D() {
             <PartMesh geometry={G.shafts.input} />
             <Part id="main-disc" name="Transmission clutch plate" material="friction" info={INFO.mainDisc} cites={C.clutch} explode={[0.1, 0, 0]}>
               <group ref={refs.mainDisc}>
-                <PartMesh geometry={G.clutch.disc} />
-                <PartMesh geometry={G.clutch.discHubIn} material="steel" position={[0.01, 0, 0]} />
+                <PartMesh geometry={G.clutch.discIn.friction} />
+                <PartMesh geometry={G.clutch.discIn.hub} material="steel" />
               </group>
             </Part>
           </group>
@@ -299,8 +300,8 @@ export function PtoTypes3D() {
               {isLive ? (
                 <Part id="pto-disc" name="PTO clutch plate" material="friction" info={INFO.ptoDisc} cites={C.clutch} explode={[0.06, 0, 0]}>
                   <group ref={refs.ptoDisc}>
-                    <PartMesh geometry={G.clutch.disc} />
-                    <PartMesh geometry={G.clutch.discHubPto} material="steel" position={[-0.015, 0, 0]} />
+                    <PartMesh geometry={G.clutch.discPto.friction} />
+                    <PartMesh geometry={G.clutch.discPto.hub} material="steel" />
                   </group>
                 </Part>
               ) : (

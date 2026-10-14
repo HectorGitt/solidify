@@ -16,7 +16,7 @@ const scene: SceneDef = {
   camera: MOWER_VIEW,
   follow: 'tractor',
   extent: 8,
-  floorY: 0,
+  floorY: -0.45,
   hatchScale: 0.04,
   timeScale: 1 / 8,
   cutPresets: [

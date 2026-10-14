@@ -1,10 +1,10 @@
 import { useMemo } from 'react'
 import type { Citation } from '@/content/citations'
 import { box } from '@/geometry'
+import { gableRoof, walls, type Opening } from '@/parts/lib/structures'
 import type { MaterialKey } from '@/render/materials'
 import { Part, PartMesh } from '@/render/Part'
 import type { PartInfo } from '@/parts/registry'
-import { gableRoof, walls, type Opening } from './build'
 
 /**
  * Simple single-storey building: floor slab, hollow walls with openings and a gable roof
@@ -45,7 +45,7 @@ export function Building({
 }) {
   const g = useMemo(() => {
     const t = Math.min(0.25, Math.max(0.15, w / 60))
-    return { walls: walls(w, d, h, t, openings), floor: box(w, 0.15, d), roof: gableRoof(w, d, pitch, Math.min(0.6, w / 20), 0.1) }
+    return { walls: walls({ w, d, h, t, openings }), floor: box(w, 0.15, d), roof: gableRoof({ span: w, length: d, pitchDeg: pitch, overhang: Math.min(0.6, w / 20), t: 0.1 }) }
   }, [w, d, h, pitch, openings])
   return (
     <Part id={id} name={name} role="housing" material={wallMat} info={info} cites={cites} beyondNotes={beyondNotes} position={position} rotation={[0, rotationY, 0]}>

@@ -18,6 +18,14 @@ export interface PartInfo {
   role?: string
   /** longer notes, construction, materials */
   details?: string
+  /** scenes that show this part in more depth (drill-down); overrides the shared rules */
+  detail?: { route: string; label?: string }[]
+  /** the part can be opened in place ("Look inside"); names what you will see */
+  inside?: string
+  /** direction to look from when inside, in the machine's own frame (default: front, left, above) */
+  insideView?: [number, number, number]
+  /** 'whole': opening this part shows every system of the machine at once */
+  insideMode?: 'part' | 'whole'
 }
 
 export interface PartMeta {

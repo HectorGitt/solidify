@@ -24,6 +24,8 @@ import {
   terminalVelocity,
   troughSection,
   uniformityIndex,
+  coolingLoadKw,
+  plankFreezingTime
 } from './processing'
 
 describe('size reduction laws — RED / Fellows Ch 4', () => {
@@ -132,5 +134,18 @@ describe('layout metrics — HAND Note 4', () => {
     expect(routeLength([[0, 0], [3, 4], [3, 10]])).toBeCloseTo(11, 12)
     expect(flowCrossings([[[0, 0], [2, 2]], [[0, 2], [2, 0]]])).toBe(1)
     expect(flowCrossings([[[0, 0], [4, 0], [4, 2], [0, 2]]])).toBe(0)
+  })
+})
+
+describe('preservation & food kinetics — N536', () => {
+  it('N536 worked example: product cooling load', () => {
+    const m = 90000 / 86400
+    const load = coolingLoadKw(m, 3.2, 3, 225, 1.63, 11)
+    expect(load).toBeCloseTo(263, 0)
+  })
+  it('N536 worked example: Plank freezing time', () => {
+    // 7 cm sphere
+    const tf = plankFreezingTime(1000, 250000, -1.25, -15, 1/6, 0.07, 50, 1/24, 1.2)
+    expect(tf).toBeCloseTo(7335, -1)
   })
 })

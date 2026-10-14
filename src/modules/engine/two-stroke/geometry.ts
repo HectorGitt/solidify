@@ -1,6 +1,7 @@
 import * as THREE from 'three'
 import { box, csg, cylinder, extrude, lathe, mat4, merge, pipe, roundedBox, tube, xform, type CsgOp, type V2 } from '@/geometry'
-import { conRod } from '../multi-cylinder/crank'
+import { conRodOnePiece, crankshaft as libCrankshaft, flywheel as libFlywheel, gasColumn, pistonAssembly, type PistonSpec } from '@/parts/lib/engine'
+import { sparkPlug as libSparkPlug } from '@/parts/lib/electrical'
 import { DIM, HEAD_Y, PORT_Y, SKIRT_TDC } from './model'
 
 /**
@@ -87,61 +88,62 @@ function crankcaseHalves() {
 
 /* ------------------------------ moving parts ------------------------------ */
 
+/** Built-up crank: full-circle disc webs with lightening holes, pressed-in pin, stub shafts. */
 function crankshaft() {
-  const web = xform(cylinder(0.036, 0.01, 56), alongZ)
-  const pin = xform(cylinder(0.0082, 0.0135, 32), mat4.c(mat4.t(0, DIM.crankR, 0), alongZ))
-  const shaftL = xform(cylinder(0.0075, 0.06, 32), mat4.c(mat4.t(0, 0, -0.0465), alongZ))
-  const shaftR = xform(cylinder(0.0075, 0.06, 32), mat4.c(mat4.t(0, 0, 0.0465), alongZ))
-  // lightening holes on the pin side of each full-circle web balance the throw
-  const holes = (z: number) => merge(...[0.021, -0.021].map((x) => xform(cylinder(0.006, 0.02, 24), mat4.c(mat4.t(x, 0.012, z), alongZ))))
-  const webs = [0.0115, -0.0115].map((z) => csg(xform(web, mat4.t(0, 0, z)), [{ op: 'sub', geometry: holes(z) }]))
-  return merge(...webs, pin, shaftL, shaftR)
+  return libCrankshaft({ r: DIM.crankR, pinR: 0.0082, journalR: 0.0075, webT: 0.01, cwR: 0.036, pinLen: 0.013, web: 'disc' }, [{ z: 0, firingDeg: 0 }], 0.05, {
+    outerMainLen: 0.06,
+    nose: null,
+    tail: null,
+  }).geometry
+}
+
+/** Two compression rings, no oil ring (the petroil mist lubricates); pin 12 mm. */
+const PISTON: PistonSpec = {
+  bore: DIM.bore,
+  comp: DIM.pistonComp,
+  skirt: DIM.pistonSkirt,
+  clearance: 0.0002,
+  pinR: 0.006,
+  crownT: 0.006,
+  wall: 0.003,
+  grooves: [
+    [0.0095, 0.0016],
+    [0.0045, 0.0016],
+  ],
+  grooveDepth: 0.0021,
+  bowl: null,
+  slotW: 0.0125,
+  oilRing: false,
 }
 
 function piston() {
-  const Rp = R - 0.0002
-  const top = DIM.pistonComp
-  const bottom = -DIM.pistonSkirt
-  const d = 0.0021
-  const grooves: [number, number][] = [
-    [top - 0.0045, 0.0016],
-    [top - 0.0095, 0.0016],
-  ]
-  const prof: V2[] = [
-    [0, top - 0.006],
-    [Rp - 0.0035, top - 0.0075],
-    [Rp - 0.0028, bottom],
-    [Rp, bottom],
-  ]
-  for (const [gy, w] of grooves) prof.push([Rp, gy - w / 2], [Rp - d, gy - w / 2], [Rp - d, gy + w / 2], [Rp, gy + w / 2])
-  prof.push([Rp, top], [0, top])
-  const body = lathe(prof, 64)
+  const p = pistonAssembly(PISTON)
   // deflector ridge across the crown: steep face towards the transfer port (−X), ramp towards the exhaust
   const s = new THREE.Shape()
   s.moveTo(-0.012, 0)
   s.lineTo(0.012, 0)
   s.lineTo(-0.008, DIM.deflectorH)
   s.lineTo(-0.012, DIM.deflectorH)
-  const deflector = xform(extrude(s, 0.04, { curveSegments: 4 }), mat4.t(0, top - 0.0002, 0))
-  const pin = xform(tube(0.006, 0.0035, 2 * (Rp - 0.0006), 24), alongZ)
-  const rings = merge(...grooves.map(([gy, w]) => lathe([[R - 0.0019, gy - w / 2 + 0.0001], [R - 0.00005, gy - w / 2 + 0.0001], [R - 0.00005, gy + w / 2 - 0.0001], [R - 0.0019, gy + w / 2 - 0.0001]], 64)))
-  return { body, deflector, pin, rings }
+  const deflector = xform(extrude(s, 0.04, { curveSegments: 4 }), mat4.t(0, DIM.pistonComp - 0.0002, 0))
+  return { body: p.body, deflector, pin: p.pin, rings: p.rings.compression }
 }
 
+/** Flywheel magneto: the library flywheel (ring gear for the electric starter) with fan vanes and the magnet. */
 function flywheel() {
-  const disc = lathe([[0.008, 0], [0.068, 0], [0.068, 0.018], [0.06, 0.018], [0.058, 0.006], [0.02, 0.006], [0.016, 0.012], [0.008, 0.012]], 72)
+  const fw = libFlywheel({ r: 0.068, width: 0.018, boreR: 0.0075, ringModule: 0.0015, ringWidth: 0.007 })
   // fan vanes on the outer face (air-cooled engines: the flywheel doubles as the fan, TB ch.7)
   const vanes: THREE.BufferGeometry[] = []
   for (let i = 0; i < 14; i++) {
     const a = (i / 14) * PI * 2
-    vanes.push(xform(box(0.034, 0.012, 0.0025), mat4.c(mat4.ry(-a), mat4.t(0.039, 0.012, 0))))
+    vanes.push(xform(box(0.034, 0.011, 0.0025), mat4.c(mat4.ry(-a), mat4.t(0.039, 0.0125, 0))))
   }
   // vanes stand in the dished outer face, between hub and rim
   const fan = merge(...vanes)
   // flywheel-magneto magnet let into the rim (TB p29: on single-cylinder engines the magneto is built into the flywheel)
-  const magnet = xform(box(0.018, 0.014, 0.006), mat4.t(0, 0.009, 0.0655))
+  const magnet = xform(box(0.018, 0.014, 0.006), mat4.t(0, 0.009, 0.0645))
   return {
-    disc: xform(disc, mat4.rx(-PI / 2)),
+    disc: fw.disc,
+    ring: fw.ring,
     fan: xform(fan, mat4.rx(-PI / 2)),
     magnet: xform(magnet, mat4.rx(-PI / 2)),
   }
@@ -153,16 +155,7 @@ export const PLUG_GAP = 0.0006
 
 function sparkPlug() {
   // local y = 0 at the head face; electrodes below, terminal above
-  const body = lathe([[0.0042, -0.0002], [0.007, -0.0002], [0.007, 0.031], [0.0056, 0.031], [0.0056, 0.0005], [0.0042, 0.0005]], 32)
-  const hex = lathe([[0.0056, 0.031], [0.0105, 0.031], [0.0105, 0.041], [0.0065, 0.0435], [0.0056, 0.0435]], 6)
-  const shell = merge(body, hex)
-  const insulator = lathe([[0.0011, -0.0001], [0.0028, 0.0], [0.004, 0.006], [0.0053, 0.03], [0.0054, 0.0435], [0.0054, 0.066], [0.0035, 0.069], [0.0011, 0.069]], 32)
-  const centre = lathe([[0, -0.0018], [0.0011, -0.0018], [0.0011, 0.07], [0, 0.07]], 16)
-  const terminal = lathe([[0, 0.069], [0.0028, 0.069], [0.0028, 0.077], [0, 0.077]], 16)
-  const tip = -0.0018
-  const g1 = xform(box(0.0016, 0.0024, 0.0024), mat4.t(-0.0049, -0.0012, 0))
-  const g2 = xform(box(0.0062, 0.0014, 0.0024), mat4.t(-0.0024, tip - 0.0006 - PLUG_GAP - 0.0002, 0))
-  return { shell, insulator, centre: merge(centre, terminal), ground: merge(g1, g2), sparkY: tip - PLUG_GAP / 2 }
+  return libSparkPlug({ seat: 0.01, gap: PLUG_GAP })
 }
 
 function magnetoCoil() {
@@ -224,8 +217,8 @@ function tank() {
 
 /* ------------------------------ fluids & flow paths ------------------------------ */
 
-function gasColumn() {
-  return lathe([[0, 0], [R - 0.0003, 0], [R - 0.0003, 1], [0, 1]], 48)
+function gasCol() {
+  return gasColumn(DIM.bore, { clearance: 0.0003, segments: 48 })
 }
 
 export const INLET_FLOW = path([
@@ -286,7 +279,7 @@ export function buildStatic() {
     caseBack: cc.back,
     bearings: merge(...[0.03, -0.03].map((z) => xform(tube(0.0113, 0.0076, 0.011, 32), mat4.c(mat4.t(0, 0, z), alongZ)))),
     crank: crankshaft(),
-    rod: conRod(DIM.rodL, 0.0084, 0.0061, 0.011),
+    rod: conRodOnePiece({ length: DIM.rodL, pinR: 0.0082, gudgeonR: 0.006, width: 0.011 }),
     piston: piston(),
     flywheel: flywheel(),
     plug: sparkPlug(),
@@ -294,7 +287,7 @@ export function buildStatic() {
     induction: induction(),
     exhaust: exhaust(),
     tank: tank(),
-    gas: gasColumn(),
+    gas: gasCol(),
   }
 }
 

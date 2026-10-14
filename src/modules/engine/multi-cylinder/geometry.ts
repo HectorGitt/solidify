@@ -1,5 +1,6 @@
 import * as THREE from 'three'
-import { box, csg, cylinder, extrude, lathe, mat4, merge, pipe, roundedRect, xform, type CsgOp } from '@/geometry'
+import { box, csg, cylinder, extrude, mat4, merge, pipe, roundedRect, xform, type CsgOp } from '@/geometry'
+import { conRod, cylinderLiner, flywheel, gasColumn, injector, pistonAssembly, vPulley, type CrankSpec, type PistonSpec } from '@/parts/lib/engine'
 import { CROWN_TDC, DIM, cylZ, type CylCount } from './model'
 
 /**
@@ -10,7 +11,7 @@ import { CROWN_TDC, DIM, cylZ, type CylCount } from './model'
 const { PI } = Math
 const alongZ = mat4.rx(PI / 2)
 
-export const CRANK = { r: DIM.crankR, pinR: 0.024, journalR: 0.028, webT: 0.016, cwR: 0.062, pinLen: 0.03 }
+export const CRANK: CrankSpec = { r: DIM.crankR, pinR: 0.024, journalR: 0.028, webT: 0.016, cwR: 0.062, pinLen: 0.03 }
 export const LINER_OUT = 0.046
 export const DECK = CROWN_TDC + 0.0012
 export const HEAD_H = 0.07
@@ -19,6 +20,9 @@ export const BARREL_X = 0.078
 export const RAIL_Y = -0.072
 export const BARREL_Y0 = 0.118
 export const INJ_X = 0.012
+/** piston: 80 mm bore, flat crown; gudgeon pin 0.14 × bore */
+export const PISTON: PistonSpec = { bore: DIM.bore, comp: DIM.pistonComp, skirt: DIM.pistonSkirt, clearance: 0.0003, pinR: DIM.bore * 0.14, bowl: null, slotW: 0.029 }
+export const FLYWHEEL_R = 0.16
 
 export const blockLength = (n: number) => n * DIM.pitch + 0.05
 
@@ -138,11 +142,13 @@ export function buildStatic() {
   for (const n of COUNTS) out[n] = { block: block(n), coolant: coolant(n), head: head(n), cover: rockerCover(n), sump: sump(n), oil: oil(n), exhaust: exhaustManifold(n) }
   return {
     byCount: out,
-    liner: lathe([[DIM.bore / 2, 0.128], [LINER_OUT - 0.0002, 0.128], [LINER_OUT - 0.0002, DECK - 0.0002], [DIM.bore / 2, DECK - 0.0002]], 56),
-    injector: lathe([[0, 0], [0.003, 0], [0.004, 0.012], [0.009, 0.02], [0.009, 0.075], [0.012, 0.078], [0.012, 0.1], [0.005, 0.104], [0.005, 0.118], [0, 0.118]], 24),
-    gas: lathe([[0, 0], [DIM.bore / 2 - 0.0003, 0], [DIM.bore / 2 - 0.0003, 1], [0, 1]], 48),
-    flywheel: xform(lathe([[0.03, 0], [0.16, 0], [0.16, 0.04], [0.13, 0.04], [0.12, 0.015], [0.05, 0.015], [0.045, 0.028], [0.03, 0.028]], 96), mat4.rx(-PI / 2)),
-    pulley: xform(lathe([[0.016, 0], [0.065, 0], [0.065, 0.004], [0.052, 0.011], [0.065, 0.018], [0.065, 0.022], [0.016, 0.022]], 64), mat4.rx(PI / 2)),
+    liner: cylinderLiner({ bore: DIM.bore, outer: LINER_OUT, y0: 0.128, y1: DECK - 0.0002, segments: 56 }),
+    injector: injector({ scale: 0.118 / 0.14 }).body,
+    gas: gasColumn(DIM.bore, { clearance: 0.0003, segments: 48 }),
+    flywheel: flywheel({ r: FLYWHEEL_R }),
+    pulley: vPulley({ r: 0.065, bore: 0.016, grooveW: 0.014, grooveDepth: 0.013 }),
+    piston: pistonAssembly(PISTON),
+    rod: conRod({ length: DIM.rodL, pinR: CRANK.pinR, gudgeonR: PISTON.pinR, width: 0.026 }),
   }
 }
 

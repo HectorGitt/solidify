@@ -8,8 +8,8 @@ import { Part, PartMesh } from '@/render/Part'
 import { PROFILES, heightAt, stampRun } from '@/render/soil'
 import { createTractorPose } from '@/tractor/Tractor'
 import { FieldGround, FieldRun, makeSoil, resetSoil, type DriveRun, type StepCtx } from '../_shared/field'
-import { bar, plateXY, plateXZ, rod } from '../_shared/geom'
-import { Particles, PtoDriveline, wheelGeometry } from '../_appkit/three'
+import { aFrameMast, bar, coulterDisc, diggingBlade, elevatorAgitator, elevatorRod, plateXY, rod, roadWheel, slipClutch } from '@/parts/lib/implements'
+import { Particles, PtoDriveline } from '../_appkit/three'
 import { C, DIG, ELEV_LEN, HRAISED, HW, MACHINES, PTO_LOCAL, digger, live, useRoots, type Machine } from './model'
 
 const { PI } = Math
@@ -95,22 +95,11 @@ const INFO = {
 function diggerGeometry(m: Machine) {
   const { tipX, bladeX1, bladeRise, W, elevF, elevR, frameY } = DIG
   const hw = W / 2
-  const blade =
-    m === 'cassava'
-      ? merge(
-          plateXZ([[tipX, 0], [bladeX1, hw * 0.75], [bladeX1 - 0.05, hw * 0.75], [bladeX1 - 0.05, -hw * 0.75], [bladeX1, -hw * 0.75]], 0.016, 0.01),
-          bar([tipX, 0.0, 0], [bladeX1, bladeRise, 0], 0.08, 0.03),
-          plateXY([[bladeX1 + 0.02, 0], [bladeX1 - 0.05, 0], [bladeX1 - 0.05, bladeRise + 0.1], [bladeX1 + 0.08, bladeRise + 0.05]], 0.02, hw * 0.75),
-          plateXY([[bladeX1 + 0.02, 0], [bladeX1 - 0.05, 0], [bladeX1 - 0.05, bladeRise + 0.1], [bladeX1 + 0.08, bladeRise + 0.05]], 0.02, -hw * 0.75 - 0.02),
-        )
-      : merge(...[-1, 1].map((s) => bar([tipX, 0.0, (s * hw) / 2], [bladeX1, bladeRise, (s * hw) / 2], hw, 0.016)))
-  // the blade is pitched: rotate the plate parts so the rear is raised (bar() already slopes)
+  const blade = diggingBlade(m, { tipX, x1: bladeX1, rise: bladeRise, W })
   const sideFrames = [1, -1].map((s) => plateXY([[elevF[0] + 0.05, elevF[1] - 0.08], [elevR[0] - 0.05, elevR[1] - 0.08], [elevR[0] - 0.05, elevR[1] + 0.14], [elevF[0] + 0.05, elevF[1] + 0.14]], 0.012, s > 0 ? hw + 0.02 : -hw - 0.032))
   const elevFrame = merge(...sideFrames, rod([elevR[0] + 0.05, elevR[1], hw + 0.05], [elevR[0] + 0.05, elevR[1], -hw - 0.05], 0.025, 12), rod([elevF[0], elevF[1], hw + 0.05], [elevF[0], elevF[1], -hw - 0.05], 0.02, 12))
   const frame = merge(
-    rod([0, HW, 0.43], [0, HW, -0.43], 0.02, 12),
-    bar([0, HW, 0.38], [0.02, HW + 0.61, 0.04], 0.06, 0.014),
-    bar([0, HW, -0.38], [0.02, HW + 0.61, -0.04], 0.06, 0.014),
+    aFrameMast({ at: [0, HW, 0] }),
     bar([0, HW + 0.1, 0.4], [-1.95, frameY, hw + 0.12], 0.08, 0.08),
     bar([0, HW + 0.1, -0.4], [-1.95, frameY, -hw - 0.12], 0.08, 0.08),
     bar([0.02, HW + 0.6, 0], [-1.2, frameY + 0.05, 0], 0.06, 0.06),
@@ -123,13 +112,13 @@ function diggerGeometry(m: Machine) {
       bar([-0.6, frameY, s * (hw + 0.12)], [DIG.wheelX, DIG.wheelR, s * DIG.wheelZ], 0.05, 0.05),
     ]),
   )
-  const rodGeo = cylinder(0.011, W - 0.02, 8).rotateX(PI / 2)
-  const agitator = merge(...[-0.3, 0.3].map((z) => lathe([[0, -0.012], [0.07, -0.012], [0.07, 0.012], [0, 0.012]], 6).rotateX(PI / 2).scale(1, 1.5, 1).translate(0, 0, z)), cylinder(0.015, W, 10).rotateX(PI / 2))
-  const disc = merge(cylinder(DIG.discR, 0.008, 40).rotateX(PI / 2), cylinder(0.08, 0.1, 16).rotateX(PI / 2))
+  const rodGeo = elevatorRod(W - 0.02)
+  const agitator = elevatorAgitator(W)
+  const disc = coulterDisc(DIG.discR, 0.006, 0.08)
   const gearbox = merge(box(0.22, 0.2, 0.2).translate(-0.55, frameY + 0.18, 0), rod([-0.66, frameY + 0.18, 0], [-1.98, frameY + 0.05, hw + 0.12], 0.012, 6), box(1.4, 0.06, 0.03).translate(-1.3, frameY + 0.12, hw + 0.14))
-  const clutch = merge(cylinder(0.08, 0.04, 24).rotateZ(PI / 2), cylinder(0.05, 0.05, 6).rotateZ(PI / 2).translate(0.05, 0, 0))
+  const clutch = slipClutch()
   const inverter = merge(...[-0.4, -0.15, 0.15, 0.4].map((z) => pipe(new THREE.CatmullRomCurve3([new THREE.Vector3(elevR[0] - 0.02, elevR[1] + 0.02, z), new THREE.Vector3(elevR[0] - 0.35, elevR[1] + 0.15, z), new THREE.Vector3(elevR[0] - 0.6, elevR[1] - 0.1, z * 0.8), new THREE.Vector3(elevR[0] - 0.7, elevR[1] - 0.4, z * 0.6)]), 0.01, 0, 24, 6)))
-  const wheel = wheelGeometry(DIG.wheelR, 0.16)
+  const wheel = roadWheel(DIG.wheelR, 0.16)
   return { blade, elevFrame, frame, rodGeo, agitator, disc, gearbox, clutch, inverter, wheel }
 }
 

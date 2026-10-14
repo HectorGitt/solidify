@@ -201,6 +201,12 @@ export function Landing() {
             <Link to="/about" className="hover:text-ink transition-colors">
               How it works
             </Link>
+            {/* in Study mode the study links (below) already include it */}
+            {academic ? null : (
+              <Link to="/challenges" className="hover:text-ink transition-colors">
+                Challenges
+              </Link>
+            )}
           </nav>
           <StudyLinks compact className="hidden md:flex" />
           <div className="ml-auto flex items-center gap-3">
@@ -249,6 +255,12 @@ export function Landing() {
                 className="inline-flex items-center justify-center gap-2 rounded-xl bg-accent px-6 py-3.5 text-[14.5px] font-semibold text-accent-ink shadow-lg shadow-accent/20 transition-all hover:brightness-110 active:scale-[0.98]"
               >
                 {copy.primary.label} <Icon.chevron width={16} height={16} />
+              </Link>
+              <Link
+                to="/promo"
+                className="inline-flex items-center justify-center gap-2 rounded-xl border border-accent/30 bg-accent/10 px-5 py-3.5 text-[14.5px] font-semibold text-accent backdrop-blur-md transition-all hover:bg-accent/20 active:scale-[0.98]"
+              >
+                <Icon.tour width={16} height={16} /> Watch 30s Promo
               </Link>
               <a
                 href="#systems"

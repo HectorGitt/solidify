@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { cite } from '@/content/citations'
+import { VANE_PUMP } from '@/parts/lib/hydraulics'
 import { gearPumpDisplacementExact, vanePumpDisplacementExact, type GearPumpGeometry, type VanePumpGeometry } from '@/physics/pumps'
 
 export const MG1617 = (where?: string) => cite('AEE502', 'AEE 502-2016-2017- Marking Guide-draft-new.docx', where)
@@ -8,7 +9,7 @@ export const MS1718 = (where?: string) => cite('AEE502', 'AEE 502 -2017-2018-mar
 /** External gear pump drawn: m 3 mm, 12 teeth, 20 mm wide (typical tractor lift pump size). Pump axis along Z. */
 export const GEAR: GearPumpGeometry & { x: number } = { module: 0.003, teeth: 12, width: 0.02, x: -0.11 }
 /** Unbalanced vane pump drawn: ring bore 80 mm, rotor 68 mm, 30 mm wide, 8 vanes 4 mm thick. */
-export const VANE = { x: 0.11, ringR: 0.04, rotorR: 0.034, width: 0.03, vanes: 8, vaneT: 0.004, vaneLen: 0.018 }
+export const VANE = { x: 0.11, ...VANE_PUMP }
 
 export type Source = 'gear' | 'vane' | 'manual'
 

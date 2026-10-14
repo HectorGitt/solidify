@@ -1,7 +1,9 @@
 import { useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { useSimFrame } from '@/core/sim'
-import { box, cylinder, lathe, mat4, merge, xform } from '@/geometry'
+import { box, cylinder, mat4, merge, xform } from '@/geometry'
+import { discSlab, grainSilo, ringSlab } from '@/parts/lib/structures'
+import { elevatedTank } from '@/parts/lib/water'
 import { Flow } from '@/render/Flow'
 import { PartLabel } from '@/render/Label'
 import { Part, PartMesh } from '@/render/Part'
@@ -10,7 +12,7 @@ import { DRIVES, HAZARD_SEPARATION, ZONES } from '@/physics/structures'
 import { TRACTOR } from '@/tractor/dims'
 import { Tractor, createTractorPose } from '@/tractor/Tractor'
 import { Building } from '../_shared/Building'
-import { P, discFlat, ringFlat, tint } from '../_shared/build'
+import { P, tint } from '../_shared/build'
 import { C, assess, live, useFarmstead, type Rect } from './model'
 
 const ZONE_COLORS = ['#7fc97f', '#80b1d3', '#fdc086', '#e7a0a0']
@@ -61,7 +63,7 @@ function RectBuilding(props: { r: Rect; name: string; h: number; info: { summary
       roofMat={props.roofMat}
       info={props.info}
       cites={[C.ln('p8–9 zone planning')]}
-      position={P(r.e, r.n, 0.12)}
+      position={P(r.e, r.n, 0.24)}
       openings={[{ side: r.e < 0 ? '+x' : '-x', at: 0, width: Math.min(4, r.d * 0.4), height: Math.min(props.h - 0.3, 3.5) }]}
     />
   )
@@ -77,14 +79,13 @@ export function Scene3D() {
   const phi = useRef(0)
 
   const g = useMemo(() => {
-    const zones = L.r.map((r) => discFlat(r, 0.02, 128))
-    const pad = discFlat(L.court.r, 0.05, 64)
-    const ring15 = ringFlat(HAZARD_SEPARATION + 0.25, HAZARD_SEPARATION - 0.25, 0.04, 96)
-    const silo = merge(cylinder(L.silo.r, 9, 32), xform(lathe([[0, 0], [L.silo.r + 0.15, 0], [0, 2.2]], 32), mat4.t(0, 4.5, 0)))
-    const tank = merge(
-      xform(cylinder(1.4, 2.2, 24), mat4.t(0, 6.1, 0)),
-      ...[-1, 1].flatMap((sx) => [-1, 1].map((sz) => xform(box(0.15, 5, 0.15), mat4.t(sx * 0.9, 2.5, sz * 0.9)))),
-    )
+    const zones = L.r.map((r) => discSlab({ r, h: 0.02, segments: 128 }))
+    const pad = discSlab({ r: L.court.r, h: 0.05, segments: 64 })
+    const ring15 = ringSlab({ rOuter: HAZARD_SEPARATION + 0.25, rInner: HAZARD_SEPARATION - 0.25, h: 0.04 })
+    const s = grainSilo({ r: L.silo.r, h: 9, roofRise: 2.2 })
+    const silo = merge(s.barrel, s.roof, s.vent)
+    const et = elevatedTank({ r: 1.4, h: 2.2, standH: 5, spread: 0.9 })
+    const tank = merge(et.tank, et.stand)
     const pole = cylinder(0.12, 8, 10)
     const stripes = merge(...[0, 1, 2, 3].map((i) => xform(box(0.12, 0.02, DRIVES.stall.l), mat4.t((i - 1.5) * DRIVES.stall.w, 0, 0))))
     const field = merge(...[-2, -1, 0, 1, 2].map((i) => xform(box(0.5, 0.03, 8), mat4.t(i * 1.2, 0, 0))))
@@ -104,7 +105,8 @@ export function Scene3D() {
     }
     pose.rearAngle += (dt * v) / TRACTOR.rear.rolling
     pose.frontAngle += (dt * v) / TRACTOR.front.radius
-    pose.steer = Math.atan(TRACTOR.wheelbase / R)
+    // heading −φ − π/2 falls as φ grows: a right turn, so the wheels yaw −Y
+    pose.steer = -Math.atan(TRACTOR.wheelbase / R)
     pose.engineAngle += dt * 2 * Math.PI * 25
     // wind arrow (bearing the wind blows towards)
     const b = ((s.windFrom + 180) * Math.PI) / 180
@@ -132,7 +134,9 @@ export function Scene3D() {
     return out
   }, [L.far])
 
-  const zoneY = (k: number) => 0.02 * (4 - k)
+  // ground layers are spaced 6 cm apart: closer than that, the depth buffer of this 220 m scene
+  // cannot separate them and the surfaces flicker (z-fighting) as the camera moves
+  const zoneY = (k: number) => 0.06 * (4 - k)
   const roadLen = 2 * L.r[3] + 120
 
   return (
@@ -141,7 +145,7 @@ export function Scene3D() {
         <PartMesh geometry={g.unit} position={[0, -0.25, -L.r[3]]} scale={[roadLen + 60, 0.5, 2 * L.r[3] + 120]} receiveShadow />
       </Part>
       <Part id="main-road" name="Main road" role="static" material="paintGrey" info={INFO.road} cites={[C.ln('p8 zone figure'), C.ln('p9 accessibility')]} cut={false}>
-        <PartMesh geometry={g.unit} position={P(0, -4.5, 0.05)} scale={[roadLen, 0.1, 8]} receiveShadow />
+        <PartMesh geometry={g.unit} position={P(0, -4.5, 0.12)} scale={[roadLen, 0.1, 8]} receiveShadow />
       </Part>
       <Part id="zones" name="Zones (10–30 m rings)" role="static" info={{ summary: 'Zone planning.', role: 'Concentric zones 10–30 m wide, all tangent to the road at one point. The dwelling sits upwind near the road; livestock at the far downwind end.' }} cites={[C.ln('p8–9')]} cut={false}>
         {L.r.map((r, i) => (
@@ -151,17 +155,17 @@ export function Scene3D() {
         ))}
       </Part>
       <Part id="drive" name="Zone 5: access drive" role="static" material="concrete" info={INFO.drive} cites={[C.ln('p8 zone 5'), C.ln('p21–22 drives')]} cut={false}>
-        <PartMesh geometry={g.unit} position={P(0, L.far / 2, 0.11)} scale={[st.driveW, 0.06, L.far + 2]} receiveShadow />
+        <PartMesh geometry={g.unit} position={P(0, L.far / 2, 0.33)} scale={[st.driveW, 0.06, L.far + 2]} receiveShadow />
         <Part id="courtyard" name="Courtyard & turning area" role="static" material="concrete" info={INFO.court} cites={[C.ln('p22 turning radius 40–50 ft')]}>
-          <PartMesh geometry={g.pad} position={P(0, L.court.n, 0.1)} receiveShadow />
+          <PartMesh geometry={g.pad} position={P(0, L.court.n, 0.42)} receiveShadow />
         </Part>
         <Part id="parking" name="Large-vehicle parking" role="static" material="concrete" info={INFO.parking} cites={[C.ln('p22 stalls 12 × 60 ft')]}>
-          <PartMesh geometry={g.unit} position={P(L.parking.e, L.parking.n, 0.1)} scale={[3 * DRIVES.stall.w, 0.05, DRIVES.stall.l]} receiveShadow />
-          <PartMesh geometry={g.stripes} position={P(L.parking.e, L.parking.n, 0.14)} material="paintYellow" />
+          <PartMesh geometry={g.unit} position={P(L.parking.e, L.parking.n, 0.3)} scale={[3 * DRIVES.stall.w, 0.05, DRIVES.stall.l]} receiveShadow />
+          <PartMesh geometry={g.stripes} position={P(L.parking.e, L.parking.n, 0.345)} material="paintYellow" />
         </Part>
       </Part>
 
-      <Building id="dwelling" name="Dwelling" w={L.house.d} d={L.house.w} h={3} pitch={22} roofMat="paintRed" info={INFO.house} cites={[C.ln('p12–13')]} position={P(L.house.e, L.house.n, 0.12)} rotationY={Math.PI / 2} openings={[{ side: '+x', at: 0, width: 1, height: 2.1 }]} />
+      <Building id="dwelling" name="Dwelling" w={L.house.d} d={L.house.w} h={3} pitch={22} roofMat="paintRed" info={INFO.house} cites={[C.ln('p12–13')]} position={P(L.house.e, L.house.n, 0.24)} rotationY={Math.PI / 2} openings={[{ side: '+x', at: 0, width: 1, height: 2.1 }]} />
       <RectBuilding r={L.shed} name="Machinery shed" h={4.5} info={INFO.shed} />
       <RectBuilding r={L.shop} name="Workshop" h={4} info={INFO.shop} />
       <RectBuilding r={L.feed} name="Feed store / small animals" h={3.5} info={INFO.feed} roofMat="paintGreen" />
@@ -169,12 +173,12 @@ export function Scene3D() {
         <RectBuilding key={b.id} r={b} name={`Livestock building ${i + 1}`} h={3.5} info={INFO.barn} wallMat="wood" />
       ))}
       <Part id="silo" name="Grain silo" role="housing" material="galvanised" info={INFO.silo} cites={[C.ln('p8 zone 3')]}>
-        <PartMesh geometry={g.silo} position={P(L.silo.e, L.silo.n, 4.6)} castShadow />
+        <PartMesh geometry={g.silo} position={P(L.silo.e, L.silo.n, 0.1)} castShadow />
       </Part>
       <Part id="fuel" name="Fuel store" role="housing" material="paintRed" info={INFO.fuel} cites={[C.ln('p27 hazardous stores')]}>
         <PartMesh geometry={g.unit} position={P(L.fuel.e, L.fuel.n, 1.3)} scale={[4, 2.5, 4]} castShadow />
         <Part id="fuel-ring" name="15 m separation radius" role="static" info={{ summary: '15 m separation radius.', role: 'No other building may stand inside this ring.' }} cites={[C.ln('p27')]} cut={false}>
-          <PartMesh geometry={g.ring15} position={P(L.fuel.e, L.fuel.n, 0.13)} customMaterial={tint(a.fuelOk ? 'ring-ok' : 'ring-bad', a.fuelOk ? '#e0a03c' : '#e0503c', 1, 0.4)} />
+          <PartMesh geometry={g.ring15} position={P(L.fuel.e, L.fuel.n, 0.39)} customMaterial={tint(a.fuelOk ? 'ring-ok' : 'ring-bad', a.fuelOk ? '#e0a03c' : '#e0503c', 1, 0.4)} />
         </Part>
       </Part>
       <Part id="services" name="Services" role="static" info={{ summary: 'Services.', role: 'Water, power and sanitation reach the work centres.' }} cites={[C.ln('p9–10 layout factors')]}>
@@ -183,7 +187,7 @@ export function Scene3D() {
         </Part>
         <Part id="septic" name="Septic tank & drainage field" role="static" material="concrete" info={INFO.septic} cites={[C.ln('p12, p18')]}>
           <PartMesh geometry={g.unit} position={P(L.septic.e, L.septic.n, 0.3)} scale={[2.5, 0.6, 1.5]} />
-          <PartMesh geometry={g.field} position={P(L.septic.e - 5, L.septic.n, 0.12)} material="soil" />
+          <PartMesh geometry={g.field} position={P(L.septic.e - 5, L.septic.n, 0.36)} material="soil" />
         </Part>
         <Part id="power" name="Power line" role="static" material="wood" info={INFO.power} cites={[C.ln('p10 utilities')]} cut={false}>
           {poles.map((n) => (

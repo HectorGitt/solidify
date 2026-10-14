@@ -1,5 +1,6 @@
 import type { SceneDef } from '@/modules/types'
 import { Ballast3D } from './Ballast3D'
+import { clamp, roundTo, soilFromCI } from '@/content/context'
 import { BAL, DEFAULTS, L27, TT, TTS, resetTest, useBallast } from './model'
 import { BallastPanel } from './Panel'
 
@@ -29,6 +30,12 @@ const scene: SceneDef = {
     useBallast.getState().reset()
     resetTest()
   },
+  fromContext: (c) => ({
+    ...(c.pullKN !== undefined ? { pull: roundTo(clamp(c.pullKN, 5, 40), 0.25) } : {}),
+    // this scene has firm and tilled only
+    ...(c.CI !== undefined ? { soil: soilFromCI(c.CI) === 'firm' ? 'firm' : 'tilled' } : {}),
+    ...(c.speedKmh !== undefined && c.speedKmh > 0.5 ? { mph: Math.round((c.speedKmh / 1.609) * 10) / 10 } : {}),
+  }),
   applyParams: (p) => {
     useBallast.getState().set(p as Partial<typeof DEFAULTS>)
     resetTest()

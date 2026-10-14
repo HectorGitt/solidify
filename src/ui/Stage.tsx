@@ -1,13 +1,15 @@
 import { CameraControls, ContactShadows, Environment, Grid, Lightformer, Html, Line } from '@react-three/drei'
 import { Canvas, useFrame } from '@react-three/fiber'
-import { Suspense, useCallback, useEffect, useRef } from 'react'
+import { Suspense, useCallback, useEffect, useMemo, useRef } from 'react'
 import type CameraControlsImpl from 'camera-controls'
 import * as THREE from 'three'
 import { SimClockDriver } from '@/core/sim'
 import type { CameraPose, SceneDef } from '@/modules/types'
 import { CutController, CutPlaneHelpers } from '@/render/CutController'
+import { HoverTelemetry } from '@/render/Telemetry'
+import { InsideHider } from '@/render/InsideHider'
 import { useView } from '@/render/view'
-import { flyTo, followOrigin, getCameraControls, setCameraControls, trackedPartId } from './camera'
+import { flyTo, followOrigin, getCameraControls, isRecording, setCameraControls, trackedPartId } from './camera'
 import { installDevBridge } from './devBridge'
 import { partObjects } from '@/parts/registry'
 
@@ -49,24 +51,48 @@ function CaliperTool({ extent }: { extent: number }) {
   )
 }
 
-function Lights({ extent }: { extent: number }) {
+const SHADOW_MAP = 2048
+
+/**
+ * Key light with shadows. The shadow box is sized to the scene, but in scenes that follow a
+ * moving machine it stays tight round it (and moves with it), so shadow pixels stay small.
+ * The box moves in whole shadow-pixel steps, and the bias scales with the pixel size: together
+ * they stop self-shadowing acne and edges shimmering on moving parts.
+ */
+function Lights({ extent, follow }: { extent: number; follow: boolean }) {
   const s = extent
+  const half = follow ? Math.min(1.4 * s, 18) : 1.4 * s
+  const texel = (2 * half) / SHADOW_MAP
+  const light = useRef<THREE.DirectionalLight>(null)
+  const offset = useMemo(() => new THREE.Vector3(1.4, 2.2, 1.6).normalize().multiplyScalar(Math.max(s * 3, half * 3)), [s, half])
+  useFrame(() => {
+    const l = light.current
+    if (!l) return
+    const cx = follow && followOrigin.active ? Math.round(followOrigin.x / texel) * texel : 0
+    const cz = follow && followOrigin.active ? Math.round(followOrigin.z / texel) * texel : 0
+    if (l.target.position.x === cx && l.target.position.z === cz && l.target.parent) return
+    l.target.position.set(cx, 0, cz)
+    l.position.set(cx + offset.x, offset.y, cz + offset.z)
+    if (!l.target.parent) l.parent?.add(l.target)
+    l.target.updateMatrixWorld()
+  })
   return (
     <>
       <hemisphereLight args={['#ffffff', '#0f172a', 0.65]} />
       <directionalLight
-        position={[s * 1.4, s * 2.2, s * 1.6]}
+        ref={light}
+        position={[offset.x, offset.y, offset.z]}
         intensity={2.1}
         castShadow
-        shadow-mapSize={[2048, 2048]}
-        shadow-bias={-0.0004}
-        shadow-normalBias={0.02}
-        shadow-camera-left={-s * 1.4}
-        shadow-camera-right={s * 1.4}
-        shadow-camera-top={s * 1.4}
-        shadow-camera-bottom={-s * 1.4}
+        shadow-mapSize={[SHADOW_MAP, SHADOW_MAP]}
+        shadow-bias={-0.0002}
+        shadow-normalBias={texel * 1.5}
+        shadow-camera-left={-half}
+        shadow-camera-right={half}
+        shadow-camera-top={half}
+        shadow-camera-bottom={-half}
         shadow-camera-near={0.01}
-        shadow-camera-far={s * 8}
+        shadow-camera-far={offset.length() + half * 3}
       />
       <directionalLight position={[-s * 2, s * 0.8, -s]} intensity={0.55} color="#bcd4ff" />
       <Environment resolution={256} frames={1}>
@@ -80,9 +106,27 @@ function Lights({ extent }: { extent: number }) {
   )
 }
 
+/**
+ * Showroom floor: shadow catcher, contact shadows and grid. They are overlays, so they never
+ * write depth and are pushed back by a polygon offset: where a scene has its own ground at the
+ * same height, the ground always wins instead of the two flickering (z-fighting) as the camera moves.
+ */
 function Floor({ y, extent }: { y: number; extent: number }) {
+  const ref = useRef<THREE.Group>(null)
+  useEffect(() => {
+    ref.current?.traverse((o) => {
+      const m = (o as THREE.Mesh).material
+      for (const mat of Array.isArray(m) ? m : m ? [m] : []) {
+        mat.polygonOffset = true
+        mat.polygonOffsetFactor = 4
+        mat.polygonOffsetUnits = 4
+        mat.depthWrite = false
+        mat.needsUpdate = true
+      }
+    })
+  }, [extent])
   return (
-    <group position={[0, y, 0]}>
+    <group ref={ref} position={[0, y, 0]}>
       <mesh rotation-x={-Math.PI / 2} receiveShadow>
         <planeGeometry args={[extent * 30, extent * 30]} />
         <shadowMaterial transparent opacity={0.25} />
@@ -111,7 +155,7 @@ function CameraTracker({ controlsRef }: { controlsRef: React.RefObject<CameraCon
 
   useFrame(() => {
     const controls = controlsRef.current
-    if (!controls || !trackedPartId) {
+    if (!controls || !trackedPartId || isRecording) {
       lastCenter.current.set(0, 0, 0)
       return
     }
@@ -198,7 +242,7 @@ function FollowCamera({ partId, pose }: { partId: string; pose: CameraPose }) {
   return null
 }
 
-export function Stage({ scene }: { scene: SceneDef }) {
+export function Stage({ scene, smooth = true }: { scene: SceneDef; smooth?: boolean }) {
   const ref = useRef<CameraControlsImpl>(null)
   const select = useView((s) => s.select)
 
@@ -235,14 +279,18 @@ export function Stage({ scene }: { scene: SceneDef }) {
         installDevBridge({ scene: s3, camera, gl })
       }}
       aria-label={`3D view: ${scene.title}`}
+      // 3D labels (drei Html) carry huge z-indexes; keep them inside the canvas so cards and modals stay on top
+      style={{ isolation: 'isolate', zIndex: 0 }}
     >
       <color attach="background" args={['#09090b']} />
       <fog attach="fog" args={['#09090b', scene.extent * 6, scene.extent * 16]} />
       <SimClockDriver />
+      <HoverTelemetry />
+      <InsideHider />
       <CameraTracker controlsRef={ref} />
       <CutController hatchScale={scene.hatchScale ?? scene.extent / 220} />
       <CaliperTool extent={scene.extent} />
-      <Lights extent={scene.extent} />
+      <Lights extent={scene.extent} follow={!!scene.follow} />
       <Suspense fallback={null}>
         <scene.Viewport />
       </Suspense>
@@ -255,7 +303,7 @@ export function Stage({ scene }: { scene: SceneDef }) {
         minDistance={scene.extent * 0.15}
         maxDistance={scene.extent * 8}
         dollySpeed={0.6}
-        smoothTime={0.35}
+        smoothTime={smooth ? 0.35 : 0}
       />
     </Canvas>
   )

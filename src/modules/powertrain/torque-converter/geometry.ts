@@ -1,81 +1,25 @@
 import * as THREE from 'three'
-import { cylinder, extrudeTwisted, mat4, merge, xform, type V2 } from '@/geometry'
-import { axial, ringZ, shaftZ } from '../common/geo'
+import { cylinder, mat4, merge, xform, type V2 } from '@/geometry'
+import { flexPlate, statorWheel, torusBand, torusBlades, torusPoint } from '@/parts/lib/driveline'
+import { axial, ccwProfile, ringZ, shaftZ } from '@/parts/lib/shapes'
 import { TC } from './model'
 
 /** Cheap (no CSG) torque-converter geometry, built once on the main thread. Axis along Z. */
 const { PI } = Math
 
-/** Make an (r, z) loop counter-clockwise (solid on the left), as lathe() expects. */
-function ccw(pts: V2[]) {
-  let a = 0
-  for (let i = 0; i < pts.length; i++) {
-    const [x0, y0] = pts[i]
-    const [x1, y1] = pts[(i + 1) % pts.length]
-    a += x0 * y1 - x1 * y0
-  }
-  return a > 0 ? pts : pts.slice().reverse()
-}
+const ccw = ccwProfile
 
 /** Point on the torus section: centre (RC, 0), radius R, angle θ (θ = 0 outer, +π/2 rear). */
-const tp = (R: number, th: number): V2 => [TC.RC + R * Math.cos(th), R * Math.sin(th)]
+const tp = (R: number, th: number): V2 => torusPoint(TC.RC, R, th)
 
 /** Half-annulus band R0…R1 for θ from t0 to t1, revolved about Z. */
-function band(R0: number, R1: number, t0: number, t1: number, n = 24) {
-  const pts: V2[] = []
-  for (let i = 0; i <= n; i++) pts.push(tp(R1, t0 + ((t1 - t0) * i) / n))
-  for (let i = n; i >= 0; i--) pts.push(tp(R0, t0 + ((t1 - t0) * i) / n))
-  return axial(ccw(pts), 96)
-}
+const band = (R0: number, R1: number, t0: number, t1: number) => torusBand(TC.RC, R0, R1, t0, t1)
 
 /** Flat blade in the meridional plane, R from B to A, θ from t0 to t1, thickness t; copies round Z. */
-function blades(count: number, t0: number, t1: number, thick: number, phase = 0) {
-  const outline: THREE.Vector2[] = []
-  const n = 14
-  for (let i = 0; i <= n; i++) {
-    const [r, z] = tp(TC.A - 0.0005, t0 + ((t1 - t0) * i) / n)
-    outline.push(new THREE.Vector2(r, z))
-  }
-  for (let i = n; i >= 0; i--) {
-    const [r, z] = tp(TC.B + 0.0005, t0 + ((t1 - t0) * i) / n)
-    outline.push(new THREE.Vector2(r, z))
-  }
-  const plate = extrudeTwisted(outline, [], thick)
-  const parts: THREE.BufferGeometry[] = []
-  for (let k = 0; k < count; k++) {
-    const a = phase + (2 * PI * k) / count
-    const radial = new THREE.Vector3(Math.cos(a), Math.sin(a), 0)
-    const ax = new THREE.Vector3(0, 0, 1)
-    const tang = new THREE.Vector3(Math.sin(a), -Math.cos(a), 0)
-    parts.push(xform(plate, new THREE.Matrix4().makeBasis(radial, ax, tang)))
-  }
-  return merge(...parts)
-}
+const blades = (count: number, t0: number, t1: number, thick: number, phase = 0) => torusBlades({ RC: TC.RC, A: TC.A, B: TC.B, count, t0, t1, thick, phase })
 
 /** Stator: hub plus inclined blades (they turn the returning oil to the impeller's direction). */
-function stator() {
-  const hub = ringZ(TC.statorR0, TC.rollerR + 0.003, -TC.statorHalf - 0.004, TC.statorHalf + 0.004, 64)
-  const s = new THREE.Shape()
-  const h = TC.statorHalf
-  s.moveTo(TC.statorR0 - 0.002, -h)
-  s.lineTo(TC.statorR1, -h * 0.8)
-  s.lineTo(TC.statorR1, h * 0.8)
-  s.lineTo(TC.statorR0 - 0.002, h)
-  s.closePath()
-  const plate = extrudeTwisted(s.getPoints(), [], 0.0035)
-  const parts: THREE.BufferGeometry[] = [hub]
-  for (let k = 0; k < TC.statorBlades; k++) {
-    const a = (2 * PI * k) / TC.statorBlades
-    const radial = new THREE.Vector3(Math.cos(a), Math.sin(a), 0)
-    // blade inclined 40° to the axis about the radial line
-    const inc = 0.7
-    const tang = new THREE.Vector3(-Math.sin(a), Math.cos(a), 0)
-    const ax = new THREE.Vector3(0, 0, 1).multiplyScalar(Math.cos(inc)).addScaledVector(tang, Math.sin(inc))
-    const nrm = radial.clone().cross(ax)
-    parts.push(xform(plate, new THREE.Matrix4().makeBasis(radial, ax, nrm)))
-  }
-  return merge(...parts)
-}
+const stator = () => statorWheel({ r0: TC.statorR0, r1: TC.statorR1, half: TC.statorHalf, bore: TC.rollerR + 0.003, blades: TC.statorBlades })
 
 export function buildTcGeometry() {
   const g = TC.innerGap
@@ -118,7 +62,9 @@ export function buildTcGeometry() {
   const housing = merge(
     axial(ccw([[TC.housingR - 0.008, -0.16], [TC.housingR, -0.16], [TC.housingR, 0.2], [0.05, 0.2], [0.05, 0.19], [TC.housingR - 0.008, 0.19]]), 96),
   )
-  const flywheel = merge(ringZ(0.21, 0.03, -0.155, -0.14, 96), shaftZ(0.03, -0.24, -0.14, 32))
+  // the converter is driven through a starter-ring flex plate, not a flywheel: its own mass smooths the engine
+  const fp = flexPlate({ r: 0.198, t: 0.015 })
+  const flywheel = { plate: xform(fp.disc, mat4.t(0, 0, -0.14)), ring: xform(fp.ring, mat4.t(0, 0, -0.14)), crank: shaftZ(0.03, -0.24, -0.155, 32) }
   return {
     impellerShell,
     impellerCore,

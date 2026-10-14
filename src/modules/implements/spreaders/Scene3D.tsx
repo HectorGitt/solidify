@@ -1,7 +1,7 @@
 import { useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { useSimFrame } from '@/core/sim'
-import { box, cylinder, extrude, lathe, merge, pipe, tube } from '@/geometry'
+import { box, cylinder, lathe, merge, tube } from '@/geometry'
 import { dragK } from '@/physics/application'
 import { InstancedPartMesh } from '@/modules/traction/tracks/InstancedPartMesh'
 import { PartLabel } from '@/render/Label'
@@ -10,8 +10,8 @@ import { TRACTOR } from '@/tractor/dims'
 import { PTO_STUB_X, PTO_Y } from '@/tractor/geometry'
 import { Tractor, createTractorPose } from '@/tractor/Tractor'
 import { Level } from '../_shared/field'
-import { bar, plateXY, rod } from '../_shared/geom'
-import { Ground, Particles, PtoDriveline, ballistic, drawBallistic, emit, stepBallistic, wheelGeometry, type Treadmill } from '../_appkit/three'
+import { aFrameMast, augerFlight, bar, coneHopper, plateXY, ratchetWheel, roadWheel, rod, spinnerDisc, toothedBeater } from '@/parts/lib/implements'
+import { Ground, Particles, PtoDriveline, ballistic, drawBallistic, emit, stepBallistic, type Treadmill } from '../_appkit/three'
 import { BC, C, DISC_H, GRANULE, HITCH_H, HX, HY, MS, MS_LOAD_H, PTO_LOCAL, gateFlow, live, manure, useSpreader } from './model'
 
 const { PI } = Math
@@ -64,15 +64,7 @@ const INFO = {
 
 function broadcasterGeometry() {
   const { hx, y0, y1, rTop, rOut, discY, R } = BC
-  const hopper = lathe([
-    [rOut - 0.012, y0],
-    [rOut, y0],
-    [rTop, y1],
-    [rTop + 0.03, y1],
-    [rTop + 0.03, y1 + 0.03],
-    [rTop - 0.014, y1 + 0.03],
-    [rOut - 0.012, y0 + 0.01],
-  ], 48)
+  const hopper = coneHopper(rOut, rTop, y0, y1)
   hopper.translate(hx, 0, 0)
   const spout = tube(rOut + 0.006, rOut - 0.004, 0.12, 32)
   spout.translate(hx, y0 - 0.06, 0)
@@ -86,26 +78,14 @@ function broadcasterGeometry() {
   ], 40)
   const agitator = merge(rod([0, -0.04, 0], [0, 0.32, 0], 0.012, 10), rod([-0.07, 0.04, 0], [0.07, 0.04, 0], 0.008, 8), rod([0, 0.14, -0.1], [0, 0.14, 0.1], 0.008, 8), rod([-0.12, 0.25, 0], [0.12, 0.25, 0], 0.008, 8))
   const gate = merge(box(0.22, 0.008, 0.2), rod([0.11, 0, 0.06], [0.32, 0.18, 0.06], 0.008, 8))
-  const vanes: THREE.BufferGeometry[] = [cylinder(R, 0.008, 48), cylinder(0.03, 0.08, 16)]
-  for (let k = 0; k < BC.vanes; k++) {
-    const a = (k / BC.vanes) * 2 * PI
-    const v = box(R - 0.05, 0.04, 0.008)
-    v.translate((R + 0.05) / 2, 0.024, 0)
-    v.rotateY(a)
-    vanes.push(v)
-  }
-  const disc = merge(...vanes)
+  const disc = spinnerDisc(R, BC.vanes)
   const gearbox = merge(box(0.16, 0.11, 0.14), cylinder(0.05, 0.05, 20).translate(0, 0.08, 0), rod([0.08, 0, 0], [-0.12 - hx, 0, 0], 0.02, 12))
   gearbox.translate(hx, discY - 0.1, 0)
   // frame: lower-pin bar, A-mast to the top-link pin, hopper ring and struts
   const ring = lathe([[rTop * 0.8, -0.015], [rTop * 0.8 + 0.03, -0.015], [rTop * 0.8 + 0.03, 0.015], [rTop * 0.8, 0.015]], 40)
   ring.translate(hx, y0 + (y1 - y0) * 0.6, 0)
-  const top: [number, number, number] = [0, 0.61, 0]
   const frame = merge(
-    rod([0, 0, 0.47], [0, 0, -0.47], 0.016, 12),
-    bar([0, 0, 0.4], [top[0], top[1], 0.04], 0.05, 0.012),
-    bar([0, 0, -0.4], [top[0], top[1], -0.04], 0.05, 0.012),
-    rod([0, 0.61, 0.06], [0, 0.61, -0.06], 0.012, 10),
+    aFrameMast({ pinHalf: 0.47, pinR: 0.016, footZ: 0.4, topX: 0, legW: 0.05, legT: 0.012 }),
     bar([0, 0.05, 0.35], [hx, y0 + 0.4, 0.35], 0.04, 0.04),
     bar([0, 0.05, -0.35], [hx, y0 + 0.4, -0.35], 0.04, 0.04),
     bar([0, 0.55, 0], [hx + 0.25, y0 + 0.4, 0], 0.04, 0.04),
@@ -118,50 +98,6 @@ function broadcasterGeometry() {
 }
 
 /* ------------------------------ manure spreader geometry ------------------------------ */
-
-function sawRatchet(teeth: number, R: number, depth: number, t: number) {
-  const s = new THREE.Shape()
-  for (let i = 0; i < teeth; i++) {
-    const a0 = (i / teeth) * 2 * PI
-    const a1 = ((i + 1) / teeth) * 2 * PI
-    const p0 = [R * Math.cos(a0), R * Math.sin(a0)]
-    const p1 = [(R - depth) * Math.cos(a1), (R - depth) * Math.sin(a1)]
-    if (i === 0) s.moveTo(p0[0], p0[1])
-    else s.lineTo(p0[0], p0[1])
-    s.lineTo(p1[0], p1[1])
-  }
-  s.closePath()
-  const g = extrude(s, t)
-  g.translate(0, 0, -t / 2)
-  return g
-}
-
-function helixFlight(z0: number, z1: number, R: number, turns: number, wire: number) {
-  class Helix extends THREE.Curve<THREE.Vector3> {
-    constructor() {
-      super()
-    }
-    getPoint(t: number, target = new THREE.Vector3()) {
-      const a = t * turns * 2 * PI
-      return target.set(R * Math.cos(a), R * Math.sin(a), z0 + (z1 - z0) * t)
-    }
-  }
-  return pipe(new Helix(), wire, 0, Math.max(48, Math.round(Math.abs(turns) * 28)), 8)
-}
-
-function beaterGeometry(r: number, len: number, rows: number, perRow: number) {
-  const core = cylinder(r * 0.45, len, 24)
-  core.rotateX(PI / 2)
-  const teeth: THREE.BufferGeometry[] = [core]
-  for (let i = 0; i < rows; i++) {
-    for (let j = 0; j < perRow; j++) {
-      const z = -len / 2 + ((j + 0.5) / perRow) * len
-      const a = (i / rows) * 2 * PI + j * 0.6
-      teeth.push(rod([r * 0.4 * Math.cos(a), r * 0.4 * Math.sin(a), z], [r * Math.cos(a), r * Math.sin(a), z], 0.012, 6))
-    }
-  }
-  return merge(...teeth)
-}
 
 function manureGeometry() {
   const { boxX0, boxX1, floorY, b, wallH } = MS
@@ -181,16 +117,16 @@ function manureGeometry() {
   )
   const tongue = merge(bar([0.02, 0, 0], [boxX0 + 0.05, floorY - 0.1, 0.4], 0.08, 0.08), bar([0.02, 0, 0], [boxX0 + 0.05, floorY - 0.1, -0.4], 0.08, 0.08), cylinder(0.05, 0.05, 20), box(0.25, 0.4, 0.06).translate(-0.6, -0.12, 0))
   const slat = box(0.035, 0.02, b - 0.06)
-  const ratchet = sawRatchet(MS.ratchetTeeth, 0.16, 0.018, 0.02)
+  const ratchet = ratchetWheel(MS.ratchetTeeth, 0.16, 0.018, 0.02)
   const ratchetHub = cylinder(0.03, 0.08, 16).rotateX(PI / 2)
   const pawlArm = merge(bar([0, 0, 0], [0.24, 0, 0], 0.02, 0.03), bar([0.17, 0, 0], [0.13, -0.035, 0], 0.02, 0.012))
   const eccentric = merge(cylinder(0.07, 0.03, 20).rotateX(PI / 2), cylinder(0.015, 0.06, 10).rotateX(PI / 2).translate(0.05, 0, 0))
-  const lower = beaterGeometry(MS.lower.r, b - 0.04, 6, 7)
-  const upper = beaterGeometry(MS.upper.r, b - 0.04, 6, 7)
-  const auger = merge(rod([0, 0, -MS.W / 2 + 1.0], [0, 0, MS.W / 2 - 1.0], 0.03, 12), helixFlight(0.02, 0.95, MS.auger.r, 3, 0.022), helixFlight(-0.02, -0.95, MS.auger.r, 3, 0.022))
+  const lower = toothedBeater(MS.lower.r, b - 0.04, 6, 7)
+  const upper = toothedBeater(MS.upper.r, b - 0.04, 6, 7)
+  const auger = merge(rod([0, 0, -MS.W / 2 + 1.0], [0, 0, MS.W / 2 - 1.0], 0.03, 12), augerFlight({ R: MS.auger.r, z0: 0.02, z1: 0.95, turns: 3, wire: 0.022 }), augerFlight({ R: MS.auger.r, z0: -0.02, z1: -0.95, turns: 3, wire: 0.022 }))
   const chainCase = box(1.05, 0.9, 0.05).translate(-4.55, 0.7, hb + 0.08)
   const load = box(1, 1, 1)
-  const wheel = wheelGeometry(MS.wheelR, 0.25)
+  const wheel = roadWheel(MS.wheelR, 0.25)
   return { body, tongue, slat, ratchet, ratchetHub, pawlArm, eccentric, lower, upper, auger, chainCase, load, wheel }
 }
 

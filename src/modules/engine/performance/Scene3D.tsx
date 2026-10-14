@@ -9,7 +9,8 @@ import { pinHeight } from '@/physics/engine'
 import { Flow } from '@/render/Flow'
 import { PartLabel } from '@/render/Label'
 import { Part, PartMesh } from '@/render/Part'
-import { conRod, crankshaft, piston } from '../multi-cylinder/crank'
+import { fan as coolingFan, radiatorCore, radiatorFrame, radiatorTank, type RadiatorSpec } from '@/parts/lib/cooling'
+import { crankshaft } from '../multi-cylinder/crank'
 import { BARREL_X, CASE_X, CRANK, DECK, INJ_X, blockLength, getMultiGeometry } from '../multi-cylinder/geometry'
 import { DIM, LAYOUTS, SC, cylZ, type CylCount } from '../multi-cylinder/model'
 import { compute, live, shares, usePerf } from './model'
@@ -17,6 +18,9 @@ import { compute, live, shares, usePerf } from './model'
 const { PI } = Math
 const alongZ = mat4.rx(PI / 2)
 export const FLOOR_Y = -0.182
+
+/** test-bed radiator, centred on x = 0, z = 0 (placed in front of the engine) */
+const BED_RAD: RadiatorSpec = { x: 0.17, y0: -0.035, y1: 0.275, z0: -0.025, z1: 0.025, tankZ0: -0.035, tankZ1: 0.035, botY0: -0.09, topY1: 0.33, tubes: 14, fins: 34 }
 
 /** Map any cylinder count onto one of the modelled inline engines (the 3D engine is representative). */
 export function shownCount(n: number): CylCount {
@@ -87,8 +91,8 @@ export function Performance3D() {
   const sh = shares(p, r)
 
   const crankG = useMemo(() => crankshaft(CRANK, layout.firing.map((f, i) => ({ z: cylZ(i + 1, n), firingDeg: f })), DIM.pitch), [n, layout])
-  const pist = useMemo(() => piston({ bore: DIM.bore, comp: DIM.pistonComp, skirt: DIM.pistonSkirt }), [])
-  const rodG = useMemo(() => conRod(DIM.rodL, CRANK.pinR + 0.0003, DIM.bore * 0.14 + 0.0002, 0.026), [])
+  const pist = g.piston
+  const rodG = g.rod
 
   // test-bed layout along −Z behind the flywheel
   const flyZ = crankG.back
@@ -110,13 +114,6 @@ export function Performance3D() {
     const dial = xform(lathe([[0, 0], [0.05, 0], [0.05, 0.012], [0.044, 0.016], [0, 0.014]], 48), mat4.c(mat4.t(p.arm, -0.11, dynoZ + 0.035), alongZ))
     const needle = xform(box(0.003, 0.04, 0.002), mat4.t(0, 0.02, 0))
     const base = xform(box(0.5, 0.02, radZ - dynoZ + 0.5), mat4.t(0.12, FLOOR_Y - 0.01, (radZ + dynoZ) / 2))
-    const radiator = merge(
-      xform(box(0.36, 0.32, 0.05), mat4.t(0, 0.12, radZ + 0.12)),
-      xform(box(0.4, 0.05, 0.07), mat4.t(0, 0.305, radZ + 0.12)),
-      xform(box(0.4, 0.05, 0.07), mat4.t(0, -0.065, radZ + 0.12)),
-      xform(box(0.04, 0.39, 0.06), mat4.t(0.2, 0.12, radZ + 0.12)),
-      xform(box(0.04, 0.39, 0.06), mat4.t(-0.2, 0.12, radZ + 0.12)),
-    )
     const radStand = xform(box(0.3, -0.09 - FLOOR_Y, 0.05), mat4.t(0, (FLOOR_Y - 0.09) / 2, radZ + 0.12))
     const hoses = merge(
       pipe(new THREE.CatmullRomCurve3([V(0, DECK + 0.02, L / 2 - 0.01), V(0, DECK + 0.03, L / 2 + 0.05), V(0, 0.3, radZ + 0.08)]), 0.017, 0.012, 24, 16),
@@ -126,10 +123,19 @@ export function Performance3D() {
     const stack = pipe(new THREE.CatmullRomCurve3([V(stackX, DECK + 0.035, 0.0), V(stackX + 0.01, DECK + 0.12, 0), V(stackX + 0.01, 0.75, 0)]), 0.03, 0.026, 32, 20)
     const tank = xform(box(0.22, 0.16, 0.24), mat4.t(0.42, 0.42, 0.12))
     const tankStand = xform(box(0.04, 0.42 - 0.08 - FLOOR_Y, 0.04), mat4.t(0.42, (0.34 + FLOOR_Y) / 2, 0.12))
-    const fan: THREE.BufferGeometry[] = [xform(tube(0.03, 0.012, 0.02, 24), alongZ)]
-    for (let i = 0; i < 4; i++) fan.push(xform(box(0.13, 0.035, 0.004), mat4.c(mat4.rz((i * PI) / 2), mat4.t(0.08, 0, 0), mat4.rx(0.4))))
-    return { shaft, couplings, casing, rotor, dynoShaft, pedestals, arm, scaleBody, dial, needle, base, radiator, radStand, hoses, stack, tank, tankStand, fan: merge(...fan) }
+    return { shaft, couplings, casing, rotor, dynoShaft, pedestals, arm, scaleBody, dial, needle, base, radStand, hoses, stack, tank, tankStand }
   }, [flyZ, dynoZ, radZ, L, p.arm])
+
+  // radiator (shared library core, tanks and frame) and fan: rebuilt only when the engine length changes
+  const rad = useMemo(() => {
+    const at = mat4.t(0, 0, radZ + 0.12)
+    const core = radiatorCore(BED_RAD)
+    return {
+      core: xform(merge(core.tubes, core.fins), at),
+      tanks: xform(merge(radiatorTank(BED_RAD, BED_RAD.y1, BED_RAD.topY1).shell, radiatorTank(BED_RAD, BED_RAD.botY0, BED_RAD.y0).shell, radiatorFrame(BED_RAD)), at),
+    }
+  }, [radZ])
+  const fanG = useMemo(() => coolingFan(0.14), [])
 
   // heat-balance ribbons
   const rib = useMemo(() => {
@@ -212,26 +218,35 @@ export function Performance3D() {
         <Part id="crank-train" name="Crankshaft, pistons & rods" material="forged" role="moving" info={{ summary: 'Crank train (see the Crankshafts & firing order scene).' }}>
           <group ref={crankRef}>
             <PartMesh geometry={crankG.geometry} />
-            <PartMesh geometry={g.flywheel} material="castIron" position={[0, 0, flyZ]} />
+            <PartMesh geometry={g.flywheel.disc} material="castIron" position={[0, 0, flyZ]} />
+            <PartMesh geometry={g.flywheel.ring} material="steelDark" position={[0, 0, flyZ]} />
             <PartMesh geometry={g.pulley} material="castIron" position={[0, 0, crankG.front - 0.03]} />
           </group>
           {zs.map((_, i) => (
             <group key={`r${i}`} ref={(el) => void (rods.current[i] = el)}>
-              <PartMesh geometry={rodG} />
+              <PartMesh geometry={rodG.body} />
+              <PartMesh geometry={rodG.cap} />
+              <PartMesh geometry={rodG.bolts} material="steelDark" />
+              <PartMesh geometry={rodG.shells} material="bearing" />
+              <PartMesh geometry={rodG.bush} material="bronze" />
             </group>
           ))}
           {zs.map((_, i) => (
             <group key={`p${i}`} ref={(el) => void (pistons.current[i] = el)}>
               <PartMesh geometry={pist.body} material="aluminium" />
+              <PartMesh geometry={pist.rings.compression} material="steelDark" />
+              {pist.rings.oil ? <PartMesh geometry={pist.rings.oil} material="castIron" /> : null}
+              <PartMesh geometry={pist.pin} material="steel" />
             </group>
           ))}
         </Part>
         <Part id="cooling-hw" name="Radiator, hoses & fan" material="paintBlack" role="housing" cut={false} info={{ summary: 'Radiator, hoses and fan.', role: 'About 30–40 % of the fuel energy leaves in the cooling water.' }} cites={[SRC.supp509('cooling: 30 % removed by cooling'), SRC.tb509('§3.3')]}>
-          <PartMesh geometry={bed.radiator} />
+          <PartMesh geometry={rad.core} material="copper" />
+          <PartMesh geometry={rad.tanks} />
           <PartMesh geometry={bed.radStand} material="paintGrey" />
           <PartMesh geometry={bed.hoses} material="rubber" />
           <group ref={fanRef} position={[0, 0, crankG.front + 0.03]}>
-            <PartMesh geometry={bed.fan} material="paintYellow" />
+            <PartMesh geometry={fanG} material="paintYellow" />
           </group>
         </Part>
         <Part id="exhaust-stack" name="Exhaust stack" material="paintBlack" role="housing" cut={false} info={{ summary: 'Exhaust stack.', role: 'Exhaust gas carries away the largest share of the heat: about 40 %, or 31 % with other heat losses in another typical split.' }} cites={[SRC.supp509('40 % via exhaust'), SRC.tb509('§3.3')]}>
