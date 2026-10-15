@@ -168,6 +168,9 @@ export interface PartMeshProps extends Omit<MeshProps, 'material'> {
   customMaterial?: THREE.Material
 }
 
+/** raycast that never hits: the mesh is skipped by clicks and hovers */
+const NO_RAYCAST = () => {}
+
 /** A mesh belonging to the nearest enclosing <Part/>, with view-state aware material. */
 export function PartMesh({ geometry, material, customMaterial, ...rest }: PartMeshProps) {
   const ctx = useContext(Ctx)
@@ -197,7 +200,11 @@ export function PartMesh({ geometry, material, customMaterial, ...rest }: PartMe
   const highlight: Highlight = selectedId && ctx.path.includes(selectedId) ? 'select' : hoveredId === id || (faultMode && faulty) ? 'hover' : 'none'
   const mat = customMaterial ?? getMaterial(material ?? ctx.material, { variant, highlight, intersection: cut.intersection, tint: tints ? ctx.tint : undefined })
 
+  // hidden parts, parts outside the isolated one and see-through (x-ray) housings let clicks pass to
+  // what is behind or inside them; pick them from the parts list instead
+  const passThrough = !visible || variant === 'xray'
   const raycast = useMemo(() => {
+    if (passThrough) return NO_RAYCAST
     if (variant !== 'cut') return undefined
     const cutState = cut
     return function (this: THREE.Mesh, raycaster: THREE.Raycaster, intersects: THREE.Intersection[]) {
@@ -205,7 +212,7 @@ export function PartMesh({ geometry, material, customMaterial, ...rest }: PartMe
       THREE.Mesh.prototype.raycast.call(this, raycaster, tmp)
       for (const hit of tmp) if (isKept(hit.point, cutState)) intersects.push(hit)
     }
-  }, [variant, cut])
+  }, [variant, cut, passThrough])
 
   const onClick = (e: ThreeEvent<MouseEvent>) => {
     if (!id) return

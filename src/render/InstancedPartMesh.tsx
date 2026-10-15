@@ -31,7 +31,10 @@ export const InstancedPartMesh = forwardRef<THREE.InstancedMesh, { geometry: THR
     const highlight: Highlight = selectedId && ctx.path.includes(selectedId) ? 'select' : hoveredId === id ? 'hover' : 'none'
     const mat = getMaterial(material ?? ctx.material, { variant, highlight, intersection: cut.intersection })
 
+    // hidden, out of isolation or see-through: clicks pass to what is behind
+    const passThrough = isHidden || outOfIsolation || variant === 'xray'
     const raycast = useMemo(() => {
+      if (passThrough) return () => {}
       if (variant !== 'cut') return THREE.InstancedMesh.prototype.raycast
       const cutState = cut
       return function (this: THREE.InstancedMesh, raycaster: THREE.Raycaster, intersects: THREE.Intersection[]) {
@@ -39,7 +42,7 @@ export const InstancedPartMesh = forwardRef<THREE.InstancedMesh, { geometry: THR
         THREE.InstancedMesh.prototype.raycast.call(this, raycaster, tmp)
         for (const hit of tmp) if (isKept(hit.point, cutState)) intersects.push(hit)
       }
-    }, [variant, cut])
+    }, [variant, cut, passThrough])
 
     return (
       <instancedMesh
