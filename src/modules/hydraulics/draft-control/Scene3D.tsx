@@ -193,7 +193,7 @@ export function Draft3D() {
   }
   return (
     <group>
-      <Tractor pose={pose} mounted={ploughMounted} drawbar={false} internals={false}>
+      <Tractor pose={pose} mounted={ploughMounted} drawbar={false} sceneSystems={['hydraulics']}>
         <Part id="sensing-spring" name="Draft-sensing spring" role="moving" material="steel" info={INFO.spring} cites={C.draft} cut={false}>
           <PartMesh geometry={G.capsule} material="paintGrey" />
           <PartMesh geometry={G.capEnd} material="paintGrey" />

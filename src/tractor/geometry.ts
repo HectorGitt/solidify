@@ -2,6 +2,7 @@ import * as THREE from 'three'
 import { box, cylinder, extrude, gear, lathe, mat4, merge, pipe, roundedBox, tube, xform } from '@/geometry'
 import { bevelGear, bevelPair, splineShaft, torus } from '@/geometry/parts'
 import { FARMLAND_FRONT, FARMLAND_REAR, wheel } from '@/parts/lib/wheels'
+import { frontAxle, frontSupport, intakeStack, steeringKnuckle } from '@/parts/lib/chassis'
 import { clutchDisc, clutchDiscThickness } from '@/parts/lib/driveline'
 import { LINKAGE, TRACTOR } from './dims'
 
@@ -314,10 +315,16 @@ export function buildTractorGeometry() {
   const bonnet = bonnetShell()
   const radiator = box(0.07, 0.36, 0.5)
   radiator.translate(1.96, 1.16, 0)
-  const bolster = box(0.3, 0.17, 0.34)
-  bolster.translate(1.92, 0.535, 0)
-  const airCleaner = cylinder(0.065, 0.4, 28)
-  airCleaner.translate(1.2, 1.62, -0.18)
+  // cast front support under the radiator, carrying the axle pivot (parts library)
+  const fs = frontSupport({ l: 0.3, h: 0.17, w: 0.34 })
+  const atSupport = mat4.t(1.92, 0.535, 0)
+  const bolster = xform(fs.body, atSupport)
+  const bolsterSteel = xform(merge(fs.bolts, fs.eye), atSupport)
+  // air-intake stack up through the bonnet (pre-cleaner on top)
+  const st = intakeStack({ r: 0.065, length: 0.4 })
+  const atStack = mat4.t(1.2, 1.42, -0.18)
+  const airCleaner = xform(merge(st.pipe, st.collar), atStack)
+  const airCleanerBands = xform(st.bands, atStack)
   const preCleaner = lathe(
     [
       [0.02, 1.82],
@@ -408,11 +415,16 @@ export function buildTractorGeometry() {
   steeringWheel.translate(0.18, 1.62, 0)
   const rops = ropsFrame()
 
-  // ------------------------------------------------------------ front axle (static beam)
-  const axleBeam = box(0.12, 0.1, 2 * KINGPIN_Z - 0.04)
-  axleBeam.translate(1.88, FRONT_Y, 0)
-  /** knuckle (local, kingpin axis Y through origin) */
-  const knuckle = merge(cylinder(0.04, 0.22, 20), xform(zAxis(cylinder(0.03, 0.12, 20)), mat4.t(0, -0.06, 0.06)))
+  // ------------------------------------------------------------ front axle (telescopic beam) and knuckles
+  const fa = frontAxle({ kingpinZ: KINGPIN_Z })
+  const onAxle = mat4.t(TRACTOR.wheelbase, FRONT_Y, 0)
+  const axleBeam = xform(merge(fa.centre, fa.extensions, fa.lugs), onAxle)
+  const axleBolts = xform(merge(fa.bolts, fa.pin), onAxle)
+  const axleHoles = xform(fa.holes, onAxle)
+  /** knuckle (local, kingpin axis Y through origin, spindle towards +Z) */
+  const sk = steeringKnuckle({ reach: FRONT_Z - KINGPIN_Z })
+  const knuckle = sk.body
+  const knuckleSteel = merge(sk.spindle, sk.nut, sk.kingpin, sk.thrust)
 
   // ------------------------------------------------------------ drivetrain internals (local frames)
   /** crankshaft along X, local origin on its axis at the front main bearing */
@@ -491,7 +503,9 @@ export function buildTractorGeometry() {
     bonnet,
     radiator,
     bolster,
+    bolsterSteel,
     airCleaner: merge(airCleaner, preCleaner),
+    airCleanerBands,
     clutchHousing,
     gearbox,
     centre,
@@ -510,7 +524,10 @@ export function buildTractorGeometry() {
     steeringWheel,
     rops,
     axleBeam,
+    axleBolts,
+    axleHoles,
     knuckle,
+    knuckleSteel,
     crank,
     flywheel,
     clutchDisc: clutchLinings,

@@ -334,3 +334,96 @@ export function cradleBearings(s: { half: number; trunnionR?: number; bore?: num
   const cradles = [-1, 1].map((sd) => at(alongX(tube(cr, tr + 0.001, 0.07, 40)), sd * x, 0, 0))
   return { trunnions: merge(...trunnions), cradles: merge(...cradles) }
 }
+
+/* ------------------------------ front axle (2WD) ------------------------------ */
+
+/**
+ * Telescopic front axle of a two-wheel-drive tractor: a forged box-section centre beam that pivots
+ * on a fore-and-aft pin under the front support, and an extension arm each side that slides in it
+ * and is bolted at the chosen track (a row of holes shows the settings), ending in the kingpin boss.
+ * Local frame: axle centre on the origin, beam along Z, kingpin axes vertical at z = ±kingpinZ, Y up.
+ */
+export function frontAxle(spec: { kingpinZ: number; beamH?: number; beamW?: number; bossR?: number; bossH?: number; centreHalf?: number }) {
+  const K = spec.kingpinZ
+  const H = spec.beamH ?? 0.1
+  const W = spec.beamW ?? 0.1
+  const bossR = spec.bossR ?? 0.05
+  const bossH = spec.bossH ?? 0.15
+  const C = spec.centreHalf ?? Math.min(0.42, K - 0.16)
+  const xAlong = mat4.rz(Math.PI / 2)
+  // centre beam: a hollow box section (12 mm walls), open at the ends for the extensions
+  const rect = (w: number, h: number) => [new THREE.Vector2(-w / 2, -h / 2), new THREE.Vector2(w / 2, -h / 2), new THREE.Vector2(w / 2, h / 2), new THREE.Vector2(-w / 2, h / 2)]
+  const centre = merge(
+    extrudeTwisted(rect(W, H), [rect(W - 0.024, H - 0.024)], 2 * C),
+    // pivot boss through the middle
+    xform(cylinder(0.055, W + 0.06, 32), xAlong),
+  )
+  // extension arms, from inside the centre beam out to the kingpin bosses
+  const iw = W - 0.026
+  const ih = H - 0.026
+  const ext = (s: number) => {
+    const z0 = s * (C - 0.16)
+    const z1 = s * (K - bossR * 0.6)
+    return merge(xform(box(iw, ih, Math.abs(z1 - z0)), mat4.t(0, 0, (z0 + z1) / 2)), xform(cylinder(bossR, bossH, 32), mat4.t(0, 0, s * K)))
+  }
+  const extensions = merge(ext(1), ext(-1))
+  // two clamp bolts through each end of the centre beam; spare holes along the extensions
+  const bolt = merge(xform(cylinder(0.009, H + 0.05, 12), new THREE.Matrix4()), xform(cylinder(0.016, 0.012, 6), mat4.t(0, H / 2 + 0.006, 0)), xform(cylinder(0.016, 0.014, 6), mat4.t(0, -H / 2 - 0.007, 0)))
+  const bolts = merge(...[1, -1].flatMap((s) => [0.05, 0.12].map((d) => xform(bolt, mat4.t(0, 0, s * (C - d))))))
+  const holes = merge(...[1, -1].flatMap((s) => [0.04, 0.1, 0.16].map((d) => xform(cylinder(0.009, 0.003, 12), mat4.t(0, ih / 2 + 0.001, s * (C + d))))))
+  // pivot pin and the two lugs that carry it under the front support
+  const pin = xform(cylinder(0.025, W + 0.2, 20), xAlong)
+  const lugs = merge(...[1, -1].map((s) => xform(box(0.04, 0.1, 0.12), mat4.t(s * (W / 2 + 0.07), 0.035, 0))))
+  return { centre, extensions, bolts, holes, pin, lugs }
+}
+
+/**
+ * Steering knuckle (stub axle) for the 2WD front axle. Local frame: kingpin axis = Y through the
+ * origin, the axle's boss between the yokes, stub spindle along +Z out to `reach` (the wheel hub).
+ */
+export function steeringKnuckle(spec: { reach: number; bossH?: number }) {
+  const bh = spec.bossH ?? 0.15
+  const yoke = (y: number) => xform(box(0.075, 0.03, 0.1), mat4.t(0, y, 0.02))
+  const body = merge(
+    yoke(bh / 2 + 0.017),
+    yoke(-bh / 2 - 0.017),
+    // the forged web joining the yokes, carrying the spindle
+    xform(box(0.075, bh + 0.064, 0.04), mat4.t(0, 0, 0.07)),
+  )
+  // stepped spindle: inner bearing seat, outer bearing seat, thread and castle nut
+  const spindle = xform(lathe([[0, 0.09], [0.034, 0.09], [0.034, 0.12], [0.026, 0.13], [0.026, spec.reach + 0.03], [0.018, spec.reach + 0.04], [0.018, spec.reach + 0.07], [0, spec.reach + 0.07]], 28), mat4.rx(Math.PI / 2))
+  const nut = xform(cylinder(0.024, 0.016, 6), mat4.c(mat4.t(0, 0, spec.reach + 0.06), mat4.rx(Math.PI / 2)))
+  const kingpin = cylinder(0.018, bh + 0.12, 16)
+  const thrust = xform(tube(0.045, 0.02, 0.012, 28), mat4.t(0, -bh / 2 - 0.006, 0))
+  return { body, spindle, nut, kingpin, thrust }
+}
+
+/* ------------------------------ front support (bolster) ------------------------------ */
+
+/**
+ * Cast front support bolted under the front of the engine: it carries the radiator above, the
+ * front-axle pivot below and the front weights or a tow eye ahead. Local frame: centred on its own
+ * middle, X forward, Y up; `l`, `h`, `w` its length, height and width.
+ */
+export function frontSupport(spec: { l: number; h: number; w: number }) {
+  const { l, h, w } = spec
+  const body = roundedBox(l, h, w, 0.025)
+  // stiffening ribs down each side, a flange along the top with its bolts
+  const ribs = merge(...[1, -1].flatMap((s) => [-0.3, 0, 0.3].map((f) => xform(box(0.022, h * 0.86, 0.018), mat4.t(f * l, -0.01, s * (w / 2 + 0.008))))))
+  const flange = xform(roundedBox(l + 0.03, 0.022, w + 0.04, 0.008), mat4.t(0, h / 2 + 0.011, 0))
+  const bolt = merge(cylinder(0.011, 0.012, 6), xform(cylinder(0.006, 0.02, 10), mat4.t(0, -0.01, 0)))
+  const bolts = merge(...[1, -1].flatMap((s) => [-0.38, 0, 0.38].map((f) => xform(bolt, mat4.t(f * l, h / 2 + 0.028, s * (w / 2 + 0.006))))))
+  // front face: a pad for the weight frame and a tow eye below it
+  const pad = xform(roundedBox(0.02, h * 0.7, w * 0.8, 0.006), mat4.t(l / 2 + 0.01, 0.01, 0))
+  const eye = merge(xform(box(0.06, 0.03, 0.04), mat4.t(l / 2 + 0.04, -h / 2 + 0.02, 0)), xform(tube(0.03, 0.015, 0.04, 24), mat4.c(mat4.t(l / 2 + 0.08, -h / 2 + 0.02, 0), mat4.rx(Math.PI / 2))))
+  return { body: merge(body, ribs, flange, pad), bolts, eye }
+}
+
+/** Air-intake stack: the pipe up through the bonnet with its hose collar and clamp bands (the pre-cleaner sits on top). Local: base at the origin, up +Y. */
+export function intakeStack(spec: { r: number; length: number }) {
+  const { r, length: L } = spec
+  const pipe = lathe([[r - 0.004, 0], [r, 0], [r, L], [r - 0.004, L]], 32)
+  const collar = lathe([[r, 0.02], [r + 0.012, 0.02], [r + 0.012, 0.11], [r, 0.11]], 32)
+  const band = (y: number) => merge(lathe([[r + 0.012, y], [r + 0.016, y], [r + 0.016, y + 0.014], [r + 0.012, y + 0.014]], 32), xform(box(0.02, 0.014, 0.012), mat4.t(r + 0.024, y + 0.007, 0)))
+  return { pipe, collar, bands: merge(band(0.03), band(0.085)) }
+}

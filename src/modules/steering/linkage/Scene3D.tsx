@@ -141,7 +141,7 @@ export function Steering3D() {
   return (
     <group>
       <group ref={wrap}>
-        <Tractor pose={pose} drawbar={false} internals={false} labels={false} />
+        <Tractor pose={pose} drawbar={false} labels={false} sceneSystems={['steering']} />
       </group>
       <Part id="manual-steering" name="Manual steering linkage" role="moving" material="forged" info={{ summary: 'Manual steering linkage (Fig 44).', role: 'Steering wheel → box → drop arm → drag link → steering arm → stub axle; a track rod joins the two steering arms so both wheels move together.' }} cites={C.manual}>
         <Part id="steering-wheel" name="Steering wheel (turn marker)" material="paintYellow" info={INFO.wheel} cites={C.manual} cut={false}>

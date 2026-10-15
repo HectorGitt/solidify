@@ -27,8 +27,26 @@ function tsxIn(dir: string) {
   return fs.existsSync(dir) ? fs.readdirSync(dir).filter((f) => f.endsWith('.tsx')).map((f) => path.join(dir, f)) : []
 }
 
+/** the tractor's systems, mounted in place on every procedural tractor */
+const TRACTOR_FILES = ['Tractor', 'DrivelineInternals', 'FinalDrives', 'PtoDrive', 'Hydraulics', 'Steering', 'Cooling', 'Fuel', 'Electrical'].map((n) => `src/tractor/${n}.tsx`)
+/** parts only a tractor variant has, credited only where a scene asks for that variant */
+const VARIANTS: { when: RegExp; names: string[] }[] = [
+  { when: /frame="articulated"/, names: ['Articulation hinge & steering rams', 'Front propeller shaft'] },
+  { when: /drive="4wd"/, names: ['Transfer box & front propeller shaft'] },
+  { when: /running="tracks"/, names: ['Tracks'] },
+]
+/** the shared engine's part names (its NAMES table) */
+function engineNames() {
+  const src = fs.readFileSync('src/machines/Engine.tsx', 'utf8')
+  const start = src.indexOf('const NAMES')
+  const table = src.slice(start, src.indexOf('}', start))
+  return new Set([...table.matchAll(/:\s*'([^']+)'/g)].map((m) => m[1]))
+}
+
 export function buildIndex() {
-  const tractor = namesIn(['src/tractor/Tractor.tsx'])
+  const tractor = namesIn(TRACTOR_FILES)
+  const variantOnly = new Set(VARIANTS.flatMap((v) => v.names))
+  const engine = engineNames()
   const shared = namesIn(['src/modules/implements/_shared/field.tsx'])
   const index: Record<string, string[]> = {}
   for (const m of MODULES) {
@@ -38,7 +56,10 @@ export function buildIndex() {
       const files = tsxIn(dir)
       const names = namesIn(files)
       const src = files.map((f) => fs.readFileSync(f, 'utf8')).join('\n')
-      if (/<Tractor\b|<FieldRun\b/.test(src)) for (const n of tractor) names.add(n)
+      const hasTractor = /<Tractor\b|<FieldRun\b/.test(src)
+      if (hasTractor) for (const n of tractor) if (!variantOnly.has(n)) names.add(n)
+      if (hasTractor) for (const v of VARIANTS) if (v.when.test(src)) for (const n of v.names) names.add(n)
+      if (hasTractor || /<Engine\b/.test(src)) for (const n of engine) names.add(n)
       if (/<FieldRun\b/.test(src)) for (const n of shared) names.add(n)
       index[`${m.id}/${s.id}`] = [...names].sort()
     }

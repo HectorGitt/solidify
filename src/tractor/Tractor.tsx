@@ -20,6 +20,7 @@ import { ART_AXLE_X, ART_GAIN, ART_MAX, ART_PROP_FROM, ART_PROP_QUAT, HINGE_X, R
 import { crawlerGeometry } from './crawler'
 import { AXLE4_Y, FRONT_4WD, KINGPIN4_Z, PROP_FROM, PROP_QUAT, mfwdGeometry } from './mfwd'
 import { WholeTractor } from './WholeTractor'
+import { TractorSystems, useSystemsReady, type TractorSystem } from './InPlaceSystems'
 import { FINAL_RATIO } from './FinalDrives'
 import { PTO_FROM_LAY } from './PtoDrive'
 import { ClutchInternals, ClutchPlate, CrownWheel, GearTrain, GearboxInternals, newAngles } from './DrivelineInternals'
@@ -128,6 +129,8 @@ export interface TractorProps {
   frame?: 'rigid' | 'articulated'
   /** draw the operator's seat (off where a scene mounts its own, e.g. a suspended seat) */
   seat?: boolean
+  /** systems the scene draws its own way (e.g. a steering scene's own linkage); the tractor leaves these out */
+  sceneSystems?: TractorSystem[]
   labels?: boolean
   /** mounted on the lower-link hitch: local origin at the lower hitch points' midpoint, +Y up the mast, −X rearward */
   mounted?: ReactNode
@@ -180,7 +183,7 @@ const TRACTOR_INSIDE = { ...INFO.tractor, inside: 'Every system at once, working
 
 const ENGINE_INSIDE = { ...INFO.engine, inside: 'The full four-cylinder diesel, working in slow motion: block and head, crankshaft, pistons and rods, camshaft, tappets, pushrods, rockers, valves and springs, injectors and pump, with the gas in each cylinder glowing as it fires.', insideView: [0.75, 0.7, 1.1] as [number, number, number] }
 
-export function Tractor({ pose, id = 'tractor', paint = 'paintRed', linkage = true, drawbar = true, rops = true, cab = false, look = 'procedural', driver = true, internals = true, drive = '2wd', running = 'wheels', trackGauge, frame = 'rigid', seat = true, labels = true, mounted, trailed, gearRatio = 2, finalRatio = 1, position, rotation, children }: TractorProps) {
+export function Tractor({ pose, id = 'tractor', paint = 'paintRed', linkage = true, drawbar = true, rops = true, cab = false, look = 'procedural', driver = true, internals = true, drive = '2wd', running = 'wheels', trackGauge, frame = 'rigid', seat = true, sceneSystems = [], labels = true, mounted, trailed, gearRatio = 2, finalRatio = 1, position, rotation, children }: TractorProps) {
   const G = useMemo(() => tractorGeometry(), [])
   const k = (s: string) => `${id}-${s}`
   const D = G.detail
@@ -235,6 +238,10 @@ export function Tractor({ pose, id = 'tractor', paint = 'paintRed', linkage = tr
   useEffect(() => {
     if (insideEngine && !engineReady(FIRING)) useInside.setState({ loading: true })
   }, [insideEngine])
+  /** the detailed systems on the procedural tractor (their stand-ins show until they are built) */
+  const sysWanted = internals && look === 'procedural'
+  const sysReady = useSystemsReady(sysWanted)
+  const systems = sysWanted && sysReady
   const outline = (
     <>
       <PartMesh geometry={G.block} />
@@ -422,6 +429,8 @@ export function Tractor({ pose, id = 'tractor', paint = 'paintRed', linkage = tr
                   firing={FIRING}
                   paint={paint}
                   crankAngle={() => ang.current.crank}
+                  // the fuel system draws its own injection pump and pipes
+                  fuel={!systems || sceneSystems.includes('fuel')}
                   position={[ENGINE_X, DRIVE_Y, 0]}
                   rotation={[0, Math.PI / 2, 0]}
                   placeholder={outline}
@@ -442,12 +451,15 @@ export function Tractor({ pose, id = 'tractor', paint = 'paintRed', linkage = tr
               <PartMesh geometry={D.louvres} material="paintBlack" />
               <PartMesh geometry={D.stripe} material="paintBlack" />
               <PartMesh geometry={G.airCleaner} material="paintBlack" />
+              <PartMesh geometry={G.airCleanerBands} material="steel" />
               <PartMesh geometry={D.exPipe} material="steelDark" />
               <PartMesh geometry={D.muffler} material="paintBlack" />
             </Part>
             <Part id={k('radiator')} name="Radiator" role="static" material="copper" info={INFO.radiator} cites={[SRC.supp509('cooling system')]} explode={[0.35, 0, 0]}>
-              <PartMesh geometry={G.radiator} />
+              {/* the cooling system's radiator replaces the outline block once built */}
+              {systems && !sceneSystems.includes('cooling') ? null : <PartMesh geometry={G.radiator} />}
               <PartMesh geometry={G4 ? G4.support : G.bolster} material="castIron" />
+              {G4 ? null : <PartMesh geometry={G.bolsterSteel} material="steelDark" />}
             </Part>
             <Part id={k('clutch-housing')} name="Clutch housing" material="castIron" info={CLUTCH_INSIDE} cites={[SRC.pt510('clutch')]} explode={[0, 0, 0.4]}>
               <PartMesh geometry={G.clutchHousing} />
@@ -548,13 +560,18 @@ export function Tractor({ pose, id = 'tractor', paint = 'paintRed', linkage = tr
                   <PartMesh geometry={G4.trackRod} material="forged" />
                 </>
               ) : (
-                <PartMesh geometry={G.axleBeam} />
+                <>
+                  <PartMesh geometry={G.axleBeam} />
+                  <PartMesh geometry={G.axleBolts} material="steelDark" />
+                  <PartMesh geometry={G.axleHoles} material="paintBlack" />
+                </>
               )}
               {([1, -1] as const).map((s) => (
                 <group key={s} position={[TRACTOR.wheelbase, kingY, s * kingZ]}>
                   <group ref={s > 0 ? knuckleR : knuckleL}>
                     <group rotation={[0, s > 0 ? 0 : Math.PI, 0]}>
                       <PartMesh geometry={G4 ? G4.swivel : G.knuckle} />
+                      {G4 ? null : <PartMesh geometry={G.knuckleSteel} material="steel" />}
                     </group>
                     <Part id={k(s > 0 ? 'front-wheel-r' : 'front-wheel-l')} name={s > 0 ? 'Front wheel (right)' : 'Front wheel (left)'} explode={[0, 0, s * 0.45]} role="moving" material="rubber" info={four ? INFO.frontWheels4 : INFO.frontWheels} xray={whole || undefined}>
                       <group position={[0, 0, s * (FRONT_Z - kingZ)]}>
@@ -605,8 +622,13 @@ export function Tractor({ pose, id = 'tractor', paint = 'paintRed', linkage = tr
               <PartMesh geometry={D.bezels} material="chrome" />
               <PartMesh geometry={D.gaugeFaces} material="ceramic" />
               <PartMesh geometry={D.filler} material="chrome" />
-              <PartMesh geometry={G.column} material="steelDark" />
-              <PartMesh geometry={G.steeringWheel} material="plastic" />
+              {/* the steering system brings its own wheel and column */}
+              {systems || sceneSystems.includes('steering') ? null : (
+                <>
+                  <PartMesh geometry={G.column} material="steelDark" />
+                  <PartMesh geometry={G.steeringWheel} material="plastic" />
+                </>
+              )}
             </Part>
             {rops && !cab && (
               <Part id={k('rops')} name="ROPS frame" role="static" material="paintBlack" info={INFO.rops} cites={[SRC.he510('p20–21 ROPS')]} cut={false} explode={[0, 0.9, 0]}>
@@ -681,6 +703,7 @@ export function Tractor({ pose, id = 'tractor', paint = 'paintRed', linkage = tr
             </Part>
           </Part>
         )}
+        {systems && !whole ? <TractorSystems a={ang} k={k} omit={sceneSystems} /> : null}
         {whole && look === 'procedural' ? <WholeTractor a={ang} k={k} G={G} paint={paint} rootId={id} /> : null}
         {/* the implement steps aside while the whole tractor is open */}
         <group visible={!whole}>
