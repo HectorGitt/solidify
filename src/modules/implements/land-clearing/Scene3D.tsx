@@ -2,13 +2,14 @@ import { useMemo, useRef, type ReactNode } from 'react'
 import * as THREE from 'three'
 import { useSimFrame } from '@/core/sim'
 import { box, cylinder, lathe, merge } from '@/geometry'
-import { InstancedPartMesh } from '@/modules/traction/tracks/InstancedPartMesh'
+import { InstancedPartMesh } from '@/render/InstancedPartMesh'
 import { PartLabel } from '@/render/Label'
 import { Part, PartMesh } from '@/render/Part'
 import { PROFILES, createSoil, heightAt, pressPrint, roughen, stampRun } from '@/render/soil'
 import { FieldGround } from '../_shared/field'
 import { anchorLink, dozerBlade, rootPlough, type DozerAttachment } from '@/parts/lib/implements'
-import { CRAWLER_TRACK, trackBushing, trackIdler, trackLink, trackPin, trackRoller, trackShoe, trackSprocket, type TrackSpec } from '@/parts/lib/wheels'
+import { TRACTOR } from '@/tractor/dims'
+import { Tractor, createTractorPose } from '@/tractor/Tractor'
 import { Particles } from '../_appkit/three'
 import { C, PLOT, STAGES, STRIP_HALF, VEG, live, useClearing, type Method, type Stage, type Vegetation } from './model'
 
@@ -111,79 +112,12 @@ function setupStage(stage: Stage, m: Method, veg: Vegetation) {
 
 /* ------------------------------ crawler geometry ------------------------------ */
 
-const TR = { x0: -1.55, x1: 1.55, ys: 0.45, rs: 0.42, yi: 0.4, ri: 0.38, w: 0.5, z: 1.0 }
-const TRACK_LEN = 2 * (TR.x1 - TR.x0) + PI * (TR.rs + TR.ri)
-/** links round the loop: the chain pitch is set so a whole number of links closes it */
-const LINKS = 48
-/** the library crawler track at this machine's size: shoe outer faces run on the loop above */
-const LC_TRACK: TrackSpec = { ...CRAWLER_TRACK, pitch: TRACK_LEN / LINKS, shoeW: TR.w, idlerR: TR.ri - 0.064, rollerR: 0.076 }
-/** link-frame parts sit with their pitch line this far inside the loop */
-const PITCH_IN = LC_TRACK.rail + LC_TRACK.plateT
-
-/** Point on the track loop (side view) at arc length s, measured from the top of the sprocket going forward. */
-function trackPoint(s: number, out: { x: number; y: number; a: number }) {
-  const L = TR.x1 - TR.x0
-  const top = TR.ys + TR.rs
-  s = ((s % TRACK_LEN) + TRACK_LEN) % TRACK_LEN
-  if (s < L) {
-    out.x = TR.x0 + s
-    out.y = top - (s / L) * (TR.rs - TR.ri) - (TR.ys - TR.yi) * (s / L)
-    out.a = 0
-    return out
-  }
-  s -= L
-  if (s < PI * TR.ri) {
-    const a = PI / 2 - s / TR.ri
-    out.x = TR.x1 + TR.ri * Math.cos(a)
-    out.y = TR.yi + TR.ri * Math.sin(a)
-    out.a = a - PI / 2
-    return out
-  }
-  s -= PI * TR.ri
-  if (s < L) {
-    out.x = TR.x1 - s
-    out.y = 0.02
-    out.a = PI
-    return out
-  }
-  s -= L
-  const a = -PI / 2 - s / TR.rs
-  out.x = TR.x0 + TR.rs * Math.cos(a)
-  out.y = TR.ys + TR.rs * Math.sin(a)
-  out.a = a - PI / 2
-  return out
-}
-
-function crawlerGeometry() {
-  // track frames with the library's drive sprocket, front idler and bottom rollers
-  const sprocket = trackSprocket(LC_TRACK)
-  const idler = trackIdler(LC_TRACK)
-  const roller = trackRoller(LC_TRACK.rollerR, LC_TRACK)
-  const frame = merge(
-    ...[1, -1].flatMap((s) => [
-      box(TR.x1 - TR.x0, 0.35, TR.w * 0.6).translate(0, 0.42, s * TR.z),
-      sprocket.clone().translate(TR.x0, TR.ys, s * TR.z),
-      idler.clone().translate(TR.x1, TR.yi, s * TR.z),
-      ...[-0.9, -0.3, 0.3, 0.9].map((x) => roller.clone().translate(x, 0.02 + PITCH_IN + LC_TRACK.rail + LC_TRACK.rollerR, s * TR.z)),
-    ]),
-  )
-  const body = merge(
-    box(3.0, 0.4, 1.5).translate(-0.1, 0.85, 0),
-    box(1.7, 0.9, 1.3).translate(0.65, 1.45, 0),
-    box(0.15, 0.85, 1.25).translate(1.55, 1.4, 0),
-    box(1.1, 0.5, 1.6).translate(-0.85, 1.3, 0),
-    box(0.5, 0.6, 1.4).translate(-1.4, 1.35, 0),
-    cylinder(0.07, 0.8, 12).translate(0.9, 2.2, 0.3),
-    // drawbar hook
-    box(0.5, 0.12, 0.25).translate(-1.75, 0.6, 0),
-  )
-  const seat = merge(box(0.5, 0.12, 0.5).translate(-0.85, 1.65, 0), box(0.1, 0.55, 0.5).translate(-1.1, 1.9, 0), cylinder(0.18, 0.04, 20).rotateZ(0.5).translate(-0.45, 2.0, 0))
-  const rops = merge(...[[-1.35, 0.72], [-1.35, -0.72], [-0.2, 0.72], [-0.2, -0.72]].map(([x, z]) => box(0.1, 1.55, 0.1).translate(x, 2.3, z)), box(1.35, 0.08, 1.6).translate(-0.78, 3.08, 0))
-  // one link-frame unit of chain (link pair, bushing, pin) and its shoe, pulled in to the pitch line
-  const inward = (g: THREE.BufferGeometry) => g.translate(0, -PITCH_IN, 0)
-  const chain = inward(merge(trackLink(LC_TRACK), trackBushing('interlocking', LC_TRACK), trackPin(LC_TRACK)))
-  return { frame, body, seat, rops, shoe: inward(trackShoe('standard', LC_TRACK)), chain }
-}
+/** track footprint (soil prints): gauge half-width and shoe width of the crawler */
+const TR = { w: 0.45, z: 1.0 }
+/** the shared tractor on wide-gauge tracks, set back so its idlers sit just behind the blade */
+const DX = -0.8
+/** drawbar pin (chain hook, root plough hitch), crawler frame */
+const HOOK_X = DX + TRACTOR.drawbar.x
 
 type Attach = DozerAttachment
 
@@ -224,48 +158,23 @@ interface Pose {
 }
 
 function Crawler({ id, attach, pose, children }: { id: string; attach: Attach; pose: Pose; children?: ReactNode }) {
-  const g = useMemo(crawlerGeometry, [])
   const a = useMemo(() => attachmentGeometry(attach), [attach])
   const root = useRef<THREE.Group>(null)
-  const shoes = useRef<THREE.InstancedMesh>(null)
-  const links = useRef<THREE.InstancedMesh>(null)
-  const N = LINKS
-  const m = useMemo(() => new THREE.Matrix4(), [])
-  const q = useMemo(() => ({ x: 0, y: 0, a: 0 }), [])
+  const tpose = useMemo(() => createTractorPose({ hitchHeight: 0.6 }), [])
   useSimFrame(() => {
     if (root.current) {
       root.current.position.set(pose.x, heightAt(grid, pose.x, pose.z), pose.z)
       root.current.rotation.set(0, pose.yaw, 0)
     }
-    if (shoes.current) {
-      let k = 0
-      for (const s of [1, -1])
-        for (let i = 0; i < N; i++) {
-          trackPoint((i / N) * TRACK_LEN - pose.phase, q)
-          m.makeRotationZ(q.a).setPosition(q.x, q.y, s * TR.z)
-          shoes.current.setMatrixAt(k, m)
-          links.current?.setMatrixAt(k, m)
-          k++
-        }
-      shoes.current.instanceMatrix.needsUpdate = true
-      if (links.current) links.current.instanceMatrix.needsUpdate = true
-    }
+    // the tracks run with the distance travelled
+    tpose.rearAngle = pose.phase / TRACTOR.rear.rolling
   })
   const bladeName = { straight: 'Bulldozer blade', pusher: 'Tree pusher', rake: 'Clearing rake', shear: 'Shear blade', none: 'Front weight' }[attach]
   const bladeInfo = attach === 'none' ? { summary: 'Front weight.', role: 'Balances the pull of the chain.' } : INFO[attach]
   return (
     <group ref={root}>
       <Part id={id} name="Crawler tractor" role="housing" material="paintYellow" info={INFO.crawler} cites={CITE.machines} beyondNotes>
-        <PartMesh geometry={g.body} />
-        <Part id={`${id}-tracks`} name="Tracks and track frames" role="moving" material="steelDark" info={{ summary: 'Track frames, sprocket, idler, rollers and shoes.', role: 'The sprocket at the rear drives the track; grousers on the shoes bite into the ground.' }}>
-          <PartMesh geometry={g.frame} />
-          <InstancedPartMesh ref={shoes} geometry={g.shoe} count={2 * N} />
-          <InstancedPartMesh ref={links} geometry={g.chain} count={2 * N} />
-        </Part>
-        <Part id={`${id}-rops`} name="ROPS and seat" role="static" material="paintBlack" info={{ summary: 'Roll-over protective structure and seat.', role: 'Protects the operator from falling branches and in a roll-over.' }} cut={false}>
-          <PartMesh geometry={g.rops} />
-          <PartMesh geometry={g.seat} material="plastic" />
-        </Part>
+        <Tractor id={`${id}-tractor`} pose={tpose} running="tracks" trackGauge={2 * TR.z} paint="paintYellow" linkage={false} internals={false} labels={false} position={[DX, 0, 0]} />
         <Part id={`${id}-blade`} name={bladeName} role="static" material={attach === 'shear' ? 'steelDark' : 'paintYellow'} info={bladeInfo} cites={CITE.machines} explode={[0.6, 0, 0]}>
           <PartMesh geometry={a.blade} />
           {a.extra && <PartMesh geometry={a.extra} material={attach === 'shear' ? 'forged' : 'paintYellow'} />}
@@ -300,8 +209,8 @@ function lanePose(p: number, pose: Pose) {
 
 function chainPoint(t: number, out: THREE.Vector3) {
   // quadratic Bézier in plan from crawler A's hook through the bight to crawler B's hook
-  const ax = P1.x - 1.9
-  const bx = P2.x - 1.9
+  const ax = P1.x + HOOK_X
+  const bx = P2.x + HOOK_X
   const cx = (ax + bx) / 2 - CHAIN_BIGHT * 2
   const x = (1 - t) * (1 - t) * ax + 2 * t * (1 - t) * cx + t * t * bx
   const z = (1 - t) * (1 - t) * P1.z + 2 * t * (1 - t) * 0 + t * t * P2.z
@@ -521,7 +430,7 @@ function RootPlough() {
   const g = useMemo(rootPlough, [])
   return (
     <Part id="root-plough" name="Root plough" role="static" material="paintYellow" info={INFO.plough} cites={CITE.plough} explode={[-0.6, 0, 0]}>
-      <group position={[-1.75, 0, 0]}>
+      <group position={[HOOK_X, 0, 0]}>
         <PartMesh geometry={g.frame} />
         <PartMesh geometry={g.standards} material="forged" />
         <Part id="root-plough-blade" name="Undercutting V-blade and fins" role="static" material="steelDark" info={INFO.plough} cites={CITE.plough}>

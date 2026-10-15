@@ -5,7 +5,7 @@ import { PartLabel } from '@/render/Label'
 import { Part, PartMesh } from '@/render/Part'
 import { ForceArrow } from '../_shared/Arrow'
 import { A503 } from '../_shared/cites'
-import { InstancedPartMesh } from '../_shared/InstancedPartMesh'
+import { InstancedPartMesh } from '@/render/InstancedPartMesh'
 import { TYPES, cageOmega, live, useBearings, type BearingType } from './model'
 import { JOURNAL, bearingGeometry, housingGeometry } from './parts'
 

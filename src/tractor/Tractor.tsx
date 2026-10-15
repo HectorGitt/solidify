@@ -15,6 +15,10 @@ import { insideReady, useInside } from '@/ui/inside'
 import { Engine } from '@/machines/Engine'
 import { engineReady } from '@/machines/engine.geometry'
 import { ENGINE_X, FIRING } from './engine'
+import { CrawlerTracks } from './CrawlerTrack'
+import { ART_AXLE_X, ART_GAIN, ART_MAX, ART_PROP_FROM, ART_PROP_QUAT, HINGE_X, RAM_FRONT, RAM_REAR, articulatedGeometry } from './articulated'
+import { crawlerGeometry } from './crawler'
+import { AXLE4_Y, FRONT_4WD, KINGPIN4_Z, PROP_FROM, PROP_QUAT, mfwdGeometry } from './mfwd'
 import { WholeTractor } from './WholeTractor'
 import { FINAL_RATIO } from './FinalDrives'
 import { PTO_FROM_LAY } from './PtoDrive'
@@ -74,6 +78,12 @@ const INFO = {
   trumpets: { summary: 'Rear axle (trumpet) housings.', role: 'Carry the half shafts, final drives and wet brakes out to the wheel hubs.' },
   rearWheels: { summary: 'Rear driving wheels, 14.9-28 R-1 tyres.', role: 'Turn the axle torque into pull: H = 2Tw/D, less rolling resistance R and slip.' },
   frontAxle: { summary: 'Front axle and steering knuckles.', role: 'Pivots at the centre so all four wheels stay on rough ground; the knuckles steer the front wheels.' },
+  frontAxle4: { summary: 'Driven front axle (MFWD).', role: 'A differential in the axle centre and an epicyclic reduction in each swivel housing drive the front wheels; the swivels steer them. The axle pivots on a fore-and-aft pin so all four wheels stay on rough ground.', details: 'Front assist roughly doubles the share of the weight that gives traction, at the cost of a little more rolling loss; it is usually engaged for heavy draft work and on slippery ground.' },
+  hinge: { summary: 'Articulation hinge and steering rams.', role: 'The front and rear frames turn about vertical pins above and below the driveline; two double-acting rams fold them to steer, and a universal joint in the shaft passes the drive through the hinge. The rear wheels follow in the front wheels’ tracks, so there is less soil compaction and no steered axle to carry.' },
+  frontAxleArt: { summary: 'Rigid driven front axle.', role: 'A differential and half shafts like the rear axle’s, with the same size of wheels: the weight is nearly equal front and rear, so all four wheels pull alike.' },
+  tracks: { summary: 'Steel tracks in place of the wheels (crawler).', role: 'The drive sprocket on each half shaft lays a track of steel shoes down ahead of the tractor and picks it up behind: a long contact patch gives low ground pressure, little slip and high drawbar pull in soft soil. Steering is by slowing one track (skid steering).', details: 'Sprocket on the rear axle, idler at the front on a recoil spring, five bottom rollers on each track frame; an equaliser bar across the front lets the frames rock independently.' },
+  frontDrive: { summary: 'Transfer box and front propeller shaft.', role: 'A gear pair under the gearbox takes drive off the output shaft to a propeller shaft with a universal joint at each end; the front pinion turns at the rear pinion’s speed, so the front tyres keep pace with the rears.' },
+  frontWheels4: { summary: 'Driven front wheels (11.2-24 lugged tyres).', role: 'Bigger than a 2WD tractor’s steering tyres and lugged for traction; geared to run at the same ground speed as the rear wheels.' },
   frontWheels: { summary: 'Front steering wheels, F-2 rib tyres.', role: 'Carry the front weight and steer. The ribs resist sideways slip.' },
   station: { summary: 'Operator station.', role: 'Seat, steering wheel, controls, fuel tank and platform.' },
   drivetrain: { summary: 'Engine and transmission internals.', role: 'The moving heart of the tractor, shown inside the detailed body: crankshaft, flywheel, clutch, gearbox and crown wheel turn in step with the wheels. Turn on X-ray to see them through the bonnet.' },
@@ -108,6 +118,16 @@ export interface TractorProps {
   driver?: boolean
   /** show the engine/transmission internals inside the housings */
   internals?: boolean
+  /** '4wd': mechanical front-wheel drive — a driven, steered front axle and bigger lugged front tyres */
+  drive?: '2wd' | '4wd'
+  /** 'tracks': a crawler — a steel track each side, driven by a sprocket on the rear axle, instead of the four wheels */
+  running?: 'wheels' | 'tracks'
+  /** crawler: track centre to centre (default the rear wheel track); wider takes the drive out through outboard final drives */
+  trackGauge?: number
+  /** 'articulated': front and rear frames joined by a vertical hinge, steered by folding; equal wheels front and rear, both axles driven */
+  frame?: 'rigid' | 'articulated'
+  /** draw the operator's seat (off where a scene mounts its own, e.g. a suspended seat) */
+  seat?: boolean
   labels?: boolean
   /** mounted on the lower-link hitch: local origin at the lower hitch points' midpoint, +Y up the mast, −X rearward */
   mounted?: ReactNode
@@ -160,10 +180,28 @@ const TRACTOR_INSIDE = { ...INFO.tractor, inside: 'Every system at once, working
 
 const ENGINE_INSIDE = { ...INFO.engine, inside: 'The full four-cylinder diesel, working in slow motion: block and head, crankshaft, pistons and rods, camshaft, tappets, pushrods, rockers, valves and springs, injectors and pump, with the gas in each cylinder glowing as it fires.', insideView: [0.75, 0.7, 1.1] as [number, number, number] }
 
-export function Tractor({ pose, id = 'tractor', paint = 'paintRed', linkage = true, drawbar = true, rops = true, cab = false, look = 'procedural', driver = true, internals = true, labels = true, mounted, trailed, gearRatio = 2, finalRatio = 1, position, rotation, children }: TractorProps) {
+export function Tractor({ pose, id = 'tractor', paint = 'paintRed', linkage = true, drawbar = true, rops = true, cab = false, look = 'procedural', driver = true, internals = true, drive = '2wd', running = 'wheels', trackGauge, frame = 'rigid', seat = true, labels = true, mounted, trailed, gearRatio = 2, finalRatio = 1, position, rotation, children }: TractorProps) {
   const G = useMemo(() => tractorGeometry(), [])
   const k = (s: string) => `${id}-${s}`
   const D = G.detail
+  const tracks = running === 'tracks'
+  const art = frame === 'articulated' && !tracks
+  const four = drive === '4wd' && !tracks && !art
+  const GT = useMemo(() => (tracks ? crawlerGeometry(trackGauge) : null), [tracks, trackGauge])
+  const GA = useMemo(() => (art ? articulatedGeometry(G.trumpets) : null), [art, G])
+  /** the front frame's groups (articulated: they turn about the hinge) */
+  const frontFrames = useRef<(THREE.Group | null)[]>([])
+  const addFront = (i: number) => (el: THREE.Group | null) => void (frontFrames.current[i] = el)
+  const rams = useRef<(THREE.Group | null)[]>([])
+  const hingeJoint = useRef<THREE.Group>(null)
+  const G4 = useMemo(() => (four ? mfwdGeometry() : null), [four])
+  /** steered front wheels: kingpin height and position, and the wheel offset from it */
+  const kingY = four ? AXLE4_Y : FRONT_Y
+  const kingZ = four ? KINGPIN4_Z : KINGPIN_Z
+  const frontRoll = four ? FRONT_4WD.rolling : art ? TRACTOR.rear.rolling : TRACTOR.front.radius
+  const propRef = useRef<THREE.Group>(null)
+  /** distance the tracks have run (crawler) */
+  const run = useRef(0)
 
   const rearL = useRef<THREE.Group>(null)
   const rearR = useRef<THREE.Group>(null)
@@ -214,8 +252,10 @@ export function Tractor({ pose, id = 'tractor', paint = 'paintRed', linkage = tr
     const p = pose
     rearL.current?.rotation.set(0, 0, -p.rearAngle)
     rearR.current?.rotation.set(0, 0, -p.rearAngle)
-    frontL.current?.rotation.set(0, 0, -p.frontAngle)
-    frontR.current?.rotation.set(0, 0, -p.frontAngle)
+    run.current = p.rearAngle * TRACTOR.rear.rolling
+    const fa = (p.frontAngle * TRACTOR.front.radius) / frontRoll
+    frontL.current?.rotation.set(0, 0, -fa)
+    frontR.current?.rotation.set(0, 0, -fa)
     
     if (p.rearTrack !== undefined) {
       const rZ = p.rearTrack / 2
@@ -224,7 +264,7 @@ export function Tractor({ pose, id = 'tractor', paint = 'paintRed', linkage = tr
     }
     if (p.frontTrack !== undefined) {
       const fZ = p.frontTrack / 2
-      const kZ = fZ - 0.09
+      const kZ = fZ - (TRACTOR.front.track / 2 - kingZ)
       if (knuckleR.current?.parent) knuckleR.current.parent.position.z = kZ
       if (knuckleL.current?.parent) knuckleL.current.parent.position.z = -kZ
     }
@@ -265,10 +305,11 @@ export function Tractor({ pose, id = 'tractor', paint = 'paintRed', linkage = tr
       crownA = (pin * CROWN.pinion) / CROWN.teeth
       if (wholeOpen) {
         const wheel = crownA / fr
+        run.current = wheel * TRACTOR.rear.rolling
         rearL.current?.rotation.set(0, 0, -wheel)
         rearR.current?.rotation.set(0, 0, -wheel)
-        frontL.current?.rotation.set(0, 0, (-wheel * TRACTOR.rear.rolling) / TRACTOR.front.radius)
-        frontR.current?.rotation.set(0, 0, (-wheel * TRACTOR.rear.rolling) / TRACTOR.front.radius)
+        frontL.current?.rotation.set(0, 0, (-wheel * TRACTOR.rear.rolling) / frontRoll)
+        frontR.current?.rotation.set(0, 0, (-wheel * TRACTOR.rear.rolling) / frontRoll)
       }
     }
     d.lastLay = layA
@@ -277,6 +318,25 @@ export function Tractor({ pose, id = 'tractor', paint = 'paintRed', linkage = tr
     const steer = parked && mine === 'centre-housing' ? 0.5 * Math.sin(t * 0.6) : parked && wholeOpen ? 0.4 * Math.sin(t * 0.3) : p.steer
     const track = p.frontTrack ?? 2 * KINGPIN_Z + 0.18
     const st = ackermann(steer, TRACTOR.wheelbase, track)
+    if (art) {
+      // fold the frames: the front frame turns about the hinge, the rams follow
+      const al = Math.max(-ART_MAX, Math.min(ART_MAX, steer * ART_GAIN))
+      for (const g of frontFrames.current) g?.rotation.set(0, al, 0)
+      const c = Math.cos(al)
+      const sn = Math.sin(al)
+      rams.current.forEach((g, i) => {
+        if (!g) return
+        const sz = i < 2 ? 1 : -1
+        const fx = RAM_FRONT.x - HINGE_X
+        const fz = sz * RAM_FRONT.z
+        v.a.set(RAM_REAR.x, RAM_REAR.y, sz * RAM_REAR.z)
+        v.b.set(HINGE_X + fx * c + fz * sn, RAM_FRONT.y, -fx * sn + fz * c)
+        // barrel from the rear anchor, rod from the front anchor
+        if (i % 2 === 0) orient(g, v.a, v.b)
+        else orient(g, v.b, v.a)
+      })
+      hingeJoint.current?.rotation.set(inA, 0, 0)
+    }
     knuckleL.current?.rotation.set(0, st.left, 0)
     knuckleR.current?.rotation.set(0, st.right, 0)
     d.diff += (crownA - d.lastCrown) * ((REAR_Z * Math.tan(steer)) / TRACTOR.wheelbase)
@@ -285,6 +345,8 @@ export function Tractor({ pose, id = 'tractor', paint = 'paintRed', linkage = tr
     crank.current?.rotation.set(crankA, 0, 0)
     flywheel.current?.rotation.set(crankA, 0, 0)
     // the whole tractor drives its stub through the PTO gears; elsewhere the scene sets it
+    // the front propeller shaft turns with the rear pinion
+    propRef.current?.rotation.set(pin, 0, 0)
     pto.current?.rotation.set(wholeOpen ? layA / PTO_FROM_LAY : p.ptoAngle, 0, 0)
 
     // the whole tractor, parked, works its linkage up and down so the hydraulics can be watched
@@ -349,6 +411,9 @@ export function Tractor({ pose, id = 'tractor', paint = 'paintRed', linkage = tr
           </>
         ) : (
           <>
+            {/* front frame (turns about the hinge when articulated) */}
+            <group ref={addFront(0)} position={[HINGE_X, 0, 0]}>
+              <group position={[-HINGE_X, 0, 0]}>
             <Part id={k('engine')} name="Engine" material="castIron" info={ENGINE_INSIDE} cites={[SRC.mech502('p1'), SRC.l4_509('engine parts')]} explode={[0, 0.25, 0]}>
               {/* the real engine, every part working; the outline castings stand in while it is built */}
               {whole ? null : internals ? (
@@ -382,13 +447,15 @@ export function Tractor({ pose, id = 'tractor', paint = 'paintRed', linkage = tr
             </Part>
             <Part id={k('radiator')} name="Radiator" role="static" material="copper" info={INFO.radiator} cites={[SRC.supp509('cooling system')]} explode={[0.35, 0, 0]}>
               <PartMesh geometry={G.radiator} />
-              <PartMesh geometry={G.bolster} material="castIron" />
+              <PartMesh geometry={G4 ? G4.support : G.bolster} material="castIron" />
             </Part>
             <Part id={k('clutch-housing')} name="Clutch housing" material="castIron" info={CLUTCH_INSIDE} cites={[SRC.pt510('clutch')]} explode={[0, 0, 0.4]}>
               <PartMesh geometry={G.clutchHousing} />
               {((internals && !whole) || insideClutch) && <ClutchPlate a={ang} k={k} G={G} info={INFO.clutchDisc} />}
               {insideClutch ? <ClutchInternals a={ang} k={k} /> : null}
             </Part>
+              </group>
+            </group>
             <Part id={k('gearbox')} name="Gearbox" material="castIron" info={GEARBOX_INSIDE} cites={[SRC.mech502('p8, 98 % per gear pair'), SRC.pt510('gearboxes')]} explode={[0, 0, 0.45]}>
               <PartMesh geometry={G.gearbox} />
               {insideGearbox ? <GearboxInternals a={ang} k={k} /> : null}
@@ -405,6 +472,14 @@ export function Tractor({ pose, id = 'tractor', paint = 'paintRed', linkage = tr
             <Part id={k('trumpets')} name="Rear axle housings" material="castIron" info={INFO.trumpets} explode={[0, -0.15, 0]}>
               <PartMesh geometry={G.trumpets} />
             </Part>
+            {GT ? (
+              <Part id={k('tracks')} name="Tracks" role="moving" material="steelDark" info={INFO.tracks} cites={[SRC.tt510('tracks')]} explode={false}>
+                <PartMesh geometry={GT.frames} material={paint} />
+                <PartMesh geometry={GT.equaliser} material="forged" />
+                {GT.finals ? <PartMesh geometry={GT.finals} material="castIron" /> : null}
+                <CrawlerTracks layout={GT.layout} geometry={GT.parts} z={GT.z} travel={() => run.current} />
+              </Part>
+            ) : (
             <Part id={k('rear-wheels')} name="Rear wheels" role="moving" material="rubber" info={INFO.rearWheels} cites={[SRC.mech502('eq 2.1–2.2'), SRC.tt510('tyre types')]} explode={false} xray={whole || undefined}>
               {([1, -1] as const).map((s) => (
                 <Part key={s} id={k(s > 0 ? 'rear-wheel-r' : 'rear-wheel-l')} name={s > 0 ? 'Rear wheel (right)' : 'Rear wheel (left)'} explode={[0, 0, s * 0.6]}>
@@ -420,21 +495,74 @@ export function Tractor({ pose, id = 'tractor', paint = 'paintRed', linkage = tr
                 </Part>
               ))}
             </Part>
-            <Part id={k('front-axle')} name="Front axle" role="static" material="forged" info={INFO.frontAxle} cites={[SRC.st510('front axle, steering linkage')]} explode={[0.4, -0.05, 0]}>
-              <PartMesh geometry={G.axleBeam} />
+            )}
+            {GA ? (
+              <>
+                <group ref={addFront(1)} position={[HINGE_X, 0, 0]}>
+                  <group position={[-HINGE_X, 0, 0]}>
+                    <Part id={k('front-axle')} name="Driven front axle" role="static" material="castIron" info={INFO.frontAxleArt} explode={[0.4, -0.05, 0]}>
+                      <PartMesh geometry={GA.frontAxle} />
+                      <PartMesh geometry={GA.rails} material={paint} />
+                      {([1, -1] as const).map((s) => (
+                        <Part key={s} id={k(s > 0 ? 'front-wheel-r' : 'front-wheel-l')} name={s > 0 ? 'Front wheel (right)' : 'Front wheel (left)'} role="moving" material="rubber" info={INFO.rearWheels} explode={[0, 0, s * 0.6]} xray={whole || undefined}>
+                          <group position={[ART_AXLE_X, AXLE_Y, s * REAR_Z]}>
+                            <group ref={s > 0 ? frontL : frontR}>
+                              <group rotation={[0, s > 0 ? 0 : Math.PI, 0]}>
+                                <PartMesh geometry={G.rearTyre} />
+                                <PartMesh geometry={G.rearRim} material="paintGrey" />
+                                <PartMesh geometry={D.rearHub} material="steelDark" />
+                              </group>
+                            </group>
+                          </group>
+                        </Part>
+                      ))}
+                    </Part>
+                    <Part id={k('front-drive')} name="Front propeller shaft" role="moving" material="steel" info={INFO.frontDrive} explode={[0, -0.2, 0]}>
+                      <group position={ART_PROP_FROM} quaternion={ART_PROP_QUAT}>
+                        <group ref={propRef}>
+                          <PartMesh geometry={GA.prop} />
+                        </group>
+                      </group>
+                    </Part>
+                  </group>
+                </group>
+                <Part id={k('hinge')} name="Articulation hinge & steering rams" role="moving" material="forged" info={INFO.hinge} explode={[0, 0.3, 0]}>
+                  <PartMesh geometry={GA.hinge} />
+                  <group position={[HINGE_X, DRIVE_Y, 0]} ref={hingeJoint}>
+                    <PartMesh geometry={GA.hingeJoint} material="steel" />
+                  </group>
+                  {[0, 1, 2, 3].map((i) => (
+                    <group key={i} ref={(el) => void (rams.current[i] = el)}>
+                      <PartMesh geometry={i % 2 === 0 ? GA.ramBarrel : GA.ramRod} material={i % 2 === 0 ? 'paintBlack' : 'chrome'} />
+                    </group>
+                  ))}
+                </Part>
+              </>
+            ) : GT ? null : (
+            <>
+            <Part id={k('front-axle')} name={four ? 'Driven front axle' : 'Front axle'} role="static" material={four ? 'castIron' : 'forged'} info={four ? INFO.frontAxle4 : INFO.frontAxle} cites={[SRC.st510('front axle, steering linkage')]} explode={[0.4, -0.05, 0]}>
+              {G4 ? (
+                <>
+                  <PartMesh geometry={G4.housing} />
+                  <PartMesh geometry={G4.pivot} material="forged" />
+                  <PartMesh geometry={G4.trackRod} material="forged" />
+                </>
+              ) : (
+                <PartMesh geometry={G.axleBeam} />
+              )}
               {([1, -1] as const).map((s) => (
-                <group key={s} position={[TRACTOR.wheelbase, FRONT_Y, s * KINGPIN_Z]}>
+                <group key={s} position={[TRACTOR.wheelbase, kingY, s * kingZ]}>
                   <group ref={s > 0 ? knuckleR : knuckleL}>
                     <group rotation={[0, s > 0 ? 0 : Math.PI, 0]}>
-                      <PartMesh geometry={G.knuckle} />
+                      <PartMesh geometry={G4 ? G4.swivel : G.knuckle} />
                     </group>
-                    <Part id={k(s > 0 ? 'front-wheel-r' : 'front-wheel-l')} name={s > 0 ? 'Front wheel (right)' : 'Front wheel (left)'} explode={[0, 0, s * 0.45]} role="moving" material="rubber" info={INFO.frontWheels} xray={whole || undefined}>
-                      <group position={[0, 0, s * (FRONT_Z - KINGPIN_Z)]}>
+                    <Part id={k(s > 0 ? 'front-wheel-r' : 'front-wheel-l')} name={s > 0 ? 'Front wheel (right)' : 'Front wheel (left)'} explode={[0, 0, s * 0.45]} role="moving" material="rubber" info={four ? INFO.frontWheels4 : INFO.frontWheels} xray={whole || undefined}>
+                      <group position={[0, 0, s * (FRONT_Z - kingZ)]}>
                         <group ref={s > 0 ? frontL : frontR}>
                           <group rotation={[0, s > 0 ? 0 : Math.PI, 0]}>
-                            <PartMesh geometry={G.frontTyre} />
-                            <PartMesh geometry={G.frontRim} material="paintGrey" />
-                            <PartMesh geometry={D.frontHub} material="steelDark" />
+                            <PartMesh geometry={G4 ? G4.tyre : G.frontTyre} />
+                            <PartMesh geometry={G4 ? G4.rim : G.frontRim} material="paintGrey" />
+                            <PartMesh geometry={G4 ? G4.hub : D.frontHub} material="steelDark" />
                           </group>
                         </group>
                       </group>
@@ -443,21 +571,40 @@ export function Tractor({ pose, id = 'tractor', paint = 'paintRed', linkage = tr
                 </group>
               ))}
             </Part>
+            {G4 ? (
+              <Part id={k('front-drive')} name="Transfer box & front propeller shaft" role="moving" material="steel" info={INFO.frontDrive} explode={[0, -0.2, 0]}>
+                <PartMesh geometry={G4.transfer} material="castIron" />
+                <group position={PROP_FROM} quaternion={PROP_QUAT}>
+                  <group ref={propRef}>
+                    <PartMesh geometry={G4.prop} />
+                  </group>
+                </group>
+              </Part>
+            ) : null}
+            </>
+            )}
+            {/* no wheel fenders over a wide-gauge crawler's outboard tracks */}
+            {GT?.finals ? null : (
             <Part id={k('fenders')} name="Fenders" material={paint} info={INFO.fenders} explode={[0, 0.35, 0]}>
               <PartMesh geometry={G.fenders} />
               <PartMesh geometry={D.tail} material="paintRed" />
             </Part>
+            )}
             <Part id={k('station')} name="Operator station" role="static" material="paintGrey" info={INFO.station} cites={[SRC.he510('operator station')]} cut={false} explode={[-0.15, 0.6, 0]}>
               <PartMesh geometry={G.platform} material="paintBlack" />
               <PartMesh geometry={G.tank} material={paint} />
               <PartMesh geometry={G.dash} />
-              <PartMesh geometry={G.seat} material="plastic" />
-              <PartMesh geometry={D.seatSides} material="plastic" />
+              {seat ? (
+                <>
+                  <PartMesh geometry={G.seat} material="plastic" />
+                  <PartMesh geometry={D.seatSides} material="plastic" />
+                  <PartMesh geometry={G.seatPost} material="steelDark" />
+                </>
+              ) : null}
               <PartMesh geometry={D.pod} material="paintBlack" />
               <PartMesh geometry={D.bezels} material="chrome" />
               <PartMesh geometry={D.gaugeFaces} material="ceramic" />
               <PartMesh geometry={D.filler} material="chrome" />
-              <PartMesh geometry={G.seatPost} material="steelDark" />
               <PartMesh geometry={G.column} material="steelDark" />
               <PartMesh geometry={G.steeringWheel} material="plastic" />
             </Part>
@@ -547,7 +694,9 @@ export function Tractor({ pose, id = 'tractor', paint = 'paintRed', linkage = tr
           <PartLabel partId={k('gearbox')} at={[0.36, 0.95, 0.3]} />
           <PartLabel partId={k('centre-housing')} at={[0, 1.15, 0.3]} />
           <PartLabel partId={k('rear-wheels')} at={[0, 1.35, REAR_Z + 0.2]} />
-          <PartLabel partId={k('front-axle')} at={[1.88, 0.55, FRONT_Z + 0.15]} />
+          {!tracks && <PartLabel partId={k('front-axle')} at={art ? [ART_AXLE_X, 1.45, REAR_Z + 0.2] : [1.88, four ? 0.85 : 0.55, FRONT_Z + 0.15]} />}
+          {art && <PartLabel partId={k('hinge')} at={[HINGE_X, 1.15, 0.35]} />}
+          {four && <PartLabel partId={k('front-drive')} at={[1.0, 0.25, -0.35]} />}
           {linkage && <PartLabel partId={k('top-link')} at={[-0.75, 1.05, 0]} />}
           {linkage && <PartLabel partId={k('lower-links')} at={[-0.7, 0.35, 0.45]} />}
           {drawbar && <PartLabel partId={k('drawbar')} at={[-0.6, 0.38, 0]} />}

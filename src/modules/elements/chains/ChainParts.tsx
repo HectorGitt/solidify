@@ -4,7 +4,7 @@ import { useSimFrame } from '@/core/sim'
 import { chainSprocket, linkPlate, rollerChain } from '@/parts/lib/elements'
 import { Part, PartMesh } from '@/render/Part'
 import { A503 } from '../_shared/cites'
-import { InstancedPartMesh } from '../_shared/InstancedPartMesh'
+import { InstancedPartMesh } from '@/render/InstancedPartMesh'
 import { rollerPositions, sprocketAngle, type ChainLoop } from './model'
 
 /** Chain and sprocket geometry: the shared parts library's (src/parts/lib/elements.ts). */

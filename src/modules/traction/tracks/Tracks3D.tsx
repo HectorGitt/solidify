@@ -5,7 +5,7 @@ import { useSimFrame } from '@/core/sim'
 import { toothEngaged } from '@/physics/tyres'
 import { PartLabel } from '@/render/Label'
 import { Part, PartMesh } from '@/render/Part'
-import { InstancedPartMesh } from './InstancedPartMesh'
+import { InstancedPartMesh } from '@/render/InstancedPartMesh'
 import { CHAIN, DIM, MISALIGN, RS, SHOES, TT, YC, YI, YS, ROLLER_Y, live, trackPath, trackState, useTracks } from './model'
 import {
   BOLT_OFFSETS,

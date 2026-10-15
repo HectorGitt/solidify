@@ -2,10 +2,10 @@ import { useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { SRC } from '@/content/citations'
 import { useSimFrame } from '@/core/sim'
-import { box, cylinder, extrude, mat4, merge, roundedBox, xform } from '@/geometry'
-import { torus } from '@/geometry/parts'
+import { box, mat4, merge, xform } from '@/geometry'
 import { coilSpring, operatorSeat, seatSuspension, telescopicDamper } from '@/parts/lib/chassis'
-import { FARMLAND_FRONT, FARMLAND_REAR, wheel as roadWheel } from '@/parts/lib/wheels'
+import { TRACTOR } from '@/tractor/dims'
+import { Tractor, createTractorPose } from '@/tractor/Tractor'
 import { profileAt, rk4Step, seatDeriv } from '@/physics/vibration'
 import { PartLabel } from '@/render/Label'
 import { Part, PartMesh } from '@/render/Part'
@@ -45,36 +45,14 @@ const capsule = (a: THREE.Vector3, b: THREE.Vector3, r: number) => {
 }
 const V = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z)
 
-function fenderGeo() {
-  const s = new THREE.Shape()
-  const R1 = 0.74
-  const R2 = 0.78
-  s.absarc(0, 0, R2, Math.PI * 0.08, Math.PI * 0.95, false)
-  s.absarc(0, 0, R1, Math.PI * 0.95, Math.PI * 0.08, true)
-  return extrude(s, 0.46)
-}
+/** the shared tractor, its wheels turned by the distance run */
+const tpose = createTractorPose({ hitchHeight: 0.6 })
 
 export function Scene3D() {
   const ground = useSeat((s) => s.ground)
   const g = useMemo(() => {
-    const along = mat4.rx(Math.PI / 2)
-    // Farmland 14.9-28 rear and 7.50-16 front wheels from the parts library
-    const rear = roadWheel({ ...FARMLAND_REAR, radius: T.rearR })
-    const front = roadWheel({ ...FARMLAND_FRONT, radius: T.frontR })
-    const body = merge(
-      xform(roundedBox(1.0, 0.5, 0.62, 0.05), mat4.t(-0.05, 0.72, 0)),
-      xform(cylinder(0.12, 1.25, 32), mat4.c(mat4.t(0, T.rearAxleY, 0), along)),
-      xform(roundedBox(0.7, 0.42, 0.5, 0.05), mat4.t(0.75, 0.72, 0)),
-    )
-    const hood = xform(roundedBox(1.15, 0.42, 0.52, 0.06), mat4.t(1.45, 1.06, 0))
-    const grille = xform(box(0.06, 0.5, 0.5), mat4.t(2.05, 0.98, 0))
-    const engine = xform(roundedBox(1.0, 0.36, 0.42, 0.04), mat4.t(1.45, 0.68, 0))
-    const frontAxle = merge(xform(box(0.14, 0.12, 1.25), mat4.t(T.wheelbase, T.frontR, 0)), xform(box(0.3, 0.3, 0.3), mat4.t(T.wheelbase, 0.58, 0)))
-    const exhaust = xform(cylinder(0.04, 0.6, 20), mat4.t(1.75, 1.55, 0.15))
-    const fender = fenderGeo()
-    const platform = xform(box(0.95, 0.04, 0.95), mat4.t(-0.18, T.platformY - 0.02, 0))
-    const column = xform(cylinder(0.03, 0.62, 16), mat4.c(mat4.t(0.4, 1.28, 0), mat4.rz(0.45)))
-    const wheel = xform(torus(0.19, 0.014, 10, 40), mat4.c(mat4.t(0.24, 1.58, 0), mat4.rz(0.45), mat4.rx(Math.PI / 2)))
+    // seat mounting plate on top of the centre housing (the tractor is the shared one)
+    const platform = xform(box(0.5, 0.04, 0.5), mat4.t(T.seatX, T.platformY - 0.02, 0))
     // --- seat suspension and seat (parts library; seat-group frame: origin on the platform at the seat point)
     const { basePlate, stops, bar } = seatSuspension()
     const springGeo = coilSpring({ coilR: 0.034, wireR: 0.005, turns: 7 })
@@ -101,7 +79,7 @@ export function Scene3D() {
     const trousers = merge(...legs)
     const skin = merge(head, neck)
     // --- ground strip (one 64 m period; local x 0…64)
-    return { rear, front, body, hood, grille, engine, frontAxle, exhaust, fender, platform, column, wheel, basePlate, stops, bar, springGeo, damperBody, damperRod, pan, back, cushion, backCushion, clothes, trousers, skin }
+    return { platform, basePlate, stops, bar, springGeo, damperBody, damperRod, pan, back, cushion, backCushion, clothes, trousers, skin }
   }, [])
 
   const groundGeo = useMemo(() => {
@@ -118,8 +96,6 @@ export function Scene3D() {
   }, [ground])
 
   const bodyOuter = useRef<THREE.Group>(null)
-  const rearW = useRef<THREE.Group[]>([])
-  const frontW = useRef<THREE.Group[]>([])
   const groundRefs = useRef<(THREE.Group | null)[]>([])
   const panRef = useRef<THREE.Group>(null)
   const opRef = useRef<THREE.Group>(null)
@@ -179,8 +155,8 @@ export function Scene3D() {
       bodyOuter.current.rotation.set(0, 0, (zf - zr) / T.wheelbase)
     }
     const dist = (st.V / 3.6) * s.t
-    rearW.current.forEach((w) => w && w.rotation.set(0, 0, -dist / 0.635))
-    frontW.current.forEach((w) => w && w.rotation.set(0, 0, -dist / T.frontR))
+    tpose.rearAngle = dist / TRACTOR.rear.rolling
+    tpose.frontAngle = dist / TRACTOR.front.radius
     const m = dist % 64
     groundRefs.current.forEach((gr, i) => gr && gr.position.set(-m + (i - 1) * 64, 0, 0))
 
@@ -221,42 +197,10 @@ export function Scene3D() {
       </Part>
       <group ref={bodyOuter} position={[0, T.rearAxleY, 0]}>
         <group position={[0, -T.rearAxleY, 0]}>
-          <Part id="tractor" name="Tractor (sprung on its tyres)" material="paintRed" role="housing" info={INFO.tractor} cites={[C.he('tractor natural frequencies 3–10 Hz'), SRC.mac502('App. II Farmland tractor')]}>
-            <PartMesh geometry={g.body} material="castIron" />
-            <PartMesh geometry={g.hood} />
-            <PartMesh geometry={g.grille} material="paintGrey" />
-            <PartMesh geometry={g.engine} material="castIron" />
-            <PartMesh geometry={g.frontAxle} material="paintGrey" />
-            <PartMesh geometry={g.exhaust} material="paintBlack" />
-            {[-1, 1].map((sz) => (
-              <PartMesh key={sz} geometry={g.fender} position={[0, T.rearAxleY, sz * 0.71]} />
-            ))}
-            <Part id="rear-wheels" name="Rear wheels" material="rubber" role="moving" info={{ summary: 'Rear tyres 14.9-28: the tractor’s main “springs”.', role: 'Tyre stiffness and the body mass set the bounce frequency (≈ 3 Hz here).' }} cut={false}>
-              {[-1, 1].map((sz, i) => (
-                <group key={sz} ref={(el) => el && (rearW.current[i] = el)} position={[0, T.rearAxleY, sz * 0.71]}>
-                  <PartMesh geometry={g.rear.tyre} />
-                  <group rotation={[0, sz < 0 ? Math.PI : 0, 0]}>
-                    <PartMesh geometry={g.rear.rim} material="paintYellow" />
-                    {g.rear.hub ? <PartMesh geometry={g.rear.hub} material="steelDark" /> : null}
-                  </group>
-                </group>
-              ))}
-            </Part>
-            <Part id="front-wheels" name="Front wheels" material="rubber" role="moving" cut={false} info={{ summary: 'Front tyres.', role: 'Meet each bump one wheelbase before the rear wheels, pitching the tractor.' }}>
-              {[-1, 1].map((sz, i) => (
-                <group key={sz} ref={(el) => el && (frontW.current[i] = el)} position={[T.wheelbase, T.frontR, sz * 0.71]}>
-                  <PartMesh geometry={g.front.tyre} />
-                  <group rotation={[0, sz < 0 ? Math.PI : 0, 0]}>
-                    <PartMesh geometry={g.front.rim} material="paintYellow" />
-                    {g.front.hub ? <PartMesh geometry={g.front.hub} material="steelDark" /> : null}
-                  </group>
-                </group>
-              ))}
-            </Part>
+          <Part id="tractor-sprung" name="Tractor (sprung on its tyres)" material="paintRed" role="housing" info={INFO.tractor} cites={[C.he('tractor natural frequencies 3–10 Hz'), SRC.mac502('App. II Farmland tractor')]}>
+            <Tractor pose={tpose} seat={false} internals={false} labels={false} />
             <Part id="platform" name="Platform (seat input z_input)" material="paintBlack" role="static" info={INFO.platform} cites={[C.he('eq 11–12')]}>
               <PartMesh geometry={g.platform} />
-              <PartMesh geometry={g.column} material="paintGrey" />
-              <PartMesh geometry={g.wheel} material="plastic" />
             </Part>
             <group position={[T.seatX, T.platformY, 0]}>
               <Part id="suspension" name="Seat suspension" material="steelDark" role="moving" info={INFO.suspension} cites={[C.he('Fig 10.9, eq 13–17')]} cut={false}>

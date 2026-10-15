@@ -29,7 +29,11 @@ function TypeModel() {
         }),
     [parts, type],
   )
+  // the real tractor, where the shared one has the type
   if (type === 'standard') return <Tractor pose={pose} internals={false} labels />
+  if (type === 'crawler') return <Tractor pose={pose} running="tracks" cab paint="paintYellow" internals={false} labels />
+  if (type === 'articulated') return <Tractor pose={pose} frame="articulated" cab paint="paintRed" internals={false} labels />
+  if (type === 'mfwd') return <Tractor pose={pose} drive="4wd" cab paint="paintGreen" internals={false} labels />
   return (
     <Part id={type} name={info.name} role="housing" material="paintGrey" info={{ summary: `${info.name} tractor.`, role: info.features.join(' '), details: 'Proportions are typical values for the type, not measured dimensions.' }} cites={CITES}>
       {parts.map((p) => (
@@ -59,6 +63,8 @@ export function Scene3D() {
     if (spinRef.current && st.spin) spinRef.current.rotation.y += dt * 0.25
     pose.rearAngle += dt * 0.5
     pose.frontAngle += dt * 0.8
+    // the articulated tractor folds gently so its hinge can be seen working
+    pose.steer = st.type === 'articulated' ? 0.3 * Math.sin(performance.now() / 2000) : 0
   })
   return (
     <group>

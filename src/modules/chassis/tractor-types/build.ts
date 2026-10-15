@@ -2,7 +2,7 @@ import * as THREE from 'three'
 import { box, cylinder, extrude, merge, roundedBox, tube } from '@/geometry'
 import type { MaterialKey } from '@/render/materials'
 import { operatorSeatMerged } from '@/parts/lib/chassis'
-import { toLeft, trackLoop, wheel, wheelStations } from '@/parts/lib/wheels'
+import { toLeft, wheel, wheelStations } from '@/parts/lib/wheels'
 import { bar } from '../common/wheel'
 import type { TypeId } from './model'
 
@@ -91,13 +91,6 @@ function seatAndWheel(sx: number, sy: number, wx: number, wy: number) {
   sw.translate(wx, wy, 0)
   const col = bar([wx - 0.02, wy - 0.02, 0], [wx + 0.28, wy - 0.5, 0], 0.04)
   return merge(seat, sw, col)
-}
-
-/** One crawler track side from the parts library (links, shoes, sprocket, idler, rollers), centred on z. */
-function crawlerTrack(cx: number, span: number, z: number) {
-  const t = trackLoop({ xs: cx - span / 2, xi: cx + span / 2, rollers: 5 })
-  const m = (g: G) => at(g, 0, 0, z)
-  return { chain: m(t.chain), shoes: m(t.shoes), wheels: m(merge(t.sprocket, t.idler, t.rollers)) }
 }
 
 /** Loader bucket: back, bottom and sides, opening forward, lip at (x, 0). */
@@ -219,21 +212,8 @@ export function buildType(id: TypeId): PartSpec[] {
         P('rotor', 'Rotary tiller', 'paintRed', merge(hood, ...blades), 'Rotary tiller.', 'L-blades on a PTO-driven rotor chop and mix the soil; the forward thrust of the blades helps drive the machine.', 'moving'),
       ]
     }
-    case 'crawler': {
-      const tl = crawlerTrack(0.9, 1.75, 0.8)
-      const tr = crawlerTrack(0.9, 1.75, -0.8)
-      const c = cab(-0.3, 0.8, 1.45, 2.85, 1.2)
-      const blade = merge(blk(2.55, 2.68, 0.02, 1.0, 2.6, 0.02), bar([1.6, 0.5, 0.8], [2.55, 0.35, 0.8], 0.1), bar([1.6, 0.5, -0.8], [2.55, 0.35, -0.8], 0.1))
-      return [
-        P('tracks', 'Tracks', 'steelDark', merge(tl.shoes, tr.shoes), 'Steel track shoes with grousers.', 'Spread the weight over a long contact patch: low ground pressure and high traction in soft soil. Steel tracks from the 1930s; rubber belts (Challenger) from the 1990s.', 'moving'),
-        P('track-chain', 'Track chain', 'forged', merge(tl.chain, tr.chain), 'Track chain: links, pins and bushings.', 'An endless roller chain under the shoes; the sprocket teeth drive on its bushings.', 'moving'),
-        P('rollers', 'Sprocket, idler and rollers', 'steel', merge(tl.wheels, tr.wheels), 'Drive sprocket, idler and track rollers.', 'The sprocket drives the track; the rollers carry the weight onto it. Steering is by slowing or braking one track.', 'moving'),
-        P('body', 'Engine and hull', 'paintYellow', merge(blk(-0.3, 2.3, 0.6, 1.45, 1.05, 0.06), blk(0.9, 2.3, 1.45, 1.75, 0.8, 0.06)), 'Engine and hull.', 'Low-mounted, heavy body between the track frames.'),
-        P('cab', 'ROPS cab', 'paintBlack', c.frame, 'ROPS cab.', 'Rollover and falling-object protection.', 'static'),
-        P('glass', 'Cab glass', 'glass', c.glass, 'Glazing.', 'Operator view.', 'static'),
-        P('blade', 'Dozer blade', 'paintYellow', blade, 'Front blade.', 'Land clearing and earth moving; push arms carry the thrust to the track frames.', 'static'),
-      ]
-    }
+    case 'crawler':
+      return [] // the shared <Tractor running="tracks"/>
     case 'skidSteer': {
       const w = wheels([
         { x: 0, r: 0.38, w: 0.27, track: 1.32, pattern: 'R1' },
@@ -268,35 +248,10 @@ export function buildType(id: TypeId): PartSpec[] {
         P('log', 'Log', 'wood', log, 'Log being skidded.', 'The load, dragged with its front end raised.', 'static'),
       ]
     }
-    case 'mfwd': {
-      const w = wheels([
-        { x: 0, r: 0.85, w: 0.47, track: 1.9 },
-        { x: 2.85, r: 0.62, w: 0.38, track: 1.85 },
-      ])
-      const c = cab(-0.65, 0.55, 1.35, 2.95, 1.3)
-      return [
-        ...common(w, 'Driven front tyres, smaller than the rears, steered by knuckles with epicyclic hubs.'),
-        P('body', 'Engine and transmission', 'paintGreen', merge(blk(0.45, 3.4, 1.0, 1.75, 0.75, 0.08), blk(-0.4, 0.5, 0.55, 1.35, 0.85, 0.05)), 'Engine and power-shift transmission.', 'A transfer drive sends part of the power forward through a propeller shaft to the front axle.'),
-        P('frontAxle', 'Driven front axle', 'castIron', blk(2.72, 2.98, 0.5, 0.75, 1.55, 0.04), 'Front drive axle.', 'Differential and epicyclic hubs; pivots in the middle to follow the ground.', 'static'),
-        P('cab', 'Cab (ROPS)', 'paintBlack', c.frame, 'ROPS cab.', 'Modern tractors carry a ROPS cab with air-conditioning.', 'static'),
-        P('glass', 'Cab glass', 'glass', c.glass, 'Glazing.', 'Operator view.', 'static'),
-      ]
-    }
-    case 'articulated': {
-      const w = wheels([
-        { x: 0, r: 0.95, w: 0.6, track: 2.3, duals: true },
-        { x: 3.2, r: 0.95, w: 0.6, track: 2.3, duals: true },
-      ])
-      const c = cab(0.25, 1.45, 1.9, 3.45, 1.4)
-      return [
-        ...common(w, 'Equal-size tyres, here in duals, to put 100–300+ kW to the ground.'),
-        P('front', 'Front frame and engine', 'paintRed', merge(blk(1.85, 4.3, 1.0, 2.15, 1.05, 0.1), blk(1.85, 4.3, 0.7, 1.0, 0.8, 0.03)), 'Front frame with the engine.', 'Carries the engine over the front axle; the weight split is nearly equal front and rear.'),
-        P('rear', 'Rear frame', 'paintRed', merge(blk(-0.8, 1.55, 0.7, 1.9, 1.05, 0.08)), 'Rear frame.', 'Carries the cab, rear axle, three-point linkage and drawbar.'),
-        P('hinge', 'Articulation hinge and steering rams', 'steelDark', merge(blk(1.55, 1.85, 0.75, 1.65, 0.55, 0.02), bar([1.35, 1.2, 0.5], [2.1, 1.2, 0.45], 0.08), bar([1.35, 1.2, -0.5], [2.1, 1.2, -0.45], 0.08)), 'Articulation hinge.', 'Two hydraulic rams fold the frames about the hinge to steer.', 'moving'),
-        P('cab', 'Cab (ROPS)', 'paintBlack', c.frame, 'ROPS cab.', 'Operator protection and comfort.', 'static'),
-        P('glass', 'Cab glass', 'glass', c.glass, 'Glazing.', 'Operator view.', 'static'),
-      ]
-    }
+    case 'mfwd':
+      return [] // the shared <Tractor drive="4wd"/>
+    case 'articulated':
+      return [] // the shared <Tractor frame="articulated"/>
   }
 }
 
