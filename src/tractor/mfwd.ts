@@ -2,6 +2,7 @@ import * as THREE from 'three'
 import { box, cylinder, lathe, mat4, merge, xform } from '@/geometry'
 import { UJ, ujCross, ujYoke } from '@/parts/lib/driveline'
 import { wheel, type WheelSpec } from '@/parts/lib/wheels'
+import { frontSupport } from '@/parts/lib/chassis'
 import { TRACTOR } from './dims'
 
 /**
@@ -45,8 +46,12 @@ export function mfwdGeometry() {
   const housing = merge(tube(-KINGPIN4_Z + 0.09, DIFF_Z - 0.08, 0.055), tube(DIFF_Z + 0.08, KINGPIN4_Z - 0.09, 0.055), diffCase, nose)
   // centre pivot: the axle oscillates about a fore-and-aft pin under the front support
   const pivot = merge(xform(cylinder(0.035, 0.36, 24), mat4.c(mat4.t(x, y + 0.1, 0), xAlong)), xform(box(0.1, 0.07, 0.12), mat4.t(x - 0.12, y + 0.08, 0)), xform(box(0.1, 0.07, 0.12), mat4.t(x + 0.12, y + 0.08, 0)))
-  // front support casting above the axle (replaces the 2WD bolster)
-  const support = xform(box(0.32, 0.17, 0.34), mat4.t(1.92, y + 0.215, 0))
+  // front support casting above the axle (replaces the 2WD bolster); its neck passes over the crank
+  // pulley (top at y 0.712) and bolts to the front of the crankcase
+  const fs = frontSupport({ l: 0.32, h: 0.17, w: 0.34, neck: { l: 1.76 - 1.385, h: 0.08, dy: -0.015 } })
+  const atSupport = mat4.t(1.92, y + 0.215, 0)
+  const support = xform(fs.body, atSupport)
+  const supportSteel = xform(merge(fs.bolts, fs.eye), atSupport)
   /** swivel housing with the hub reduction, local: kingpin axis Y through the origin, wheel side +Z */
   const swivel = merge(
     lathe([[0, -0.1], [0.07, -0.09], [0.1, -0.04], [0.1, 0.04], [0.07, 0.09], [0, 0.1]], 32),
@@ -69,7 +74,7 @@ export function mfwdGeometry() {
     return merge(xform(yokeOut, mat4.c(mat4.t(at, 0, 0), toShaft)), xform(yokeOut, mat4.c(mat4.t(at, 0, 0), other, mat4.rx(PI / 2))), xform(ujCross(), mat4.t(at, 0, 0)))
   }
   const prop = merge(shaft, joint(0, true), joint(len, false))
-  return { tyre: W.tyre, rim: W.rim, hub: W.hub!, housing, pivot, support, swivel, trackRod, transfer, prop, propLen: len }
+  return { tyre: W.tyre, rim: W.rim, hub: W.hub!, housing, pivot, support, supportSteel, swivel, trackRod, transfer, prop, propLen: len }
 }
 export type MfwdGeometry = ReturnType<typeof mfwdGeometry>
 

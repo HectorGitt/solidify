@@ -447,7 +447,13 @@ export function steeringKnuckle(spec: { reach: number; bossH?: number }) {
  * front-axle pivot below and the front weights or a tow eye ahead. Local frame: centred on its own
  * middle, X forward, Y up; `l`, `h`, `w` its length, height and width.
  */
-export function frontSupport(spec: { l: number; h: number; w: number }) {
+export function frontSupport(spec: {
+  l: number
+  h: number
+  w: number
+  /** the neck back to the engine: its length, height, and centre height relative to the body; it ends in a bolted flange */
+  neck?: { l: number; h: number; dy: number }
+}) {
   const { l, h, w } = spec
   const body = roundedBox(l, h, w, 0.025)
   // stiffening ribs down each side, a flange along the top with its bolts
@@ -457,8 +463,23 @@ export function frontSupport(spec: { l: number; h: number; w: number }) {
   const bolts = merge(...[1, -1].flatMap((s) => [-0.38, 0, 0.38].map((f) => xform(bolt, mat4.t(f * l, h / 2 + 0.028, s * (w / 2 + 0.006))))))
   // front face: a pad for the weight frame and a tow eye below it
   const pad = xform(roundedBox(0.02, h * 0.7, w * 0.8, 0.006), mat4.t(l / 2 + 0.01, 0.01, 0))
+  const neckBolts: THREE.BufferGeometry[] = []
   const eye = merge(xform(box(0.06, 0.03, 0.04), mat4.t(l / 2 + 0.04, -h / 2 + 0.02, 0)), xform(tube(0.03, 0.015, 0.04, 24), mat4.c(mat4.t(l / 2 + 0.08, -h / 2 + 0.02, 0), mat4.rx(Math.PI / 2))))
-  return { body: merge(body, ribs, flange, pad), bolts, eye }
+  // the neck that reaches back to the engine's front face and bolts to it
+  const neckParts: THREE.BufferGeometry[] = []
+  if (spec.neck) {
+    const nk = spec.neck
+    const x0 = -l / 2 - nk.l
+    neckParts.push(
+      xform(roundedBox(nk.l + 0.04, nk.h, w * 0.86, 0.02), mat4.t(x0 + (nk.l + 0.04) / 2, nk.dy, 0)),
+      // side webs running from the body down the neck
+      ...[1, -1].map((s) => xform(box(nk.l * 0.9, 0.02, 0.02), mat4.t(x0 + nk.l * 0.55, nk.dy + nk.h / 2 - 0.012, s * (w * 0.43)))),
+      // bolting flange against the engine
+      xform(roundedBox(0.025, nk.h + 0.06, w + 0.04, 0.008), mat4.t(x0 + 0.0125, nk.dy, 0)),
+    )
+    for (const sy of [-1, 1]) for (const sz of [-1, 0, 1]) neckBolts.push(xform(cylinder(0.011, 0.014, 6), mat4.c(mat4.t(x0 + 0.032, nk.dy + sy * (nk.h / 2 + 0.014), sz * (w / 2 - 0.02)), mat4.rz(Math.PI / 2))))
+  }
+  return { body: merge(body, ribs, flange, pad, ...neckParts), bolts: neckBolts.length ? merge(bolts, ...neckBolts) : bolts, eye }
 }
 
 /** Air-intake stack: the pipe up through the bonnet with its hose collar and clamp bands (the pre-cleaner sits on top). Local: base at the origin, up +Y. */

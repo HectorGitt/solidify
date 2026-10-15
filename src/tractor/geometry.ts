@@ -316,7 +316,8 @@ export function buildTractorGeometry() {
   const radiator = box(0.07, 0.36, 0.5)
   radiator.translate(1.96, 1.16, 0)
   // cast front support under the radiator, carrying the axle pivot (parts library)
-  const fs = frontSupport({ l: 0.3, h: 0.17, w: 0.34 })
+  // its neck runs back under the crank pulley and bolts to the front of the sump: the engine is the frame
+  const fs = frontSupport({ l: 0.3, h: 0.17, w: 0.34, neck: { l: 1.77 - 1.385, h: 0.105, dy: 0.5025 - 0.535 } })
   const atSupport = mat4.t(1.92, 0.535, 0)
   const bolster = xform(fs.body, atSupport)
   const bolsterSteel = xform(merge(fs.bolts, fs.eye), atSupport)

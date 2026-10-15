@@ -464,7 +464,7 @@ export function Tractor({ pose, id = 'tractor', paint = 'paintRed', linkage = tr
             )}
             <Part id={k('front-support')} name="Front support" role="static" material="castIron" info={INFO.frontSupport} explode={[0.35, -0.1, 0]}>
               <PartMesh geometry={G4 ? G4.support : G.bolster} />
-              {G4 ? null : <PartMesh geometry={G.bolsterSteel} material="steelDark" />}
+              <PartMesh geometry={G4 ? G4.supportSteel : G.bolsterSteel} material="steelDark" />
             </Part>
             <Part id={k('clutch-housing')} name="Clutch housing" material="castIron" info={CLUTCH_INSIDE} cites={[SRC.pt510('clutch')]} explode={[0, 0, 0.4]}>
               <PartMesh geometry={G.clutchHousing} />
