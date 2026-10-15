@@ -113,7 +113,7 @@ export function Configurator3D() {
     <group>
       <group ref={tractor} position={[START, 0, 0]}>
         <group scale={s}>
-          <Tractor pose={pose} internals={false} labels={false} cab={st.engine !== 'small'} paint={st.engine === 'large' ? 'paintGreen' : st.engine === 'medium' ? 'paintBlue' : 'paintRed'} />
+          <Tractor pose={pose} labels={false} cab={st.engine !== 'small'} paint={st.engine === 'large' ? 'paintGreen' : st.engine === 'medium' ? 'paintBlue' : 'paintRed'} />
           {weights.front ? (
             <Part id="ballast-front" name="Front ballast" role="static" material="paintBlack" cut={false} info={INFO.front}>
               <PartMesh geometry={weights.front} />

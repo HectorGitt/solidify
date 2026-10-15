@@ -121,7 +121,7 @@ export function FieldRun({ grid, pose, speed, start, end, hitchWork, hitchRaised
   })
   return (
     <group ref={tractor} position={[start, 0, z]}>
-      <Tractor pose={pose} labels={false} internals={false} mounted={mounted ? <Level pose={pose}>{mounted}</Level> : undefined} trailed={trailed} />
+      <Tractor pose={pose} labels={false} mounted={mounted ? <Level pose={pose}>{mounted}</Level> : undefined} trailed={trailed} />
     </group>
   )
 }

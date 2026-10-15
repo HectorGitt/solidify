@@ -194,7 +194,7 @@ export function PtoShaft3D() {
 
   return (
     <group>
-      <Tractor pose={pose} internals={false} labels={false} mounted={mode === 'mounted' ? mower : undefined} trailed={mode === 'trailed' ? trailer : undefined} />
+      <Tractor pose={pose} labels={false} mounted={mode === 'mounted' ? mower : undefined} trailed={mode === 'trailed' ? trailer : undefined} />
       <Part id="pto-driveline" name="PTO drive shaft (Fig A2.7)" role="moving" material="forged" info={{ summary: 'Telescopic PTO drive shaft, Fig A2.7.', role: '(1) tractor PTO, (2) implement power input connection, (3) PTO yoke, (4) PIC yoke, (5) lemon-profile telescopic tubes, (6) guard cones.' }} cites={C.shaft}>
         <Part id="pto-yoke" name="PTO yoke (3)" info={INFO.ptoYoke} cites={C.std}>
           <group ref={r.inYoke}>

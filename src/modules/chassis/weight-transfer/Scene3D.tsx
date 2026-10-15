@@ -126,7 +126,7 @@ export function Scene3D() {
         <Ground length={11} x={-0.4} cites={[SRC.mac502('Ch 6, Fig 6.6')]} />
         <group ref={pivot} position={[0, AXLE_Y, 0]}>
           <group position={[0, -AXLE_Y, 0]}>
-            <Tractor pose={pose} drawbar={false} internals={false} labels={false} />
+            <Tractor pose={pose} drawbar={false} labels={false} />
             <AdjustableDrawbar xd={st.xd} yd={st.yd} cites={[SRC.mac502('Ch 6, eqs 6.4–6.5'), SRC.hitch502('drawbar height y′')]} />
             <group ref={cg}>
               <Part id="cg" name="Centre of gravity" role="static" material="paintYellow" info={{ summary: 'Centre of gravity G.', role: 'The whole weight W acts here: xr ahead of the rear axle and yg above it (Farmland: 0.54 m and 0.13 m). Its height sets how much weight a slope moves to the rear axle.', details: 'Rule of thumb: xr ≈ 30 % of the wheelbase (Farmland 0.54/1.88 = 29 %).' }} cites={[SRC.mac502('App. II; eq 6.1')]} cut={false}>

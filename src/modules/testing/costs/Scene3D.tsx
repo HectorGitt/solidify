@@ -214,7 +214,7 @@ export function Scene3D() {
         </Part>
       </Part>
       <group ref={tractor}>
-        <Tractor pose={pose} labels={false} linkage={false} internals={false} trailed={implement} />
+        <Tractor pose={pose} labels={false} linkage={false} trailed={implement} />
       </group>
       <PartLabel partId="headlands" at={[st.L / 2, 1.5, plan.B / 2 + 1]} />
       <PartLabel partId="field" at={[-st.L / 4, 1.5, -plan.B / 2 - 2]} />

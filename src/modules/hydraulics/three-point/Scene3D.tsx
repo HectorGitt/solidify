@@ -165,7 +165,7 @@ export function ThreePoint3D() {
   const far = (x: number) => Math.max(-9, Math.min(12, x))
   return (
     <group>
-      <Tractor pose={pose} linkage={false} drawbar={false} internals={false} labels={false} />
+      <Tractor pose={pose} linkage={false} drawbar={false} labels={false} />
       <Part id="linkage" name="Three-point linkage" role="moving" material="forged" info={INFO.linkage} cites={[...C.linkage, ...C.fig64]}>
         <Part id="lower-links" name="Lower links" info={INFO.lower} cites={C.linkage} explode={[0, -0.15, 0.25]}>
           <group ref={r.lowL}>

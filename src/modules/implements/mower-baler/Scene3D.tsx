@@ -521,7 +521,7 @@ export function MowerBaler3D() {
     <group>
       <Tractor
         pose={pose}
-        internals={false}
+       
         labels={false}
         mounted={
           isM ? (

@@ -169,7 +169,7 @@ export function Cab3D() {
   const due = interval ? dueAt(interval) : []
   return (
     <group>
-      <Tractor pose={pose} internals={false} labels={false} rops={station === 'rops'} />
+      <Tractor pose={pose} labels={false} rops={station === 'rops'} />
       {station === 'cab' && (
         <Part id="cab" name="Cab" role="static" material="paintRed" info={INFO.cab} cites={[C.he('p22–23, Fig 10.11, Table 10.7'), C.he('p5, p22 — 96 vs 88 dB(A)')]} cut={false}>
           <PartMesh geometry={g.frame} />

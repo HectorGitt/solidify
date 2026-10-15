@@ -243,7 +243,7 @@ export function Lab3D() {
       ) : (
         <>
           <group ref={body}>
-            <Tractor pose={pose} trailed={<LoadCar wheels={carWheel} />} labels={false} internals={false} />
+            <Tractor pose={pose} trailed={<LoadCar wheels={carWheel} />} labels={false} />
             <Part id="rear-ballast" name={`Rear wheel weights (${2 * nDisc} discs)`} role="moving" material="castIron" cut={false} info={{ summary: 'Cast-iron weights on the rear wheel centres (the Ballast slider).', role: 'Adds weight on the driving wheels: more pull for the same slip, less slip loss — but more rolling resistance, so there is an optimum.' }} cites={[SRC.mech502('p7, p10'), SRC.l27('p40–44 ballast')]}>
               <group position={[0, AXLE_Y, 0]} ref={discs}>
                 {wheelWeightStack(FARMLAND_REAR, nDisc).map((z, i) =>

@@ -285,7 +285,7 @@ export function SeeSpray3D() {
   return (
     <group>
       <group ref={tractor} position={[START, 0, 0]}>
-        <Tractor pose={pose} internals={false} labels={false} paint="paintGreen" cab />
+        <Tractor pose={pose} labels={false} paint="paintGreen" cab />
         <group position={[BOOM_X, 0, 0]}>
           <Part id="boom" name="Spot-spraying boom" role="static" material="paintYellow" cut={false} info={INFO.boom}>
             <PartMesh geometry={geo.frame} />

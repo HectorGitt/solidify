@@ -151,7 +151,7 @@ export function Scene3D() {
             <group position={[0, 0, zc]}>
               <group ref={pivot} position={[0, AXLE_Y, 0]}>
                 <group position={[0, -AXLE_Y, 0]}>
-                  <Tractor pose={pose} drawbar={false} internals={false} labels={false} />
+                  <Tractor pose={pose} drawbar={false} labels={false} />
                   <AdjustableDrawbar xd={FARMLAND.xd} yd={st.hitchPoint === 'custom' ? st.yd : FARMLAND.yd} cites={[SRC.mac502('Problem 6.16')]} />
                   {/* pull on the tractor at the chosen hitch point, towards the stump */}
                   <ForceArrow

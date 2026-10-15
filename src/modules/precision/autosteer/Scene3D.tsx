@@ -424,7 +424,7 @@ export function Autosteer3D() {
       <group ref={tractor}>
         <Tractor
           pose={pose}
-          internals={false}
+         
           labels={false}
           paint="paintGreen"
           cab

@@ -137,7 +137,7 @@ export function Scene3D() {
   }
   return (
     <group>
-      <Tractor pose={pose} internals={false} labels={false} />
+      <Tractor pose={pose} labels={false} />
       <Implement hitch={hitch} b={b} z={z} a={a} />
       <Ground length={10} x={-0.8} depth={0.5} cut cites={[SRC.mac502('Fig 6.10')]} />
       {/* soil force S on the implement, θ below horizontal, drawn through the ground */}

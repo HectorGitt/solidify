@@ -30,10 +30,10 @@ function TypeModel() {
     [parts, type],
   )
   // the real tractor, where the shared one has the type
-  if (type === 'standard') return <Tractor pose={pose} internals={false} labels />
-  if (type === 'crawler') return <Tractor pose={pose} running="tracks" cab paint="paintYellow" internals={false} labels />
-  if (type === 'articulated') return <Tractor pose={pose} frame="articulated" cab paint="paintRed" internals={false} labels />
-  if (type === 'mfwd') return <Tractor pose={pose} drive="4wd" cab paint="paintGreen" internals={false} labels />
+  if (type === 'standard') return <Tractor pose={pose} labels />
+  if (type === 'crawler') return <Tractor pose={pose} running="tracks" cab paint="paintYellow" labels />
+  if (type === 'articulated') return <Tractor pose={pose} frame="articulated" cab paint="paintRed" labels />
+  if (type === 'mfwd') return <Tractor pose={pose} drive="4wd" cab paint="paintGreen" labels />
   return (
     <Part id={type} name={info.name} role="housing" material="paintGrey" info={{ summary: `${info.name} tractor.`, role: info.features.join(' '), details: 'Proportions are typical values for the type, not measured dimensions.' }} cites={CITES}>
       {parts.map((p) => (

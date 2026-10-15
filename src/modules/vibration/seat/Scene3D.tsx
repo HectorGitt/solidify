@@ -198,7 +198,7 @@ export function Scene3D() {
       <group ref={bodyOuter} position={[0, T.rearAxleY, 0]}>
         <group position={[0, -T.rearAxleY, 0]}>
           <Part id="tractor-sprung" name="Tractor (sprung on its tyres)" material="paintRed" role="housing" info={INFO.tractor} cites={[C.he('tractor natural frequencies 3–10 Hz'), SRC.mac502('App. II Farmland tractor')]}>
-            <Tractor pose={tpose} seat={false} internals={false} labels={false} />
+            <Tractor pose={tpose} seat={false} labels={false} />
             <Part id="platform" name="Platform (seat input z_input)" material="paintBlack" role="static" info={INFO.platform} cites={[C.he('eq 11–12')]}>
               <PartMesh geometry={g.platform} />
             </Part>

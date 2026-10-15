@@ -579,7 +579,7 @@ export function Scene3D() {
     <group>
       <Tractor
         pose={pose}
-        internals={false}
+       
         labels={false}
         mounted={
           <Level pose={pose}>

@@ -174,7 +174,7 @@ function Crawler({ id, attach, pose, children }: { id: string; attach: Attach; p
   return (
     <group ref={root}>
       <Part id={id} name="Crawler tractor" role="housing" material="paintYellow" info={INFO.crawler} cites={CITE.machines} beyondNotes>
-        <Tractor id={`${id}-tractor`} pose={tpose} running="tracks" trackGauge={2 * TR.z} paint="paintYellow" linkage={false} internals={false} labels={false} position={[DX, 0, 0]} />
+        <Tractor id={`${id}-tractor`} pose={tpose} running="tracks" trackGauge={2 * TR.z} paint="paintYellow" linkage={false} labels={false} position={[DX, 0, 0]} />
         <Part id={`${id}-blade`} name={bladeName} role="static" material={attach === 'shear' ? 'steelDark' : 'paintYellow'} info={bladeInfo} cites={CITE.machines} explode={[0.6, 0, 0]}>
           <PartMesh geometry={a.blade} />
           {a.extra && <PartMesh geometry={a.extra} material={attach === 'shear' ? 'forged' : 'paintYellow'} />}

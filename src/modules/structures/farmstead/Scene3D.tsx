@@ -197,7 +197,7 @@ export function Scene3D() {
       </Part>
 
       <group ref={tractor}>
-        <Tractor pose={pose} labels={false} linkage={false} internals={false} />
+        <Tractor pose={pose} labels={false} linkage={false} />
       </group>
 
       <Arrow ref={arrow} color="#4aa3ff" radius={0.9} />

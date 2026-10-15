@@ -245,7 +245,7 @@ export function Scene3D() {
       </Part>
 
       <group ref={tractor}>
-        <Tractor pose={pose} labels={false} linkage={false} internals={false} />
+        <Tractor pose={pose} labels={false} linkage={false} />
       </group>
 
       <Part id="fuel-store" name="Fuel store" role="housing" material="concrete" info={{ summary: 'Separate hazardous-materials store.', role: 'Above 3 L thinner, 10 L petrol, 20 L kerosene or 50 L diesel: a separate building at least 15 m from any other. Vents high and low, lockable, vermin-proof, warning sign, no floor drain — the floor, lower walls and door sill form a spill bund.' }} cites={[C.ln('p26–27')]} position={[D.fuelX, 0, fuelZ]}>
