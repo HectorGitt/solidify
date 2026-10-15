@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import { mergeGeometries, mergeVertices, toCreasedNormals } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
+import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { ADDITION, Brush, Evaluator, INTERSECTION, SUBTRACTION } from 'three-bvh-csg'
 
 /**
@@ -9,12 +9,79 @@ import { ADDITION, Brush, Evaluator, INTERSECTION, SUBTRACTION } from 'three-bvh
 
 export type V2 = [number, number]
 
+/**
+ * Per-vertex normals for a non-indexed triangle soup, smooth across edges gentler than `crease`.
+ * Like three's toCreasedNormals, but coincident vertices are matched to 0.01 mm instead of 1 cm: at
+ * 1 cm every vertex of a small part (a screw thread, a valve) lands in a few cells, which blends the
+ * shading of faces that never touch and makes the matching quadratic (seconds for a fine thread).
+ */
+function creasedNormals(g: THREE.BufferGeometry, crease: number) {
+  const pos = g.getAttribute('position') as THREE.BufferAttribute
+  const p = pos.array as ArrayLike<number>
+  const n = pos.count
+  const creaseDot = Math.cos(crease)
+  const fn = new Float32Array(n) // one normal per face (n / 3 faces × 3)
+  const keys = new Array<string>(n)
+  const q = 1e5
+  const groups = new Map<string, number[]>()
+  for (let f = 0; f < n / 3; f++) {
+    const a = f * 9
+    const ux = p[a + 3] - p[a]
+    const uy = p[a + 4] - p[a + 1]
+    const uz = p[a + 5] - p[a + 2]
+    const vx = p[a + 6] - p[a]
+    const vy = p[a + 7] - p[a + 1]
+    const vz = p[a + 8] - p[a + 2]
+    const nx = uy * vz - uz * vy
+    const ny = uz * vx - ux * vz
+    const nz = ux * vy - uy * vx
+    const len = Math.hypot(nx, ny, nz) || 1
+    fn[f * 3] = nx / len
+    fn[f * 3 + 1] = ny / len
+    fn[f * 3 + 2] = nz / len
+    for (let v = 0; v < 3; v++) {
+      const i = f * 3 + v
+      const k = Math.round(p[i * 3] * q) + ',' + Math.round(p[i * 3 + 1] * q) + ',' + Math.round(p[i * 3 + 2] * q)
+      keys[i] = k
+      let list = groups.get(k)
+      if (!list) groups.set(k, (list = []))
+      list.push(f)
+    }
+  }
+  const out = new Float32Array(n * 3)
+  for (let i = 0; i < n; i++) {
+    const f = (i / 3) | 0
+    const ax = fn[f * 3]
+    const ay = fn[f * 3 + 1]
+    const az = fn[f * 3 + 2]
+    let sx = 0
+    let sy = 0
+    let sz = 0
+    for (const o of groups.get(keys[i])!) {
+      const bx = fn[o * 3]
+      const by = fn[o * 3 + 1]
+      const bz = fn[o * 3 + 2]
+      if (ax * bx + ay * by + az * bz > creaseDot) {
+        sx += bx
+        sy += by
+        sz += bz
+      }
+    }
+    const l = Math.hypot(sx, sy, sz) || 1
+    out[i * 3] = sx / l
+    out[i * 3 + 1] = sy / l
+    out[i * 3 + 2] = sz / l
+  }
+  g.setAttribute('normal', new THREE.BufferAttribute(out, 3))
+  return g
+}
+
 /** Normalise attributes so geometries can be merged / used in CSG. */
 export function finalize(g: THREE.BufferGeometry, crease = Math.PI / 5): THREE.BufferGeometry {
   let out = g.index ? g.toNonIndexed() : g
   out.deleteAttribute('uv')
   out.deleteAttribute('normal')
-  out = toCreasedNormals(out, crease)
+  out = creasedNormals(out, crease)
   const n = out.getAttribute('position').count
   out.setAttribute('uv', new THREE.Float32BufferAttribute(new Float32Array(n * 2), 2))
   out.computeBoundingBox()
