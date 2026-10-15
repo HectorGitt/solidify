@@ -8,6 +8,7 @@ import { HAZARD_SEPARATION, MACHINES, WORKSHOP } from '@/physics/structures'
 import { TRACTOR } from '@/tractor/dims'
 import { Tractor, createTractorPose } from '@/tractor/Tractor'
 import { column, gableRoof, kingPostTruss, ringSlab, walls } from '@/parts/lib/structures'
+import { discGang, mouldboardBottom, roadWheel } from '@/parts/lib/implements'
 import { tint } from '../_shared/build'
 import { C, design, live, useStorage } from './model'
 
@@ -23,23 +24,31 @@ function trailerGeo() {
   const bed = bx(m.l - 1, 0.12, m.w, 0.5, 0.95, 0)
   const sides = merge(bx(m.l - 1, 0.5, 0.06, 0.5, 1.26, m.w / 2 - 0.03), bx(m.l - 1, 0.5, 0.06, 0.5, 1.26, -m.w / 2 + 0.03), bx(0.06, 0.5, m.w - 0.12, 0.5 + (m.l - 1) / 2 - 0.03, 1.26, 0), bx(0.06, 0.5, m.w - 0.12, 0.5 - (m.l - 1) / 2 + 0.03, 1.26, 0))
   const draw = merge(bx(1.1, 0.1, 0.1, -m.l / 2 + 0.55, 0.6, 0.3), bx(1.1, 0.1, 0.1, -m.l / 2 + 0.55, 0.6, -0.3))
-  const wheels = merge(...[-1, 1].map((s) => cyl(0.42, 0.3, mat4.c(mat4.t(0.6, 0.42, s * (m.w / 2 - 0.2)), mat4.rx(PI / 2)))))
-  return { body: merge(bed, sides, draw), wheels }
+  // the library's implement road wheels (tyre, rim, nuts and hub cap)
+  const w = roadWheel(0.42, 0.3)
+  const wheels = merge(...[-1, 1].map((s) => xform(w.tyre, mat4.t(0.6, 0.42, s * (m.w / 2 - 0.2)))))
+  const rims = merge(...[-1, 1].map((s) => xform(w.rim, mat4.c(mat4.t(0.6, 0.42, s * (m.w / 2 - 0.2)), s < 0 ? mat4.ry(PI) : mat4.t(0, 0, 0)))))
+  return { body: merge(bed, sides, draw), wheels, rims }
 }
 
 function ploughGeo() {
   const m = MACHINES.plough
   const beam = merge(bx(m.l, 0.12, 0.12, 0, 0.9, 0), bx(0.12, 0.12, m.w, -m.l / 2 + 0.3, 0.9, 0), bx(0.1, 0.7, 0.1, -m.l / 2 + 0.3, 1.25, 0))
-  const bodies = merge(...[0, 1, 2].map((i) => xform(box(0.5, 0.45, 0.08), mat4.c(mat4.t(-0.3 + i * 0.6, 0.35, -0.4 + i * 0.4), mat4.ry(0.5)))), ...[0, 1, 2].map((i) => bx(0.06, 0.5, 0.06, -0.3 + i * 0.6, 0.65, -0.4 + i * 0.4)))
+  // three of the library's mouldboard bottoms, resting on the floor under the beam
+  const b = mouldboardBottom(0.36, 0.2, 'general', 0.01, 0.01, 0.75)
+  const one = merge(b.share, b.board, b.landside, b.heel, b.frog, b.shin, b.standard)
+  one.computeBoundingBox()
+  const lift = -one.boundingBox!.min.y
+  const bodies = merge(...[0, 1, 2].map((i) => xform(one, mat4.t(-0.3 + i * 0.6, lift, -0.4 + i * 0.4))))
   return { frame: beam, bodies }
 }
 
 function harrowGeo() {
   const m = MACHINES.harrow
   const frame = merge(bx(m.l, 0.1, 0.1, 0, 0.75, m.w / 2 - 0.1), bx(m.l, 0.1, 0.1, 0, 0.75, -m.w / 2 + 0.1), bx(0.1, 0.1, m.w, 0.5, 0.75, 0), bx(0.1, 0.1, m.w, -0.5, 0.75, 0), bx(0.9, 0.1, 0.1, -m.l / 2 + 0.45, 0.65, 0))
-  const discs: THREE.BufferGeometry[] = []
-  for (const x of [0.5, -0.5]) for (let i = 0; i < 9; i++) discs.push(cyl(0.27, 0.03, mat4.c(mat4.t(x, 0.27, -1 + i * 0.25), mat4.rx(PI / 2)), 18))
-  return { frame, discs: merge(...discs) }
+  // two of the library's concave disc gangs
+  const gang = discGang({ n: 9, spacing: 0.25, R: 0.27 })
+  return { frame, discs: merge(...[0.5, -0.5].map((x) => xform(gang, mat4.t(x, 0.27, 0)))) }
 }
 
 export function Scene3D() {
@@ -223,6 +232,7 @@ export function Scene3D() {
         <Part id="trailer" name="Trailer" role="static" material="paintGreen" info={{ summary: 'Farm trailer.', role: `Envelope ${MACHINES.trailer.l} × ${MACHINES.trailer.w} × ${MACHINES.trailer.h} m (typical).` }} beyondNotes position={[bayX('trailer'), 0.2, zBack + 0.3 + MACHINES.trailer.l / 2]} rotation={[0, PI / 2, 0]}>
           <PartMesh geometry={g.trailer.body} />
           <PartMesh geometry={g.trailer.wheels} material="rubber" />
+          <PartMesh geometry={g.trailer.rims} material="paintGrey" />
         </Part>
         <Part id="plough" name="Mouldboard plough" role="static" material="paintRed" info={{ summary: '3-furrow mouldboard plough.', role: 'Can stay outdoors if cleaned and greased, especially the threaded adjusters.' }} beyondNotes position={[bayX('plough'), 0.2, zBack + 0.3 + MACHINES.plough.l / 2]} rotation={[0, PI / 2, 0]}>
           <PartMesh geometry={g.plough.frame} />

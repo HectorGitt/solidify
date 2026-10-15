@@ -7,8 +7,10 @@ import { PartLabel } from '@/render/Label'
 import { createDynamicCutMaterial } from '@/render/materials'
 import { Part, PartMesh } from '@/render/Part'
 import { useView } from '@/render/view'
-import { AIR_PATHS, HOSES, TUBE_X, buildCoolingGeometry } from './geometry'
-import { AIRC, CAP, CRANK_Y, ENG, FAN, PUMP, RAD, SPEC, THERMO, advance, coolantColor, finColor, live, restartLive, useCool } from './model'
+import { Engine, type EnginePartKey, type EnginePartOverride } from '@/machines/Engine'
+import { HEAD_PASSAGE } from '@/machines/layout'
+import { AIR_PATHS, HOSES, THERMO_TURN, TUBE_X, buildCoolingGeometry } from './geometry'
+import { AIRC, CAP, CRANK_Y, ENGINE_Z, ENG, FAN, FIRING, PULLEY_Z, PUMP, RAD, SPEC, THERMO, advance, coolantColor, finColor, live, restartLive, useCool } from './model'
 
 const { PI } = Math
 const V = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z)
@@ -23,7 +25,7 @@ const C = {
 }
 
 const INFO = {
-  engine: { summary: 'Three-cylinder liquid-cooled tractor diesel.', details: 'Combustion gas reaches about 1600 °C; the cooling system keeps the metal at a safe working temperature — 60–93 °C coolant, typically about 90 °C.' },
+  engine: { summary: 'Three-cylinder liquid-cooled tractor diesel (100 × 124 mm), every part working.', details: 'Combustion gas reaches about 1600 °C; the cooling system keeps the metal at a safe working temperature — 60–93 °C coolant, typically about 90 °C.' },
   block: { summary: 'Cylinder block with water jacket.', role: 'The jacket surrounds the cylinder liners so coolant can take heat from the cylinder walls.' },
   coolant: { summary: 'Coolant in the water jacket and head passages.', role: 'Colour shows its temperature. Heat flows from the hot cylinder walls into the coolant, which carries it to the radiator.' },
   head: { summary: 'Cylinder head with its own water passages.', role: 'Coolant rises from the block through holes in the head-gasket face and leaves at the front through the thermostat housing — hot water rises.' },
@@ -42,6 +44,16 @@ const INFO = {
   flyFan: { summary: 'Flywheel fan.', role: 'Vanes cast on the flywheel act as a centrifugal blower — the flywheel doubles as the fan.' },
 } as const
 
+/** the scene's ids, names, cards and sources for the shared engine's parts */
+const IDS: Partial<Record<EnginePartKey, string>> = { pulley: 'crank-pulley' }
+const ek = (key: EnginePartKey) => IDS[key] ?? key
+const PARTS: Partial<Record<EnginePartKey, EnginePartOverride>> = {
+  block: { name: 'Cylinder block & water jacket', info: INFO.block, cites: C.forced },
+  coolant: { name: 'Coolant (jacket & head)', info: INFO.coolant, cites: C.forced },
+  head: { info: INFO.head, cites: C.forced },
+  pulley: { info: { summary: 'Crankshaft pulley.', role: 'Drives the fan belt.' } },
+}
+
 export function Cool3D() {
   const g = buildCoolingGeometry()
   const mode = useCool((s) => s.mode)
@@ -59,7 +71,7 @@ export function Cool3D() {
   const fin = useMemo(() => createDynamicCutMaterial({ color: '#b8bcc2', hatch: 'light', metalness: 0.85, roughness: 0.4 }), [])
   const rgb = useMemo(() => ({ r: 0, g: 0, b: 0 }), [])
 
-  const crank = useRef<THREE.Group>(null)
+  const theta = useRef(0)
   const fanG = useRef<THREE.Group>(null)
   const valve = useRef<THREE.Group>(null)
   const spring = useRef<THREE.Mesh>(null)
@@ -70,19 +82,24 @@ export function Cool3D() {
   /* ---------- flow paths ---------- */
   const jacketPaths = useMemo(
     () =>
-      [-1, 1].map((s) =>
-        path([
-          V(0, PUMP.y - 0.04, ENG.z1 + 0.012),
-          V(0.02 * s, 0.2, 0.055),
-          V(0.06 * s, 0.19, -0.1),
-          V(0.062 * s, 0.24, -0.27),
-          V(0.062 * s, 0.31, -0.28),
-          V(0.03 * s, 0.355, -0.24),
-          V(0.02 * s, 0.355, -0.02),
-          V(0, 0.385, THERMO.z),
-          V(0, ENG.headTop + 0.035, THERMO.z),
-        ]),
-      ),
+      [-1, 1].map((s) => {
+        const zf = ENG.cylZ[0]
+        const zr = ENG.cylZ[ENG.cylZ.length - 1]
+        const inY = PUMP.y - 0.04
+        const passY = ENG.deck + (HEAD_PASSAGE.y0 + HEAD_PASSAGE.y1) / 2
+        return path([
+          V(0, inY, ENG.z1 + 0.012),
+          V(0.015 * s, inY, zf + 0.06),
+          V(0.06 * s, inY - 0.03, zf),
+          V(0.06 * s, inY - 0.01, zr + 0.01),
+          V(0.02 * s, ENG.deck - 0.03, zr - 0.06),
+          V(0, ENG.deck + 0.02, zr - 0.06),
+          V(0.03 * s, passY, zr),
+          V(0.03 * s, passY, zf - 0.05),
+          V(THERMO.x, passY + 0.01, THERMO.z),
+          V(THERMO.x, ENG.headTop + 0.035, THERMO.z),
+        ])
+      }),
     [],
   )
   const corePaths = useMemo(
@@ -107,7 +124,7 @@ export function Cool3D() {
     const f = live.flows
     const Te = live.state.Te
     const w = (st.rpm * 2 * PI) / 60
-    crank.current?.rotateZ(w * dt)
+    theta.current += w * dt
     fanG.current?.rotateZ((f.beltRpm * 2 * PI * dt) / 60)
     flyFan.current?.rotateX(w * dt)
 
@@ -188,33 +205,20 @@ export function Cool3D() {
   return (
     <group>
       <Part id="engine" name="Tractor diesel" material="castIron" role="housing" info={INFO.engine} cites={C.engine}>
-        <Part id="block" name="Cylinder block & water jacket" material="castIron" role="housing" info={INFO.block} cites={C.forced}>
-          <PartMesh geometry={g.block} />
-          <Part id="liners" name="Cylinder liners" material="steelDark" role="static">
-            <PartMesh geometry={g.liners} />
-          </Part>
-          <Part id="coolant" name="Coolant (jacket & head)" role="fluid" info={INFO.coolant} cites={C.forced}>
-            <PartMesh geometry={g.coolant} customMaterial={hot.material} castShadow={false} />
-          </Part>
-        </Part>
-        <Part id="head" name="Cylinder head" material="castIron" role="housing" info={INFO.head} cites={C.forced} explode={[0, 0.14, 0]}>
-          <PartMesh geometry={g.head} />
-          <PartMesh geometry={g.rockerCover} material="paintGreen" />
-        </Part>
-        <Part id="sump" name="Sump" material="paintGrey" role="housing" explode={[0, -0.1, 0]}>
-          <PartMesh geometry={g.sump} />
-        </Part>
-        <Part id="crank-pulley" name="Crankshaft pulley" material="castIron" role="moving" info={{ summary: 'Crankshaft pulley.', role: 'Drives the fan belt.' }}>
-          <group ref={crank} position={[0, CRANK_Y, 0]}>
-            <PartMesh geometry={g.crankNose} material="forged" position={[0, -CRANK_Y, 0]} />
-            <PartMesh geometry={g.crankPulley} position={[0, 0, 0.16]} />
-          </group>
-        </Part>
+        <Engine
+          firing={FIRING}
+          position={[0, CRANK_Y, ENGINE_Z]}
+          crankAngle={() => theta.current}
+          k={ek}
+          parts={PARTS}
+          gas={false}
+          coolantMaterial={hot.material}
+        />
       </Part>
 
       {(
         <Part id="thermostat" name="Thermostat & housing" material="aluminium" role="housing" info={INFO.thermostat} cites={C.forced} explode={[0, 0.12, 0]}>
-          <group position={[THERMO.x, THERMO.y, THERMO.z]}>
+          <group position={[THERMO.x, THERMO.y, THERMO.z]} rotation={[0, THERMO_TURN, 0]}>
             <PartMesh geometry={g.thermostatHousing} />
             <Part id="thermostat-valve" name="Thermostat valve & wax element" material="brass" role="moving" cut={false} info={INFO.thermostat} cites={C.forced}>
               <PartMesh geometry={g.thSeat} position={[0, 0.012, 0]} />
@@ -236,7 +240,7 @@ export function Cool3D() {
         <group ref={fanG} position={[0, PUMP.y, 0]}>
           <PartMesh geometry={g.pumpShaft} material="steel" position={[0, 0, PUMP.z]} />
           {pumped ? <PartMesh geometry={g.impeller} material="bronze" position={[0, 0, PUMP.z]} /> : null}
-          <PartMesh geometry={g.fanPulley} material="castIron" position={[0, 0, 0.16]} />
+          <PartMesh geometry={g.fanPulley} material="castIron" position={[0, 0, PULLEY_Z]} />
           <PartMesh geometry={g.fan} position={[0, 0, FAN.z]} />
         </group>
       </Part>
@@ -306,14 +310,14 @@ export function Cool3D() {
       ) : null}
 
       <PartLabel partId="radiator" at={[RAD.x + 0.06, RAD.y1, 0.3]} />
-      <PartLabel partId="thermostat" at={[0.05, ENG.headTop + 0.09, THERMO.z]} />
+      <PartLabel partId="thermostat" at={[THERMO.x + 0.03, ENG.headTop + 0.09, THERMO.z]} />
       <PartLabel partId="pressure-cap" at={[CAP.x + 0.02, CAP.y + 0.08, CAP.z]} />
       <PartLabel partId="water-pump" at={[-0.1, PUMP.y - 0.06, PUMP.z + 0.02]} />
       <PartLabel partId="fan-drive" at={[-0.15, PUMP.y + 0.16, FAN.z]} text="Fan" />
-      <PartLabel partId="fan-belt" at={[0.08, 0.12, 0.16]} />
-      <PartLabel partId="coolant" at={[0.09, 0.22, -0.15]} />
+      <PartLabel partId="fan-belt" at={[0.08, 0.12, PULLEY_Z]} />
+      <PartLabel partId="coolant" at={[0.12, 0.22, ENG.cylZ[1]]} />
       <PartLabel partId="hoses" at={[0.06, ENG.headTop + 0.07, 0.15]} text="Top hose" />
-      <PartLabel partId="block" at={[0.09, 0.08, -0.25]} />
+      <PartLabel partId="block" at={[0.14, 0.08, ENG.cylZ[2]]} />
       <PartLabel partId="core" at={[-RAD.x - 0.05, 0.25, 0.32]} />
       {thermo ? <PartLabel partId="bypass" at={[-0.12, ENG.headTop - 0.02, 0.1]} /> : null}
     </group>

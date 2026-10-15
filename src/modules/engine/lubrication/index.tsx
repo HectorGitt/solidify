@@ -12,7 +12,7 @@ const scene: SceneDef = {
     'A four-cylinder diesel cut open to show its force-feed oil circuit — pump, relief valve, full-flow filter, main gallery and drillings to every bearing — and the circulating splash system for comparison. Pressures and flows follow engine speed, oil temperature and the relief-valve setting.',
   Viewport: Lube3D,
   Panel: LubePanel,
-  camera: { position: [0.62, 0.42, 1.0], target: [-0.04, 0.08, -0.05] },
+  camera: { position: [0.92, 0.57, 1.47], target: [-0.04, 0.08, -0.05] },
   extent: 0.9,
   floorY: -0.22,
   hatchScale: 0.006,
@@ -27,14 +27,14 @@ const scene: SceneDef = {
   defaultPreset: 'half',
   cites: [SRC.tb509('Ch 6, Figs 6.1–6.3'), SRC.supp509('lubrication: purposes, parts needing oil, SAE grades'), SRC.add509('petroil / oils')],
   reset: () => useLube.getState().reset(),
-  prepare: prepareLubeGeometry,
+  prepare: () => Promise.all([prepareLubeGeometry(), import('@/machines/engine.geometry').then((m) => m.prepareEngine())]),
   applyParams: (p) => useLube.getState().set(p as Partial<typeof DEFAULTS>),
   tour: [
     {
       title: 'Why an engine needs oil',
       body:
         'Oil keeps a film between every pair of rubbing surfaces. It **reduces friction**, **cools** the bearings and pistons, **seals** the rings and **cleans**, carrying dirt to the filter. This four-cylinder diesel is cut open to show how the oil gets everywhere.',
-      camera: { position: [0.62, 0.42, 1.0], target: [-0.04, 0.08, -0.05] },
+      camera: { position: [0.92, 0.57, 1.47], target: [-0.04, 0.08, -0.05] },
       cut: 'half',
       select: null,
       explode: 0,
@@ -74,7 +74,7 @@ const scene: SceneDef = {
       title: '4 · Main gallery and drillings',
       body:
         'The **main gallery** runs the length of the block. Drillings feed each **main bearing** and **camshaft bearing**; drillings in the crankshaft carry oil on from the mains to the **big ends**. Oil escaping from the big ends is flung onto the cylinder walls.',
-      camera: { position: [0.3, 0.12, 0.45], target: [0, 0.02, -0.06] },
+      camera: { position: [0.43, 0.16, 0.68], target: [0, 0.02, -0.06] },
       select: 'oilways',
       cut: 'transverse',
       cites: [SRC.tb509('Fig 6.2 — main gallery, oilways')],
@@ -99,7 +99,7 @@ const scene: SceneDef = {
       title: 'Circulating splash system',
       body:
         'In the older **splash** system the camshaft-driven pump only keeps a set of **troughs** full. A **dipper** on each big-end cap dips in every revolution and splashes oil over the cylinder walls, pins and bearings.',
-      camera: { position: [0.45, 0.05, 0.6], target: [0, -0.08, 0] },
+      camera: { position: [0.65, 0.11, 0.87], target: [0, -0.08, 0] },
       select: 'conrods',
       cut: 'half',
       params: { mode: 'splash', tempC: 90, rpm: 1200 },

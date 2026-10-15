@@ -310,22 +310,33 @@ export function bearingHousing(type: BearingType) {
 }
 
 /**
- * Simple pillow-block (plummer) housing for a shaft along Z: ring round the bore at the origin
- * (50 mm wide), a web down to a foot whose underside is at y = −h.
+ * Plummer (pillow) block: cast housing with a base and bolt bosses, and its bearing insert, round a
+ * shaft through the origin along X or Z. `drop` is the distance from the shaft axis down to the base.
  */
+export function plummerBlock(s: { bore: number; drop: number; axis?: 'x' | 'z' }) {
+  const { bore, drop } = s
+  const ro = bore + 0.022
+  const w = 0.05
+  const foot = 0.014
+  const prof = new THREE.Shape()
+  prof.moveTo(-ro, -drop + foot)
+  prof.lineTo(ro, -drop + foot)
+  prof.absarc(0, 0, ro, 0, PI, false)
+  const hole = new THREE.Path()
+  hole.absarc(0, 0, bore + 0.006, 0, 2 * PI, true)
+  prof.holes.push(hole)
+  // the profile is extruded along Z (centred); turned for an X shaft
+  const turn = s.axis === 'x' ? mat4.ry(PI / 2) : mat4.t(0, 0, 0)
+  const body = xform(extrude(prof, w, { curveSegments: 40 }), turn)
+  const base = xform(box(2 * ro + 0.09, foot, w + 0.02), mat4.c(turn, mat4.t(0, -drop + foot / 2, 0)))
+  const insert = xform(tube(bore + 0.006, bore, w * 0.8, 40), s.axis === 'x' ? mat4.rz(PI / 2) : mat4.rx(PI / 2))
+  return { housing: merge(body, base), insert }
+}
+
+/** Plummer block on a Z shaft, housing and insert in one geometry (belts and chains scenes). */
 export function pillowBlock(boreR: number, h: number) {
-  const body = lathe(
-    [
-      [boreR, -0.025],
-      [boreR * 2.2, -0.025],
-      [boreR * 2.2, 0.025],
-      [boreR, 0.025],
-    ],
-    32,
-  )
-  const foot = xform(box(boreR * 6, 0.016, 0.05), mat4.t(0, -h + 0.008, 0))
-  const web = xform(box(boreR * 2.2, h - boreR * 1.5, 0.04), mat4.t(0, -h / 2 - boreR * 0.4, 0))
-  return merge(toZ(body), foot, web)
+  const p = plummerBlock({ bore: boreR, drop: h, axis: 'z' })
+  return merge(p.housing, p.insert)
 }
 
 /* ================================ plain bearings, bushes, fasteners ================================ */
@@ -1110,19 +1121,7 @@ export function telescopicDamper(s: { bodyR: number; bodyL: number; rodR: number
  * bosses, and the bearing insert. `drop` is the distance from the shaft axis to the base.
  */
 export function pillowBlockX(bore: number, drop: number) {
-  const ro = bore + 0.022
-  const w = 0.05
-  const foot = 0.014
-  const prof = new THREE.Shape()
-  prof.moveTo(-ro, -drop + foot)
-  prof.lineTo(ro, -drop + foot)
-  prof.absarc(0, 0, ro, 0, PI, false)
-  const hole = new THREE.Path()
-  hole.absarc(0, 0, bore + 0.006, 0, 2 * PI, true)
-  prof.holes.push(hole)
-  const body = xform(extrude(prof, w, { curveSegments: 40 }), mat4.ry(PI / 2))
-  const base = xform(box(w + 0.02, foot, 2 * ro + 0.09), mat4.t(0, -drop + foot / 2, 0))
-  return { housing: merge(body, base), insert: xform(tube(bore + 0.006, bore, w * 0.8, 40), mat4.rz(PI / 2)) }
+  return plummerBlock({ bore, drop, axis: 'x' })
 }
 
 /** (moved from implements.ts) */

@@ -5,8 +5,9 @@ import { useSimFrame } from '@/core/sim'
 import { Flow } from '@/render/Flow'
 import { PartLabel } from '@/render/Label'
 import { Part, PartMesh } from '@/render/Part'
-import { PATHS, buildLubeGeometry } from './geometry'
-import { BREATHER, CAM, CYL_X, DECK, FILTER, GAUGE, MAIN_X, PUMP, R, RELIEF, ROCKER, ROD, THROW, gaugeBar, live, operating, pistonPinY, useLube } from './model'
+import { Engine, type EnginePartKey, type EnginePartOverride } from '@/machines/Engine'
+import { CRANK_DRILLINGS, PATHS, STRAINER, buildLubeGeometry } from './geometry'
+import { BREATHER, CAM, CYL_X, DECK, FILTER, GAUGE, MAIN_X, PUMP, RELIEF, ROCKER, SUMP_OIL_Y, TROUGH, gaugeBar, live, operating, useLube } from './model'
 
 const { PI } = Math
 const V = (x: number, y: number, z = 0) => new THREE.Vector3(x, y, z)
@@ -21,7 +22,7 @@ const C = {
 }
 
 const INFO = {
-  engine: { summary: 'Four-cylinder in-line diesel (100 × 120 mm), shown for its lubrication system.', details: 'Oil must reach the cylinder walls and pistons, gudgeon pins, main and big-end bearings, camshaft bearings and the valve gear.' },
+  engine: { summary: 'Four-cylinder in-line diesel (100 × 124 mm, firing order 1-3-4-2), every part working, shown for its lubrication system.', details: 'Oil must reach the cylinder walls and pistons, gudgeon pins, main and big-end bearings, camshaft bearings and the valve gear.' },
   block: { summary: 'Cylinder block with the main oil gallery drilled along it.', role: 'Drillings from the gallery feed every main bearing and camshaft bearing; a riser feeds the rocker shaft.' },
   sump: { summary: 'Sump (oil pan) — the oil reservoir.', role: 'Holds the oil; oil returning from the bearings, cylinder walls and valve gear drains back here and cools.' },
   pump: { summary: 'Gear-type oil pump, driven from the camshaft.', role: 'Two meshing gears carry oil round the outside of the casing from the inlet to the outlet. Output rises with engine speed.' },
@@ -39,14 +40,25 @@ const INFO = {
   breather: { summary: 'Crankcase breather pipe with filter.', role: 'Vents blow-by gas that leaks past the rings, so crankcase pressure does not force oil past the seals; the filter stops dust getting in.' },
 }
 
+/** the scene's ids, names, cards and sources for the shared engine's parts */
+const IDS: Partial<Record<EnginePartKey, string>> = { crank: 'crankshaft', oil: 'sump-oil' }
+const k = (key: EnginePartKey) => IDS[key] ?? key
+const partsFor = (force: boolean): Partial<Record<EnginePartKey, EnginePartOverride>> => ({
+  block: { name: 'Cylinder block & oil gallery', info: INFO.block, cites: C.force },
+  'main-bearings': { name: 'Main bearing shells', info: { summary: 'Main bearing shells (white metal on steel).', role: 'Each is fed with oil from the gallery; the oil film keeps journal and shell apart.' }, cites: [SRC.m503(7, 'journal bearings')] },
+  sump: { info: INFO.sump, cites: C.force },
+  oil: { name: 'Oil in the sump', info: { summary: 'Engine oil.', role: 'Reduces friction, cools the bearings and pistons, seals the rings and cleans — carrying dirt away to the filter.' }, cites: C.oil },
+  'rocker-shaft': { name: 'Rocker shaft (hollow)', info: INFO.rocker, cites: C.force },
+  crank: { name: 'Crankshaft & oilways', info: INFO.crank, cites: C.force },
+  camshaft: { name: 'Camshaft & skew gear', info: INFO.camshaft, cites: C.force },
+  conrods: { info: INFO.rods, cites: force ? C.force : C.splash },
+  pistons: { info: INFO.pistons, cites: C.engine },
+})
+
 export function Lube3D() {
   const g = buildLubeGeometry()
   const mode = useLube((s) => s.mode)
   const flows = useLube((s) => s.flows)
-  const crank = useRef<THREE.Group>(null)
-  const cam = useRef<THREE.Group>(null)
-  const rods = useRef<(THREE.Group | null)[]>([])
-  const pistons = useRef<(THREE.Group | null)[]>([])
   const pumpA = useRef<THREE.Group>(null)
   const pumpB = useRef<THREE.Group>(null)
   const plunger = useRef<THREE.Group>(null)
@@ -57,16 +69,12 @@ export function Lube3D() {
   const sprays = useMemo(
     () =>
       CYL_X.flatMap((x) =>
-        [-1, 1].map((s) => new THREE.CatmullRomCurve3([V(x, -0.01, 0), V(x + s * 0.02, 0.06, s * 0.02), V(x + s * 0.045, 0.16, s * 0.02), V(x + s * 0.048, 0.2, 0)])),
+        [-1, 1].map((s) => new THREE.CatmullRomCurve3([V(x, -0.01, 0), V(x + s * 0.02, 0.07, s * 0.02), V(x + s * 0.045, 0.18, s * 0.02), V(x + s * 0.048, 0.24, 0)])),
       ),
     [],
   )
   const splashes = useMemo(
-    () => CYL_X.flatMap((x) => [-1, 1].map((s) => new THREE.CatmullRomCurve3([V(x, -0.115, 0), V(x + s * 0.03, -0.04, s * 0.03), V(x + s * 0.045, 0.06, s * 0.04), V(x + s * 0.048, 0.15, 0)]))),
-    [],
-  )
-  const crankFlows = useMemo(
-    () => CYL_X.map((x, i) => new THREE.CatmullRomCurve3([V(x - 0.06, 0, 0), V(x - 0.035, R * 0.45 * Math.cos(THROW[i]), R * 0.45 * Math.sin(THROW[i])), V(x, R * Math.cos(THROW[i]), R * Math.sin(THROW[i]))])),
+    () => CYL_X.flatMap((x) => [-1, 1].map((s) => new THREE.CatmullRomCurve3([V(x, TROUGH.y, 0), V(x + s * 0.03, -0.04, s * 0.03), V(x + s * 0.045, 0.07, s * 0.04), V(x + s * 0.048, 0.18, 0)]))),
     [],
   )
 
@@ -75,21 +83,8 @@ export function Lube3D() {
     const w = (st.rpm * 2 * PI) / 60
     live.theta += w * dt
     const th = live.theta
-    crank.current?.rotation.set(th, 0, 0)
-    cam.current?.rotation.set(-th / 2, 0, 0)
     pumpA.current?.rotation.set(0, th / 2, 0)
     pumpB.current?.rotation.set(0, -th / 2, 0)
-    for (let i = 0; i < 4; i++) {
-      const a = th + THROW[i]
-      const py = R * Math.cos(a)
-      const pz = R * Math.sin(a)
-      const rg = rods.current[i]
-      if (rg) {
-        rg.position.set(CYL_X[i], py, pz)
-        rg.rotation.set(Math.asin(-pz / ROD), 0, 0)
-      }
-      pistons.current[i]?.position.set(CYL_X[i], pistonPinY(th, i), 0)
-    }
     const r = operating(st)
     const s = state.current
     s.pump = st.rpm > 0 ? Math.min(1, r.pumpLpm / 12) : 0
@@ -117,39 +112,30 @@ export function Lube3D() {
   return (
     <group>
       <Part id="engine" name="Four-cylinder engine" role="housing" material="castIron" info={INFO.engine} cites={C.engine}>
-        <Part id="block" name="Cylinder block & oil gallery" material="castIron" role="housing" info={INFO.block} cites={C.force}>
-          <PartMesh geometry={g.block} />
-          <Part id="main-bearings" name="Main bearing shells" material="bearing" role="static" info={{ summary: 'Main bearing shells (white metal on steel).', role: 'Each is fed with oil from the gallery; the oil film keeps journal and shell apart.' }} cites={[SRC.m503(7, 'journal bearings')]}>
-            <PartMesh geometry={g.mainShells} />
-            <PartMesh geometry={g.camBearings} />
-          </Part>
-        </Part>
-        <Part id="head" name="Cylinder head & rocker cover" material="castIron" role="housing" explode={[0, 0.18, 0]}>
-          <PartMesh geometry={g.head} />
-          <Part id="rocker-cover" name="Rocker cover" material="paintGreen" role="housing" explode={[0, 0.1, 0]}>
-            <PartMesh geometry={g.rockerCover} />
-          </Part>
-          <Part id="rocker-shaft" name="Rocker shaft & rockers" material="steel" role="static" info={INFO.rocker} cites={C.force}>
-            <group position={[0, ROCKER.y, ROCKER.z]}>
-              <PartMesh geometry={g.rockerShaft} />
-              <PartMesh geometry={g.rockerArms} material="forged" />
-              <PartMesh geometry={g.rockerPedestals} material="castIron" />
-            </group>
-          </Part>
-        </Part>
-        <Part id="sump" name="Sump" material="paintGrey" role="housing" info={INFO.sump} cites={C.force} explode={[0, -0.16, 0]}>
-          <PartMesh geometry={g.sump} />
-          <Part id="sump-oil" name="Oil in the sump" material="oil" role="fluid" info={{ summary: 'Engine oil.', role: 'Reduces friction, cools the bearings and pistons, seals the rings and cleans — carrying dirt away to the filter.' }} cites={C.oil}>
-            <PartMesh geometry={g.sumpOil} />
-          </Part>
-          {!force ? (
-            <Part id="troughs" name="Splash troughs" material="paintGrey" role="static" info={INFO.troughs} cites={C.splash}>
-              <PartMesh geometry={g.troughs} />
-              <PartMesh geometry={g.troughOil} material="oil" />
-              <PartMesh geometry={g.oilTroughFeed} material="oil" />
+        {/* the shared engine, turned so its crank lies along X with cylinder 1 at the front (−X) */}
+        <Engine
+          rotation={[0, -PI / 2, 0]}
+          crankAngle={() => live.theta}
+          k={k}
+          parts={partsFor(force)}
+          gas={false}
+          oilTop={SUMP_OIL_Y}
+          crankParts={
+            <Part id="crank-oil" name="Crankshaft oil drillings" material="oil" role="fluid" cut={false} info={INFO.crank}>
+              <PartMesh geometry={g.crankOil} />
+              {flows ? CRANK_DRILLINGS.map((c, i) => <Flow key={`k${i}`} curve={c} count={8} radius={0.0028} color={OIL_C} speed={1} spread={0.001} intensity={fk(bearingK)} />) : null}
             </Part>
-          ) : null}
-        </Part>
+          }
+          camParts={<PartMesh geometry={g.camSkew} material="steelDark" />}
+          rodParts={() => (force ? null : <PartMesh geometry={g.dipper} material="steel" />)}
+        />
+        {!force ? (
+          <Part id="troughs" name="Splash troughs" material="paintGrey" role="static" info={INFO.troughs} cites={C.splash}>
+            <PartMesh geometry={g.troughs} />
+            <PartMesh geometry={g.troughOil} material="oil" />
+            <PartMesh geometry={g.oilTroughFeed} material="oil" />
+          </Part>
+        ) : null}
 
         {/* oil system */}
         <Part id="oil-pump" name="Gear oil pump" material="castIron" role="housing" info={INFO.pump} cites={C.force} explode={[0, -0.1, -0.08]}>
@@ -160,12 +146,12 @@ export function Lube3D() {
               <PartMesh geometry={g.pumpShaft} material="steel" />
               <PartMesh geometry={g.skewPinion} position={[0, CAM.y - PUMP.y, 0]} />
             </group>
-            <group ref={pumpB} position={[PUMP.x + PUMP.idleDx, PUMP.y, PUMP.z]}>
+            <group ref={pumpB} position={[PUMP.x, PUMP.y, PUMP.z - PUMP.idleDz]}>
               <PartMesh geometry={g.pumpGear} />
             </group>
           </Part>
           <Part id="strainer" name="Strainer" material="brass" role="static" info={INFO.strainer} cites={C.force}>
-            <group position={[PUMP.x + PUMP.idleDx / 2, -0.2, PUMP.z + 0.02]}>
+            <group position={[STRAINER.x, STRAINER.y, STRAINER.z]}>
               <PartMesh geometry={g.gauze} />
               <PartMesh geometry={g.gauzeCap} material="steel" />
             </group>
@@ -211,48 +197,6 @@ export function Lube3D() {
           <PartMesh geometry={g.breatherCan} material="galvanised" position={[BREATHER.x, BREATHER.y, BREATHER.z]} />
         </Part>
 
-        {/* moving parts */}
-        <Part id="crankshaft" name="Crankshaft & oilways" material="forged" role="moving" info={INFO.crank} cites={C.force}>
-          <group ref={crank}>
-            <PartMesh geometry={g.crankshaft} />
-            <Part id="crank-oil" name="Crankshaft oil drillings" material="oil" role="fluid" cut={false} info={INFO.crank}>
-              <PartMesh geometry={g.crankOil} />
-            </Part>
-            {flows
-              ? crankFlows.map((c, i) => <Flow key={`k${i}`} curve={c} count={8} radius={0.0028} color={OIL_C} speed={1} spread={0.001} intensity={fk(bearingK)} />)
-              : null}
-          </group>
-        </Part>
-        <Part id="camshaft" name="Camshaft & skew gear" material="forged" role="moving" info={INFO.camshaft} cites={C.force}>
-          <group ref={cam} position={[0, CAM.y, CAM.z]}>
-            <PartMesh geometry={g.camshaft} />
-            <PartMesh geometry={g.camLobes} material="steel" />
-            <PartMesh geometry={g.camGears} material="steelDark" />
-          </group>
-        </Part>
-        <Part id="conrods" name="Connecting rods" material="forged" role="moving" info={INFO.rods} cites={force ? C.force : C.splash}>
-          {CYL_X.map((x, i) => (
-            <group key={x} ref={(o) => void (rods.current[i] = o)}>
-              <PartMesh geometry={g.rod} />
-              <PartMesh geometry={g.rodCap} />
-              <PartMesh geometry={g.rodBolts} material="steelDark" />
-              <PartMesh geometry={g.rodBush} material="bronze" />
-              <PartMesh geometry={g.rodShells} material="bearing" />
-              {!force ? <PartMesh geometry={g.dipper} material="steel" /> : null}
-            </group>
-          ))}
-        </Part>
-        <Part id="pistons" name="Pistons" material="aluminium" role="moving" info={INFO.pistons} cites={C.engine}>
-          {CYL_X.map((x, i) => (
-            <group key={x} ref={(o) => void (pistons.current[i] = o)}>
-              <PartMesh geometry={g.piston} />
-              <PartMesh geometry={g.pistonRings} material="steelDark" />
-              <PartMesh geometry={g.oilRing} material="castIron" />
-              <PartMesh geometry={g.gudgeonPin} material="steel" />
-            </group>
-          ))}
-        </Part>
-
         {flows ? (
           <>
             <Flow curve={PATHS.inlet} count={14} radius={0.0034} color={OIL_C} speed={1} spread={0.002} intensity={pumpK} />
@@ -289,18 +233,18 @@ export function Lube3D() {
       </Part>
 
       <PartLabel partId="oil-pump" at={[PUMP.x - 0.02, PUMP.y - 0.04, PUMP.z + 0.05]} />
-      <PartLabel partId="strainer" at={[PUMP.x + 0.06, -0.205, 0.02]} />
+      <PartLabel partId="strainer" at={[STRAINER.x + 0.06, STRAINER.y - 0.01, STRAINER.z + 0.03]} />
       <PartLabel partId="relief-valve" at={[RELIEF.x + 0.03, RELIEF.y + 0.05, RELIEF.z + 0.03]} />
       <PartLabel partId="oil-filter" at={[FILTER.x, -0.13, FILTER.z]} />
-      <PartLabel partId="oilways" at={[0.05, 0.05, -0.1]} text="Main oil gallery" />
+      <PartLabel partId="oilways" at={[0.05, 0.05, -0.14]} text="Main oil gallery" />
       <PartLabel partId="crankshaft" at={[MAIN_X[2], -0.07, 0.06]} />
       <PartLabel partId="camshaft" at={[0.1, CAM.y + 0.03, CAM.z]} />
       <PartLabel partId="rocker-shaft" at={[0.1, ROCKER.y + 0.03, ROCKER.z]} />
       <PartLabel partId="pressure-gauge" at={[GAUGE.x, GAUGE.y + 0.07, GAUGE.z]} />
       <PartLabel partId="breather" at={[BREATHER.x + 0.03, BREATHER.y + 0.06, BREATHER.z]} />
       <PartLabel partId="sump" at={[0.2, -0.2, 0.1]} />
-      <PartLabel partId="pistons" at={[CYL_X[1], DECK - 0.04, 0.06]} />
-      {!force ? <PartLabel partId="troughs" at={[CYL_X[2], -0.1, 0.05]} /> : null}
+      <PartLabel partId="pistons" at={[CYL_X[1], DECK - 0.05, 0.06]} />
+      {!force ? <PartLabel partId="troughs" at={[CYL_X[2], TROUGH.y + 0.01, 0.05]} /> : null}
     </group>
   )
 }

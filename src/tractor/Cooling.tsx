@@ -6,8 +6,8 @@ import { beltBand, loopPath } from '@/geometry/parts'
 import type { PartInfo } from '@/parts/registry'
 import { Part, PartMesh } from '@/render/Part'
 import type { DriveAngles } from './DrivelineInternals'
-import { ENGINE_X } from './EngineDetail'
-import { CYL_Z, HEAD_Y } from './engine.geometry'
+import { HEAD_OUTLET } from '@/machines/layout'
+import { CYL_Z, ENGINE_X } from './engine'
 import { DRIVE_Y } from './geometry'
 import { FAN_PULLEY_R, RADIATOR, prepareSystems, systemsReady, type SystemsGeometry } from './systems.geometry'
 
@@ -27,8 +27,8 @@ const FAN_X = 1.8
 /** the crankshaft pulley's plane (front of the engine) */
 const BELT_X = ENGINE_X + CYL_Z[0] + 0.112
 const CRANK_PULLEY_R = 0.065
-/** thermostat on top of the head at its front end */
-const THERMO = V(ENGINE_X + CYL_Z[0] + 0.05, DRIVE_Y + HEAD_Y + 0.095, 0.03)
+/** thermostat on the head's coolant outlet, at its front end (engine frame (x, z) → tractor (ENGINE_X + z, −x)) */
+const THERMO = V(ENGINE_X + CYL_Z[0] + HEAD_OUTLET.dz, DRIVE_Y + HEAD_OUTLET.topY, -HEAD_OUTLET.x)
 /** fan speed ÷ crank speed */
 export const FAN_RATIO = CRANK_PULLEY_R / FAN_PULLEY_R
 

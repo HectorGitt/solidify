@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import { box, csg, cylinder, lathe, mat4, merge, pipe, xform, type CsgOp, type V2 } from '@/geometry'
+import { box, csg, cylinder, lathe, mat4, merge, pipe, xform, type V2 } from '@/geometry'
 import { beltBand, loopPath } from '@/geometry/parts'
 import { AIRC, CRANK_Y, ENG, FAN, PULLEY_Z, PUMP, RAD, THERMO } from './model'
 import {
@@ -15,7 +15,6 @@ import {
   tubeXs,
   vPulley,
 } from '@/parts/lib/cooling'
-import { cylinderLiner } from '@/parts/lib/engine'
 
 const { PI } = Math
 const at = (x: number, y: number, z: number) => mat4.t(x, y, z)
@@ -26,68 +25,9 @@ const curve = (pts: THREE.Vector3[], t = 0.3) => new THREE.CatmullRomCurve3(pts,
 /** box from min/max corners */
 const bx = (x0: number, x1: number, y0: number, y1: number, z0: number, z1: number) => xform(box(x1 - x0, y1 - y0, z1 - z0), at((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2))
 
-/* ------------------------------ liquid-cooled engine ------------------------------ */
-
-const J = ENG.jacket
-const HJ = ENG.headJacket
-/** coolant transfer holes through the head gasket face, (x, z) */
-const TRANSFER: [number, number][] = ENG.cylZ.flatMap((z) => [
-  [-0.062, z + 0.04],
-  [0.062, z - 0.04],
-])
-
-function block() {
-  const outer = bx(-ENG.x, ENG.x, 0, ENG.deck, ENG.z0, ENG.z1)
-  const ops: CsgOp[] = [
-    { op: 'sub', geometry: bx(-J.x, J.x, J.y0, J.y1, J.z0, J.z1) },
-    { op: 'sub', geometry: bx(-ENG.x + 0.012, ENG.x - 0.012, -0.01, 0.1, ENG.z0 + 0.012, ENG.z1 - 0.012) },
-  ]
-  for (const z of ENG.cylZ) ops.push({ op: 'sub', geometry: xform(cylinder(ENG.linerOuter, 0.24, 40), at(0, 0.2, z)) })
-  for (const [x, z] of TRANSFER) ops.push({ op: 'sub', geometry: xform(cylinder(0.006, 0.04, 16), at(x, J.y1 + 0.005, z)) })
-  // water-pump outlet into the front of the jacket
-  ops.push({ op: 'sub', geometry: xform(cylinder(0.014, 0.05, 20), mat4.c(at(0, PUMP.y - 0.04, ENG.z1), alongZ)) })
-  return csg(outer, ops)
-}
-
-function liners() {
-  const liner = cylinderLiner({ bore: ENG.bore, outer: ENG.linerOuter, y0: 0.08, y1: ENG.deck, segments: 48 })
-  return merge(...ENG.cylZ.map((z) => xform(liner, at(0, 0, z))))
-}
-
-function head() {
-  const outer = bx(-ENG.x, ENG.x, ENG.deck, ENG.headTop, ENG.z0, ENG.z1)
-  const ops: CsgOp[] = [{ op: 'sub', geometry: bx(-HJ.x, HJ.x, HJ.y0, HJ.y1, HJ.z0, HJ.z1) }]
-  for (const [x, z] of TRANSFER) ops.push({ op: 'sub', geometry: xform(cylinder(0.006, 0.08, 16), at(x, ENG.deck + 0.02, z)) })
-  ops.push({ op: 'sub', geometry: xform(cylinder(0.016, 0.06, 24), at(THERMO.x, ENG.headTop - 0.01, THERMO.z)) })
-  for (const z of ENG.cylZ) ops.push({ op: 'sub', geometry: xform(cylinder(0.035, 0.02, 32), at(0, ENG.deck + 0.006, z)) })
-  return csg(outer, ops)
-}
-
-/** One coolant solid: block jacket + transfer holes + head passages + outlet, minus the liners. */
-function jacketCoolant() {
-  const e = 0.0003
-  const base = bx(-J.x + e, J.x - e, J.y0 + e, J.y1 - e, J.z0 + e, J.z1 - e)
-  const ops: CsgOp[] = []
-  for (const [x, z] of TRANSFER) ops.push({ op: 'add', geometry: xform(cylinder(0.0058, HJ.y0 - J.y1 + 0.004, 16), at(x, (J.y1 + HJ.y0) / 2, z)) })
-  ops.push({ op: 'add', geometry: bx(-HJ.x + e, HJ.x - e, HJ.y0 + e, HJ.y1 - e, HJ.z0 + e, HJ.z1 - e) })
-  ops.push({ op: 'add', geometry: xform(cylinder(0.0157, ENG.headTop - HJ.y1 + 0.002, 24), at(THERMO.x, (HJ.y1 + ENG.headTop) / 2, THERMO.z)) })
-  for (const z of ENG.cylZ) ops.push({ op: 'sub', geometry: xform(cylinder(ENG.linerOuter, 0.24, 40), at(0, 0.2, z)) })
-  return csg(base, ops)
-}
-
-function sump() {
-  const o = bx(-ENG.x, ENG.x, -0.1, 0, ENG.z0, ENG.z1)
-  return csg(o, [{ op: 'sub', geometry: bx(-ENG.x + 0.006, ENG.x - 0.006, -0.094, 0.01, ENG.z0 + 0.006, ENG.z1 - 0.006) }])
-}
-
-function rockerCover() {
-  const o = bx(-ENG.x + 0.006, ENG.x - 0.006, ENG.headTop, ENG.headTop + 0.06, ENG.z0 + 0.01, -0.03)
-  return csg(o, [{ op: 'sub', geometry: bx(-ENG.x + 0.012, ENG.x - 0.012, ENG.headTop - 0.01, ENG.headTop + 0.054, ENG.z0 + 0.016, -0.036) }])
-}
-
 /* ------------------------------ thermostat ------------------------------ */
 
-/** Housing on the head outlet, local origin at the head top face. Outlet to the top hose on +Z, bypass on −X. */
+/** Housing on the head outlet, local origin at the head top face. Outlet to the top hose on +Z, bypass on −X (the scene turns it a quarter turn, outlet to +X). */
 function thermostatHousing() {
   return libThermostatHousing()
 }
@@ -114,7 +54,8 @@ function pulley(r: number) {
   return vPulley(r)
 }
 
-export const CRANK_PULLEY_R = 0.065
+/** the shared engine's crank pulley (four-stroke scene) */
+export const CRANK_PULLEY_R = 0.072
 export const FAN_PULLEY_R = 0.05
 
 function belt() {
@@ -148,10 +89,16 @@ function capParts() {
 const tankMidTop = (RAD.y1 + RAD.topY1) / 2
 const tankMidBot = (RAD.botY0 + RAD.y0) / 2
 
+/**
+ * The thermostat housing is turned a quarter turn on the head (its outlet to +X, clear of the rocker
+ * cover; the bypass port forward, +Z): the top hose leaves sideways and runs forward over the inlet
+ * manifold to the header tank, the bypass runs down the front of the head to the pump.
+ */
+export const THERMO_TURN = PI / 2
 export const HOSES = {
-  top: curve([V(0, ENG.headTop + 0.038, THERMO.z + 0.03), V(0, ENG.headTop + 0.045, 0.12), V(0, tankMidTop + 0.005, 0.2), V(0, tankMidTop, RAD.tankZ0 + 0.002)]),
-  bottom: curve([V(0.15, tankMidBot, RAD.tankZ0 + 0.002), V(0.15, tankMidBot + 0.02, 0.17), V(0.12, PUMP.y - 0.05, 0.12), V(0.068, PUMP.y, PUMP.z)]),
-  bypass: curve([V(THERMO.x - 0.03, ENG.headTop + 0.012, THERMO.z), V(-0.06, ENG.headTop - 0.03, 0.09), V(-0.078, PUMP.y + 0.03, PUMP.z + 0.004), V(-0.06, PUMP.y, PUMP.z)]),
+  top: curve([V(THERMO.x + 0.03, ENG.headTop + 0.038, THERMO.z), V(THERMO.x + 0.06, ENG.headTop + 0.045, THERMO.z + 0.06), V(0.08, tankMidTop + 0.01, 0.2), V(0.02, tankMidTop, RAD.tankZ0 + 0.002)]),
+  bottom: curve([V(0.15, tankMidBot, RAD.tankZ0 + 0.002), V(0.15, tankMidBot + 0.02, 0.19), V(0.12, PUMP.y - 0.05, PUMP.z + 0.01), V(0.068, PUMP.y, PUMP.z)]),
+  bypass: curve([V(THERMO.x, ENG.headTop + 0.012, THERMO.z + 0.03), V(THERMO.x - 0.01, ENG.headTop - 0.012, ENG.z1 + 0.018), V(-0.06, PUMP.y + 0.05, PUMP.z + 0.012), V(-0.078, PUMP.y + 0.03, PUMP.z + 0.004), V(-0.06, PUMP.y, PUMP.z)]),
 }
 
 /* ------------------------------ air-cooled engine (TB Fig 7.1) ------------------------------ */
@@ -222,12 +169,6 @@ export function buildStatic() {
   const cp = capParts()
   const ac = airCooled()
   return {
-    block: block(),
-    liners: liners(),
-    head: head(),
-    coolant: jacketCoolant(),
-    sump: sump(),
-    rockerCover: rockerCover(),
     thermostatHousing: thermostatHousing(),
     thSeat: th.seat,
     thValve: th.valve,
@@ -238,8 +179,6 @@ export function buildStatic() {
     impeller: impeller(),
     fan: fan(),
     fanPulley: pulley(FAN_PULLEY_R),
-    crankPulley: pulley(CRANK_PULLEY_R),
-    crankNose: xform(cylinder(0.02, PULLEY_Z - ENG.z1 + 0.01, 24), mat4.c(at(0, CRANK_Y, (PULLEY_Z + ENG.z1) / 2), alongZ)),
     pumpShaft: xform(cylinder(0.008, FAN.z - PUMP.z + 0.03, 16), mat4.c(at(0, 0, (FAN.z - PUMP.z) / 2), alongZ)),
     belt: belt(),
     coreTubes: core.tubes,

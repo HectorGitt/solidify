@@ -4,10 +4,12 @@ import type { PartInfo } from '@/parts/registry'
 import type { MaterialKey } from '@/render/materials'
 import { Part } from '@/render/Part'
 import { insideReady, systemsOf, useInside } from '@/ui/inside'
-import { prepareTractorEngine, tractorEngineReady } from './engine.geometry'
+import { engineReady, prepareEngine } from '@/machines/engine.geometry'
+import { Engine } from '@/machines/Engine'
+import { ENGINE_X, FIRING } from './engine'
+import { DRIVE_Y } from './geometry'
 import { prepareSystems, systemsReady } from './systems.geometry'
 import { ClutchInternals, ClutchPlate, CrownWheel, GearTrain, GearboxInternals, type DriveAngles } from './DrivelineInternals'
-import { EngineDetail } from './EngineDetail'
 import { FinalDrives } from './FinalDrives'
 import { PtoDrive } from './PtoDrive'
 import { Hydraulics } from './Hydraulics'
@@ -53,12 +55,12 @@ const DRIVE_INFO: Record<string, PartInfo> = {
 export function WholeTractor({ a, k, G, paint, rootId }: { a: MutableRefObject<DriveAngles>; k: (s: string) => string; G: TractorGeometry; paint: MaterialKey; rootId: string }) {
   const def = (key: string) => SYSTEMS.find((s) => s.key === key)!
   // every system appears together, once the heavy parts are built (in the worker, first time only)
-  const [ready, setReady] = useState(() => !!(tractorEngineReady() && systemsReady()))
+  const [ready, setReady] = useState(() => !!(engineReady(FIRING) && systemsReady()))
   useEffect(() => {
     if (ready) return
     let live = true
     useInside.setState({ loading: true })
-    void Promise.all([prepareTractorEngine(), prepareSystems(), prepareFuelGeometry()]).then(() => {
+    void Promise.all([prepareEngine(FIRING), prepareSystems(), prepareFuelGeometry()]).then(() => {
       if (!live) return
       setReady(true)
       window.setTimeout(insideReady, 60)
@@ -71,7 +73,7 @@ export function WholeTractor({ a, k, G, paint, rootId }: { a: MutableRefObject<D
   return (
     <Part id={systemsOf(rootId)} name="Systems" role="moving" explode={false} xray={null}>
       <System def={def('engine')} k={k}>
-        <EngineDetail k={k} paint={paint} crankAngle={() => a.current.crank} fuel={false} />
+        <Engine k={k} firing={FIRING} paint={paint} crankAngle={() => a.current.crank} fuel={false} position={[ENGINE_X, DRIVE_Y, 0]} rotation={[0, Math.PI / 2, 0]} />
       </System>
       <System def={def('driveline')} k={k}>
         <ClutchPlate a={a} k={k} G={G} info={DRIVE_INFO.clutch} />

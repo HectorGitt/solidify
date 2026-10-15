@@ -11,13 +11,13 @@ import { Part, PartMesh } from '@/render/Part'
 import { LINKAGE, TRACTOR } from './dims'
 import { AXLE_Y, CROWN, DRIVE_Y, FRONT_Y, FRONT_Z, GEARBOX, KINGPIN_Z, PTO_STUB_X, PTO_Y, REAR_Z, tractorGeometry } from './geometry'
 import { phiForHitchHeight, solveLinkage, type LinkagePose } from './linkage'
-import { useInside } from '@/ui/inside'
-import { useView } from '@/render/view'
-import { EngineDetail } from './EngineDetail'
+import { insideReady, useInside } from '@/ui/inside'
+import { Engine } from '@/machines/Engine'
+import { engineReady } from '@/machines/engine.geometry'
+import { ENGINE_X, FIRING } from './engine'
 import { WholeTractor } from './WholeTractor'
 import { FINAL_RATIO } from './FinalDrives'
 import { PTO_FROM_LAY } from './PtoDrive'
-import { prepareTractorEngine } from './engine.geometry'
 import { ClutchInternals, ClutchPlate, CrownWheel, GearTrain, GearboxInternals, newAngles } from './DrivelineInternals'
 
 /**
@@ -193,13 +193,17 @@ export function Tractor({ pose, id = 'tractor', paint = 'paintRed', linkage = tr
   const insideCentre = inside === 'centre-housing'
   /** the whole tractor is open: every system at once */
   const whole = useInside((s) => s.id === id)
-  useEffect(
-    () =>
-      useView.subscribe((s) => {
-        if (s.selectedId === k('engine')) void prepareTractorEngine()
-      }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [id],
+  // opening the engine before its geometry is built: say so until it arrives
+  useEffect(() => {
+    if (insideEngine && !engineReady(FIRING)) useInside.setState({ loading: true })
+  }, [insideEngine])
+  const outline = (
+    <>
+      <PartMesh geometry={G.block} />
+      <PartMesh geometry={G.head} />
+      <PartMesh geometry={G.timingCover} />
+      <PartMesh geometry={G.sump} material="paintGrey" />
+    </>
   )
   /** drive angles shared with the internals */
   const ang = useRef(newAngles())
@@ -346,30 +350,20 @@ export function Tractor({ pose, id = 'tractor', paint = 'paintRed', linkage = tr
         ) : (
           <>
             <Part id={k('engine')} name="Engine" material="castIron" info={ENGINE_INSIDE} cites={[SRC.mech502('p1'), SRC.l4_509('engine parts')]} explode={[0, 0.25, 0]}>
-              {/* looking inside, the outline engine gives way to the full one */}
-              {insideEngine ? (
-                <EngineDetail k={k} paint={paint} crankAngle={() => ang.current.crank} />
-              ) : whole ? null : (
-                <>
-                  <PartMesh geometry={G.block} />
-                  <PartMesh geometry={G.head} />
-                  <PartMesh geometry={G.timingCover} />
-                  <PartMesh geometry={G.sump} material="paintGrey" />
-                </>
-              )}
-              {internals && !insideEngine && !whole && (
-                <>
-                  <Part id={k('crank')} name="Crankshaft" role="moving" material="forged" info={INFO.crank}>
-                    <group position={[1.7, DRIVE_Y, 0]} ref={crank}>
-                      <PartMesh geometry={G.crank} />
-                    </group>
-                  </Part>
-                  <Part id={k('flywheel')} name="Flywheel" role="moving" material="castIron" info={INFO.flywheel}>
-                    <group position={[0.785, DRIVE_Y, 0]} ref={flywheel}>
-                      <PartMesh geometry={G.flywheel} />
-                    </group>
-                  </Part>
-                </>
+              {/* the real engine, every part working; the outline castings stand in while it is built */}
+              {whole ? null : internals ? (
+                <Engine
+                  k={k}
+                  firing={FIRING}
+                  paint={paint}
+                  crankAngle={() => ang.current.crank}
+                  position={[ENGINE_X, DRIVE_Y, 0]}
+                  rotation={[0, Math.PI / 2, 0]}
+                  placeholder={outline}
+                  onReady={() => useInside.getState().id === k('engine') && insideReady()}
+                />
+              ) : (
+                outline
               )}
             </Part>
             <Part id={k('bonnet')} name="Bonnet" material={paint} info={INFO.bonnet} explode={[0, 0.5, 0]}>

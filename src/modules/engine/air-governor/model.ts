@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { FIRING_4, engineLayout } from '@/machines/layout'
 import {
   TYPICAL_GOVERNED_ENGINE,
   TYPICAL_GOVERNOR,
@@ -38,6 +39,26 @@ export const GOV = {
   forkTop: 0.04,
   leverPivot: { x: 0.3, y: GY + 0.105 },
 }
+
+/**
+ * The governed engine is the shared four-cylinder (src/machines/Engine), crank along X with its timing
+ * end towards the governor: a 30-tooth gear on the crank nose drives the governor spindle. The rig
+ * (governor, engine, brake) is laid out in its own frame, shifted RIG_X along X clear of the air
+ * cleaners; the engine is turned a quarter turn so its own frame maps (x, y, z) → (z, y, −x).
+ */
+const EL = engineLayout(FIRING_4)
+export const RIG_X = 0.68
+/** crank-nose gear: this far ahead of cylinder 1 (past the timing gears and pulley) */
+const GEAR_AHEAD = 0.23
+/** rig-frame x of the engine's centre */
+export const ENGINE_X = GOV.gearX - GEAR_AHEAD - EL.front
+/** brake drum on the crank tail behind the flywheel (engine-frame z of its front face) */
+export const DRUM_EZ = EL.flywheelZ - 0.12
+/** rig-frame x of the brake band's centre */
+export const BRAKE_X = ENGINE_X + DRUM_EZ + 0.0225
+/** engine-frame z of the crank-nose gear */
+export const GEAR_EZ = EL.front + GEAR_AHEAD
+export const ENGINE_FLYWHEEL_EZ = EL.flywheelZ
 
 /** Engine swept volume for the air-consumption estimate (4-cylinder tractor diesel; beyond notes). */
 export const DISPLACEMENT = 3.3e-3

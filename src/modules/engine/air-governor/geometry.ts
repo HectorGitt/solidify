@@ -1,7 +1,6 @@
 import * as THREE from 'three'
 import { box, csg, cylinder, extrude, extrudeTwisted, gear, helixSpring, lathe, mat4, merge, tube, xform, type CsgOp, type V2 } from '@/geometry'
-import { flywheel as libFlywheel } from '@/parts/lib/engine'
-import { CRANK_Y, DR, GOV, GY, OB } from './model'
+import { CRANK_Y, DRUM_EZ, DR, ENGINE_FLYWHEEL_EZ, GEAR_EZ, GOV, GY, OB } from './model'
 
 const { PI } = Math
 const alongX = mat4.rz(-PI / 2)
@@ -134,21 +133,15 @@ function dryParts() {
 
 /* ------------------------------ governor (TB Fig 4.10) ------------------------------ */
 
-function engineBlock() {
-  const b = xform(box(0.15, 0.17, 0.14), at(0.065, -0.0))
-  return csg(b, [{ op: 'sub', geometry: xform(cylinder(0.022, 0.4, 32), mat4.c(at(0.1, CRANK_Y), alongX)) }])
-}
-
+/** Parts on the engine's crankshaft, in the engine's frame (crank axis Z, front +Z): the nose extension and governor drive gear, the tail shaft and the brake drum. */
 function crankParts() {
-  const shaft = xform(cylinder(0.02, 0.46, 32), mat4.c(at(0.33, 0), alongX))
-  // library flywheel (with its starter ring gear), flat face at x = 0.38, disc towards +X
-  const fw = libFlywheel({ r: 0.15, width: 0.045, boreR: 0.02 })
-  const onX = mat4.c(at(0.38, 0), mat4.ry(-PI / 2))
-  const flywheel = xform(fw.disc, onX)
-  const ring = xform(fw.ring, onX)
-  const drum = xform(lathe([[0.02, 0], [0.085, 0], [0.085, 0.045], [0.078, 0.045], [0.078, 0.008], [0.02, 0.008]], 72), mat4.c(at(0.48, 0), alongX))
-  const crankGear = xform(gear({ teeth: 30, module: 0.003, width: 0.02, bore: 0.02 }), mat4.ry(PI / 2))
-  return { shaft: merge(shaft, flywheel), ring, drum, crankGear }
+  const alongZ = mat4.rx(PI / 2)
+  const shaft = (z0: number, z1: number) => xform(cylinder(0.02, z1 - z0, 32), mat4.c(at(0, 0, (z0 + z1) / 2), alongZ))
+  const nose = shaft(GEAR_EZ - 0.09, GEAR_EZ + 0.012)
+  const crankGear = xform(gear({ teeth: 30, module: 0.003, width: 0.02, bore: 0.02 }), at(0, 0, GEAR_EZ))
+  const tail = shaft(DRUM_EZ, ENGINE_FLYWHEEL_EZ - 0.02)
+  const drum = xform(lathe([[0.02, 0], [0.085, 0], [0.085, 0.045], [0.078, 0.045], [0.078, 0.008], [0.02, 0.008]], 72), mat4.c(at(0, 0, DRUM_EZ), alongZ))
+  return { shaft: merge(nose, tail), drum, crankGear }
 }
 
 /** Prony-type brake on the drum: shoes, arm along +Z and a hanging unit weight (scaled with the load). */
@@ -284,9 +277,7 @@ export function buildStatic() {
     dryCup: dr.cup,
     unloader: dr.unloader,
     dryDust: dr.dust,
-    block: engineBlock(),
-    crank: cr.shaft,
-    flywheelRing: cr.ring,
+    crankShafts: cr.shaft,
     drum: cr.drum,
     crankGear: cr.crankGear,
     brake: br.brake,

@@ -25,10 +25,12 @@ function getWorker() {
 
 /**
  * Build a scene's static geometry in the worker (once per session). Falls back to building on
- * the main thread if workers are unavailable.
+ * the main thread if workers are unavailable. `args` (JSON-safe) are passed to the builder, and each
+ * distinct set of args is built and cached separately.
  */
-export function buildGeometry<T>(builder: string, fallback: () => T): Promise<T> {
-  const hit = cache.get(builder)
+export function buildGeometry<T>(builder: string, fallback: () => T, args?: unknown): Promise<T> {
+  const key = args === undefined ? builder : `${builder}:${JSON.stringify(args)}`
+  const hit = cache.get(key)
   if (hit) return hit as Promise<T>
   let p: Promise<T>
   if (typeof Worker === 'undefined') {
@@ -38,7 +40,7 @@ export function buildGeometry<T>(builder: string, fallback: () => T): Promise<T>
       // in development the build id lasts as long as the server, so a cache would serve stale shapes
       if (!import.meta.env.DEV) {
         try {
-          const cached = await get(KEY(builder))
+          const cached = await get(KEY(key))
           if (cached) return unpack(cached as Packed) as T
         } catch (e) {
           // ignore IDB errors on read
@@ -48,22 +50,22 @@ export function buildGeometry<T>(builder: string, fallback: () => T): Promise<T>
       return new Promise<Packed>((resolve, reject) => {
         const id = nextId++
         pending.set(id, { resolve: resolve as (v: unknown) => void, reject })
-        getWorker().postMessage({ id, builder })
+        getWorker().postMessage({ id, builder, args })
       })
         .then(async (packed) => {
           try {
-            if (!import.meta.env.DEV) await set(KEY(builder), packed)
+            if (!import.meta.env.DEV) await set(KEY(key), packed)
           } catch (e) {
             // ignore IDB errors on write
           }
           return unpack(packed) as T
         })
         .catch((err) => {
-          console.warn(`Geometry worker failed for ${builder}; building on the main thread.`, err)
+          console.warn(`Geometry worker failed for ${key}; building on the main thread.`, err)
           return fallback()
         })
     })()
   }
-  cache.set(builder, p)
+  cache.set(key, p)
   return p
 }

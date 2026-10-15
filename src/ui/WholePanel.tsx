@@ -17,7 +17,7 @@ export function WholeButton() {
       // start building the heavy parts while the pointer is on its way
       onPointerEnter={() => {
         // loaded on demand so the main bundle stays light
-        void import('@/tractor/engine.geometry').then((m) => m.prepareTractorEngine())
+        void import('@/machines/engine.geometry').then((m) => m.prepareEngine())
         void import('@/tractor/systems.geometry').then((m) => m.prepareSystems())
       }}
       className="hidden items-center gap-1.5 rounded-md border border-accent/40 px-2 py-1 text-[12px] text-accent hover:bg-accent/10 md:flex"

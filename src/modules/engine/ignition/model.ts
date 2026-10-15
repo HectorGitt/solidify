@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { firingAngles } from '@/physics/engine'
 import type { CameraPose } from '@/modules/types'
+import { FIRING_4, HEAD_OUTLET, engineLayout } from '@/machines/layout'
 
 /**
  * Ignition, starting & charging — AEE509 L4, Supp, TB ch.5 (Figs 5.1–5.9).
@@ -20,7 +21,7 @@ export const SUBS: { id: Sub; label: string; title: string }[] = [
 ]
 
 export const CAMERAS: Record<Sub, CameraPose> = {
-  coil: { position: [0.78, 0.42, 0.82], target: [0.16, -0.06, 0] },
+  coil: { position: [1.05, 0.6, 1.2], target: [0.12, -0.02, 0] },
   magneto: { position: [0.34, -0.02, 0.36], target: [0, -0.15, 0.02] },
   plug: { position: [0.12, -0.14, 0.18], target: [0, -0.205, 0] },
   starter: { position: [0.62, 0.12, 0.42], target: [0.06, -0.1, -0.05] },
@@ -38,10 +39,18 @@ export const ORDER = [1, 3, 4, 2]
 const FA = firingAngles(ORDER)
 /** firing angle (crank deg) of cylinder 1…4 */
 export const FIRING = [1, 2, 3, 4].map((c) => FA.get(c)!)
-/** spark-plug z for cylinder 1…4 (cylinder 1 at the front, +Z) */
-export const PLUG_Z = [0.135, 0.045, -0.045, -0.135]
-export const PLUG_X = 0.035
-export const HEAD_TOP = 0.02
+/**
+ * The engine is the shared four-cylinder (src/machines/Engine) as a small petrol engine: spark plugs
+ * in place of the injectors, drawn at two-thirds size (67 × 83 mm cylinders, 90 mm apart), crank
+ * axis along Z at y = ENGINE_Y with cylinder 1 at the front (+Z).
+ */
+export const ENGINE_SCALE = 2 / 3
+export const ENGINE_Y = -0.13
+/** spark-plug (cylinder) z for cylinder 1…4 */
+export const PLUG_Z = engineLayout(FIRING_4).cylZ.map((z) => z * ENGINE_SCALE)
+/** the plugs lean 16° outwards: this is about their mid-length */
+export const PLUG_X = 0.012
+export const HEAD_TOP = ENGINE_Y + ENGINE_SCALE * HEAD_OUTLET.topY
 
 /** coil electrical constants (typical — beyond notes) */
 export const COIL = { L: 0.006, R: 3.2, C: 0.25e-6, coupling: 0.6 }

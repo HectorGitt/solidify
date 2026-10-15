@@ -7,8 +7,7 @@ import { DEFAULTS as FUEL_DEFAULTS, ELEMENT_X, LAYOUT, PINION_PHASE, RACK_X0, DI
 import type { PartInfo } from '@/parts/registry'
 import { Part, PartMesh } from '@/render/Part'
 import type { DriveAngles } from './DrivelineInternals'
-import { ENGINE_X } from './EngineDetail'
-import { CYL_Z, injectorTop } from './engine.geometry'
+import { CYL_Z, ENGINE_X, injectorTop } from './engine'
 import { DRIVE_Y } from './geometry'
 
 /**

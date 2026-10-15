@@ -1,7 +1,13 @@
 import * as THREE from 'three'
-import { box, cam, csg, cylinder, extrude, gear, helixSpring, lathe, mat4, merge, pipe, tube, xform, type CsgOp } from '@/geometry'
-import { conRod as libConRod, crankshaft as libCrankshaft, pistonAssembly } from '@/parts/lib/engine'
-import { BREATHER, CAM, CYL_X, DECK, FILTER, GALLERY, GAUGE, MAIN_X, PISTON_COMP, PUMP, R, RELIEF, ROCKER, ROD, SUMP_OIL_Y } from './model'
+import { box, csg, cylinder, gear, helixSpring, lathe, mat4, merge, pipe, xform, type CsgOp } from '@/geometry'
+import { FIRING_4, PITCH, engineLayout } from '@/machines/layout'
+import { BREATHER, CAM, CAM_JX, CYL_X, DECK, FILTER, GALLERY, GAUGE, MAIN_X, PUMP, R, RELIEF, ROCKER, SUMP_OIL_Y, TROUGH } from './model'
+
+/**
+ * The oil system laid over the shared engine (worker-safe: no React, no DOM): pump and strainer,
+ * relief valve, full-flow filter, the gallery and every drilled oilway, crankshaft drillings, splash
+ * troughs and dippers, gauge and breather. Scene frame (see model.ts) except where marked.
+ */
 
 const { PI } = Math
 const alongX = mat4.rz(-PI / 2)
@@ -9,127 +15,57 @@ const at = (x: number, y: number, z = 0) => mat4.t(x, y, z)
 const V = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z)
 const path = (pts: THREE.Vector3[], t = 0.15) => new THREE.CatmullRomCurve3(pts, false, 'catmullrom', t)
 
-const X0 = -0.335
-const X1 = 0.3
-const XM = (X0 + X1) / 2
-const W = X1 - X0
+/** the pump's two gear centres (drive on the cam shaft line, idler beside it towards −z) and the mesh line between them */
+const DRIVE_Z = PUMP.z
+const IDLE_Z = PUMP.z - PUMP.idleDz
+const MESH_Z = (DRIVE_Z + IDLE_Z) / 2
+/** inlet and outlet ports either side of the mesh, along the crank */
+const IN_X = PUMP.x - 0.02
+const OUT_X = PUMP.x + 0.02
+/** crossed helical (skew) gears between camshaft and pump shaft, sized to their 38 mm centre distance */
+const SKEW = { teeth: 14, module: 0.0019, width: 0.02, helixDeg: 45 }
+/** where the skew gear sits on the camshaft (engine-frame z: between cylinder 1's lobes and the front journal) */
+export const SKEW_Z = 0.245
 
-/* ------------------------------ castings ------------------------------ */
+/* ------------------------------ moving parts (engine frame) ------------------------------ */
 
-function block() {
-  const outer = xform(box(W, DECK + 0.04, 0.2), at(XM, (DECK - 0.04) / 2))
-  const ops: CsgOp[] = []
-  for (const x of CYL_X) ops.push({ op: 'sub', geometry: xform(cylinder(0.05, 0.3, 48), at(x, DECK - 0.1)) })
-  ops.push({ op: 'sub', geometry: xform(box(W - 0.05, 0.17, 0.155), at(XM - 0.005, 0.035, 0.0075)) })
-  for (const x of MAIN_X) ops.push({ op: 'add', geometry: xform(box(0.022, 0.17, 0.15), at(x, 0.035, 0.005)) })
-  ops.push({ op: 'sub', geometry: xform(cylinder(0.032, W + 0.1, 40), mat4.c(at(XM, 0), alongX)) })
-  ops.push({ op: 'sub', geometry: xform(cylinder(0.024, W + 0.1, 32), mat4.c(at(XM, CAM.y, CAM.z), alongX)) })
-  ops.push({ op: 'sub', geometry: xform(box(W - 0.05, 0.05, 0.05), at(XM - 0.005, CAM.y + 0.02, CAM.z)) })
-  // pump drive-shaft passage
-  ops.push({ op: 'sub', geometry: xform(cylinder(0.009, 0.3, 16), at(PUMP.x, 0, PUMP.z)) })
-  return csg(outer, ops)
-}
-
-function head() {
-  const h = xform(box(W, 0.085, 0.2), at(XM, DECK + 0.0475))
-  return csg(h, [
-    ...CYL_X.map((x) => ({ op: 'sub' as const, geometry: xform(cylinder(0.04, 0.02, 32), at(x, DECK + 0.005)) })),
-    { op: 'sub', geometry: xform(cylinder(0.006, 0.2, 16), at(0.27, DECK + 0.05, ROCKER.z)) },
-  ])
-}
-
-function rockerCover() {
-  const y0 = DECK + 0.09
-  const o = xform(box(W - 0.01, 0.075, 0.17), at(XM, y0 + 0.0375))
-  const i = xform(box(W - 0.022, 0.075, 0.158), at(XM, y0 + 0.0315))
-  return csg(o, [
-    { op: 'sub', geometry: i },
-    { op: 'add', geometry: xform(cylinder(0.012, 0.03, 24), at(0.2, y0 + 0.08, -0.05)) },
-    { op: 'sub', geometry: xform(cylinder(0.008, 0.06, 24), at(0.2, y0 + 0.07, -0.05)) },
-  ])
-}
-
-function sump() {
-  const o = xform(box(W, 0.18, 0.2), at(XM, -0.13))
-  const i = xform(box(W - 0.012, 0.18, 0.188), at(XM, -0.124))
-  return csg(o, [{ op: 'sub', geometry: i }])
-}
-
-function sumpOil() {
-  const h = SUMP_OIL_Y - (-0.214)
-  return xform(box(W - 0.0125, h, 0.1875), at(XM, -0.214 + h / 2))
-}
-
-/* ------------------------------ moving parts ------------------------------ */
-
-/** The library crankshaft, laid along X (front, with the timing-gear nose, towards −X). */
-const ALONG_X = mat4.ry(-PI / 2)
-const THROWS = [0, 180, 180, 0]
-
-function crankshaft() {
-  const c = libCrankshaft({ r: R, pinR: 0.027, journalR: 0.03, webT: 0.016, cwR: 0.072, pinLen: 0.048, bossR: 0.032 }, CYL_X.map((x, i) => ({ z: -x, firingDeg: THROWS[i] })), MAIN_X[1] - MAIN_X[0], {
-    nose: { r: 0.025, len: 0.08, inset: 0.003 },
-    tail: null,
+/** Oil drillings inside the crankshaft (main journal → web → crank pin), engine frame, as fluid. */
+export const CRANK_DRILLINGS = (() => {
+  const E = engineLayout(FIRING_4)
+  return E.cylZ.map((z, i) => {
+    const f = (FIRING_4[i] * PI) / 180
+    const s = Math.sin(f)
+    const c = Math.cos(f)
+    return path([V(0, 0, z + PITCH / 2), V(0.45 * R * s, 0.45 * R * c, z + 0.035), V(R * s, R * c, z)], 0)
   })
-  return xform(c.geometry, ALONG_X)
+})()
+
+/** dipper (scoop) under a big-end cap, rod frame: big-end centre at the origin, cap bottom at y = −0.043 */
+function dipper() {
+  return merge(xform(box(0.01, 0.014, 0.01), at(0, -0.049, 0)), xform(box(0.018, 0.004, 0.018), at(0, -0.056, 0.003)))
 }
 
-/** Oil drillings inside the crankshaft (main journal → web → crank pin), crank-local, as fluid. */
-function crankDrillings() {
-  const parts: THREE.BufferGeometry[] = []
-  const throws = [0, PI, PI, 0]
-  CYL_X.forEach((x, i) => {
-    const c = path([V(x - 0.06, 0, 0), V(x - 0.035, R * 0.45, 0), V(x, R, 0)], 0)
-    parts.push(xform(pipe(c, 0.0035, 0, 16, 8), mat4.rx(throws[i])))
-  })
-  return merge(...parts)
-}
-
-/** Library connecting rod along +Y from the big end (origin) to the small end (y = ROD), width along X; dipper below the cap. */
-function conRod() {
-  const r = libConRod({ length: ROD, pinR: 0.027, gudgeonR: 0.0135, width: 0.03 })
-  const x = (g: THREE.BufferGeometry) => xform(g, mat4.ry(PI / 2))
-  const dipper = merge(xform(box(0.012, 0.035, 0.012), at(0, -0.055, 0)), xform(box(0.02, 0.006, 0.02), at(0, -0.073, 0.004)))
-  return { body: x(r.body), cap: x(r.cap), bolts: x(r.bolts), shells: x(r.shells), bush: x(r.bush), dipper }
-}
-
-/** flat-crown piston, 100 mm bore, on a 27 mm gudgeon pin */
-const PISTON = { bore: 0.1, comp: PISTON_COMP, skirt: 0.045, pinR: 0.0135, bowl: null }
-
-function camshaft() {
-  const shaft = xform(cylinder(0.012, W - 0.03, 24), mat4.c(at(XM - 0.005, 0), alongX))
-  const journals = merge(...MAIN_X.map((x) => xform(cylinder(0.021, 0.022, 32), mat4.c(at(x, 0), alongX))))
-  const lobe = cam(0.016, (p) => 0.007 * Math.max(0, Math.cos(p / 1)) ** 3, 0.014)
-  const lobes: THREE.BufferGeometry[] = []
-  CYL_X.forEach((x, i) => {
-    for (const [dx, ph] of [
-      [-0.025, 0],
-      [0.025, PI / 2],
-    ] as const)
-      lobes.push(xform(lobe, mat4.c(at(x + dx, 0), mat4.rx(ph + i * PI * 0.5), mat4.ry(PI / 2))))
-  })
-  const skew = xform(gear({ teeth: 14, module: 0.0028, width: 0.022, helixDeg: 45, bore: 0.012 }), mat4.c(at(PUMP.x, 0), mat4.ry(PI / 2)))
-  const timing = xform(gear({ teeth: 40, module: 0.003, width: 0.018, bore: 0.012 }), mat4.c(at(X0 - 0.012, 0), mat4.ry(PI / 2)))
-  return { shaft: merge(shaft, journals), lobes: merge(...lobes), gears: merge(skew, timing) }
+/** skew gear on the camshaft (camshaft frame: axis along Z) */
+function camSkewGear() {
+  return xform(gear({ ...SKEW, bore: 0.012 }), mat4.t(0, 0, SKEW_Z))
 }
 
 /* ------------------------------ oil pump, relief valve, filter ------------------------------ */
 
 function pumpBody() {
-  const b = xform(box(0.105, 0.04, 0.07), at(PUMP.x + PUMP.idleDx / 2, PUMP.y, PUMP.z))
+  const b = xform(box(0.06, 0.04, PUMP.idleDz + 0.062), at(PUMP.x, PUMP.y, MESH_Z))
   const ops: CsgOp[] = [
-    { op: 'sub', geometry: xform(cylinder(0.0265, 0.03, 40), at(PUMP.x, PUMP.y, PUMP.z)) },
-    { op: 'sub', geometry: xform(cylinder(0.0265, 0.03, 40), at(PUMP.x + PUMP.idleDx, PUMP.y, PUMP.z)) },
-    { op: 'sub', geometry: xform(cylinder(0.009, 0.06, 16), at(PUMP.x, PUMP.y + 0.02, PUMP.z)) },
-    { op: 'sub', geometry: xform(cylinder(0.006, 0.03, 16), at(PUMP.x + PUMP.idleDx / 2, PUMP.y - 0.02, PUMP.z + 0.02)) },
-    { op: 'sub', geometry: xform(cylinder(0.006, 0.03, 16), at(PUMP.x + PUMP.idleDx / 2, PUMP.y + 0.02, PUMP.z - 0.02)) },
+    { op: 'sub', geometry: xform(cylinder(0.0265, 0.03, 40), at(PUMP.x, PUMP.y, DRIVE_Z)) },
+    { op: 'sub', geometry: xform(cylinder(0.0265, 0.03, 40), at(PUMP.x, PUMP.y, IDLE_Z)) },
+    { op: 'sub', geometry: xform(cylinder(0.009, 0.06, 16), at(PUMP.x, PUMP.y + 0.02, DRIVE_Z)) },
+    { op: 'sub', geometry: xform(cylinder(0.006, 0.03, 16), at(IN_X, PUMP.y - 0.02, MESH_Z)) },
+    { op: 'sub', geometry: xform(cylinder(0.006, 0.03, 16), at(OUT_X, PUMP.y + 0.02, MESH_Z)) },
   ]
   return csg(b, ops)
 }
 
 function pumpGears() {
-  const g = gear({ teeth: 11, module: 0.004, width: 0.028, bore: 0.004 })
-  return xform(g, mat4.rx(PI / 2))
+  return xform(gear({ teeth: 11, module: 0.004, width: 0.028, bore: 0.004 }), mat4.rx(PI / 2))
 }
 
 function pumpShaft() {
@@ -137,14 +73,16 @@ function pumpShaft() {
 }
 
 function skewPinion() {
-  return xform(gear({ teeth: 14, module: 0.0028, width: 0.022, helixDeg: 45, bore: 0.006 }), mat4.rx(PI / 2))
+  return xform(gear({ ...SKEW, bore: 0.006 }), mat4.rx(PI / 2))
 }
 
 function strainer() {
-  const gauze = lathe([[0.006, -0.008], [0.032, -0.008], [0.032, 0.008], [0.006, 0.008]], 40)
-  const cap = lathe([[0.006, 0.008], [0.034, 0.008], [0.034, 0.011], [0.006, 0.011]], 40)
+  const gauze = lathe([[0.006, -0.008], [0.03, -0.008], [0.03, 0.008], [0.006, 0.008]], 40)
+  const cap = lathe([[0.006, 0.008], [0.032, 0.008], [0.032, 0.011], [0.006, 0.011]], 40)
   return { gauze, cap }
 }
+/** strainer centre, under the pump inlet */
+export const STRAINER = { x: PUMP.x, y: -0.16, z: MESH_Z }
 
 /** Relief valve body (along Y), local origin at the valve seat. */
 function reliefBody() {
@@ -157,6 +95,7 @@ function filter() {
   const head = lathe([[0.008, 0], [0.046, 0], [0.046, 0.022], [0.008, 0.022]], 48)
   const element = lathe([[0.012, -0.1], [0.033, -0.1], [0.033, -0.006], [0.012, -0.006]], 48)
   const oil = lathe([[0, -0.104], [0.0402, -0.104], [0.0402, -0.002], [0, -0.002]], 40)
+  // the head's mounting pad reaches back to the crankcase wall
   return { can, head: csg(head, [{ op: 'add', geometry: xform(box(0.03, 0.02, 0.06), at(0, 0.012, 0.045)) }]), element, oil }
 }
 
@@ -165,23 +104,29 @@ function filter() {
 export const PATHS = (() => {
   const gy = GALLERY.y
   const gz = GALLERY.z
-  const inlet = path([V(PUMP.x + PUMP.idleDx / 2, -0.2, PUMP.z + 0.02), V(PUMP.x + PUMP.idleDx / 2, -0.17, PUMP.z + 0.02), V(PUMP.x + PUMP.idleDx / 2, PUMP.y - 0.012, PUMP.z + 0.02)])
-  const pumpGears = path([V(PUMP.x + 0.022, PUMP.y, PUMP.z + 0.02), V(PUMP.x - 0.03, PUMP.y, PUMP.z), V(PUMP.x + 0.022, PUMP.y, PUMP.z - 0.02), V(PUMP.x + 0.074, PUMP.y, PUMP.z), V(PUMP.x + 0.022, PUMP.y, PUMP.z + 0.02)], 0.5)
-  const delivery = path([V(PUMP.x + 0.022, PUMP.y + 0.012, PUMP.z - 0.02), V(PUMP.x + 0.022, -0.08, PUMP.z - 0.02), V(PUMP.x + 0.03, -0.06, -0.115), V(-0.24, -0.05, -0.16), V(FILTER.x - 0.035, 0.0, FILTER.z + 0.004), V(FILTER.x - 0.03, 0.012, FILTER.z)])
+  const inlet = path([V(STRAINER.x, STRAINER.y, STRAINER.z), V(IN_X, STRAINER.y + 0.005, MESH_Z), V(IN_X, PUMP.y - 0.012, MESH_Z)])
+  // round the outside of each gear, inlet side (−x) to outlet side (+x)
+  const pumpGears = path([V(IN_X, PUMP.y, MESH_Z), V(PUMP.x, PUMP.y, DRIVE_Z + 0.03), V(OUT_X, PUMP.y, MESH_Z), V(PUMP.x, PUMP.y, IDLE_Z - 0.03), V(IN_X, PUMP.y, MESH_Z)], 0.5)
+  const delivery = path([V(OUT_X, PUMP.y + 0.012, MESH_Z), V(OUT_X, PUMP.y + 0.024, -0.1), V(OUT_X + 0.01, -0.07, -0.122), V(FILTER.x - 0.07, -0.04, -0.16), V(FILTER.x - 0.035, 0.0, FILTER.z + 0.004), V(FILTER.x - 0.03, 0.012, FILTER.z)])
   const throughFilter = path([V(FILTER.x - 0.03, 0.012, FILTER.z), V(FILTER.x - 0.036, -0.01, FILTER.z), V(FILTER.x - 0.037, -0.11, FILTER.z), V(FILTER.x - 0.02, -0.115, FILTER.z), V(FILTER.x, -0.11, FILTER.z), V(FILTER.x, 0.0, FILTER.z), V(FILTER.x, 0.012, FILTER.z)], 0.05)
-  const toGallery = path([V(FILTER.x, 0.012 + 0.0, FILTER.z), V(FILTER.x, gy, FILTER.z + 0.03), V(FILTER.x, gy, gz)])
+  const toGallery = path([V(FILTER.x, 0.012, FILTER.z), V(FILTER.x, gy, FILTER.z + 0.03), V(FILTER.x, gy, gz)])
   const gallery = path([V(FILTER.x, gy, gz), V(GALLERY.x0 + 0.02, gy, gz)], 0)
   const galleryRear = path([V(FILTER.x, gy, gz), V(GALLERY.x1, gy, gz)], 0)
-  const mains = MAIN_X.map((x) => path([V(x, gy, gz), V(x, 0.022, -0.05), V(x, 0.0, -0.031)]))
-  const cams = MAIN_X.map((x) => path([V(x, gy, gz), V(x, 0.06, gz + 0.002), V(x, CAM.y - 0.021, CAM.z)], 0))
-  const riser = path([V(GALLERY.x1, gy, gz), V(GALLERY.x1, 0.2, gz), V(GALLERY.x1, DECK + 0.02, -0.05), V(GALLERY.x1, ROCKER.y, ROCKER.z)])
-  const rockerShaft = path([V(GALLERY.x1, ROCKER.y, ROCKER.z), V(X0 + 0.04, ROCKER.y, ROCKER.z)], 0)
-  const drains = CYL_X.map((x) => path([V(x + 0.03, ROCKER.y - 0.01, ROCKER.z), V(x + 0.03, DECK + 0.04, -0.07), V(x + 0.03, 0.2, -0.085), V(x + 0.03, 0.05, -0.09), V(x + 0.035, SUMP_OIL_Y + 0.005, -0.09)]))
+  const mains = MAIN_X.map((x) => path([V(x, gy, gz), V(x, 0.022, -0.06), V(x, 0.0, -0.031)]))
+  const cams = CAM_JX.map((x) => path([V(x, gy, gz), V(x, 0.06, CAM.z - 0.012), V(x, CAM.y - 0.014, CAM.z)], 0))
+  const riser = path([V(GALLERY.x1, gy, gz), V(GALLERY.x1, 0.12, gz), V(GALLERY.x1, 0.2, -0.098), V(GALLERY.x1, DECK + 0.02, -0.08), V(GALLERY.x1, ROCKER.y, ROCKER.z)])
+  const rockerShaft = path([V(GALLERY.x1, ROCKER.y, ROCKER.z), V(-GALLERY.x1, ROCKER.y, ROCKER.z)], 0)
+  // back to the sump down beside each exhaust pushrod
+  const drains = CYL_X.map((cx) => {
+    const x = cx + 0.024
+    return path([V(x, ROCKER.y - 0.02, -0.07), V(x, DECK + 0.03, -0.078), V(x, CAM.y + 0.06, -0.078), V(x, CAM.y + 0.02, -0.1), V(x, 0.0, -0.11), V(x, SUMP_OIL_Y + 0.005, -0.11)])
+  })
   const gaugeLine = path([V(GALLERY.x0 + 0.02, gy, gz), V(GALLERY.x0 - 0.02, gy, gz), V(GAUGE.x + 0.02, 0.1, GAUGE.z - 0.02), V(GAUGE.x, GAUGE.y - 0.045, GAUGE.z - 0.01)])
-  const reliefBranch = path([V(PUMP.x + 0.022, -0.1, PUMP.z - 0.02), V(RELIEF.x - 0.02, -0.112, RELIEF.z), V(RELIEF.x, -0.112, RELIEF.z), V(RELIEF.x, RELIEF.y - 0.004, RELIEF.z)])
+  const reliefBranch = path([V(OUT_X, PUMP.y + 0.024, -0.095), V(RELIEF.x - 0.01, RELIEF.y - 0.02, RELIEF.z), V(RELIEF.x, RELIEF.y - 0.004, RELIEF.z)])
   const spill = path([V(RELIEF.x, RELIEF.y + 0.004, RELIEF.z), V(RELIEF.x, RELIEF.y + 0.012, RELIEF.z), V(RELIEF.x + 0.016, RELIEF.y + 0.012, RELIEF.z), V(RELIEF.x + 0.03, RELIEF.y - 0.01, RELIEF.z), V(RELIEF.x + 0.035, SUMP_OIL_Y + 0.004, RELIEF.z)])
-  const troughFeed = path([V(PUMP.x + 0.022, -0.08, PUMP.z - 0.02), V(-0.24, -0.095, -0.06), V(0.22, -0.095, -0.06)], 0.1)
-  const breather = path([V(0.2, DECK + 0.19, -0.05), V(0.2, DECK + 0.23, -0.05), V(BREATHER.x - 0.03, DECK + 0.23, BREATHER.z), V(BREATHER.x, BREATHER.y + 0.03, BREATHER.z), V(BREATHER.x, BREATHER.y - 0.05, BREATHER.z), V(BREATHER.x, 0.12, BREATHER.z), V(BREATHER.x + 0.02, 0.05, BREATHER.z)])
+  const troughFeed = path([V(OUT_X, PUMP.y + 0.02, MESH_Z), V(PUMP.x + 0.04, TROUGH.y - 0.014, -0.045), V(CYL_X[3] + 0.03, TROUGH.y - 0.014, -0.045)], 0.1)
+  const coverTop = DECK + 0.18
+  const breather = path([V(0.2, coverTop - 0.005, -0.04), V(0.2, coverTop + 0.04, -0.04), V(BREATHER.x - 0.03, coverTop + 0.04, BREATHER.z), V(BREATHER.x, BREATHER.y + 0.03, BREATHER.z), V(BREATHER.x, BREATHER.y - 0.05, BREATHER.z), V(BREATHER.x, 0.12, BREATHER.z), V(BREATHER.x + 0.02, 0.05, BREATHER.z)])
   return { inlet, pumpGears, delivery, throughFilter, toGallery, gallery, galleryRear, mains, cams, riser, rockerShaft, drains, gaugeLine, reliefBranch, spill, troughFeed, breather }
 })()
 
@@ -190,37 +135,22 @@ function oilTubes() {
   const solid = (c: THREE.Curve<THREE.Vector3>, r = 0.0042) => pipe(c, r, 0, 48, 10)
   return {
     pressure: merge(solid(P.inlet), solid(P.delivery), solid(P.reliefBranch, 0.0035), solid(P.toGallery), solid(P.gallery, 0.006), solid(P.galleryRear, 0.006), ...P.mains.map((c) => solid(c, 0.0035)), ...P.cams.map((c) => solid(c, 0.003)), solid(P.riser, 0.0035), solid(P.gaugeLine, 0.003)),
-    rockerOil: solid(P.rockerShaft, 0.006),
+    // inside the hollow rocker shaft
+    rockerOil: solid(P.rockerShaft, 0.0045),
     troughFeed: solid(P.troughFeed, 0.004),
     breather: pipe(P.breather, 0.009, 0.0065, 64, 16),
+    crankOil: merge(...CRANK_DRILLINGS.map((c) => pipe(c, 0.0035, 0, 16, 8))),
   }
-}
-
-function rockerGear() {
-  const shaft = xform(tube(0.0095, 0.0065, W - 0.06, 32), mat4.c(at(XM - 0.01, 0), alongX))
-  const arms: THREE.BufferGeometry[] = []
-  for (const x of CYL_X)
-    for (const dx of [-0.025, 0.025]) {
-      const s = new THREE.Shape()
-      s.moveTo(-0.03, -0.004)
-      s.lineTo(0.04, -0.006)
-      s.lineTo(0.042, 0.004)
-      s.lineTo(0, 0.012)
-      s.lineTo(-0.03, 0.006)
-      s.lineTo(-0.03, -0.004)
-      arms.push(xform(extrude(s, 0.01), mat4.c(at(x + dx, 0, 0), mat4.ry(-PI / 2))))
-    }
-  const pedestals = merge(...[-0.24, 0, 0.24].map((x) => xform(box(0.016, 0.03, 0.02), at(x, -0.02, 0))))
-  return { shaft, arms: merge(...arms), pedestals }
 }
 
 function troughs() {
   const parts: THREE.BufferGeometry[] = []
   const oil: THREE.BufferGeometry[] = []
+  const { y, h, w, d } = TROUGH
   for (const x of CYL_X) {
-    const t = xform(box(0.05, 0.022, 0.06), at(x, -0.12, 0))
-    parts.push(csg(t, [{ op: 'sub', geometry: xform(box(0.044, 0.022, 0.054), at(x, -0.114, 0)) }]))
-    oil.push(xform(box(0.0435, 0.012, 0.0535), at(x, -0.1215, 0)))
+    const t = xform(box(w, h, d), at(x, y, 0))
+    parts.push(csg(t, [{ op: 'sub', geometry: xform(box(w - 0.006, h, d - 0.006), at(x, y + 0.003, 0)) }]))
+    oil.push(xform(box(w - 0.0065, h * 0.55, d - 0.0065), at(x, y - h / 2 + 0.003 + (h * 0.55) / 2, 0)))
   }
   return { troughs: merge(...parts), oil: merge(...oil) }
 }
@@ -246,38 +176,15 @@ function breatherCan() {
 /* ------------------------------ build ------------------------------ */
 
 export function buildStatic() {
-  const rod = conRod()
-  const pa = pistonAssembly(PISTON)
-  const cs = camshaft()
   const st = strainer()
   const fl = filter()
   const tubes = oilTubes()
-  const rk = rockerGear()
   const tr = troughs()
   const ga = gauge()
   return {
-    block: block(),
-    head: head(),
-    rockerCover: rockerCover(),
-    sump: sump(),
-    sumpOil: sumpOil(),
-    mainShells: merge(...MAIN_X.map((x) => xform(tube(0.0322, 0.0302, 0.024, 40), mat4.c(at(x, 0), alongX)))),
-    camBearings: merge(...MAIN_X.map((x) => xform(tube(0.0235, 0.0212, 0.02, 32), mat4.c(at(x, CAM.y, CAM.z), alongX)))),
-    crankshaft: crankshaft(),
-    crankOil: crankDrillings(),
-    rod: rod.body,
-    rodCap: rod.cap,
-    rodBolts: rod.bolts,
-    rodBush: rod.bush,
-    rodShells: rod.shells,
-    dipper: rod.dipper,
-    piston: pa.body,
-    pistonRings: pa.rings.compression,
-    oilRing: pa.rings.oil!,
-    gudgeonPin: pa.pin,
-    camshaft: cs.shaft,
-    camLobes: cs.lobes,
-    camGears: cs.gears,
+    crankOil: tubes.crankOil,
+    dipper: dipper(),
+    camSkew: camSkewGear(),
     pumpBody: pumpBody(),
     pumpGear: pumpGears(),
     pumpShaft: pumpShaft(),
@@ -296,9 +203,6 @@ export function buildStatic() {
     oilTroughFeed: tubes.troughFeed,
     breatherPipe: tubes.breather,
     breatherCan: breatherCan(),
-    rockerShaft: rk.shaft,
-    rockerArms: rk.arms,
-    rockerPedestals: rk.pedestals,
     troughs: tr.troughs,
     troughOil: tr.oil,
     gaugeBody: ga.body,

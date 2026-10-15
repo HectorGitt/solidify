@@ -2,6 +2,7 @@ import * as THREE from 'three'
 import { box, cylinder, extrude, gear, lathe, mat4, merge, pipe, roundedBox, tube, xform } from '@/geometry'
 import { bevelGear, bevelPair, splineShaft, torus } from '@/geometry/parts'
 import { FARMLAND_FRONT, FARMLAND_REAR, wheel } from '@/parts/lib/wheels'
+import { clutchDisc, clutchDiscThickness } from '@/parts/lib/driveline'
 import { LINKAGE, TRACTOR } from './dims'
 
 /**
@@ -303,12 +304,13 @@ export function buildTractorGeometry() {
   const frontRim = wheel(FARMLAND_FRONT).rim
 
   // ------------------------------------------------------------ engine (housings)
-  const block = shellBox(0.9, 0.5, 0.42, 0.03, 0.03, 1.27, 0.8) // x 0.82–1.72, y 0.55–1.05
-  const sump = shellBox(0.8, 0.12, 0.36, 0.02, 0.008, 1.27, 0.49)
-  const head = roundedBox(0.86, 0.12, 0.38, 0.02)
-  head.translate(1.27, 1.11, 0)
+  // sized to the real four-cylinder (EngineDetail): crank centre at x = 1.1, 0.6 m long
+  const block = shellBox(0.6, 0.5, 0.42, 0.03, 0.03, 1.1, 0.8) // x 0.80–1.40, y 0.55–1.05
+  const sump = shellBox(0.56, 0.12, 0.36, 0.02, 0.008, 1.1, 0.49)
+  const head = roundedBox(0.58, 0.12, 0.38, 0.02)
+  head.translate(1.1, 1.11, 0)
   const timingCover = roundedBox(0.08, 0.5, 0.4, 0.03)
-  timingCover.translate(1.76, 0.78, 0)
+  timingCover.translate(1.44, 0.78, 0)
   const bonnet = bonnetShell()
   const radiator = box(0.07, 0.36, 0.5)
   radiator.translate(1.96, 1.16, 0)
@@ -424,7 +426,12 @@ export function buildTractorGeometry() {
     return merge(...parts)
   })()
   const flywheel = xAxis(lathe([[0.03, -0.035], [0.23, -0.035], [0.24, 0.035], [0.03, 0.035]], 48))
-  const clutchDisc = xAxis(tube(0.2, 0.06, 0.02, 48))
+  // the library clutch disc (linings either side of a steel core on a splined hub), centred and turned on to X
+  const cd = clutchDisc({ Ro: 0.2, Ri: 0.11, bore: 0.022, hubR: 0.05, hubZ0: -0.012, hubZ1: 0.02 })
+  const cdT = clutchDiscThickness({})
+  const onX = (g: THREE.BufferGeometry) => xAxis(g.translate(0, 0, -cdT / 2).rotateX(-PI / 2))
+  const clutchLinings = onX(cd.linings)
+  const clutchCore = onX(merge(cd.core, cd.hub))
   const m = GEARBOX.module
   const inputShaft = xform(xAxis(cylinder(0.022, 0.5, 20)), mat4.t(0.25, 0, 0)) // local x 0 → 0.5
   const gearAt = (teeth: number, width: number) => {
@@ -506,7 +513,8 @@ export function buildTractorGeometry() {
     knuckle,
     crank,
     flywheel,
-    clutchDisc,
+    clutchDisc: clutchLinings,
+    clutchCore,
     inputShaft,
     inputPinion,
     layGear,

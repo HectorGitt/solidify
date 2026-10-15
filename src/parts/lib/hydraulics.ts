@@ -1,5 +1,6 @@
 import * as THREE from 'three'
 import { box, csg, cylinder, extrude, extrudeTwisted, gear, helixSpring, lathe, mat4, merge, tube, xform, type CsgOp, type V2 } from '@/geometry'
+import { axial, ringZ, shaftZ } from './shapes'
 
 /**
  * Shared parts library — hydraulic components: gear and vane pumps, spool control valves (the
@@ -536,4 +537,103 @@ export function stabiliserParts(s: { r?: number; sleeveR?: number; sleeveLen?: n
     bar: xform(cylinder(s.r ?? 0.014, 1, 16), mat4.c(mat4.t(0.5, 0, 0), mat4.rz(PI / 2))),
     sleeve: xform(cylinder(s.sleeveR ?? 0.022, L, 16), mat4.c(mat4.t(L / 2, 0, 0), mat4.rz(PI / 2))),
   }
+}
+
+/* ------------------------------ axial-piston pump / motor ------------------------------ */
+
+/** Axial-piston swashplate unit proportions (m). Defaults: the hydrostatic scene's 53.6 cm³/rev unit. */
+export const AXIAL_PISTON = {
+  pistons: 9,
+  bore: 0.018,
+  pitchR: 0.036,
+  blockR: 0.058,
+  blockZ0: -0.042,
+  blockZ1: 0.028,
+  swR: 0.062,
+  swT: 0.014,
+  slipperR: 0.0105,
+  slipperT: 0.006,
+  pistonL: 0.064,
+  pistonR: 0.0088,
+  valveZ0: -0.05,
+  coverZ0: -0.075,
+  bossZ: -0.095,
+  portX: 0.035,
+  housingR: 0.085,
+  housingIn: 0.077,
+  housingZ1: 0.09,
+  shaftR: 0.014,
+}
+export type AxialPistonSpec = typeof AXIAL_PISTON
+
+/**
+ * Axial-piston swashplate pump or motor (the same unit drives either way). Local frame: shaft axis
+ * along Z, shaft out to +Z; the cylinder block between blockZ0 and blockZ1, the valve plate and end
+ * cover behind it, the swashplate face at local z = 0 of its own part (place it at the swash z and
+ * tilt it). Pistons and slippers are single parts to instance round the pitch circle; `column` is a
+ * unit-length oil column for a bore.
+ */
+export function axialPistonUnit(spec: Partial<AxialPistonSpec> = {}) {
+  const D = { ...AXIAL_PISTON, ...spec }
+  const { PI } = Math
+  const circle = (r: number, n = 48, cx = 0, cy = 0) => Array.from({ length: n }, (_, i) => new THREE.Vector2(cx + r * Math.cos((2 * PI * i) / n), cy + r * Math.sin((2 * PI * i) / n)))
+  const kidney = (c: number, h: number, r0: number, r1: number, n = 16) => {
+    const pts: THREE.Vector2[] = []
+    for (let i = 0; i <= n; i++) pts.push(new THREE.Vector2(r1 * Math.cos(c - h + (2 * h * i) / n), r1 * Math.sin(c - h + (2 * h * i) / n)))
+    for (let i = n; i >= 0; i--) pts.push(new THREE.Vector2(r0 * Math.cos(c - h + (2 * h * i) / n), r0 * Math.sin(c - h + (2 * h * i) / n)))
+    return pts
+  }
+  const slab = (outline: THREE.Vector2[], holes: THREE.Vector2[][], z0: number, z1: number) => xform(extrudeTwisted(outline, holes, z1 - z0), mat4.t(0, 0, (z0 + z1) / 2))
+  const R = D.pitchR
+  const bores = Array.from({ length: D.pistons }, (_, i) => circle(D.bore / 2 + 0.0004, 20, R * Math.cos((2 * PI * i) / D.pistons), R * Math.sin((2 * PI * i) / D.pistons)))
+  const block = slab(circle(D.blockR, 64), [...bores, circle(D.shaftR + 0.0005, 24)], D.blockZ0, D.blockZ1)
+  const k0 = kidney(0, 1.25, R - 0.0075, R + 0.0075)
+  const k1 = kidney(PI, 1.25, R - 0.0075, R + 0.0075)
+  const valvePlate = slab(circle(D.blockR + 0.004, 64), [k0, k1, circle(D.shaftR + 0.001, 24)], D.valveZ0, D.blockZ0)
+  const kidneyOil = { pos: slab(k0, [], D.valveZ0 + 0.0003, D.blockZ0 - 0.0003), neg: slab(k1, [], D.valveZ0 + 0.0003, D.blockZ0 - 0.0003) }
+  const portHole = (s: number) => circle(0.009, 20, s * D.portX, 0)
+  const cover = merge(
+    slab(circle(D.housingR, 64), [portHole(1), portHole(-1)], D.coverZ0, D.valveZ0),
+    ...[1, -1].map((s) => xform(ringZ(0.017, 0.009, D.bossZ, D.coverZ0, 24), mat4.t(s * D.portX, 0, 0))),
+  )
+  const portOil = {
+    pos: xform(shaftZ(0.0087, D.bossZ + 0.0003, D.valveZ0 - 0.0003, 16), mat4.t(D.portX, 0, 0)),
+    neg: xform(shaftZ(0.0087, D.bossZ + 0.0003, D.valveZ0 - 0.0003, 16), mat4.t(-D.portX, 0, 0)),
+  }
+  // housing: a cup open at the back (the end cover closes it), shaft hole in the front wall
+  const housing = axial(
+    [
+      [D.housingIn, D.valveZ0],
+      [D.housingR, D.valveZ0],
+      [D.housingR, D.housingZ1],
+      [0.024, D.housingZ1],
+      [0.024, D.housingZ1 - 0.012],
+      [D.housingIn, D.housingZ1 - 0.012],
+    ],
+    64,
+  )
+  // swashplate: plate face at local z = 0, trunnions along X
+  const swash = merge(slab(circle(D.swR, 64), [circle(0.022, 24)], 0, D.swT), xform(cylinder(0.011, 2 * D.housingR + 0.03, 20), mat4.c(mat4.t(0, 0, D.swT / 2), mat4.rz(PI / 2))))
+  const lever = merge(xform(cylinder(0.007, 0.1, 12), mat4.t(0, 0.05, 0)), xform(lathe([[0, -0.012], [0.012, -0.006], [0.012, 0.006], [0, 0.012]], 16), mat4.t(0, 0.105, 0)))
+  const piston = xform(
+    lathe(
+      [
+        [0, -D.pistonL],
+        [D.pistonR, -D.pistonL],
+        [D.pistonR, -0.007],
+        [0.004, -0.0055],
+        [0.0065, -0.0035],
+        [0.0068, 0],
+        [0.0055, 0.004],
+        [0, 0.0066],
+      ],
+      20,
+    ),
+    mat4.rx(PI / 2),
+  )
+  const slipper = shaftZ(D.slipperR, 0, D.slipperT, 20)
+  const column = shaftZ(D.bore / 2 - 0.0002, 0, 1, 16)
+  /** shaft from the valve plate out to `toZ` */
+  const shaft = (toZ: number) => shaftZ(D.shaftR, D.valveZ0 + 0.002, toZ, 24)
+  return { block, valvePlate, kidneyOil, cover, portOil, housing, swash, lever, piston, slipper, column, shaft }
 }

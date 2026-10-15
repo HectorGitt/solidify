@@ -2,20 +2,24 @@ import { create } from 'zustand'
 import { cylinderCycleAngle, firingAngles, firingInterval, pinHeight, pistonVelocity, strokeAt, throwAngle, volumeFraction, type FourStroke, type SliderCrank } from '@/physics/engine'
 import { AIR, airStandardCycle, deltaFromHeat, stateAtCrank } from '@/physics/thermo'
 
+import { DIM as ENGINE } from '../four-stroke/model'
+
 /**
- * Inline multi-cylinder four-stroke engine: 2, 3, 4, 6 or 8 cylinders on one crankshaft.
- * Frame: crank axis = Z (cylinder 1 at the front, +Z, pulley end), cylinders vertical (+Y),
- * crank centre at the origin. Dimensions are typical tractor-diesel proportions.
+ * Inline multi-cylinder four-stroke engine: 2, 3, 4, 6 or 8 cylinders on one crankshaft. The engine
+ * is the shared one (src/machines/Engine): the four-stroke scene's 100 × 124 mm cylinder repeated
+ * at a 135 mm pitch. Frame: crank axis = Z (cylinder 1 at the front, +Z, pulley end), cylinders
+ * vertical (+Y), crank centre at the origin.
  */
 export const DIM = {
-  bore: 0.08,
-  stroke: 0.09,
-  crankR: 0.045,
-  rodL: 0.16,
-  pistonComp: 0.042,
-  pistonSkirt: 0.04,
-  pitch: 0.1,
-  linerOuter: 0.05,
+  bore: ENGINE.bore,
+  stroke: ENGINE.stroke,
+  crankR: ENGINE.crankR,
+  rodL: ENGINE.rodL,
+  pistonComp: ENGINE.pistonComp,
+  pistonSkirt: ENGINE.pistonSkirt,
+  /** cylinder pitch: the shared engine's PITCH */
+  pitch: 0.135,
+  linerOuter: ENGINE.linerOuter,
 }
 
 export const SC: SliderCrank = { r: DIM.crankR, l: DIM.rodL }

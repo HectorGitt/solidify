@@ -1,7 +1,7 @@
 import * as THREE from 'three'
 import { box, cam, csg, cylinder, extrude, lathe, mat4, merge, pipe, tube, xform, type V2 } from '@/geometry'
 import { beltBand, loopPath } from '@/geometry/parts'
-import { FIRING, FLOOR, FLY_C, GEAR_MODULE, HEAD_TOP, PINION_TEETH, PLUG_X, PLUG_Z, RING_TEETH, STARTER_C } from './model'
+import { FIRING, FLOOR, FLY_C, GEAR_MODULE, PINION_TEETH, RING_TEETH, STARTER_C } from './model'
 import { alternator as alternatorLib, battery, dynamo as dynamoLib, sparkPlug as sparkPlugLib, starterMotor, wireTurns } from '@/parts/lib/electrical'
 import { flywheel, vPulley } from '@/parts/lib/engine'
 export { battery }
@@ -44,14 +44,6 @@ export function camLift(phi: number) {
 }
 
 export function coilIgnition() {
-  const block = xform(box(0.16, 0.2, 0.4), mat4.t(0, FLOOR + 0.1, 0))
-  const holes = merge(...PLUG_Z.map((z) => xform(cylinder(0.0072, 0.2, 24), mat4.t(PLUG_X, 0, z))))
-  const chambers = merge(...PLUG_Z.map((z) => xform(cylinder(0.016, 0.02, 32), mat4.t(PLUG_X - 0.004, -0.04, z))))
-  const head = csg(xform(box(0.15, 0.07, 0.38), mat4.t(0, -0.015, 0)), [
-    { op: 'sub', geometry: holes },
-    { op: 'sub', geometry: chambers },
-  ])
-  const cover = xform(box(0.07, 0.035, 0.36), mat4.t(-0.036, HEAD_TOP + 0.0175, 0))
   // distributor (local: x, z about the shaft; y up from the body top at 0)
   const body = lathe([[0.0056, -0.15], [0.012, -0.15], [0.012, -0.062], [0.03, -0.06], [0.03, 0], [0.027, 0], [0.027, -0.052], [0.0056, -0.052]], 48)
   const bracket = xform(box(0.05, 0.018, 0.024), mat4.t(-0.032, -0.11, 0))
@@ -96,9 +88,6 @@ export function coilIgnition() {
   const key = merge(xform(box(0.003, 0.012, 0.012), mat4.t(0, 0, 0.012)), xform(box(0.02, 0.016, 0.003), mat4.t(0, 0.0, 0.025)))
   const needle = xform(box(0.0015, 0.019, 0.0012), mat4.t(0, 0.0095, 0))
   return {
-    block,
-    head,
-    cover,
     plug: sparkPlug(0.012),
     dist: { body, bracket, shaft, plate, cam: breakerCam, fixedContact, arm, pivot, condenser, cap, towers, segments, rotor, rotorStrip },
     coil: { can, top, core, secondary, primary, terms: coilTerms, pedestal },

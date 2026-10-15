@@ -2,7 +2,7 @@ import { SRC } from '@/content/citations'
 import type { SceneDef } from '@/modules/types'
 import { Cool3D } from './Cool3D'
 import { prepareCoolingGeometry } from './geometry'
-import { CAP, DEFAULTS, ENG, PUMP, RAD, THERMO, useCool, type CoolParams } from './model'
+import { CAP, DEFAULTS, ENG, FIRING, PUMP, RAD, THERMO, useCool, type CoolParams } from './model'
 import { CoolPanel } from './Panel'
 
 const scene: SceneDef = {
@@ -12,9 +12,9 @@ const scene: SceneDef = {
     'A liquid-cooled tractor diesel with its radiator, pump, fan, thermostat, bypass and pressure cap — run it from cold and watch the thermostat open — plus thermosiphon circulation and an air-cooled engine with a flywheel fan. Includes the classic faults.',
   Viewport: Cool3D,
   Panel: CoolPanel,
-  camera: { position: [0.9, 0.55, 0.8], target: [0, 0.22, 0.02] },
+  camera: { position: [1.26, 0.68, 1.11], target: [0, 0.22, 0.02] },
   extent: 0.8,
-  floorY: -0.1,
+  floorY: -0.215,
   hatchScale: 0.0055,
   timeScale: 1 / 20,
   cutPresets: [
@@ -27,7 +27,7 @@ const scene: SceneDef = {
   defaultPreset: 'half',
   cites: [SRC.tb509('Ch 7, Figs 7.1–7.4'), SRC.l4_509('cooling system; 60–93 °C'), SRC.supp509('cooling; heat balance 40/30/30'), SRC.exam509('thermosiphon — all four papers')],
   reset: () => useCool.getState().reset(),
-  prepare: prepareCoolingGeometry,
+  prepare: () => Promise.all([prepareCoolingGeometry(), import('@/machines/engine.geometry').then((m) => m.prepareEngine(FIRING))]),
   applyParams: (p) => {
     const { coldStart, ...rest } = p
     const s = useCool.getState()
@@ -39,7 +39,7 @@ const scene: SceneDef = {
       title: 'Why an engine needs cooling',
       body:
         'Combustion gas reaches about **1600 °C**. Roughly **30 %** of the fuel energy must be carried away by the cooling system, keeping the coolant at a working temperature of **60–93 °C**. This tractor diesel is cut down its centre line.',
-      camera: { position: [0.9, 0.55, 0.8], target: [0, 0.22, 0.02] },
+      camera: { position: [1.26, 0.68, 1.11], target: [0, 0.22, 0.02] },
       cut: 'half',
       select: null,
       explode: 0,
@@ -51,7 +51,7 @@ const scene: SceneDef = {
     {
       title: '1 · Water jacket',
       body: 'The **water jacket** surrounds every cylinder liner, and passages in the head connect to it through holes in the gasket face. Coolant takes heat from the cylinder walls; its colour here shows its temperature.',
-      camera: { position: [0.55, 0.45, -0.25], target: [0, 0.25, -0.12] },
+      camera: { position: [0.77, 0.53, -0.3], target: [0, 0.25, -0.12] },
       select: 'coolant',
       cut: 'transverse',
       cites: [SRC.tb509('Ch 7'), SRC.l4_509('cylinder block, water jacket')],
@@ -84,7 +84,7 @@ const scene: SceneDef = {
       title: 'Thermosiphon circulation',
       body:
         'Take the pump away. Water heated in the jacket becomes lighter and **rises** to the top of the radiator; cooled water is heavier and **sinks** to the bottom and back into the block. The flow is slower, so the temperature difference across the radiator is larger.',
-      camera: { position: [0.9, 0.5, 0.6], target: [0, 0.25, 0.1] },
+      camera: { position: [1.26, 0.6, 0.8], target: [0, 0.25, 0.1] },
       select: 'hoses',
       params: { mode: 'thermosiphon', load: 0.5, rpm: 1600, coldStart: true },
       cites: [SRC.tb509('Ch 7 thermosiphon'), SRC.exam509('thermosiphon principle')],
@@ -101,7 +101,7 @@ const scene: SceneDef = {
       title: 'Air cooling',
       body:
         'Small engines are often **air-cooled**: fins on the cylinder and head give a large surface, a **cowling** ducts the air, and fan blades cast on the **flywheel** blow it over the fins. No water, pump, radiator or hoses.',
-      camera: { position: [0.6, 0.45, 0.6], target: [-0.03, 0.18, 0] },
+      camera: { position: [0.85, 0.56, 0.84], target: [-0.03, 0.18, 0] },
       select: 'fins',
       cut: 'half',
       params: { ...DEFAULTS, mode: 'air', load: 0.4, rpm: 2200, coldStart: true },

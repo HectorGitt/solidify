@@ -1,34 +1,42 @@
 import { create } from 'zustand'
+import { BLOCK_INLET, FIRING_ORDERS, HEAD_OUTLET, HEAD_Y, engineLayout, firingFromOrder } from '@/machines/layout'
+import { DIM as ENGINE } from '../four-stroke/model'
 import { TYPICAL_COOLING, coolingFlows, coolingStep, type CoolMode, type CoolingFlowsResult, type CoolingInputs, type CoolingState, type ThermostatFault } from '@/physics/engineSystems'
 
 /**
- * Cooling-system scene. Liquid-cooled layout (forced circulation / thermosiphon): a three-cylinder
- * tractor diesel with the radiator in front (+Z), crank axis along Z at y = CRANK_Y.
- * Air-cooled layout: a single finned cylinder with a flywheel fan (TB Fig 7.1), crank axis along X.
- * Metres, Y up.
+ * Cooling-system scene. Liquid-cooled layout (forced circulation / thermosiphon): the shared engine
+ * (src/machines/Engine) as a three-cylinder tractor diesel, crank axis along Z at y = CRANK_Y, cylinder 1
+ * at the front (+Z) and the radiator ahead of it. The engine sits in its own frame shifted by
+ * (0, CRANK_Y, ENGINE_Z). Air-cooled layout: a single finned cylinder with a flywheel fan (TB Fig 7.1),
+ * crank axis along X. Metres, Y up.
  */
 export const SPEC = TYPICAL_COOLING
 
+/** the engine: three cylinders firing 1-2-3 */
+export const FIRING = firingFromOrder(FIRING_ORDERS[3])
+const E = engineLayout(FIRING)
+export const CRANK_Y = -0.04
+/** cylinder 1 sits at z = 0.048, so the crank pulley and the pump pulley line up ahead of the block */
+export const ENGINE_Z = 0.048 - E.front
+
 export const ENG = {
-  x: 0.08,
-  z0: -0.31,
-  z1: 0.07,
-  deck: 0.3,
-  headTop: 0.4,
-  cylZ: [-0.24, -0.12, 0.0],
-  bore: 0.09,
-  linerOuter: 0.05,
-  /** water jacket (block) */
-  jacket: { x: 0.068, y0: 0.12, y1: 0.29, z0: -0.3, z1: 0.06 },
-  /** head water passages */
-  headJacket: { x: 0.06, y0: 0.33, y1: 0.38, z0: -0.29, z1: 0.05 },
+  /** half-width of the crankcase */
+  x: 0.132,
+  /** rear and front faces of the block */
+  z0: ENGINE_Z - E.ll / 2,
+  z1: ENGINE_Z + E.lu / 2,
+  deck: CRANK_Y + HEAD_Y,
+  headTop: CRANK_Y + HEAD_OUTLET.topY,
+  cylZ: E.cylZ.map((z) => z + ENGINE_Z),
+  bore: ENGINE.bore,
 }
-export const CRANK_Y = 0.04
-export const THERMO = { x: 0, y: 0.4, z: 0.03 }
-/** water-pump volute mid-plane (volute bolted to the block front, z = 0.07 … 0.115) */
-export const PUMP = { y: 0.24, z: 0.0925 }
+/** thermostat housing on the head's coolant outlet */
+export const THERMO = { x: HEAD_OUTLET.x, y: CRANK_Y + HEAD_OUTLET.topY, z: ENGINE_Z + E.front + HEAD_OUTLET.dz }
+/** water-pump volute mid-plane: bolted to the block front (its back face just into the block's inlet boss), its outlet 40 mm below the spindle on the block inlet */
+export const PUMP = { y: CRANK_Y + BLOCK_INLET.y + 0.04, z: ENG.z1 - 0.002 + 0.0225 }
 export const FAN = { z: 0.21, r: 0.17 }
-export const PULLEY_Z = 0.16
+/** the fan belt's plane: the crank pulley's groove */
+export const PULLEY_Z = ENGINE_Z + E.pulleyZ + 0.012
 export const RAD = { x: 0.2, y0: 0.06, y1: 0.44, z0: 0.27, z1: 0.33, tankZ0: 0.255, tankZ1: 0.345, topY1: 0.52, botY0: -0.02 }
 export const CAP = { x: 0.12, y: 0.52, z: 0.3 }
 /** air-cooled engine */

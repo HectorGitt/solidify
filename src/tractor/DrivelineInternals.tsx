@@ -69,6 +69,7 @@ export function ClutchPlate({ a, k, G, info, explode }: Core) {
     <Part id={k('clutch-disc')} name="Clutch plate" role="moving" material="friction" info={info} explode={explode}>
       <group position={[0.73, DRIVE_Y, 0]} ref={g}>
         <PartMesh geometry={G.clutchDisc} />
+        <PartMesh geometry={G.clutchCore} material="steel" />
       </group>
     </Part>
   )

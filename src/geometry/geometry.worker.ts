@@ -6,12 +6,12 @@ import { pack } from './serialize'
  * worker-safe geometry.ts exporting `buildStatic()` (no React, no DOM). Builders are imported
  * lazily so a scene only pays for its own geometry code.
  */
-const FILES = import.meta.glob<{ buildStatic: () => unknown }>('/src/modules/*/*/geometry.ts')
-/** shared machines (e.g. the tractor's full engine): src/tractor/<name>.geometry.ts → "tractor/<name>" */
-const SHARED = import.meta.glob<{ buildStatic: () => unknown }>('/src/tractor/*.geometry.ts')
+const FILES = import.meta.glob<{ buildStatic: (args?: unknown) => unknown }>('/src/modules/*/*/geometry.ts')
+/** shared machines (e.g. the tractor's full engine): src/tractor/<name>.geometry.ts → "tractor/<name>", src/machines/<name>.geometry.ts → "machines/<name>" */
+const SHARED = import.meta.glob<{ buildStatic: (args?: unknown) => unknown }>(['/src/tractor/*.geometry.ts', '/src/machines/*.geometry.ts'])
 
 /** Builder key "<moduleId>/<folder>" → that scene's geometry.ts `buildStatic`. */
-const BUILDERS: Record<string, () => Promise<() => unknown>> = Object.fromEntries([
+const BUILDERS: Record<string, () => Promise<(args?: unknown) => unknown>> = Object.fromEntries([
   ...Object.entries(FILES).map(([path, load]) => {
     const key = path.replace('/src/modules/', '').replace('/geometry.ts', '')
     return [key, () => load().then((m) => m.buildStatic)] as const
@@ -22,14 +22,14 @@ const BUILDERS: Record<string, () => Promise<() => unknown>> = Object.fromEntrie
   }),
 ])
 
-self.onmessage = async (e: MessageEvent<{ id: number; builder: string }>) => {
-  const { id, builder } = e.data
+self.onmessage = async (e: MessageEvent<{ id: number; builder: string; args?: unknown }>) => {
+  const { id, builder, args } = e.data
   try {
     const load = BUILDERS[builder]
     if (!load) throw new Error(`Unknown geometry builder "${builder}"`)
     const build = await load()
     const transfers: Transferable[] = []
-    const packed = pack(build(), transfers)
+    const packed = pack(build(args), transfers)
     ;(self as unknown as Worker).postMessage({ id, packed }, transfers)
   } catch (err) {
     ;(self as unknown as Worker).postMessage({ id, error: String(err) })

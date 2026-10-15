@@ -2,11 +2,11 @@ import { SRC } from '@/content/citations'
 import type { SceneDef } from '@/modules/types'
 import { AirGov3D } from './AirGov3D'
 import { prepareAirGovGeometry } from './geometry'
-import { DEFAULTS, FULL_LOAD, GY, OB, resetGovernor, useAirGov } from './model'
+import { DEFAULTS, FULL_LOAD, GY, OB, RIG_X, resetGovernor, useAirGov } from './model'
 import { AirGovPanel } from './Panel'
 
-const overview = { position: [0.0, 0.75, 2.0] as [number, number, number], target: [0.0, 0.35, 0] as [number, number, number] }
-const govCam = { position: [0.42, 0.42, 0.62] as [number, number, number], target: [0.24, 0.16, 0] as [number, number, number] }
+const overview = { position: [0.25, 1.25, 3.3] as [number, number, number], target: [0.25, 0.3, 0] as [number, number, number] }
+const govCam = { position: [RIG_X + 0.42, 0.42, 0.62] as [number, number, number], target: [RIG_X + 0.24, 0.16, 0] as [number, number, number] }
 
 const scene: SceneDef = {
   id: 'air-governor',
@@ -16,19 +16,19 @@ const scene: SceneDef = {
   Viewport: AirGov3D,
   Panel: AirGovPanel,
   camera: overview,
-  extent: 1.5,
-  floorY: -0.13,
+  extent: 1.9,
+  floorY: -0.155,
   hatchScale: 0.003,
   timeScale: 1 / 20,
   cutPresets: [
     { id: 'half', label: 'Half section', planes: [{ normal: [0, 0, 1], pos: 0 }] },
-    { id: 'governor-only', label: 'Section the governor only', planes: [{ normal: [0, 0, 1], pos: 0 }, { normal: [-1, 0, 0], pos: -0.15 }], intersection: true },
+    { id: 'governor-only', label: 'Section the governor only', planes: [{ normal: [0, 0, 1], pos: 0 }, { normal: [-1, 0, 0], pos: -RIG_X }], intersection: true },
     { id: 'all-moving', label: 'Section everything', planes: [{ normal: [0, 0, 1], pos: 0 }], sectionMoving: true },
   ],
   defaultPreset: 'half',
   cites: [SRC.tb509('§4.3, §4.6, Figs 4.3, 4.4, 4.10'), SRC.supp509('governor regulation and hunting')],
   reset: () => useAirGov.getState().reset(),
-  prepare: prepareAirGovGeometry,
+  prepare: () => Promise.all([prepareAirGovGeometry(), import('@/machines/engine.geometry').then((m) => m.prepareEngine())]),
   applyParams: (p) => useAirGov.getState().set(p as Partial<typeof DEFAULTS>),
   tour: [
     {
@@ -90,7 +90,7 @@ const scene: SceneDef = {
     {
       title: 'Hunting',
       body: 'With too little damping on the sleeve the governor over-corrects: too much fuel, then too little — the speed swings **fast–slow–fast**. This is **hunting**. Watch the speed chart in the Controls panel, then raise the damping.',
-      camera: { position: [0.38, GY + 0.2, 0.42], target: [0.24, GY, 0] },
+      camera: { position: [RIG_X + 0.38, GY + 0.2, 0.42], target: [RIG_X + 0.24, GY, 0] },
       select: 'sleeve',
       params: { load: 0, damping: 15 },
       cites: [SRC.supp509('hunting'), SRC.ln518('Routh–Hurwitz')],

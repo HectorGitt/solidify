@@ -27,7 +27,7 @@ const scene: SceneDef = {
   defaultPreset: 'z0',
   cites: [SRC.l4_509('ignition system'), SRC.supp509('magneto ignition'), SRC.tb509('ch.5, Figs 5.1–5.9')],
   reset: () => useIgn.getState().reset(),
-  prepare: prepareIgnitionGeometry,
+  prepare: () => Promise.all([prepareIgnitionGeometry(), import('@/machines/engine.geometry').then((m) => m.prepareEngine())]),
   applyParams: (p) => useIgn.getState().set(p as Partial<typeof DEFAULTS>),
   tour: [
     {

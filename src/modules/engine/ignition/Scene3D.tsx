@@ -32,7 +32,8 @@ import {
   capAngle,
   getIgnitionGeometry,
 } from './geometry'
-import { COIL, FIRING, FLY_C, HATCH, HEAD_TOP, PINION_TEETH, PLUG_X, PLUG_Z, RING_TEETH, STARTER_ANGLE, STARTER_C, live, starterCmd, useIgn } from './model'
+import { Engine, PLUG_AXIS, plugTerminal, type EnginePartKey, type EnginePartOverride } from '@/machines/Engine'
+import { COIL, ENGINE_SCALE, ENGINE_Y, FIRING, FLY_C, HATCH, HEAD_TOP, PINION_TEETH, PLUG_X, PLUG_Z, RING_TEETH, STARTER_ANGLE, STARTER_C, live, starterCmd, useIgn } from './model'
 
 const { PI } = Math
 const D2R = PI / 180
@@ -59,12 +60,25 @@ function Spark({ at, refFn, size = 0.0018 }: { at: [number, number, number]; ref
   return <mesh ref={refFn} geometry={geo} material={mat} position={at} visible={false} />
 }
 
+/** the coil system's ids, names, cards and sources for the shared engine's parts */
+const IGN_IDS: Partial<Record<EnginePartKey, string>> = { 'spark-plugs': 'plugs' }
+const ignK = (key: EnginePartKey) => IGN_IDS[key] ?? key
+const IGN_PARTS: Partial<Record<EnginePartKey, EnginePartOverride>> = {
+  'spark-plugs': { name: 'Spark plugs (4)', info: { summary: 'One spark plug per cylinder.', role: 'The high-voltage current jumps the air gap (≈ 0.6 mm) between the electrodes and ignites the mixture.' }, cites: C.plug },
+}
+/** plug terminal in the scene, and the plug axis */
+const plugTopAt = (c: number): [number, number, number] => {
+  const p = plugTerminal(PLUG_Z[c - 1] / ENGINE_SCALE).multiplyScalar(ENGINE_SCALE)
+  return [p.x, p.y + ENGINE_Y, p.z]
+}
+
 /* ======================================================================================
  * (a) Battery (coil) ignition — four-cylinder engine, firing order 1-3-4-2
  * ====================================================================================== */
 
 function CoilSystem() {
   const g = getIgnitionGeometry().coil
+  const sparkY = g.plug.sparkY
   const theta = useRef(0)
   const camRef = useRef<THREE.Group>(null)
   const rotorRef = useRef<THREE.Group>(null)
@@ -72,7 +86,6 @@ function CoilSystem() {
   const needle = useRef<THREE.Group>(null)
   const sparks = useRef<(THREE.Mesh | null)[]>([])
 
-  const plugTop = (c: number): [number, number, number] => [PLUG_X, HEAD_TOP - 0.0195 + 0.072, PLUG_Z[c - 1]]
   const tower = (c: number): [number, number, number] => add(DIST, [0.0235 * Math.cos(capAngle(c)), 0.053, -0.0235 * Math.sin(capAngle(c))])
   const W = useMemo(() => {
     const battPos = add(BATT, [-0.075, 0.115, -0.03])
@@ -92,10 +105,13 @@ function CoilSystem() {
     const condLead: [number, number, number][] = [add(cond, [0, 0.03, 0]), add(cond, [0.004, 0.04, 0.01]), distLT]
     const earth: [number, number, number][] = [battNeg, add(battNeg, [0, 0.05, 0]), [0.3, -0.12, 0.17], [0.08, -0.2, 0.15]]
     const ht0: [number, number, number][] = [coilHT, add(coilHT, [0, 0.03, 0]), [0.17, 0.12, 0], add(capC, [0, 0.03, 0]), capC]
+    // up from the cap clear of the manifolds, over, and down each plug well onto the terminal
+    const up = 0.24
     const ht = [1, 2, 3, 4].map((c) => {
       const a = tower(c)
-      const b = plugTop(c)
-      return [a, add(a, [0.004, 0.035, 0]), [(a[0] + b[0]) / 2, 0.12, (a[2] + b[2]) / 2], add(b, [0, 0.035, 0]), b] as [number, number, number][]
+      const b = plugTopAt(c)
+      const above = add(b, PLUG_AXIS.clone().multiplyScalar(0.075).toArray())
+      return [a, add(a, [0.004, 0.035, 0]), [a[0], up, (a[2] + b[2]) / 2], [(a[0] + above[0]) / 2, up + 0.01, b[2]], above, add(b, PLUG_AXIS.clone().multiplyScalar(0.02).toArray()), b] as [number, number, number][]
     })
     return { lt: [lt1, lt2, lt3, lt4], condLead, earth, ht0, ht }
   }, [])
@@ -151,22 +167,18 @@ function CoilSystem() {
   const Imax = () => useIgn.getState().volts / COIL.R
   return (
     <Part id="coil-system" name="Battery (coil) ignition" role="housing" material="castIron" info={{ summary: 'Battery ignition for a four-cylinder petrol engine.', role: 'Primary circuit: battery, ammeter, switch, coil primary, contact breaker, condenser. Secondary: coil secondary, distributor rotor and cap, HT leads, spark plugs.' }} cites={C.coil}>
-      <Part id="engine" name="Engine (cylinder head & block)" material="castIron" role="housing" info={{ summary: 'Four-cylinder engine, firing order 1-3-4-2 (cylinder 1 at the front).' }} cites={[SRC.tb509('§2.6.4')]}>
-        <PartMesh geometry={g.block} />
-        <PartMesh geometry={g.head} />
-        <PartMesh geometry={g.cover} material="paintGreen" />
-      </Part>
-      <Part id="plugs" name="Spark plugs (4)" material="steel" role="housing" info={{ summary: 'One spark plug per cylinder.', role: 'The high-voltage current jumps the air gap (≈ 0.6 mm) between the electrodes and ignites the mixture.' }} cites={C.plug}>
-        {PLUG_Z.map((z, i) => (
-          <group key={i} position={[PLUG_X, HEAD_TOP - 0.0195, z]}>
-            <PartMesh geometry={g.plug.shell} />
-            <PartMesh geometry={g.plug.insulator} material="ceramic" />
-            <PartMesh geometry={g.plug.centre} material="steelDark" />
-            <PartMesh geometry={g.plug.terminal} material="brass" />
-            <PartMesh geometry={g.plug.ground} material="steelDark" />
-            <Spark at={[0, g.plug.sparkY, 0]} refFn={(m) => void (sparks.current[i] = m)} />
-          </group>
-        ))}
+      <Part id="engine" name="Four-cylinder petrol engine" material="castIron" role="housing" info={{ summary: 'Four-cylinder petrol engine (67 × 83 mm), firing order 1-3-4-2 (cylinder 1 at the front), every part working.', role: 'Each spark is timed to arrive a little before its piston reaches top dead centre on the compression stroke.' }} cites={[SRC.tb509('§2.6.4')]}>
+        <Engine
+          firing={FIRING}
+          ignition="spark"
+          position={[0, ENGINE_Y, 0]}
+          scale={ENGINE_SCALE}
+          // the coil system counts each cylinder's firing angle from its compression TDC
+          crankAngle={() => ((theta.current + 360) * PI) / 180}
+          k={ignK}
+          parts={IGN_PARTS}
+          plugParts={(i) => <Spark at={[0, sparkY, 0]} size={0.0027} refFn={(m) => void (sparks.current[i] = m)} />}
+        />
       </Part>
       <Part id="distributor" name="Distributor" material="aluminium" role="housing" info={{ summary: 'Distributor (driven at half engine speed).', role: 'Carries the contact breaker and its cam, and the rotor arm that sends each HT pulse to the right plug in firing order.' }} cites={C.coil}>
         <group position={DIST}>
@@ -263,7 +275,7 @@ function CoilSystem() {
       <PartLabel partId="condenser" at={add(DIST, [0.06, -0.02, -0.02])} />
       <PartLabel partId="battery" at={add(BATT, [0, 0.13, 0.06])} />
       <PartLabel partId="dash" at={add(DASH, [0, 0.06, 0])} />
-      <PartLabel partId="plugs" at={[PLUG_X + 0.03, 0.11, PLUG_Z[0]]} />
+      <PartLabel partId="plugs" at={[PLUG_X + 0.05, HEAD_TOP + 0.08, PLUG_Z[0]]} />
       <PartLabel partId="leads" at={[0.1, 0.13, 0.08]} />
     </Part>
   )

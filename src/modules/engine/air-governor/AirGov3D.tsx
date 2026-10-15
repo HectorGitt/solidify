@@ -6,8 +6,9 @@ import { flyweightAngle, fuelFraction, governorStep } from '@/physics/engineSyst
 import { Flow } from '@/render/Flow'
 import { PartLabel } from '@/render/Label'
 import { Part, PartMesh } from '@/render/Part'
+import { Engine } from '@/machines/Engine'
 import { buildAirGovGeometry } from './geometry'
-import { CRANK_Y, DASH_Y, DR, E, G, GOV, GY, OB, dust, live, preload, pushHistory, settings, useAirGov } from './model'
+import { BRAKE_X, CRANK_Y, DASH_Y, DR, E, ENGINE_X, G, GOV, GY, OB, RIG_X, dust, live, preload, pushHistory, settings, useAirGov } from './model'
 
 const { PI } = Math
 const V = (x: number, y: number, z = 0) => new THREE.Vector3(x, y, z)
@@ -35,7 +36,7 @@ const INFO = {
   fork: { summary: 'Fork (governor) lever and control rod.', role: 'Turns sleeve movement into rack movement: sleeve out (engine fast) pulls the rack towards stop; sleeve in (engine slow) gives more fuel.' },
   speedLever: { summary: 'Speed-control (hand throttle) lever.', role: 'Sets the spring compression, i.e. the engine speed the governor will hold.' },
   rack: { summary: 'Injection-pump control rack (stub).', role: 'Sets the fuel delivered per stroke (see the Diesel fuel system scene).' },
-  engine: { summary: 'Engine (stub): crankshaft, timing gears, flywheel.', role: 'The crankshaft gear drives the governor spindle gear at half engine speed (30 : 60 teeth).' },
+  engine: { summary: 'Four-cylinder tractor diesel, every part working.', role: 'A 30-tooth gear on the crankshaft nose drives the governor spindle gear (60 teeth) at half engine speed; the brake drum on the crank tail behind the flywheel takes the load.' },
   brake: { summary: 'Brake drum with a weighted arm (prony-type load).', role: 'Applies the load torque: the bigger the hanging weight, the bigger the load. A load step makes the engine slow down until the governor adds fuel.' },
 }
 
@@ -45,7 +46,6 @@ export function AirGov3D() {
   const height = useAirGov((s) => s.height)
   const crank = useRef(0)
   const histAcc = useRef(0)
-  const crankRef = useRef<THREE.Group>(null)
   const spindleRef = useRef<THREE.Group>(null)
   const fw = useRef<(THREE.Group | null)[]>([])
   const sleeveRef = useRef<THREE.Group>(null)
@@ -88,7 +88,6 @@ export function AirGov3D() {
       pushHistory(live.t, rpm, fuelFraction(G, x) * 100)
     }
     crank.current += w * dt
-    crankRef.current?.rotation.set(crank.current, 0, 0)
     spindleRef.current?.rotation.set(-crank.current * G.ratio, 0, 0)
     const phi = flyweightAngle(G, x)
     for (const f of fw.current) f?.rotation.set(0, 0, phi)
@@ -205,20 +204,28 @@ export function AirGov3D() {
 
       {/* ======================== governor ======================== */}
       <Part id="governor-rig" name="Governed engine" role="housing" material="castIron" info={INFO.governor} cites={C.gov}>
-        <Part id="engine-stub" name="Engine (stub)" material="castIron" role="housing" info={INFO.engine} cites={C.gov}>
-          <PartMesh geometry={g.block} />
-        </Part>
-        <Part id="crankshaft" name="Crankshaft, gear & flywheel" material="forged" role="moving" info={INFO.engine} cites={C.gov}>
-          <group ref={crankRef} position={[0, CRANK_Y, 0]}>
-            <PartMesh geometry={g.crank} material="castIron" />
-            <PartMesh geometry={g.flywheelRing} material="steelDark" />
-            <PartMesh geometry={g.drum} material="steelDark" />
-            <PartMesh geometry={g.crankGear} material="steelDark" position={[GOV.gearX, 0, 0]} />
-          </group>
+        <group position={[RIG_X, 0, 0]}>
+        <Part id="engine" name="Four-cylinder tractor diesel" material="castIron" role="housing" info={INFO.engine} cites={C.gov}>
+          {/* turned so the crank lies along X, timing end towards the governor */}
+          <Engine
+            position={[ENGINE_X, CRANK_Y, 0]}
+            rotation={[0, PI / 2, 0]}
+            crankAngle={() => crank.current}
+            gas={false}
+            crankParts={
+              <Part id="governor-drive" name="Governor drive gear, crank extension & brake drum" material="steelDark" role="moving" info={INFO.engine} cites={C.gov}>
+                <PartMesh geometry={g.crankShafts} material="forged" />
+                <PartMesh geometry={g.crankGear} />
+                <PartMesh geometry={g.drum} />
+              </Part>
+            }
+          />
         </Part>
         <Part id="brake" name="Brake load (weighted arm)" material="paintYellow" role="static" cut={false} info={INFO.brake} cites={[SRC.tests502('dynamometers')]} beyondNotes>
-          <PartMesh geometry={g.brake} />
-          <PartMesh ref={weightRef} geometry={g.weight} material="castIron" />
+          <group position={[BRAKE_X - 0.502, 0, 0]}>
+            <PartMesh geometry={g.brake} />
+            <PartMesh ref={weightRef} geometry={g.weight} material="castIron" />
+          </group>
         </Part>
         <Part id="governor-housing" name="Governor housing" material="castIron" role="housing" info={INFO.governor} cites={C.gov} explode={[0, 0, -0.16]}>
           <PartMesh geometry={g.govHousing} />
@@ -270,6 +277,15 @@ export function AirGov3D() {
             </group>
           </Part>
         </Part>
+        <PartLabel partId="flyweights" at={[0.25, GY + 0.07, 0.04]} />
+        <PartLabel partId="sleeve" at={[0.22, GY - 0.03, 0.03]} />
+        <PartLabel partId="gov-spring" at={[0.28, GY - 0.03, 0.03]} />
+        <PartLabel partId="speed-lever" at={[0.33, GY + 0.19, 0]} />
+        <PartLabel partId="fork-lever" at={[0.2, GY + 0.16, 0]} />
+        <PartLabel partId="rack" at={[0.06, GY + 0.18, 0.03]} />
+        <PartLabel partId="brake" at={[BRAKE_X + 0.03, CRANK_Y + 0.13, 0.3]} />
+        <PartLabel partId="engine" at={[ENGINE_X, 0.55, 0.12]} />
+        </group>
       </Part>
 
       <PartLabel partId="oil-bath" at={[OB.x - 0.1, 0.22, 0.06]} />
@@ -277,13 +293,6 @@ export function AirGov3D() {
       <PartLabel partId="dash-level" at={[OB.x + 0.2, DASH_Y + 0.01, 0.1]} />
       <PartLabel partId="ob-cup" at={[OB.x + 0.1, 0.04, 0.06]} />
       <PartLabel partId="dry-cleaner" at={[DR.x + 0.05, 0.3, 0.05]} />
-      <PartLabel partId="flyweights" at={[0.25, GY + 0.07, 0.04]} />
-      <PartLabel partId="sleeve" at={[0.22, GY - 0.03, 0.03]} />
-      <PartLabel partId="gov-spring" at={[0.28, GY - 0.03, 0.03]} />
-      <PartLabel partId="speed-lever" at={[0.33, GY + 0.19, 0]} />
-      <PartLabel partId="fork-lever" at={[0.2, GY + 0.16, 0]} />
-      <PartLabel partId="rack" at={[0.06, GY + 0.18, 0.03]} />
-      <PartLabel partId="brake" at={[0.53, CRANK_Y + 0.13, 0.3]} />
     </group>
   )
 }
