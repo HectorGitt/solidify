@@ -59,6 +59,27 @@ const SHADOW_MAP = 2048
  * The box moves in whole shadow-pixel steps, and the bias scales with the pixel size: together
  * they stop self-shadowing acne and edges shimmering on moving parts.
  */
+/**
+ * A soft light from the viewer's own position, aimed where the camera looks: whichever side you
+ * orbit to is lit enough to read, while the fixed key light still gives the shapes and shadows.
+ */
+function HeadLight() {
+  const light = useRef<THREE.DirectionalLight>(null)
+  const target = useMemo(() => new THREE.Vector3(), [])
+  useFrame(({ camera }) => {
+    const l = light.current
+    if (!l) return
+    const c = getCameraControls()
+    if (c) c.getTarget(target)
+    else camera.getWorldDirection(target).add(camera.position)
+    l.position.copy(camera.position)
+    l.target.position.copy(target)
+    if (!l.target.parent) l.parent?.add(l.target)
+    l.target.updateMatrixWorld()
+  })
+  return <directionalLight ref={light} intensity={0.7} color="#fff8f0" />
+}
+
 function Lights({ extent, follow }: { extent: number; follow: boolean }) {
   const s = extent
   const half = follow ? Math.min(1.4 * s, 18) : 1.4 * s
@@ -78,7 +99,9 @@ function Lights({ extent, follow }: { extent: number; follow: boolean }) {
   })
   return (
     <>
-      <hemisphereLight args={['#ffffff', '#0f172a', 0.65]} />
+      {/* sky above, mid grey below, so undersides are never black */}
+      <hemisphereLight args={['#ffffff', '#5b6470', 0.65]} />
+      <HeadLight />
       <directionalLight
         ref={light}
         position={[offset.x, offset.y, offset.z]}
@@ -101,6 +124,10 @@ function Lights({ extent, follow }: { extent: number; follow: boolean }) {
         <Lightformer form="rect" intensity={0.9} color="#fff3e0" position={[5, 1, 2]} scale={[3, 5, 1]} rotation-y={-Math.PI / 2} />
         <Lightformer form="ring" intensity={1.5} color="#ffffff" position={[2, 3, 6]} scale={2} />
         <Lightformer form="rect" intensity={0.25} color="#10b981" position={[0, -3, 0]} scale={[10, 10, 1]} rotation-x={-Math.PI / 2} />
+        {/* panels behind and below as well, so metal reflects something from every side */}
+        <Lightformer form="rect" intensity={1.0} color="#f2f6ff" position={[0, 2, -6]} scale={[8, 4, 1]} />
+        <Lightformer form="rect" intensity={0.7} color="#fff6ea" position={[-4, 2, -4]} scale={[3, 5, 1]} rotation-y={Math.PI / 4} />
+        <Lightformer form="rect" intensity={0.45} color="#dfe6ee" position={[0, -2.5, 0]} scale={[12, 12, 1]} rotation-x={-Math.PI / 2} />
       </Environment>
     </>
   )
