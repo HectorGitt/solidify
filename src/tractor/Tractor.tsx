@@ -81,6 +81,7 @@ const INFO = {
   frontAxle: { summary: 'Front axle and steering knuckles.', role: 'Pivots at the centre so all four wheels stay on rough ground; the knuckles steer the front wheels.' },
   frontAxle4: { summary: 'Driven front axle (MFWD).', role: 'A differential in the axle centre and an epicyclic reduction in each swivel housing drive the front wheels; the swivels steer them. The axle pivots on a fore-and-aft pin so all four wheels stay on rough ground.', details: 'Front assist roughly doubles the share of the weight that gives traction, at the cost of a little more rolling loss; it is usually engaged for heavy draft work and on slippery ground.' },
   hinge: { summary: 'Articulation hinge and steering rams.', role: 'The front and rear frames turn about vertical pins above and below the driveline; two double-acting rams fold them to steer, and a universal joint in the shaft passes the drive through the hinge. The rear wheels follow in the front wheels’ tracks, so there is less soil compaction and no steered axle to carry.' },
+  frontSupport: { summary: 'Front support (bolster).', role: 'A casting bolted under the front of the engine: it carries the radiator, the front-axle pivot and the front weights or tow eye.' },
   frontAxleArt: { summary: 'Rigid driven front axle.', role: 'A differential and half shafts like the rear axle’s, with the same size of wheels: the weight is nearly equal front and rear, so all four wheels pull alike.' },
   tracks: { summary: 'Steel tracks in place of the wheels (crawler).', role: 'The drive sprocket on each half shaft lays a track of steel shoes down ahead of the tractor and picks it up behind: a long contact patch gives low ground pressure, little slip and high drawbar pull in soft soil. Steering is by slowing one track (skid steering).', details: 'Sprocket on the rear axle, idler at the front on a recoil spring, five bottom rollers on each track frame; an equaliser bar across the front lets the frames rock independently.' },
   frontDrive: { summary: 'Transfer box and front propeller shaft.', role: 'A gear pair under the gearbox takes drive off the output shaft to a propeller shaft with a universal joint at each end; the front pinion turns at the rear pinion’s speed, so the front tyres keep pace with the rears.' },
@@ -455,10 +456,14 @@ export function Tractor({ pose, id = 'tractor', paint = 'paintRed', linkage = tr
               <PartMesh geometry={D.exPipe} material="steelDark" />
               <PartMesh geometry={D.muffler} material="paintBlack" />
             </Part>
-            <Part id={k('radiator')} name="Radiator" role="static" material="copper" info={INFO.radiator} cites={[SRC.supp509('cooling system')]} explode={[0.35, 0, 0]}>
-              {/* the cooling system's radiator replaces the outline block once built */}
-              {systems && !sceneSystems.includes('cooling') ? null : <PartMesh geometry={G.radiator} />}
-              <PartMesh geometry={G4 ? G4.support : G.bolster} material="castIron" />
+            {/* the outline radiator stands in until the cooling system's real one is built */}
+            {systems && !sceneSystems.includes('cooling') ? null : (
+              <Part id={k('radiator')} name="Radiator" role="static" material="copper" info={INFO.radiator} cites={[SRC.supp509('cooling system')]} explode={[0.35, 0, 0]}>
+                <PartMesh geometry={G.radiator} />
+              </Part>
+            )}
+            <Part id={k('front-support')} name="Front support" role="static" material="castIron" info={INFO.frontSupport} explode={[0.35, -0.1, 0]}>
+              <PartMesh geometry={G4 ? G4.support : G.bolster} />
               {G4 ? null : <PartMesh geometry={G.bolsterSteel} material="steelDark" />}
             </Part>
             <Part id={k('clutch-housing')} name="Clutch housing" material="castIron" info={CLUTCH_INSIDE} cites={[SRC.pt510('clutch')]} explode={[0, 0, 0.4]}>

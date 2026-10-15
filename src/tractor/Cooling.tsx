@@ -78,7 +78,7 @@ function CoolingSystem({ g, a, k }: { g: SystemsGeometry; a: MutableRefObject<Dr
 
   return (
     <>
-      <Part id={k('radiator-core')} name="Radiator" role="static" material="copper" info={INFO.radiator} explode={[0.3, 0, 0]}>
+      <Part id={k('radiator')} name="Radiator" role="static" material="copper" info={INFO.radiator} explode={[0.3, 0, 0]}>
         <group position={[RAD_X, 0, 0]} rotation={[0, Math.PI / 2, 0]}>
           <PartMesh geometry={c.core.tubes} material="brass" />
           <PartMesh geometry={c.core.fins} />
