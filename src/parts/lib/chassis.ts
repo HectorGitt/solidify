@@ -343,7 +343,18 @@ export function cradleBearings(s: { half: number; trunnionR?: number; bore?: num
  * and is bolted at the chosen track (a row of holes shows the settings), ending in the kingpin boss.
  * Local frame: axle centre on the origin, beam along Z, kingpin axes vertical at z = ±kingpinZ, Y up.
  */
-export function frontAxle(spec: { kingpinZ: number; beamH?: number; beamW?: number; bossR?: number; bossH?: number; centreHalf?: number }) {
+export function frontAxle(spec: {
+  kingpinZ: number
+  beamH?: number
+  beamW?: number
+  bossR?: number
+  bossH?: number
+  centreHalf?: number
+  /** height of the support's underside above the axle centre: the pivot brackets reach up to it */
+  supportY?: number
+  /** radius rods: where on the beam they start (z = ±) and the ball joint they meet at, axle-local */
+  radiusRods?: { z: number; ball: THREE.Vector3 }
+}) {
   const K = spec.kingpinZ
   const H = spec.beamH ?? 0.1
   const W = spec.beamW ?? 0.1
@@ -371,10 +382,41 @@ export function frontAxle(spec: { kingpinZ: number; beamH?: number; beamW?: numb
   const bolt = merge(xform(cylinder(0.009, H + 0.05, 12), new THREE.Matrix4()), xform(cylinder(0.016, 0.012, 6), mat4.t(0, H / 2 + 0.006, 0)), xform(cylinder(0.016, 0.014, 6), mat4.t(0, -H / 2 - 0.007, 0)))
   const bolts = merge(...[1, -1].flatMap((s) => [0.05, 0.12].map((d) => xform(bolt, mat4.t(0, 0, s * (C - d))))))
   const holes = merge(...[1, -1].flatMap((s) => [0.04, 0.1, 0.16].map((d) => xform(cylinder(0.009, 0.003, 12), mat4.t(0, ih / 2 + 0.001, s * (C + d))))))
-  // pivot pin and the two lugs that carry it under the front support
-  const pin = xform(cylinder(0.025, W + 0.2, 20), xAlong)
-  const lugs = merge(...[1, -1].map((s) => xform(box(0.04, 0.1, 0.12), mat4.t(s * (W / 2 + 0.07), 0.035, 0))))
-  return { centre, extensions, bolts, holes, pin, lugs }
+  // pivot pin, held fore and aft of the beam's boss by two brackets cast under the front support
+  const pin = merge(xform(cylinder(0.025, W + 0.24, 20), xAlong), ...[1, -1].map((s) => xform(cylinder(0.034, 0.016, 6), mat4.c(mat4.t(s * (W / 2 + 0.12), 0, 0), xAlong))))
+  const top = spec.supportY ?? 0.07
+  const bracket = (s: number) => {
+    const x = s * (W / 2 + 0.052)
+    return merge(
+      xform(box(0.04, top + 0.045, 0.15), mat4.t(x, (top - 0.045) / 2, 0)),
+      xform(cylinder(0.05, 0.04, 32), mat4.c(mat4.t(x, 0, 0), xAlong)),
+      // gussets up into the support
+      ...[1, -1].map((g) => xform(box(0.07, 0.03, 0.02), mat4.t(x - s * 0.02, top - 0.02, g * 0.065))),
+    )
+  }
+  const lugs = merge(bracket(1), bracket(-1))
+  // radius rods from the beam back to a ball joint under the clutch housing: they hold the axle
+  // square to the tractor against braking and pulling loads while it rocks about the pin
+  let rods: THREE.BufferGeometry | null = null
+  if (spec.radiusRods) {
+    const { z: rz, ball } = spec.radiusRods
+    const rod = (from: THREE.Vector3, to: THREE.Vector3, r: number) => {
+      const d = to.clone().sub(from)
+      const m = new THREE.Matrix4().compose(from.clone().add(to).multiplyScalar(0.5), new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.clone().normalize()), new THREE.Vector3(1, 1, 1))
+      return xform(cylinder(r, d.length(), 16), m)
+    }
+    const parts: THREE.BufferGeometry[] = []
+    for (const s of [1, -1]) {
+      const a = new THREE.Vector3(-W / 2 - 0.02, -0.02, s * rz)
+      parts.push(rod(a, ball, 0.017), xform(box(0.05, 0.06, 0.05), mat4.t(a.x + 0.012, a.y + 0.01, a.z)))
+    }
+    // ball and its cup on a bracket under the clutch housing
+    const sphere = new THREE.SphereGeometry(0.034, 20, 14)
+    sphere.translate(ball.x, ball.y, ball.z)
+    parts.push(sphere, xform(box(0.12, 0.05, 0.12), mat4.t(ball.x - 0.03, ball.y + 0.045, ball.z)))
+    rods = merge(...parts)
+  }
+  return { centre, extensions, bolts, holes, pin, lugs, rods }
 }
 
 /**

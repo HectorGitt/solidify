@@ -416,9 +416,10 @@ export function buildTractorGeometry() {
   const rops = ropsFrame()
 
   // ------------------------------------------------------------ front axle (telescopic beam) and knuckles
-  const fa = frontAxle({ kingpinZ: KINGPIN_Z })
+  // pivot brackets up to the front support's underside; radius rods back to a ball under the clutch housing
+  const fa = frontAxle({ kingpinZ: KINGPIN_Z, supportY: 0.45 - FRONT_Y, radiusRods: { z: 0.36, ball: new THREE.Vector3(0.82 - TRACTOR.wheelbase, 0.33 - FRONT_Y, 0) } })
   const onAxle = mat4.t(TRACTOR.wheelbase, FRONT_Y, 0)
-  const axleBeam = xform(merge(fa.centre, fa.extensions, fa.lugs), onAxle)
+  const axleBeam = xform(merge(fa.centre, fa.extensions, fa.lugs, fa.rods!), onAxle)
   const axleBolts = xform(merge(fa.bolts, fa.pin), onAxle)
   const axleHoles = xform(fa.holes, onAxle)
   /** knuckle (local, kingpin axis Y through origin, spindle towards +Z) */
