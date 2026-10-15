@@ -65,19 +65,21 @@ function block(L: EngineLayout) {
   const upper = xform(box(BLOCK_X1 - BLOCK_X0, CROWN_TDC - CASE_TOP, L.lu), at((BLOCK_X0 + BLOCK_X1) / 2, (CROWN_TDC + CASE_TOP) / 2, 0))
   const lower = xform(box(2 * CASE_X, CASE_TOP - SPLIT_Y, L.ll), at(0, (CASE_TOP + SPLIT_Y) / 2, 0))
   const shell = csg(lower, [{ op: 'add', geometry: upper }])
+  // big cuts first (they remove the most and leave less for the rest); cuts that never touch one
+  // another go in together
+  const pushrods = each(L, (z) => merge(...valveZ.map((dz) => xform(cylinder(0.0095, 0.32, 12), at(PUSHROD_X, 0.25, z + dz)))))
   const ops: CsgOp[] = [
     { op: 'sub', geometry: each(L, (z) => xform(cylinder(DIM.linerOuter, 0.4, 32), at(0, CROWN_TDC - 0.1, z))) },
     // a bay for each throw, leaving main-bearing bulkheads between the cylinders
     { op: 'sub', geometry: each(L, (z) => xform(cylinder(0.112, PITCH - 0.03, 32), onZ(0, 0, z))) },
     { op: 'sub', geometry: xform(box(0.224, 0.06, L.ll - 0.03), at(0, SPLIT_Y - 0.01, 0)) },
     { op: 'sub', geometry: each(L, (z) => xform(box(0.058, 0.08, PITCH - 0.035), at(CAM_X, CAM_Y, z))) },
-    { op: 'sub', geometry: xform(cylinder(0.014, L.ll + 0.1, 16), onZ(CAM_X, CAM_Y, 0)) },
-    { op: 'sub', geometry: xform(cylinder(0.031, L.ll + 0.1, 24), onZ(0, 0, 0)) },
+    // crank and cam tunnels
+    { op: 'sub', geometry: merge(xform(cylinder(0.014, L.ll + 0.1, 16), onZ(CAM_X, CAM_Y, 0)), xform(cylinder(0.031, L.ll + 0.1, 24), onZ(0, 0, 0))) },
     { op: 'sub', geometry: each(L, (z) => xform(tube(DIM.jacketOuter, DIM.linerOuter - 0.0005, 0.155, 32), at(0, CROWN_TDC - 0.0115 - 0.155 / 2, z))) },
-    { op: 'sub', geometry: each(L, (z) => merge(...valveZ.map((dz) => xform(cylinder(0.0095, 0.32, 12), at(PUSHROD_X, 0.25, z + dz))))) },
+    // pushrod holes, coolant transfer holes and the pump inlet are all well apart
+    { op: 'sub', geometry: merge(pushrods, transfers(L, 0), blockInlet(L, 0)) },
     { op: 'sub', geometry: each(L, (z) => merge(...valveZ.map((dz) => xform(cylinder(DIM.tappetR + 0.0008, 0.07, 16), at(PUSHROD_X, CAM_Y + 0.045, z + dz))))) },
-    { op: 'sub', geometry: transfers(L, 0) },
-    { op: 'sub', geometry: blockInlet(L, 0) },
   ]
   return csg(shell, ops)
 }
@@ -111,8 +113,8 @@ function headPassage(L: EngineLayout, inset: number) {
   const cavity = xform(box(x1 - x0, P.y1 - P.y0 - 2 * inset, L.lu - 2 * P.wall - 2 * inset), at((x0 + x1) / 2, (P.y0 + P.y1) / 2, 0))
   const e = -inset
   const bosses = merge(
-    each(L, (z) => xform(pipe(INLET_PORT, 0.0165 + P.boss + e, 0, 20, 12), at(0, 0, z))),
-    each(L, (z) => xform(pipe(EXHAUST_PORT, 0.0145 + P.boss + e, 0, 20, 12), at(0, 0, z))),
+    each(L, (z) => xform(pipe(INLET_PORT, 0.0165 + P.boss + e, 0, 14, 10), at(0, 0, z))),
+    each(L, (z) => xform(pipe(EXHAUST_PORT, 0.0145 + P.boss + e, 0, 14, 10), at(0, 0, z))),
     each(L, (z) => merge(...valveZ.map((dz) => xform(cylinder(0.011 + e, 0.2, 16), at(DIM.valveX, 0.05, z + dz))))),
     each(L, (z) => merge(...valveZ.map((dz) => xform(cylinder(0.0135 + e, 0.2, 16), at(PUSHROD_X, 0.05, z + dz))))),
     each(L, (z) => xform(cylinder(0.016 + e, 0.2, 16), injectorBore(z))),
@@ -142,15 +144,22 @@ function head(L: EngineLayout) {
   const H = DIM.headHeight
   const body = xform(box(HEAD_X1 - HEAD_X0, H, L.lu), at((HEAD_X0 + HEAD_X1) / 2, H / 2, 0))
   const seat = (r: number) => lathe([[0, -0.01], [r + 0.0005, -0.01], [r + 0.0005, 0.0008], [r - 0.004, 0.006], [0, 0.006]], 24)
+  // cuts that never touch one another go in together (a mesh of separate closed pieces is still a
+  // valid solid), so the head takes four boolean passes instead of nine
+  const pushrods = each(L, (z) => merge(...valveZ.map((dz) => xform(cylinder(0.0095, 0.3, 12), at(PUSHROD_X, H / 2, z + dz)))))
+  const injectors = each(L, (z) => xform(cylinder(0.0095, 0.17, 14), injectorBore(z)))
+  const ports = merge(
+    each(L, (z) => xform(pipe(INLET_PORT, 0.0165, 0, 20, 12), at(0, 0, z))),
+    each(L, (z) => xform(pipe(EXHAUST_PORT, 0.0145, 0, 20, 12), at(0, 0, z))),
+  )
+  // small cuts first, while the mesh is still simple; the big passage last
   return csg(body, [
-    { op: 'sub', geometry: headPassage(L, 0) },
-    { op: 'sub', geometry: xform(transfers(L, 0), at(0, -HEAD_Y, 0)) },
-    { op: 'sub', geometry: each(L, (z) => xform(pipe(INLET_PORT, 0.0165, 0, 20, 12), at(0, 0, z))) },
-    { op: 'sub', geometry: each(L, (z) => xform(pipe(EXHAUST_PORT, 0.0145, 0, 20, 12), at(0, 0, z))) },
-    { op: 'sub', geometry: each(L, (z) => merge(...valveZ.map((dz) => xform(cylinder(DIM.valveStemR + 0.0004, 0.2, 10), at(DIM.valveX, H / 2 + 0.03, z + dz))))) },
     { op: 'sub', geometry: each(L, (z) => merge(xform(seat(DIM.inletHeadR), at(DIM.valveX, 0, z + DIM.inletZ)), xform(seat(DIM.exhaustHeadR), at(DIM.valveX, 0, z + DIM.exhaustZ)))) },
-    { op: 'sub', geometry: each(L, (z) => merge(...valveZ.map((dz) => xform(cylinder(0.0095, 0.3, 12), at(PUSHROD_X, H / 2, z + dz))))) },
-    { op: 'sub', geometry: each(L, (z) => xform(cylinder(0.0095, 0.17, 14), injectorBore(z))) },
+    // transfer holes rise between the ports, never into them
+    { op: 'sub', geometry: merge(xform(transfers(L, 0), at(0, -HEAD_Y, 0)), ports) },
+    { op: 'sub', geometry: each(L, (z) => merge(...valveZ.map((dz) => xform(cylinder(DIM.valveStemR + 0.0004, 0.2, 10), at(DIM.valveX, H / 2 + 0.03, z + dz))))) },
+    // the water passage wraps round bosses that hold the pushrod and injector bores clear of it
+    { op: 'sub', geometry: merge(headPassage(L, 0), pushrods, injectors) },
   ])
 }
 
@@ -296,19 +305,17 @@ function rockerGear(L: EngineLayout) {
 
 /* ------------------------------ all ------------------------------ */
 
-/** Every part of the engine for one firing layout (default: the tractor's four, 1-3-4-2). */
-export function buildStatic(args: { firing: number[] } = { firing: FIRING_4 }) {
-  const L = engineLayout(args.firing)
-  const rod = conRod()
-  const inj = injector()
-  const cs = camshaft(L)
-  const rg = rockerGear(L)
-  return {
-    block: block(L),
-    coolant: coolant(L),
+/**
+ * The engine is built in five groups that the worker pool builds side by side (the head, block and
+ * coolant are the slow CSG; the rest are many small parts).
+ */
+const GROUPS = {
+  block: (L: EngineLayout) => ({ block: block(L) }),
+  head: (L: EngineLayout) => ({ head: head(L) }),
+  coolant: (L: EngineLayout) => ({ coolant: coolant(L) }),
+  castings: (L: EngineLayout) => ({
     liner: liner(),
     mains: mainBearings(L),
-    head: head(L),
     gasket: gasket(L),
     cover: rockerCover(L),
     sump: sump(L),
@@ -317,53 +324,90 @@ export function buildStatic(args: { firing: number[] } = { firing: FIRING_4 }) {
     exhaust: exhaustManifold(L),
     pump: injectionPump(L),
     hpPipes: hpPipes(L),
-    injector: inj,
+    injector: injector(),
     /** for a spark-ignition engine: a plug in each injector bore */
     plug: sparkPlug({ seat: 0.012 }),
-    crank: crankshaft(L),
-    flywheel: flywheel(),
-    ringGear: ringGear(),
-    timing: timingGears(),
-    pulley: pulley(),
-    rod,
-    piston: piston(),
-    rings: rings(),
-    pin: gudgeonPin(),
-    gas: gas(),
-    camShaft: cs.shaft,
-    camLobes: cs.lobes,
-    camJournals: cs.journals,
-    tappet: tappet(),
-    pushrod: pushrod(),
-    rocker: rocker(),
-    rockerShaft: rg.shaft,
-    pedestals: rg.pedestals,
-    inletValve: valve(DIM.inletHeadR),
-    exhaustValve: valve(DIM.exhaustHeadR),
-    spring: valveSpring(),
-    retainer: retainer(),
-  }
+  }),
+  moving: (L: EngineLayout) => {
+    const cs = camshaft(L)
+    const rg = rockerGear(L)
+    return {
+      crank: crankshaft(L),
+      flywheel: flywheel(),
+      ringGear: ringGear(),
+      timing: timingGears(),
+      pulley: pulley(),
+      rod: conRod(),
+      piston: piston(),
+      rings: rings(),
+      pin: gudgeonPin(),
+      gas: gas(),
+      camShaft: cs.shaft,
+      camLobes: cs.lobes,
+      camJournals: cs.journals,
+      tappet: tappet(),
+      pushrod: pushrod(),
+      rocker: rocker(),
+      rockerShaft: rg.shaft,
+      pedestals: rg.pedestals,
+      inletValve: valve(DIM.inletHeadR),
+      exhaustValve: valve(DIM.exhaustHeadR),
+      spring: valveSpring(),
+      retainer: retainer(),
+    }
+  },
 }
+type Group = keyof typeof GROUPS
+const GROUP_KEYS = Object.keys(GROUPS) as Group[]
 
-export type EngineGeometry = ReturnType<typeof buildStatic>
+export type EngineGeometry = ReturnType<(typeof GROUPS)['block']> &
+  ReturnType<(typeof GROUPS)['head']> &
+  ReturnType<(typeof GROUPS)['coolant']> &
+  ReturnType<(typeof GROUPS)['castings']> &
+  ReturnType<(typeof GROUPS)['moving']>
+
+/**
+ * Every part of the engine for one firing layout (default: the tractor's four, 1-3-4-2), or one
+ * group of them (the worker builds the groups separately).
+ */
+export function buildStatic(args: { firing: number[]; group?: Group } = { firing: FIRING_4 }): EngineGeometry {
+  const L = engineLayout(args.firing)
+  if (args.group) return GROUPS[args.group](L) as EngineGeometry
+  return Object.assign({}, ...GROUP_KEYS.map((g) => GROUPS[g](L))) as EngineGeometry
+}
 
 const ready = new Map<string, EngineGeometry>()
 const pending = new Map<string, Promise<EngineGeometry>>()
 const keyOf = (firing: number[]) => firing.join(',')
 
-/** Build one layout's geometry (in the worker) and keep it; safe to call often. */
-export function prepareEngine(firing: number[] = FIRING_4) {
+/**
+ * Build one layout's geometry (its groups in parallel, in the worker pool) and keep it; safe to call
+ * often. 'low' priority is a background pre-build that waits behind anything a scene needs.
+ */
+export function prepareEngine(firing: number[] = FIRING_4, priority: 'normal' | 'low' = 'normal') {
   const key = keyOf(firing)
   const hit = ready.get(key)
   if (hit) return Promise.resolve(hit)
   let p = pending.get(key)
-  if (!p) {
-    const args = { firing: [...firing] }
-    p = import('@/geometry/build')
-      .then(({ buildGeometry }) => buildGeometry('machines/engine', () => buildStatic(args), args))
-      .then((g) => (ready.set(key, g), g))
-    pending.set(key, p)
-  }
+  if (p && priority === 'low') return p
+  // a normal request re-issues the group builds, which promotes any still queued at low priority
+  p = import('@/geometry/build')
+    .then(({ buildGeometry }) =>
+      Promise.all(
+        GROUP_KEYS.map((group) => {
+          const args = { firing: [...firing], group }
+          return buildGeometry('machines/engine', () => buildStatic(args), args, priority)
+        }),
+      ),
+    )
+    .then((parts) => {
+      const g = Object.assign({}, ...parts) as EngineGeometry
+      ready.set(key, g)
+      // a timing mark, so load time can be measured in any build
+      performance.mark(`engine-ready:${key}`)
+      return g
+    })
+  pending.set(key, p)
   return p
 }
 

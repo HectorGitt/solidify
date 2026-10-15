@@ -470,10 +470,11 @@ export type StaticFuelGeometry = ReturnType<typeof buildStatic>
 
 let ready: StaticFuelGeometry | null = null
 
-export async function prepareFuelGeometry() {
+/** Build (in the worker) and keep; 'low' priority is a background pre-build. */
+export async function prepareFuelGeometry(priority: 'normal' | 'low' = 'normal') {
   if (ready) return ready
   const { buildGeometry } = await import('@/geometry/build')
-  ready = await buildGeometry('engine/diesel-fuel', buildStatic)
+  ready = await buildGeometry('engine/diesel-fuel', buildStatic, undefined, priority)
   return ready
 }
 

@@ -1,37 +1,97 @@
 import { unpack, type Packed } from './serialize'
 import { get, set } from 'idb-keyval'
 
-let worker: Worker | null = null
+/**
+ * Heavy (CSG) geometry is built off the main thread on a small pool of workers, so the parts of one
+ * model (or several models) can be built at the same time. Requests queue by priority: anything a
+ * scene is waiting for goes ahead of background pre-builds.
+ */
+
+type Priority = 'normal' | 'low'
+interface Task {
+  id: number
+  builder: string
+  args: unknown
+  priority: Priority
+  resolve: (p: Packed) => void
+  reject: (e: Error) => void
+}
+
+/** leave a core for the page; more than four workers buys little and costs memory */
+const POOL = typeof navigator !== 'undefined' ? Math.max(1, Math.min(4, (navigator.hardwareConcurrency || 2) - 1)) : 1
+const workers: { w: Worker; busy: Task | null }[] = []
+const queue: Task[] = []
 let nextId = 1
-const pending = new Map<number, { resolve: (v: unknown) => void; reject: (e: Error) => void }>()
 const cache = new Map<string, Promise<unknown>>()
+/** queued (not yet started) task per cache key, so a later normal request can promote it */
+const queuedByKey = new Map<string, Task>()
 
 /** Cached geometry is keyed to the build, so a new build never shows outdated models. */
 declare const __BUILD_ID__: string
 const KEY = (builder: string) => `csg_${typeof __BUILD_ID__ === 'string' ? __BUILD_ID__ : 'dev'}_${builder}`
 
-function getWorker() {
-  if (worker) return worker
-  worker = new Worker(new URL('./geometry.worker.ts', import.meta.url), { type: 'module' })
-  worker.onmessage = (e: MessageEvent<{ id: number; packed?: Packed; error?: string }>) => {
-    const p = pending.get(e.data.id)
-    if (!p) return
-    pending.delete(e.data.id)
-    if (e.data.error) p.reject(new Error(e.data.error))
-    else p.resolve(e.data.packed!)
+function spawn() {
+  const slot = { w: new Worker(new URL('./geometry.worker.ts', import.meta.url), { type: 'module' }), busy: null as Task | null }
+  slot.w.onmessage = (e: MessageEvent<{ id: number; packed?: Packed; error?: string }>) => {
+    const t = slot.busy
+    slot.busy = null
+    if (t && t.id === e.data.id) {
+      if (e.data.error) t.reject(new Error(e.data.error))
+      else t.resolve(e.data.packed!)
+    }
+    pump()
   }
-  return worker
+  workers.push(slot)
+  return slot
+}
+
+/** Hand queued tasks to idle workers, normal priority first. */
+function pump() {
+  while (queue.length) {
+    let slot = workers.find((s) => !s.busy)
+    if (!slot && workers.length < POOL) slot = spawn()
+    if (!slot) return
+    let i = queue.findIndex((t) => t.priority === 'normal')
+    if (i < 0) {
+      // background work never takes the last free worker, so a scene's own request starts at once
+      const lowBusy = workers.filter((w) => w.busy?.priority === 'low').length
+      if (POOL > 1 && lowBusy >= POOL - 1) return
+      i = 0
+    }
+    const [t] = queue.splice(i, 1)
+    for (const [k, q] of queuedByKey) if (q === t) queuedByKey.delete(k)
+    slot.busy = t
+    slot.w.postMessage({ id: t.id, builder: t.builder, args: t.args })
+  }
+}
+
+function run(key: string, builder: string, args: unknown, priority: Priority) {
+  return new Promise<Packed>((resolve, reject) => {
+    const t: Task = { id: nextId++, builder, args, priority, resolve, reject }
+    queue.push(t)
+    queuedByKey.set(key, t)
+    pump()
+  })
 }
 
 /**
- * Build a scene's static geometry in the worker (once per session). Falls back to building on
- * the main thread if workers are unavailable. `args` (JSON-safe) are passed to the builder, and each
- * distinct set of args is built and cached separately.
+ * Build a scene's static geometry in a worker (once per session). Falls back to building on the
+ * main thread if workers are unavailable. `args` (JSON-safe) are passed to the builder, and each
+ * distinct set of args is built and cached separately. `priority: 'low'` queues a background
+ * pre-build behind anything a scene asks for; asking again at normal priority promotes it.
  */
-export function buildGeometry<T>(builder: string, fallback: () => T, args?: unknown): Promise<T> {
+export function buildGeometry<T>(builder: string, fallback: () => T, args?: unknown, priority: Priority = 'normal'): Promise<T> {
   const key = args === undefined ? builder : `${builder}:${JSON.stringify(args)}`
   const hit = cache.get(key)
-  if (hit) return hit as Promise<T>
+  if (hit) {
+    const q = queuedByKey.get(key)
+    if (q && priority === 'normal' && q.priority === 'low') {
+      // promoted: it may start now on a worker that background work was leaving free
+      q.priority = 'normal'
+      pump()
+    }
+    return hit as Promise<T>
+  }
   let p: Promise<T>
   if (typeof Worker === 'undefined') {
     p = Promise.resolve(fallback())
@@ -47,11 +107,7 @@ export function buildGeometry<T>(builder: string, fallback: () => T, args?: unkn
         }
       }
 
-      return new Promise<Packed>((resolve, reject) => {
-        const id = nextId++
-        pending.set(id, { resolve: resolve as (v: unknown) => void, reject })
-        getWorker().postMessage({ id, builder, args })
-      })
+      return run(key, builder, args, priority)
         .then(async (packed) => {
           try {
             if (!import.meta.env.DEV) await set(KEY(key), packed)

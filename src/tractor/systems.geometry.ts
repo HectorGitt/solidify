@@ -84,11 +84,13 @@ export type SystemsGeometry = ReturnType<typeof buildStatic>
 let ready: SystemsGeometry | null = null
 let pending: Promise<SystemsGeometry> | null = null
 
-/** Build (in the worker) and cache; safe to call often. */
-export function prepareSystems() {
+/** Build (in the worker) and cache; safe to call often. 'low' priority is a background pre-build. */
+export function prepareSystems(priority: 'normal' | 'low' = 'normal') {
   if (ready) return Promise.resolve(ready)
+  // a normal request after a low one promotes the queued build
+  if (pending && priority === 'normal') void import('@/geometry/build').then(({ buildGeometry }) => buildGeometry('tractor/systems', buildStatic))
   return (pending ??= import('@/geometry/build')
-    .then(({ buildGeometry }) => buildGeometry('tractor/systems', buildStatic))
+    .then(({ buildGeometry }) => buildGeometry('tractor/systems', buildStatic, undefined, priority))
     .then((g) => (ready = g)))
 }
 
