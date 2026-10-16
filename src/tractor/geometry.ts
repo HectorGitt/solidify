@@ -353,8 +353,13 @@ export function buildTractorGeometry() {
       return t
     }),
   )
-  const topLinkBracket = box(0.3, 0.12, 0.14)
-  topLinkBracket.translate(-0.35, LINKAGE.topPivot.y, 0)
+  // top-link bracket: a clevis on the back of the lift cover, its two cheeks either side of the pin
+  const tp = LINKAGE.topPivot
+  const topLinkBracket = merge(
+    xform(box(0.02, 0.15, 0.16), mat4.t(-0.37, tp.y, 0)),
+    ...[1, -1].map((sz) => xform(box(0.36 - (tp.x - 0.04), 0.12, 0.022), mat4.t((tp.x - 0.04 - 0.36) / 2, tp.y, sz * 0.05))),
+    xform(zAxis(cylinder(0.016, 0.14, 16)), mat4.t(tp.x, tp.y, 0)),
+  )
   const lowerBrackets = merge(
     ...[1, -1].map((s) => {
       const b = box(0.08, 0.14, 0.05)
@@ -362,10 +367,11 @@ export function buildTractorGeometry() {
       return b
     }),
   )
-  const drawbar = box(0.48, 0.035, 0.1)
-  drawbar.translate(-0.43, TRACTOR.drawbar.y, 0)
-  const drawbarHanger = box(0.06, 0.12, 0.1)
-  drawbarHanger.translate(-0.23, TRACTOR.drawbar.y + 0.06, 0)
+  // from the hanger straps back to the pin
+  const drawbar = box(0.45, 0.035, 0.1)
+  drawbar.translate(-0.445, TRACTOR.drawbar.y, 0)
+  // drawbar hanger: a strap each side, clear of the PTO shaft that runs out between them
+  const drawbarHanger = merge(...[1, -1].map((sz) => xform(box(0.06, 0.12, 0.02), mat4.t(-0.23, TRACTOR.drawbar.y + 0.06, sz * 0.045))))
   const ptoShield = (() => {
     const s = new THREE.Shape()
     s.absarc(0, 0, 0.12, 0, PI, false)

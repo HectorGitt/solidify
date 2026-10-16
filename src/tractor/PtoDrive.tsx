@@ -27,7 +27,8 @@ const W = 0.025
 /** stub turns this many times slower than the layshaft (layshaft = engine ÷ 2) */
 export const PTO_FROM_LAY = (PTO_PAIRS[0][1] / PTO_PAIRS[0][0]) * (PTO_PAIRS[1][1] / PTO_PAIRS[1][0])
 const X_FRONT = 0.16
-const X_REAR = -0.17
+// clear of the centre housing's rear wall (inner face x −0.175)
+const X_REAR = -0.155
 
 const INFO: Record<string, PartInfo> = {
   drive: { summary: 'PTO drive shaft and engagement collar.', role: 'Taken off the rear of the gearbox layshaft. Sliding the collar with the PTO lever engages the drive; because the layshaft only turns while the clutch is engaged, this is a transmission PTO.' },
