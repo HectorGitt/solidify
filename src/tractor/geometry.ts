@@ -107,12 +107,17 @@ function fender(side: 1 | -1) {
   // inner side plate (towards the operator) — a flat half-disc ring segment
   const p = new THREE.Shape()
   p.absarc(0, 0, r0 + t, a0, a1, false)
-  p.lineTo(-(r0 + t) * 0.9, 0.08)
-  p.lineTo((r0 + t) * 0.9, 0.08)
+  p.lineTo(-(r0 + t) * 0.9, 0.06)
+  p.lineTo((r0 + t) * 0.9, 0.06)
   p.closePath()
+  const plateZ = -side * ((R.width + 0.1) / 2 + 0.0045)
   const plate = extrude(p, 0.008)
-  plate.translate(0, 0, -side * ((R.width + 0.1) / 2 + 0.0045))
-  return xform(merge(outer, plate), mat4.t(0, AXLE_Y, side * REAR_Z))
+  plate.translate(0, 0, plateZ)
+  // bolted to the axle housing: the plate's foot sits on it, with a stay each side of the axle
+  const tubeTop = 0.085
+  const stays = [-0.16, 0.16].map((x) => xform(box(0.05, 0.08, 0.05), mat4.t(x, tubeTop + 0.02, plateZ - side * 0.026)))
+  const foot = xform(box(0.42, 0.02, 0.05), mat4.t(0, tubeTop + 0.004, plateZ - side * 0.026))
+  return xform(merge(outer, plate, foot, ...stays), mat4.t(0, AXLE_Y, side * REAR_Z))
 }
 
 function ropsFrame() {
