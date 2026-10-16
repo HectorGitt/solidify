@@ -22,7 +22,8 @@ const V = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z)
 const RAD_X = 1.96
 /** water-pump / fan spindle height, and where things sit along it */
 const SPINDLE_Y = 1.06
-const PUMP_X = 1.37
+/** the volute's back face, just off the head's front face (x 1.3725) */
+const PUMP_X = 1.376
 const FAN_X = 1.8
 /** the crankshaft pulley's plane (front of the engine) */
 const BELT_X = ENGINE_X + CYL_Z[0] + 0.112

@@ -41,6 +41,7 @@ export type EnginePartKey =
   | 'gasket'
   | 'head'
   | 'rocker-cover'
+  | 'timing-cover'
   | 'inlet-manifold'
   | 'exhaust-manifold'
   | 'injectors'
@@ -87,6 +88,7 @@ function defaultInfo(L: EngineLayout): Record<EnginePartKey, PartInfo | undefine
     gasket: { summary: 'Head gasket.', role: 'Seals the joint between block and head round each cylinder (fire rings), the coolant passages and the pushrod holes.' },
     head: { ...ENGINE_INFO.head, summary: `Cylinder head: one casting over ${all}, with an inlet and an exhaust port for each.` },
     'rocker-cover': ENGINE_INFO.cover,
+    'timing-cover': { summary: 'Timing cover.', role: 'Encloses the crankshaft and camshaft timing gears on the front of the engine and keeps their oil in; the crankshaft nose comes out through it to the pulley.' },
     'inlet-manifold': { summary: 'Inlet manifold.', role: 'Carries clean air from the air cleaner to each cylinder’s inlet port.' },
     'exhaust-manifold': { summary: 'Exhaust manifold.', role: 'Collects the exhaust from each cylinder’s exhaust port and leads it to the exhaust pipe.' },
     injectors: ENGINE_INFO.injector,
@@ -124,6 +126,7 @@ const NAMES: Record<EnginePartKey, string> = {
   gasket: 'Head gasket',
   head: 'Cylinder head',
   'rocker-cover': 'Rocker cover',
+  'timing-cover': 'Timing cover',
   'inlet-manifold': 'Inlet manifold',
   'exhaust-manifold': 'Exhaust manifold',
   injectors: 'Fuel injectors',
@@ -360,6 +363,9 @@ function EngineBody({ g, firing, crankAngle, k = (s: EnginePartKey) => s, paint 
             <Part {...p('main-bearings')} material="bearing" role="static">
               <PartMesh geometry={g.mains} />
             </Part>
+          </Part>
+          <Part {...p('timing-cover')} material="castIron" role="housing" explode={[0, 0, 0.16]}>
+            <PartMesh geometry={g.timingCover} />
           </Part>
           <Part {...p('sump')} material="paintGrey" role="housing" explode={[0, -0.18, 0]}>
             <PartMesh geometry={g.sump} />

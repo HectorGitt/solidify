@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import { box, cam, csg, cylinder, extrude, lathe, mat4, merge, pipe, roundedRect, tube, xform, type CsgOp } from '@/geometry'
+import { box, cam, csg, cylinder, extrude, extrudeTwisted, lathe, mat4, merge, pipe, roundedRect, tube, xform, type CsgOp } from '@/geometry'
 import {
   BLOCK_X0,
   BLOCK_X1,
@@ -75,7 +75,7 @@ function block(L: EngineLayout) {
     { op: 'sub', geometry: xform(box(0.224, 0.06, L.ll - 0.03), at(0, SPLIT_Y - 0.01, 0)) },
     { op: 'sub', geometry: each(L, (z) => xform(box(0.058, 0.08, PITCH - 0.035), at(CAM_X, CAM_Y, z))) },
     // crank and cam tunnels
-    { op: 'sub', geometry: merge(xform(cylinder(0.014, L.ll + 0.1, 16), onZ(CAM_X, CAM_Y, 0)), xform(cylinder(0.031, L.ll + 0.1, 24), onZ(0, 0, 0))) },
+    { op: 'sub', geometry: merge(xform(cylinder(0.014, L.ll + 0.1, 16), onZ(CAM_X, CAM_Y, 0)), xform(cylinder(0.0337, L.ll + 0.1, 32), onZ(0, 0, 0))) },
     { op: 'sub', geometry: each(L, (z) => xform(tube(DIM.jacketOuter, DIM.linerOuter - 0.0005, 0.155, 32), at(0, CROWN_TDC - 0.0115 - 0.155 / 2, z))) },
     // pushrod holes, coolant transfer holes and the pump inlet are all well apart
     { op: 'sub', geometry: merge(pushrods, transfers(L, 0), blockInlet(L, 0)) },
@@ -147,7 +147,7 @@ function head(L: EngineLayout) {
   // cuts that never touch one another go in together (a mesh of separate closed pieces is still a
   // valid solid), so the head takes four boolean passes instead of nine
   const pushrods = each(L, (z) => merge(...valveZ.map((dz) => xform(cylinder(0.0095, 0.3, 12), at(PUSHROD_X, H / 2, z + dz)))))
-  const injectors = each(L, (z) => xform(cylinder(0.0095, 0.17, 14), injectorBore(z)))
+  const injectors = each(L, (z) => xform(cylinder(0.012, 0.17, 16), injectorBore(z)))
   const ports = merge(
     each(L, (z) => xform(pipe(INLET_PORT, 0.0165, 0, 20, 12), at(0, 0, z))),
     each(L, (z) => xform(pipe(EXHAUST_PORT, 0.0145, 0, 20, 12), at(0, 0, z))),
@@ -188,9 +188,56 @@ function gasket(L: EngineLayout) {
 function rockerCover(L: EngineLayout) {
   const top = DIM.headHeight
   const h = 0.085
-  const outer = xform(box(0.15, h, L.lu - 0.004), at(-0.04, top + h / 2, 0))
-  const inner = xform(box(0.14, h, L.lu - 0.014), at(-0.04, top + h / 2 - 0.005, 0))
+  // x −0.115 … 0.015: over the rockers and valve springs, clear of the injectors and the thermostat
+  const outer = xform(box(0.13, h, L.lu - 0.004), at(-0.05, top + h / 2, 0))
+  const inner = xform(box(0.12, h, L.lu - 0.014), at(-0.05, top + h / 2 - 0.005, 0))
   return csg(outer, [{ op: 'sub', geometry: inner }])
+}
+
+/**
+ * Timing cover over the crank and cam gears on the front of the block: shaped round both gears,
+ * its back fitted to the crankcase and barrel faces, a hole for the crank nose (the pulley is outside).
+ */
+function timingCover(L: EngineLayout) {
+  const m = DIM.timingModule
+  const rc = (DIM.crankTeeth * m) / 2 + m + 0.014
+  const rk = (DIM.camTeeth * m) / 2 + m + 0.014
+  // convex hull of the two gear circles, as a closed outline
+  const pts: THREE.Vector2[] = []
+  for (let i = 0; i < 48; i++) {
+    const a = (2 * PI * i) / 48
+    pts.push(new THREE.Vector2(rc * Math.cos(a), rc * Math.sin(a)), new THREE.Vector2(CAM_X + rk * Math.cos(a), CAM_Y + rk * Math.sin(a)))
+  }
+  pts.sort((p, q) => p.x - q.x || p.y - q.y)
+  const cross = (o: THREE.Vector2, a: THREE.Vector2, b: THREE.Vector2) => (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x)
+  const lower: THREE.Vector2[] = []
+  for (const p of pts) {
+    while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], p) <= 0) lower.pop()
+    lower.push(p)
+  }
+  const upper: THREE.Vector2[] = []
+  for (let i = pts.length - 1; i >= 0; i--) {
+    const p = pts[i]
+    while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], p) <= 0) upper.pop()
+    upper.push(p)
+  }
+  const hull = lower.slice(0, -1).concat(upper.slice(0, -1))
+  const shrink = (d: number) => hull.map((p) => {
+    // offset inwards towards the hull's centroid of the two centres (good enough for a convex outline)
+    const c = new THREE.Vector2(CAM_X / 2, CAM_Y / 2)
+    return p.clone().sub(c).multiplyScalar(1 - d / p.distanceTo(c)).add(c)
+  })
+  const z0 = L.front + 0.071
+  const z1 = L.front + 0.111
+  const slab = (outline: THREE.Vector2[], a: number, b: number) => xform(extrudeTwisted(outline, [], b - a), at(0, 0, (a + b) / 2))
+  const outer = slab(hull, z0, z1)
+  const inner = slab(shrink(0.006), z0 - 0.01, z1 - 0.005)
+  return csg(outer, [
+    { op: 'sub', geometry: inner },
+    // its back is fitted to the crankcase, which stands a little proud of the barrel
+    { op: 'sub', geometry: xform(box(2 * CASE_X, CASE_TOP - SPLIT_Y, L.ll), at(0, (CASE_TOP + SPLIT_Y) / 2, 0)) },
+    { op: 'sub', geometry: xform(cylinder(0.023, 0.1, 24), onZ(0, 0, z1)) },
+  ])
 }
 
 function sump(L: EngineLayout) {
@@ -318,6 +365,7 @@ const GROUPS = {
     mains: mainBearings(L),
     gasket: gasket(L),
     cover: rockerCover(L),
+    timingCover: timingCover(L),
     sump: sump(L),
     oil: oil(L),
     inlet: inletManifold(L),
