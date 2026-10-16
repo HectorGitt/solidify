@@ -386,9 +386,12 @@ export function buildTractorGeometry() {
   // ------------------------------------------------------------ operator station
   const platform = merge(
     ...[1, -1].map((s) => {
-      const p = box(0.7, 0.025, 0.24)
-      p.translate(0.25, 0.56, s * 0.42)
-      return p
+      // footplates ahead of the rear axle housings, inboard of the rear tyres
+      const p = box(0.6, 0.025, 0.2)
+      p.translate(0.46, 0.56, s * 0.4)
+      // carried on two brackets from the gearbox side
+      const brackets = [0.3, 0.62].map((x) => xform(box(0.04, 0.05, 0.1), mat4.t(x, 0.523, s * 0.28)))
+      return merge(p, ...brackets)
     }),
   )
   const fenders = merge(fender(1), fender(-1))
