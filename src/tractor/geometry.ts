@@ -395,8 +395,12 @@ export function buildTractorGeometry() {
     }),
   )
   const fenders = merge(fender(1), fender(-1))
-  const tank = roundedBox(0.3, 0.36, 0.5, 0.05)
-  tank.translate(0.6, 1.19, 0)
+  // saddle tank: a half each side of the steering box and column (z ±0.085…0.25), joined by a
+  // bridge over the column at the front, where the column is still low
+  const tank = merge(
+    ...[1, -1].map((sz) => shellBox(0.3, 0.36, 0.165, 0.04, 0.004, 0.6, 1.19, sz * 0.1675)),
+    shellBox(0.2, 0.07, 0.2, 0.02, 0.004, 0.65, 1.335, 0),
+  )
   const dash = roundedBox(0.12, 0.3, 0.46, 0.03)
   dash.translate(0.39, 1.14, 0)
   const seatPan = roundedBox(0.42, 0.08, 0.46, 0.035)

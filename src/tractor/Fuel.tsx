@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react'
 import * as THREE from 'three'
 import { useSimFrame } from '@/core/sim'
-import { box, mat4, pipe, xform } from '@/geometry'
+import { box, mat4, pipe, xform, merge } from '@/geometry'
 import { buildFuelGeometry, prepareFuelGeometry, type StaticFuelGeometry } from '@/modules/engine/diesel-fuel/geometry'
 import { DEFAULTS as FUEL_DEFAULTS, ELEMENT_X, LAYOUT, PINION_PHASE, RACK_X0, DIM, elementPose, feedPlungerY } from '@/modules/engine/diesel-fuel/model'
 import type { PartInfo } from '@/parts/registry'
@@ -67,7 +67,8 @@ function FuelSystem({ g, a, k }: { g: StaticFuelGeometry; a: MutableRefObject<Dr
       return line(0.0035, P(x, 0.186), P(x, 0.23), V(top.x, PUMP.y + 0.32, -0.19), V(top.x + 0.01, top.y + 0.03, top.z - 0.03), top)
     })
     return {
-      tankFuel: xform(box(0.27, 0.22, 0.46), mat4.t(0.6, 1.13, 0)),
+      // diesel in both halves of the saddle tank
+      tankFuel: merge(...[1, -1].map((sz) => xform(box(0.29, 0.22, 0.155), mat4.t(0.6, 1.125, sz * 0.1675)))),
       hp,
       lp: [
         // tank → sediment bowl → lift pump
