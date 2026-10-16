@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react'
 import * as THREE from 'three'
 import { useSimFrame } from '@/core/sim'
-import { box, mat4, pipe, xform } from '@/geometry'
+import { box, mat4, pipe, xform, merge } from '@/geometry'
 import type { PartInfo } from '@/parts/registry'
 import { Part, PartMesh } from '@/render/Part'
 import type { DriveAngles } from './DrivelineInternals'
@@ -20,9 +20,11 @@ import { FILTER_SPEC, RELIEF_SPEC, VALVE_SPEC, prepareSystems, systemsReady, typ
 
 const V = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z)
 /** placements, tractor frame */
-const PUMP = V(0.22, 0.48, -0.11)
-const FILTER = V(0.1, 0.66, 0.19)
-const RELIEF = V(-0.1, 0.68, 0.19)
+/** pump low in the centre housing under the PTO shaft (Ferguson-style); full-flow filter outside the gearbox side */
+const PUMP = V(0.08, 0.415, 0)
+const FILTER = V(0.36, 0.33, 0.27)
+/** relief valve in the lift cover beside the control valve */
+const RELIEF = V(0.22, 0.81, 0.12)
 const VALVE = V(-0.05, 0.985, 0.12)
 const VALVE_X0 = VALVE.x - VALVE_SPEC.length / 2
 const PORT = { P: V(VALVE_X0 + 0.1, VALVE.y + 0.04, VALVE.z), A: V(VALVE_X0 + 0.17, VALVE.y - 0.04, VALVE.z), T: V(VALVE_X0 + 0.06, VALVE.y - 0.04, VALVE.z) }
@@ -55,19 +57,20 @@ function HydraulicSystem({ g, a, k }: { g: SystemsGeometry; a: MutableRefObject<
     const reliefOut = V(RELIEF.x - RELIEF_SPEC.r, RELIEF.y + RELIEF_SPEC.seat + 0.09, RELIEF.z)
     const filterTop = V(FILTER.x, FILTER.y + FILTER_SPEC.height, FILTER.z)
     return [
-      // suction from the oil, delivery under the layshaft to the filter
-      line(V(PUMP.x, PUMP.y, PUMP.z - 0.055), V(PUMP.x, 0.42, -0.19), V(PUMP.x, 0.38, -0.2)),
-      line(V(PUMP.x, PUMP.y, PUMP.z + 0.055), V(0.2, 0.4, 0.0), V(0.15, 0.4, FILTER.z), V(FILTER.x, 0.55, FILTER.z), V(FILTER.x, FILTER.y, FILTER.z)),
-      // filter to the valve P port, with the tee to the relief valve
-      line(filterTop, V(0.05, 1.03, 0.16), V(PORT.P.x, 1.045, PORT.P.z), PORT.P),
-      line(filterTop.clone().add(V(0, 0.01, 0)), V(0.0, 0.8, RELIEF.z), reliefIn),
-      // relief and valve returns to tank, ram line
-      line(reliefOut, V(-0.16, 0.7, 0.2), V(-0.16, 0.45, 0.2)),
-      line(PORT.T, V(PORT.T.x - 0.02, 0.9, 0.18), V(-0.14, 0.7, 0.21), V(-0.14, 0.45, 0.21)),
+      // suction from the oil under the pump; delivery out through the housing side to the filter
+      line(V(PUMP.x, PUMP.y, PUMP.z - 0.055), V(PUMP.x, 0.37, -0.1), V(PUMP.x, 0.355, -0.15)),
+      line(V(PUMP.x, PUMP.y, PUMP.z + 0.055), V(0.12, 0.4, 0.2), V(0.3, 0.4, 0.3), V(FILTER.x, FILTER.y, FILTER.z)),
+      // filter up the gearbox side into the lift cover, to the valve P port, with the tee to the relief valve
+      line(filterTop, V(FILTER.x, 0.7, FILTER.z), V(0.3, 0.95, 0.2), V(PORT.P.x, 1.0, PORT.P.z), PORT.P),
+      line(filterTop.clone().add(V(0, 0.01, 0)), V(0.3, 0.8, 0.2), reliefIn),
+      // relief and valve returns down to the oil, ram line
+      line(reliefOut, V(0.18, 0.75, 0.1), V(0.15, 0.5, 0.1)),
+      line(PORT.T, V(PORT.T.x - 0.02, 0.9, 0.18), V(-0.165, 0.7, 0.21), V(-0.165, 0.45, 0.21)),
       line(PORT.A, V(0.1, 0.92, 0.1), V(0.22, 0.94, 0.04), V(RAM_PIVOT.x - 0.02, RAM_PIVOT.y + 0.06, 0)),
     ]
   }, [])
-  const oil = useMemo(() => xform(box(0.7, 0.19, 0.42), mat4.t(0.16, 0.465, 0)), [])
+  // the transmission oil, in the centre housing and the gearbox (the wall between has its own drillings)
+  const oil = useMemo(() => merge(xform(box(0.34, 0.2, 0.5), mat4.t(0, 0.45, 0)), xform(box(0.27, 0.19, 0.41), mat4.t(0.36, 0.455, 0))), [])
   const crankArm = useMemo(() => xform(box(0.03, CRANK + 0.03, 0.04), mat4.t(0, -CRANK / 2, 0)), [])
 
   const drive = useRef<THREE.Group>(null)

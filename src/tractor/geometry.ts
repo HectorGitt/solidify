@@ -340,10 +340,11 @@ export function buildTractorGeometry() {
   // ------------------------------------------------------------ transmission housings
   const clutchHousing = xAxis(lathe([[0.16, -0.15], [0.27, -0.15], [0.27, 0.15], [0.25, 0.15], [0.25, -0.13], [0.16, -0.13]], 48))
   clutchHousing.translate(0.67, DRIVE_Y, 0) // x 0.52–0.82
-  const gearbox = shellBox(0.32, 0.5, 0.46, 0.03, 0.022, 0.36, DRIVE_Y - 0.06) // x 0.20–0.52
-  const centre = shellBox(0.4, 0.56, 0.56, 0.04, 0.025, 0, DRIVE_Y) // x −0.20–0.20, y 0.36–0.92
-  const liftCover = roundedBox(0.36, 0.13, 0.5, 0.02)
-  liftCover.translate(-0.04, 0.985, 0)
+  const gearbox = shellBox(0.32, 0.46, 0.46, 0.03, 0.022, 0.36, 0.56) // x 0.20–0.52, y 0.33–0.79
+  const centre = shellBox(0.4, 0.47, 0.56, 0.04, 0.025, 0, 0.555) // x −0.20–0.20, y 0.32–0.79 (the hydraulic pump sits low inside)
+  // the lift cover is a hollow casting on the centre housing and gearbox: the control valve, the ram on
+  // its front pivot and the crank arm all work inside it, the rockshaft runs across it
+  const liftCover = shellBox(0.72, 0.25, 0.5, 0.02, 0.014, 0, 0.915) // x −0.36–0.36, y 0.79–1.04
   const trumpets = merge(
     ...[1, -1].map((s) => {
       const t = zAxis(lathe([[0.065, 0], [0.13, 0], [0.085, 0.08], [0.085, REAR_Z - R.width / 2 - 0.36], [0.11, REAR_Z - R.width / 2 - 0.3], [0.11, REAR_Z - R.width / 2 - 0.28], [0.065, REAR_Z - R.width / 2 - 0.28]], 40))
