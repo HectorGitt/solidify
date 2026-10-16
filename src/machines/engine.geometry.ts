@@ -322,8 +322,9 @@ function crankshaft(L: EngineLayout) {
 
 /** main-bearing shells in the bulkheads */
 function mainBearings(L: EngineLayout) {
-  const zs = [L.front + 0.062, ...L.mids, L.rear - 0.062]
-  return merge(...zs.map((z) => xform(tube(0.0335, 0.0302, 0.03, 40), onZ(0, 0, z))))
+  // the end shells are narrower, inside the end bulkheads and clear of the sump's end walls
+  const ends = [L.front + 0.0635, L.rear - 0.0635].map((z) => xform(tube(0.0335, 0.0302, 0.02, 40), onZ(0, 0, z)))
+  return merge(...ends, ...L.mids.map((z) => xform(tube(0.0335, 0.0302, 0.03, 40), onZ(0, 0, z))))
 }
 
 /** lobes for every cylinder, each pre-turned by half its firing angle (the shaft turns at half speed) */
@@ -346,7 +347,8 @@ function rockerGear(L: EngineLayout) {
   const shaft = xform(cylinder(0.0058, L.lu - 0.03, 24), onZ(DIM.rockerX, DIM.rockerY, 0))
   const pz = [L.front + PITCH / 2 - 0.01, ...L.mids, L.rear - PITCH / 2 + 0.01]
   const ped = rockerPedestal()
-  const pedestals = merge(...pz.map((z) => xform(ped, at(DIM.rockerX, (DIM.headHeight + DIM.rockerY) / 2 - 0.004, z))))
+  // standing on the head's top face, the shaft through their upper ends
+  const pedestals = merge(...pz.map((z) => xform(ped, at(DIM.rockerX, (DIM.headHeight + DIM.rockerY) / 2 + 0.0002, z))))
   return { shaft, pedestals }
 }
 
