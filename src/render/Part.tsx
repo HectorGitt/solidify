@@ -247,6 +247,7 @@ export function PartMesh({ geometry, material, customMaterial, ...rest }: PartMe
       castShadow={variant !== 'xray'}
       receiveShadow
       raycast={raycast ?? THREE.Mesh.prototype.raycast}
+      userData={{ partId: id }}
       onClick={onClick}
       onPointerOver={onOver}
       onPointerOut={onOut}
