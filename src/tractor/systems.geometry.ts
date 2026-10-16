@@ -34,7 +34,8 @@ export const ALT_PULLEY_R = 0.025
 export const STARTER = { module: 0.0029, pinionTeeth: 9 }
 
 /** steering column length from the box (screw centre) to the wheel */
-export const COLUMN_LEN = 0.76
+/** (the box-to-wheel distance is 0.762; the shaft runs on up into the wheel hub) */
+export const COLUMN_LEN = 0.78
 
 export function buildStatic() {
   return {

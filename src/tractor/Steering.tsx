@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react'
 import * as THREE from 'three'
 import { useSimFrame } from '@/core/sim'
-import { box, cylinder, mat4, merge, xform } from '@/geometry'
+import { box, cylinder, mat4, merge, xform, tube } from '@/geometry'
 import { BALL, SCREW_PHASE, ballBoxKinematics, ballCircuit, steeringWheel } from '@/parts/lib/steeringBox'
 import type { PartInfo } from '@/parts/registry'
 import { getMaterial } from '@/render/materials'
@@ -9,7 +9,7 @@ import { Part, PartMesh } from '@/render/Part'
 import type { DriveAngles } from './DrivelineInternals'
 import { TRACTOR } from './dims'
 import { FRONT_Y, KINGPIN_Z } from './geometry'
-import { prepareSystems, systemsReady, type SystemsGeometry } from './systems.geometry'
+import { COLUMN_LEN, prepareSystems, systemsReady, type SystemsGeometry } from './systems.geometry'
 
 /**
  * The steering system, in place: steering wheel and column, recirculating-ball box on top of the
@@ -60,6 +60,7 @@ function solve(f: (x: number) => number, lo: number, hi: number) {
 
 const INFO: Record<string, PartInfo> = {
   wheel: { summary: 'Steering wheel and column.', role: 'Turned by the driver; the column ends in the ball-screw thread inside the steering box.' },
+  column: { summary: 'Steering column tube.', role: 'The fixed outer tube bolted to the steering box: it carries the top bearing of the column shaft and keeps it straight.' },
   box: { summary: 'Recirculating-ball steering box.', role: 'Turns about four turns of the wheel, lock to lock, into a ±30° swing of the drop arm, through a nut that runs on a stream of steel balls.' },
   nut: { summary: 'Ball nut, balls and transfer tube.', role: 'The nut moves along the thread as the wheel turns; the balls roll in the grooves and return through the tube.' },
   rocker: { summary: 'Rocker arm and shaft.', role: 'The peg on the nut swings the rocker; its shaft carries the drop arm outside the box.' },
@@ -86,9 +87,13 @@ function SteeringSystem({ g, a, k }: { g: SystemsGeometry; a: MutableRefObject<D
     const sw = steeringWheel({ R: 0.2, rimR: 0.014, spokeR: 0.008, hubR: 0.03, hubL: 0.05 })
     const wheel = merge(sw.rim, sw.hub, sw.spokes).rotateZ(PI / 2)
     const arm = xform(box(ARM_LEN + 0.03, 0.022, 0.03), mat4.t(-ARM_LEN / 2, 0.05, 0))
+    // the fixed column tube round the shaft, from the top of the box to just under the wheel (box frame: +X up the column)
+    const col0 = 0.095
+    const col1 = COLUMN_LEN - 0.07
+    const columnTube = merge(xform(tube(0.022, 0.0125, col1 - col0, 24), mat4.c(mat4.t((col0 + col1) / 2, 0, 0), mat4.rz(PI / 2))), xform(tube(0.03, 0.0125, 0.02, 24), mat4.c(mat4.t(col0 + 0.01, 0, 0), mat4.rz(PI / 2))))
     // rocker shaft carried out of the box to the drop arm
     const shaftExt = xform(cylinder(0.0125, Math.abs(DROP_Z) - 0.05, 20), mat4.c(mat4.t(ROCKER.x, ROCKER.y, (DROP_Z - 0.05) / 2), mat4.rx(PI / 2)))
-    return { rod: rod(0.012), trackRod: rod(0.014), wheel, arm, shaftExt }
+    return { rod: rod(0.012), trackRod: rod(0.014), wheel, arm, columnTube, shaftExt }
   }, [])
   const circuit = useMemo(() => ballCircuit(), [])
 
@@ -160,6 +165,9 @@ function SteeringSystem({ g, a, k }: { g: SystemsGeometry; a: MutableRefObject<D
         <group rotation={[PI, 0, 0]}>
           <Part id={k('steer-box')} name="Steering box" role="housing" material="castIron" info={INFO.box} explode={[0, -0.12, 0]}>
             <PartMesh geometry={s.housing} />
+            <Part id={k('steer-column')} name="Steering column tube" role="static" material="paintBlack" info={INFO.column}>
+              <PartMesh geometry={local.columnTube} />
+            </Part>
           </Part>
           <Part id={k('steer-screw')} name="Ball screw & column shaft" role="moving" material="steel" info={INFO.wheel}>
             <group ref={screw}>
