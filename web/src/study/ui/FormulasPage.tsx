@@ -1,6 +1,5 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { formatCitation } from '@/content/citations'
 import { ERRATA } from '@/content/errata'
 import { findModule } from '@/modules/catalog'
 import { useAcademic } from '@/ui/audience'
@@ -42,7 +41,6 @@ function FormulaRow({ f }: { f: Formula }) {
       </div>
       {f.note ? <p className="text-[11.5px] text-mute">{f.note}</p> : null}
       {academic && err ? <p className="mt-1 text-[11.5px] leading-snug text-warn/90">{err.correct}</p> : null}
-      {academic ? <p className="mt-1 text-[10.5px] text-dim">{formatCitation(f.cite)}</p> : null}
     </li>
   )
 }
@@ -79,7 +77,7 @@ export function FormulasPage() {
           aria-label="Search formulas"
           className="w-full rounded-lg border border-line-2 bg-bg px-3 py-2 text-[13.5px] text-ink outline-none placeholder:text-dim focus:border-accent"
         />
-        <Pills label="Course" value={course} onChange={setCourse} options={[{ value: 'all' as const, label: 'All courses' }, ...COURSES.map((c) => ({ value: c.id, label: <CourseLabel course={c.id} /> }))]} />
+        <Pills label="Subject" value={course} onChange={setCourse} options={[{ value: 'all' as const, label: 'All subjects' }, ...COURSES.map((c) => ({ value: c.id, label: <CourseLabel course={c.id} /> }))]} />
         <p className="text-[11.5px] text-dim">{groups.count} shown</p>
       </div>
       {groups.out.map((g) => (

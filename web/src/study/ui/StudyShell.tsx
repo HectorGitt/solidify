@@ -34,10 +34,9 @@ export function StudyLinks({ compact = false, always = false, className = '' }: 
   )
 }
 
-/** Course label: the code for students, the course title for professionals. */
+/** Subject label. The platform serves many schools, so internal course codes are never shown. */
 export function CourseLabel({ course }: { course: string }) {
-  const academic = useAcademic()
-  return <>{academic ? course : courseTitle(course)}</>
+  return <>{courseTitle(course)}</>
 }
 
 /** Page frame for the study pages: header with logo, study links and the audience switch. */
