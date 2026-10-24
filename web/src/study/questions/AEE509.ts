@@ -16,367 +16,538 @@ import { fuelRateForPower, powerFromAir, specificAirConsumption } from '@/physic
 import { AIR, airStandardCycle, alphaFromPmax, deltaFromCutoffFraction, dualFromPmaxEqualHeat } from '@/physics/thermo'
 import { n } from '@/ui/Working'
 import type { Question } from '../types'
+import { num, parametric, tnum, type Vals } from '../variants'
 
-/** Load one of the performance scene's own exam presets. */
-const perf = (id: string) => {
+/**
+ * One of the performance scene's own exam presets, with the question's given numbers laid over it.
+ * The preset stays selected only while every given number matches it; `derived` values (computed
+ * from the givens, e.g. a bore) are applied without affecting that check.
+ */
+const perf = (id: string, given: Record<string, number> = {}, derived: Record<string, number> = {}): Record<string, unknown> => {
   const p = PERF.find((x) => x.id === id)
-  return p ? { ...p.params, preset: id } : undefined
+  if (!p) return {}
+  const params = p.params as Record<string, unknown>
+  const same = Object.entries(given).every(([k, x]) => typeof params[k] === 'number' && Math.abs((params[k] as number) - x) <= 1e-9 * Math.max(1, Math.abs(x)))
+  return { ...p.params, ...given, ...(same ? {} : derived), preset: same ? id : null }
 }
 
 const base = { cylinders: 1, cycle: 4 as const, rpm: 2000, hv: 44e6, pAmb: 100e3, TAmb: 300, output: { kind: 'bp' as const, value: 60e3 } }
 
+/** "A" or "An" before a number ("an 8-cylinder", "an 11-cylinder"). */
+const an = (x: number) => (/^(8|11|18)/.test(num(x)) ? 'An' : 'A')
+
+/** Mean piston speed 2LN/60, m/s (L in mm). */
+const pistonSpeed = (strokeMm: number, rpm: number) => (2 * (strokeMm / 1000) * rpm) / 60
+
+/** Bore = stroke design (worked example 6): swept volume (m³) and bore (m). */
+const squareDesign = (v: Vals) => {
+  const Vd = displacementForTorque(v.T, v.b1 * 1e3, 4)
+  return { Vd, D: squareBore(Vd / v.z) }
+}
+
+/** Otto cycle of worked example 9. */
+const ottoEx9 = (v: Vals) => airStandardCycle({ kind: 'otto', r: v.r, P1: v.P1, T1: v.T1, alpha: alphaFromPmax(v.Pmax, v.r, v.P1, AIR), delta: 1 })
+
 export const AEE509: Question[] = [
-  {
+  parametric({
     id: '509-ex1-fuel',
     course: 'AEE509',
     topic: 'Fuel & air consumption',
     moduleId: 'engine',
     sceneId: 'performance',
-    title: 'Fuel and air for a 2500 kW engine',
-    statement:
-      'An engine develops 2500 kW with a thermal efficiency of 30 %. The fuel has a heating value of 40 000 kJ/kg and the chemically correct air–fuel ratio is 15 : 1. Find the fuel rate (kg/min), the air rate (kg/min), the specific fuel consumption and the specific air consumption (kg/kWh).',
+    title: 'Fuel and air for a given power',
+    inputs: [
+      { key: 'P', value: 2500, min: 50, max: 3000, step: 10 },
+      { key: 'eta', value: 30, min: 20, max: 40, step: 1 },
+      { key: 'HV', value: 40000, min: 40000, max: 46000, step: 500 },
+      { key: 'af', value: 15, min: 14, max: 16, step: 0.5 },
+    ],
+    statement: (v) =>
+      `An engine develops ${num(v.P)} kW with a thermal efficiency of ${num(v.eta)} %. The fuel has a heating value of ${num(v.HV)} kJ/kg and the chemically correct air–fuel ratio is ${num(v.af)} : 1. Find the fuel rate (kg/min), the air rate (kg/min), the specific fuel consumption and the specific air consumption (kg/kWh).`,
     answers: [
       { key: 'mf', label: '\\dot m_f', unit: 'kg/min', expected: 12.5 },
       { key: 'ma', label: '\\dot m_a', unit: 'kg/min', expected: 187.5 },
       { key: 'sfc', label: 'sfc', unit: 'kg/kWh', expected: 0.3 },
       { key: 'sac', label: 'sac', unit: 'kg/kWh', expected: 4.5 },
     ],
-    solve: () => {
-      const mf = fuelRateForPower(2500e3, 40e6, 0.3) * 60
-      const s = sfc(mf * 60, 2500)
-      return { mf, ma: mf * 15, sfc: s, sac: specificAirConsumption(s, 15) }
+    solve: (v) => {
+      const mf = fuelRateForPower(v.P * 1e3, v.HV * 1e3, v.eta / 100) * 60
+      const s = sfc(mf * 60, v.P)
+      return { mf, ma: mf * v.af, sfc: s, sac: specificAirConsumption(s, v.af) }
     },
-    working: (r) => [
-      { label: 'Fuel rate', tex: '\\dot m_f = \\dfrac{BP}{\\eta_{th}\\,HV}', sub: '\\dfrac{2500}{0.30 \\times 40\\,000}\\times 60', result: `= ${n(r.mf)}\\ \\text{kg/min}`, cite: SRC.misc509('p5, Ex 1') },
-      { label: 'Air rate', tex: '\\dot m_a = (A/F)\\,\\dot m_f', sub: `15 \\times ${n(r.mf)}`, result: `= ${n(r.ma)}\\ \\text{kg/min}` },
-      { label: 'Specific consumptions', tex: 'sfc = \\dfrac{\\dot m_f}{BP},\\quad sac = (A/F)\\,sfc', sub: `\\dfrac{${n(r.mf * 60)}}{2500},\\ 15 \\times ${n(r.sfc)}`, result: `= ${n(r.sfc)},\\ ${n(r.sac)}\\ \\text{kg/kWh}` },
+    working: (v, r) => [
+      { label: 'Fuel rate', tex: '\\dot m_f = \\dfrac{BP}{\\eta_{th}\\,HV}', sub: `\\dfrac{${tnum(v.P)}}{${tnum(v.eta / 100)} \\times ${tnum(v.HV)}}\\times 60`, result: `= ${n(r.mf)}\\ \\text{kg/min}`, cite: SRC.misc509('p5, Ex 1') },
+      { label: 'Air rate', tex: '\\dot m_a = (A/F)\\,\\dot m_f', sub: `${tnum(v.af)} \\times ${n(r.mf)}`, result: `= ${n(r.ma)}\\ \\text{kg/min}` },
+      { label: 'Specific consumptions', tex: 'sfc = \\dfrac{\\dot m_f}{BP},\\quad sac = (A/F)\\,sfc', sub: `\\dfrac{${n(r.mf * 60)}}{${tnum(v.P)}},\\ ${tnum(v.af)} \\times ${n(r.sfc)}`, result: `= ${n(r.sfc)},\\ ${n(r.sac)}\\ \\text{kg/kWh}` },
     ],
     cite: SRC.misc509('p5, Example 1'),
-    params: perf('ex1'),
-  },
-  {
+    params: (v) => perf('ex1', { outVal: v.P, fuelVal: v.eta / 100, af: v.af, hv: v.HV / 1000 }),
+  }),
+  parametric({
     id: '509-ex2-mep',
     course: 'AEE509',
     topic: 'Mean effective pressure',
     moduleId: 'engine',
     sceneId: 'performance',
-    title: 'bmep and imep of the 2500 kW engine',
-    statement: 'The same four-stroke engine (2500 kW at 2000 rpm) has a stroke volume of 0.07 m³ and a mechanical efficiency of 80 %. Find the brake and indicated mean effective pressures.',
+    title: 'bmep and imep from the brake power',
+    inputs: [
+      { key: 'P', value: 2500, min: 500, max: 3000, step: 50 },
+      { key: 'N', value: 2000, min: 1000, max: 2500, step: 50 },
+      { key: 'Vs', value: 0.07, min: 0.02, max: 0.1, step: 0.005 },
+      { key: 'etaM', value: 80, min: 70, max: 90, step: 1 },
+    ],
+    statement: (v) =>
+      `A four-stroke engine develops ${num(v.P)} kW at ${num(v.N)} rpm. Its stroke volume is ${num(v.Vs)} m³ and its mechanical efficiency is ${num(v.etaM)} %. Find the brake and indicated mean effective pressures.`,
     answers: [
       { key: 'bmep', label: 'bmep', unit: 'kPa', expected: 2142.9 },
       { key: 'imep', label: 'imep', unit: 'kPa', expected: 2678.6 },
     ],
-    solve: () => {
-      const b = bmep(2500e3, 0.35, 0.2, 2000, 1, 4)
-      return { bmep: b / 1000, imep: imepFromBmep(b, 0.8) / 1000 }
+    solve: (v) => {
+      const b = bmep(v.P * 1e3, v.Vs, 1, v.N, 1, 4)
+      return { bmep: b / 1000, imep: imepFromBmep(b, v.etaM / 100) / 1000 }
     },
-    working: (r) => [
-      { label: 'bmep (four-stroke: N/2 cycles per minute)', tex: 'bmep = \\dfrac{60\\,BP}{L A\\,(N/2)}', sub: '\\dfrac{60 \\times 2500\\times10^3}{0.07 \\times 1000}', result: `= ${n(r.bmep)}\\ \\text{kPa}`, cite: SRC.misc509('Ex 2') },
-      { label: 'imep', tex: 'imep = \\dfrac{bmep}{\\eta_m}', sub: `\\dfrac{${n(r.bmep)}}{0.8}`, result: `= ${n(r.imep)}\\ \\text{kPa}` },
+    // keep the bmep within what real engines reach (the past paper's 2143 kPa is already high)
+    valid: (_v, r) => r.bmep >= 400 && r.bmep <= 2500,
+    working: (v, r) => [
+      { label: 'bmep (four-stroke: N/2 cycles per minute)', tex: 'bmep = \\dfrac{60\\,BP}{L A\\,(N/2)}', sub: `\\dfrac{60 \\times ${tnum(v.P)}\\times10^3}{${tnum(v.Vs)} \\times ${tnum(v.N / 2)}}`, result: `= ${n(r.bmep)}\\ \\text{kPa}`, cite: SRC.misc509('Ex 2') },
+      { label: 'imep', tex: 'imep = \\dfrac{bmep}{\\eta_m}', sub: `\\dfrac{${n(r.bmep)}}{${tnum(v.etaM / 100)}}`, result: `= ${n(r.imep)}\\ \\text{kPa}` },
     ],
     cite: SRC.misc509('Example 2'),
-    params: perf('ex1'),
-  },
-  {
+    // the scene draws one equivalent cylinder of area 0.2 m², so the stroke carries the volume
+    params: (v) => perf('ex1', { outVal: v.P, rpm: v.N, lossVal: v.etaM / 100 }, { stroke: (v.Vs / 0.2) * 1000 }),
+  }),
+  parametric({
     id: '509-ex3-air',
     course: 'AEE509',
     topic: 'Fuel & air consumption',
     moduleId: 'engine',
     sceneId: 'performance',
     title: 'Brake power from the air flow',
-    statement:
-      'An engine of thermal efficiency 25 % draws 195 kg of air per minute. The fuel–air ratio is 0.9 of the stoichiometric value (A/F = 15) and the heating value is 40 MJ/kg. Find the actual A/F ratio, the fuel rate and the brake power.',
+    inputs: [
+      { key: 'eta', value: 25, min: 20, max: 40, step: 1 },
+      { key: 'ma', value: 195, min: 5, max: 250, step: 5 },
+      { key: 'phi', value: 0.9, min: 0.8, max: 1.1, step: 0.05 },
+      { key: 'afs', value: 15, min: 14, max: 15.5, step: 0.5 },
+      { key: 'HV', value: 40, min: 40, max: 46, step: 1 },
+    ],
+    statement: (v) =>
+      `An engine of thermal efficiency ${num(v.eta)} % draws ${num(v.ma)} kg of air per minute. The fuel–air ratio is ${num(v.phi)} of the stoichiometric value (A/F = ${num(v.afs)}) and the heating value is ${num(v.HV)} MJ/kg. Find the actual A/F ratio, the fuel rate and the brake power.`,
     answers: [
       { key: 'af', label: 'A/F', unit: '', expected: 16.67 },
       { key: 'mf', label: '\\dot m_f', unit: 'kg/min', expected: 11.7 },
       { key: 'bp', label: 'BP', unit: 'kW', expected: 1950 },
     ],
-    solve: () => {
-      const fa = 0.9 / 15
-      return { af: 1 / fa, mf: 195 * fa, bp: powerFromAir(0.25, 40e6, 195 / 60, fa) / 1000 }
+    solve: (v) => {
+      const fa = v.phi / v.afs
+      return { af: 1 / fa, mf: v.ma * fa, bp: powerFromAir(v.eta / 100, v.HV * 1e6, v.ma / 60, fa) / 1000 }
     },
-    working: (r) => [
-      { label: 'Fuel–air ratio', tex: 'F/A = 0.9 \\times \\tfrac{1}{15}', result: `= ${n(1 / r.af)}\\ \\Rightarrow\\ A/F = ${n(r.af)}` },
-      { label: 'Fuel rate', tex: '\\dot m_f = \\dot m_a\\,(F/A)', sub: `195 \\times ${n(1 / r.af)}`, result: `= ${n(r.mf)}\\ \\text{kg/min}` },
-      { label: 'Brake power', tex: 'BP = \\eta\\,\\dot m_f\\,HV', sub: `0.25 \\times \\tfrac{${n(r.mf)}}{60} \\times 40\\,000`, result: `= ${n(r.bp)}\\ \\text{kW}`, cite: SRC.misc509('p5, Ex 3') },
+    working: (v, r) => [
+      { label: 'Fuel–air ratio', tex: `F/A = ${tnum(v.phi)} \\times \\tfrac{1}{${tnum(v.afs)}}`, result: `= ${n(1 / r.af)}\\ \\Rightarrow\\ A/F = ${n(r.af)}` },
+      { label: 'Fuel rate', tex: '\\dot m_f = \\dot m_a\\,(F/A)', sub: `${tnum(v.ma)} \\times ${n(1 / r.af)}`, result: `= ${n(r.mf)}\\ \\text{kg/min}` },
+      { label: 'Brake power', tex: 'BP = \\eta\\,\\dot m_f\\,HV', sub: `${tnum(v.eta / 100)} \\times \\tfrac{${n(r.mf)}}{60} \\times ${tnum(v.HV * 1000)}`, result: `= ${n(r.bp)}\\ \\text{kW}`, cite: SRC.misc509('p5, Ex 3') },
     ],
     cite: SRC.misc509('p5, Example 3'),
-  },
-  {
+  }),
+  parametric({
     id: '509-ex4-volumetric',
     course: 'AEE509',
     topic: 'Engine performance',
     moduleId: 'engine',
     sceneId: 'performance',
-    title: '8-cylinder SI engine from its volumetric efficiency',
-    statement:
-      'An 8-cylinder four-stroke SI engine, bore 100 mm, stroke 120 mm, runs at 3000 rpm with volumetric efficiency 0.85 (inlet 100 kPa, 300 K). A/F = 15, brake thermal efficiency 30 %, LHV 45 MJ/kg. Find the brake power and bmep.',
+    title: 'SI engine power from its volumetric efficiency',
+    inputs: [
+      { key: 'z', value: 8, min: 2, max: 8, step: 1 },
+      { key: 'D', value: 100, min: 80, max: 130, step: 5 },
+      { key: 'L', value: 120, min: 90, max: 150, step: 5 },
+      { key: 'N', value: 3000, min: 1500, max: 3600, step: 100 },
+      { key: 'etaV', value: 0.85, min: 0.75, max: 0.95, step: 0.01 },
+      { key: 'p', value: 100, min: 90, max: 105, step: 1 },
+      { key: 'T', value: 300, min: 285, max: 320, step: 5 },
+      { key: 'af', value: 15, min: 13, max: 17, step: 0.5 },
+      { key: 'eta', value: 30, min: 25, max: 38, step: 1 },
+      { key: 'hv', value: 45, min: 42, max: 46, step: 1 },
+    ],
+    statement: (v) =>
+      `${an(v.z)} ${num(v.z)}-cylinder four-stroke SI engine, bore ${num(v.D)} mm, stroke ${num(v.L)} mm, runs at ${num(v.N)} rpm with volumetric efficiency ${num(v.etaV)} (inlet ${num(v.p)} kPa, ${num(v.T)} K). A/F = ${num(v.af)}, brake thermal efficiency ${num(v.eta)} %, LHV ${num(v.hv)} MJ/kg. Find the brake power and bmep.`,
     answers: [
       { key: 'bp', label: 'BP', unit: 'kW', expected: 167.3 },
       { key: 'bmep', label: 'bmep', unit: 'kPa', expected: 887.5 },
     ],
-    solve: () => {
-      const r = enginePerformance({ ...base, cylinders: 8, bore: 0.1, stroke: 0.12, rpm: 3000, hv: 45e6, clearance: { kind: 'cr', value: 8 }, output: { kind: 'fuel', etaBth: 0.3 }, air: { kind: 'etaV', value: 0.85 }, fuel: { kind: 'fromAir' }, airFuel: 15 })
+    solve: (v) => {
+      const r = enginePerformance({ ...base, cylinders: v.z, bore: v.D / 1000, stroke: v.L / 1000, rpm: v.N, hv: v.hv * 1e6, pAmb: v.p * 1e3, TAmb: v.T, clearance: { kind: 'cr', value: 8 }, output: { kind: 'fuel', etaBth: v.eta / 100 }, air: { kind: 'etaV', value: v.etaV }, fuel: { kind: 'fromAir' }, airFuel: v.af })
       return { bp: r.bp! / 1000, bmep: r.bmep! / 1000 }
     },
-    working: (r) => [
-      { label: 'Swept volume rate', tex: '\\dot V_s = \\tfrac{\\pi}{4}D^2 L \\cdot z \\cdot \\tfrac{N}{2}', sub: '\\tfrac{\\pi}{4}(0.1)^2(0.12)\\times 8 \\times 1500', result: '= 11.31\\ \\text{m}^3/\\text{min}', cite: SRC.misc509('Ex 4') },
-      { label: 'Air and fuel', tex: '\\dot m_a = \\eta_v\\,\\rho\\,\\dot V_s,\\quad \\rho = \\dfrac{p}{RT}', sub: '0.85 \\times \\dfrac{100}{0.287\\times300} \\times 11.31', result: '= 11.15\\ \\text{kg/min},\\ \\dot m_f = \\dot m_a/15' },
-      { label: 'Brake power and bmep', tex: 'BP = \\eta_{bth}\\,\\dot m_f\\,HV,\\quad bmep = \\dfrac{60\\,BP}{L A z (N/2)}', result: `BP = ${n(r.bp)}\\ \\text{kW},\\ bmep = ${n(r.bmep)}\\ \\text{kPa}` },
-    ],
+    // mean piston speed of a real SI engine (≤ 15 m/s) and a sensible stroke/bore ratio
+    valid: (v) => pistonSpeed(v.L, v.N) <= 15 && v.L / v.D >= 0.8 && v.L / v.D <= 1.4,
+    working: (v, r) => {
+      const swept = (Math.PI / 4) * (v.D / 1000) ** 2 * (v.L / 1000) * v.z * (v.N / 2)
+      const ma = v.etaV * (v.p / (0.287 * v.T)) * swept
+      return [
+        { label: 'Swept volume rate', tex: '\\dot V_s = \\tfrac{\\pi}{4}D^2 L \\cdot z \\cdot \\tfrac{N}{2}', sub: `\\tfrac{\\pi}{4}(${tnum(v.D / 1000)})^2(${tnum(v.L / 1000)})\\times ${tnum(v.z)} \\times ${tnum(v.N / 2)}`, result: `= ${n(swept)}\\ \\text{m}^3/\\text{min}`, cite: SRC.misc509('Ex 4') },
+        { label: 'Air and fuel', tex: '\\dot m_a = \\eta_v\\,\\rho\\,\\dot V_s,\\quad \\rho = \\dfrac{p}{RT}', sub: `${tnum(v.etaV)} \\times \\dfrac{${tnum(v.p)}}{0.287\\times${tnum(v.T)}} \\times ${n(swept)}`, result: `= ${n(ma)}\\ \\text{kg/min},\\ \\dot m_f = \\dot m_a/${tnum(v.af)}` },
+        { label: 'Brake power and bmep', tex: 'BP = \\eta_{bth}\\,\\dot m_f\\,HV,\\quad bmep = \\dfrac{60\\,BP}{L A z (N/2)}', result: `BP = ${n(r.bp)}\\ \\text{kW},\\ bmep = ${n(r.bmep)}\\ \\text{kPa}` },
+      ]
+    },
     cite: SRC.misc509('Example 4'),
-    params: perf('ex4'),
-  },
-  {
+    params: (v) => perf('ex4', { cylinders: v.z, bore: v.D, stroke: v.L, rpm: v.N, airVal: v.etaV, pAmb: v.p, TAmb: v.T, af: v.af, outVal: v.eta / 100, hv: v.hv }),
+  }),
+  parametric({
     id: '509-ex5-two-stroke',
     course: 'AEE509',
     topic: 'Engine performance',
     moduleId: 'engine',
     sceneId: 'two-stroke',
     title: 'Two-stroke mower engine',
-    statement:
-      'A two-stroke lawn-mower engine gives 4.68 kW brake power with a mechanical efficiency of 85 %. It uses 2.4 L/h of petrol (density 760 kg/m³, heating value 44 MJ/kg). Find the indicated power and the indicated thermal efficiency.',
+    inputs: [
+      { key: 'bp', value: 4.68, min: 2, max: 8, step: 0.1 },
+      { key: 'etaM', value: 85, min: 75, max: 90, step: 1 },
+      { key: 'V', value: 2.4, min: 1, max: 4, step: 0.1 },
+      { key: 'rho', value: 760, min: 720, max: 780, step: 5 },
+      { key: 'hv', value: 44, min: 42, max: 46, step: 1 },
+    ],
+    statement: (v) =>
+      `A two-stroke lawn-mower engine gives ${num(v.bp)} kW brake power with a mechanical efficiency of ${num(v.etaM)} %. It uses ${num(v.V)} L/h of petrol (density ${num(v.rho)} kg/m³, heating value ${num(v.hv)} MJ/kg). Find the indicated power and the indicated thermal efficiency.`,
     answers: [
       { key: 'ip', label: 'IP', unit: 'kW', expected: 5.506 },
       { key: 'eta', label: '\\eta_{ith}', unit: '%', expected: 24.7 },
     ],
-    solve: () => {
-      const ip = indicatedFromBrake(4.68e3, 0.85)
-      const mf = (2.4e-3 * 760) / 3600
-      return { ip: ip / 1000, eta: indicatedThermalEfficiency(ip, mf, 44e6) * 100 }
+    solve: (v) => {
+      const ip = indicatedFromBrake(v.bp * 1e3, v.etaM / 100)
+      const mf = (v.V * 1e-3 * v.rho) / 3600
+      return { ip: ip / 1000, eta: indicatedThermalEfficiency(ip, mf, v.hv * 1e6) * 100 }
     },
-    working: (r) => [
-      { label: 'Indicated power', tex: 'IP = \\dfrac{BP}{\\eta_m}', sub: '\\dfrac{4.68}{0.85}', result: `= ${n(r.ip)}\\ \\text{kW}`, cite: SRC.misc509('p6, Ex 5') },
-      { label: 'Fuel mass rate', tex: '\\dot m_f = \\dot V\\rho', sub: '2.4\\times10^{-3} \\times 760', result: '= 1.824\\ \\text{kg/h}' },
-      { label: 'Indicated thermal efficiency', tex: '\\eta_{ith} = \\dfrac{IP}{\\dot m_f\\,HV}', sub: `\\dfrac{${n(r.ip)}}{(1.824/3600)\\times 44\\,000}`, result: `= ${n(r.eta, 3)}\\,\\%` },
-    ],
+    // a small petrol engine's indicated thermal efficiency
+    valid: (_v, r) => r.eta >= 15 && r.eta <= 38,
+    working: (v, r) => {
+      const mfh = v.V * 1e-3 * v.rho
+      return [
+        { label: 'Indicated power', tex: 'IP = \\dfrac{BP}{\\eta_m}', sub: `\\dfrac{${tnum(v.bp)}}{${tnum(v.etaM / 100)}}`, result: `= ${n(r.ip)}\\ \\text{kW}`, cite: SRC.misc509('p6, Ex 5') },
+        { label: 'Fuel mass rate', tex: '\\dot m_f = \\dot V\\rho', sub: `${tnum(v.V)}\\times10^{-3} \\times ${tnum(v.rho)}`, result: `= ${n(mfh)}\\ \\text{kg/h}` },
+        { label: 'Indicated thermal efficiency', tex: '\\eta_{ith} = \\dfrac{IP}{\\dot m_f\\,HV}', sub: `\\dfrac{${n(r.ip)}}{(${n(mfh)}/3600)\\times ${tnum(v.hv * 1000)}}`, result: `= ${n(r.eta, 3)}\\,\\%` },
+      ]
+    },
     cite: SRC.misc509('p6, Example 5'),
-  },
-  {
+  }),
+  parametric({
     id: '509-ex6-design',
     course: 'AEE509',
     topic: 'Engine performance',
     moduleId: 'engine',
     sceneId: 'performance',
-    title: 'Size a 4-cylinder engine for 160 N·m',
-    statement:
-      'A four-stroke 4-cylinder SI engine must give 160 N·m at a bmep of 950 kPa, with bore equal to stroke. Find the total swept volume and the bore. At maximum power the bmep is 825 kPa at 5000 rpm: find the brake power.',
+    title: 'Size a square engine for a target torque',
+    inputs: [
+      { key: 'z', value: 4, min: 2, max: 6, step: 1 },
+      { key: 'T', value: 160, min: 80, max: 400, step: 5 },
+      { key: 'b1', value: 950, min: 750, max: 1100, step: 10 },
+      { key: 'b2', value: 825, min: 650, max: 1000, step: 5 },
+      { key: 'N', value: 5000, min: 3000, max: 6000, step: 100 },
+    ],
+    statement: (v) =>
+      `A four-stroke ${num(v.z)}-cylinder SI engine must give ${num(v.T)} N·m at a bmep of ${num(v.b1)} kPa, with bore equal to stroke. Find the total swept volume and the bore. At maximum power the bmep is ${num(v.b2)} kPa at ${num(v.N)} rpm: find the brake power.`,
     answers: [
       { key: 'Vs', label: 'V_s', unit: 'L', expected: 2.116 },
       { key: 'D', label: 'D = L', unit: 'mm', expected: 87.65 },
       { key: 'bp', label: 'BP', unit: 'kW', expected: 72.7 },
     ],
-    solve: () => {
-      const Vd = displacementForTorque(160, 950e3, 4)
-      const D = squareBore(Vd / 4)
-      const r = enginePerformance({ ...base, cylinders: 4, bore: D, stroke: D, rpm: 5000, clearance: { kind: 'cr', value: 9 }, output: { kind: 'bmep', value: 825e3 } })
+    solve: (v) => {
+      const { Vd, D } = squareDesign(v)
+      const r = enginePerformance({ ...base, cylinders: v.z, bore: D, stroke: D, rpm: v.N, clearance: { kind: 'cr', value: 9 }, output: { kind: 'bmep', value: v.b2 * 1e3 } })
       return { Vs: Vd * 1e3, D: D * 1000, bp: r.bp! / 1000 }
     },
-    working: (r) => [
-      { label: 'Swept volume from torque', tex: 'T = \\dfrac{bmep\\,V_s}{4\\pi} \\Rightarrow V_s = \\dfrac{4\\pi T}{bmep}', sub: '\\dfrac{4\\pi\\times160}{950\\times10^3}', result: `= ${n(r.Vs)}\\ \\text{L}`, cite: SRC.misc509('Ex 6') },
-      { label: 'Bore = stroke', tex: '\\tfrac{\\pi}{4}D^3 = V_s/4', result: `D = ${n(r.D)}\\ \\text{mm}` },
-      { label: 'Power at 825 kPa', tex: 'BP = \\dfrac{bmep\\,V_s\\,N}{120}', sub: `\\dfrac{825\\times10^3 \\times ${n(r.Vs / 1000)} \\times 5000}{120}`, result: `= ${n(r.bp)}\\ \\text{kW}` },
+    // bmep falls off from peak torque to peak power; piston speed ≤ 16 m/s; bore 60–130 mm
+    valid: (v, r) => v.b2 < v.b1 - 50 && pistonSpeed(r.D, v.N) <= 16 && r.D >= 60 && r.D <= 130,
+    working: (v, r) => [
+      { label: 'Swept volume from torque', tex: 'T = \\dfrac{bmep\\,V_s}{4\\pi} \\Rightarrow V_s = \\dfrac{4\\pi T}{bmep}', sub: `\\dfrac{4\\pi\\times${tnum(v.T)}}{${tnum(v.b1)}\\times10^3}`, result: `= ${n(r.Vs)}\\ \\text{L}`, cite: SRC.misc509('Ex 6') },
+      { label: 'Bore = stroke', tex: `\\tfrac{\\pi}{4}D^3 = V_s/${tnum(v.z)}`, result: `D = ${n(r.D)}\\ \\text{mm}` },
+      { label: `Power at ${num(v.b2)} kPa`, tex: 'BP = \\dfrac{bmep\\,V_s\\,N}{120}', sub: `\\dfrac{${tnum(v.b2)}\\times10^3 \\times ${n(r.Vs / 1000)} \\times ${tnum(v.N)}}{120}`, result: `= ${n(r.bp)}\\ \\text{kW}` },
     ],
     cite: SRC.misc509('Example 6'),
-    params: perf('ex6'),
-  },
-  {
+    params: (v) => {
+      const D = Math.round(squareDesign(v).D * 1e5) / 100
+      return perf('ex6', { cylinders: v.z, rpm: v.N, outVal: v.b2 }, { bore: D, stroke: D })
+    },
+  }),
+  parametric({
     id: '509-ex7-torque',
     course: 'AEE509',
     topic: 'Engine performance',
     moduleId: 'engine',
     sceneId: 'performance',
-    title: '8-cylinder engine with 90 cc clearance',
-    statement:
-      'An 8-cylinder four-stroke petrol engine, 100 mm bore × 120 mm stroke, has a clearance volume of 90 cm³ per cylinder. It uses 20 kg/h of fuel (44 MJ/kg) and gives 160 N·m at 4500 rpm. Find the compression ratio, brake power, bmep and brake thermal efficiency.',
+    title: 'Petrol engine from its clearance volume',
+    inputs: [
+      { key: 'z', value: 8, min: 2, max: 8, step: 1 },
+      { key: 'D', value: 100, min: 80, max: 120, step: 5 },
+      { key: 'L', value: 120, min: 90, max: 140, step: 5 },
+      { key: 'Vc', value: 90, min: 50, max: 150, step: 5 },
+      { key: 'mf', value: 20, min: 4, max: 30, step: 0.5 },
+      { key: 'hv', value: 44, min: 42, max: 46, step: 1 },
+      { key: 'T', value: 160, min: 80, max: 400, step: 5 },
+      { key: 'N', value: 4500, min: 2000, max: 5000, step: 100 },
+    ],
+    statement: (v) =>
+      `${an(v.z)} ${num(v.z)}-cylinder four-stroke petrol engine, ${num(v.D)} mm bore × ${num(v.L)} mm stroke, has a clearance volume of ${num(v.Vc)} cm³ per cylinder. It uses ${num(v.mf)} kg/h of fuel (${num(v.hv)} MJ/kg) and gives ${num(v.T)} N·m at ${num(v.N)} rpm. Find the compression ratio, brake power, bmep and brake thermal efficiency.`,
     answers: [
       { key: 'cr', label: 'CR', unit: '', expected: 11.47 },
       { key: 'bp', label: 'BP', unit: 'kW', expected: 75.4 },
       { key: 'bmep', label: 'bmep', unit: 'bar', expected: 2.667 },
       { key: 'eta', label: '\\eta_{bth}', unit: '%', expected: 30.85 },
     ],
-    solve: () => {
-      const r = enginePerformance({ ...base, cylinders: 8, bore: 0.1, stroke: 0.12, rpm: 4500, clearance: { kind: 'cv', value: 90e-6 }, output: { kind: 'torque', value: 160 }, fuel: { kind: 'rate', kgPerH: 20 } })
+    solve: (v) => {
+      const r = enginePerformance({ ...base, cylinders: v.z, bore: v.D / 1000, stroke: v.L / 1000, rpm: v.N, hv: v.hv * 1e6, clearance: { kind: 'cv', value: v.Vc * 1e-6 }, output: { kind: 'torque', value: v.T }, fuel: { kind: 'rate', kgPerH: v.mf } })
       return { cr: r.CR, bp: r.bp! / 1000, bmep: r.bmep! / 1e5, eta: r.etaBth! * 100 }
     },
-    working: (r) => [
-      { label: 'Compression ratio', tex: 'CR = \\dfrac{V_s + V_c}{V_c}', sub: '\\dfrac{942.5 + 90}{90}', result: `= ${n(r.cr)}`, cite: SRC.misc509('Ex 7') },
-      { label: 'Brake power', tex: 'BP = \\dfrac{2\\pi N T}{60}', sub: '\\dfrac{2\\pi \\times 4500 \\times 160}{60}', result: `= ${n(r.bp)}\\ \\text{kW}` },
-      { label: 'bmep', tex: 'bmep = \\dfrac{60\\,BP}{L A z (N/2)}', result: `= ${n(r.bmep)}\\ \\text{bar}` },
-      { label: 'Brake thermal efficiency', tex: '\\eta_{bth} = \\dfrac{BP}{\\dot m_f HV}', sub: `\\dfrac{${n(r.bp)}}{(20/3600)\\times 44\\,000}`, result: `= ${n(r.eta)}\\,\\%` },
-    ],
+    // petrol compression ratio, a plausible brake thermal efficiency and piston speed ≤ 18 m/s
+    valid: (v, r) => r.cr >= 6 && r.cr <= 12 && r.eta >= 18 && r.eta <= 38 && pistonSpeed(v.L, v.N) <= 18,
+    working: (v, r) => {
+      const pd = (Math.PI / 4) * (v.D / 10) ** 2 * (v.L / 10)
+      return [
+        { label: 'Compression ratio', tex: 'CR = \\dfrac{V_s + V_c}{V_c}', sub: `\\dfrac{${n(pd)} + ${tnum(v.Vc)}}{${tnum(v.Vc)}}`, result: `= ${n(r.cr)}`, cite: SRC.misc509('Ex 7') },
+        { label: 'Brake power', tex: 'BP = \\dfrac{2\\pi N T}{60}', sub: `\\dfrac{2\\pi \\times ${tnum(v.N)} \\times ${tnum(v.T)}}{60}`, result: `= ${n(r.bp)}\\ \\text{kW}` },
+        { label: 'bmep', tex: 'bmep = \\dfrac{60\\,BP}{L A z (N/2)}', result: `= ${n(r.bmep)}\\ \\text{bar}` },
+        { label: 'Brake thermal efficiency', tex: '\\eta_{bth} = \\dfrac{BP}{\\dot m_f HV}', sub: `\\dfrac{${n(r.bp)}}{(${tnum(v.mf)}/3600)\\times ${tnum(v.hv * 1000)}}`, result: `= ${n(r.eta)}\\,\\%` },
+      ]
+    },
     cite: SRC.misc509('Example 7'),
-    params: perf('ex7'),
-  },
-  {
+    params: (v) => perf('ex7', { cylinders: v.z, bore: v.D, stroke: v.L, clrVal: v.Vc, fuelVal: v.mf, hv: v.hv, outVal: v.T, rpm: v.N }),
+  }),
+  parametric({
     id: '509-genset-2223',
     course: 'AEE509',
     topic: 'Mean effective pressure',
     moduleId: 'engine',
     sceneId: 'performance',
     title: 'Genset: clearance volume, bmep and imep',
-    statement:
-      'An 8-cylinder four-stroke diesel genset has piston area 0.25 m², stroke 0.3 m and total cylinder volume 0.1 m³. It develops 3000 kW at 2000 rpm with a mechanical efficiency of 75 %. Find the clearance volume, bmep, imep and friction power.',
+    inputs: [
+      { key: 'z', value: 8, min: 4, max: 12, step: 1 },
+      { key: 'A', value: 0.25, min: 0.15, max: 0.3, step: 0.01 },
+      { key: 'L', value: 0.3, min: 0.2, max: 0.4, step: 0.01 },
+      { key: 'tcv', value: 0.1, min: 0.04, max: 0.15, step: 0.005 },
+      { key: 'bp', value: 3000, min: 500, max: 4000, step: 50 },
+      { key: 'N', value: 2000, min: 1000, max: 2000, step: 50 },
+      { key: 'etaM', value: 75, min: 70, max: 90, step: 1 },
+    ],
+    statement: (v) =>
+      `${an(v.z)} ${num(v.z)}-cylinder four-stroke diesel genset has piston area ${num(v.A)} m², stroke ${num(v.L)} m and total cylinder volume ${num(v.tcv)} m³. It develops ${num(v.bp)} kW at ${num(v.N)} rpm with a mechanical efficiency of ${num(v.etaM)} %. Find the clearance volume, bmep, imep and friction power.`,
     answers: [
       { key: 'vc', label: 'V_c', unit: 'm³', expected: 0.025 },
       { key: 'bmep', label: 'bmep', unit: 'kPa', expected: 300 },
       { key: 'imep', label: 'imep', unit: 'kPa', expected: 400 },
       { key: 'fp', label: 'FP', unit: 'kW', expected: 1000 },
     ],
-    solve: () => {
-      const r = enginePerformance({ ...base, cylinders: 8, bore: 0, area: 0.25, stroke: 0.3, clearance: { kind: 'tcv', value: 0.1 }, output: { kind: 'bp', value: 3000e3 }, losses: { kind: 'etaM', value: 0.75 } })
+    solve: (v) => {
+      const r = enginePerformance({ ...base, cylinders: v.z, bore: 0, area: v.A, stroke: v.L, rpm: v.N, clearance: { kind: 'tcv', value: v.tcv }, output: { kind: 'bp', value: v.bp * 1e3 }, losses: { kind: 'etaM', value: v.etaM / 100 } })
       return { vc: r.CV, bmep: r.bmep! / 1000, imep: r.imep! / 1000, fp: r.fp! / 1000 }
     },
-    working: (r) => [
-      { label: 'Clearance volume', tex: 'V_c = TCV - A L', sub: '0.1 - 0.25\\times0.3', result: `= ${n(r.vc)}\\ \\text{m}^3`, cite: SRC.exam509('2022/23 Q2') },
-      { label: 'bmep', tex: 'bmep = \\dfrac{60\\,BP}{L A z (N/2)}', sub: '\\dfrac{60\\times3000}{0.3\\times0.25\\times8\\times1000}', result: `= ${n(r.bmep)}\\ \\text{kPa}` },
+    // the clearance volume must be positive (CR 3–22); bmep 200–2000 kPa; piston speed no worse than the paper's 20 m/s
+    valid: (v, r) => r.vc > 0 && v.tcv / r.vc >= 3 && v.tcv / r.vc <= 22 && r.bmep >= 200 && r.bmep <= 2000 && (2 * v.L * v.N) / 60 <= 20,
+    working: (v, r) => [
+      { label: 'Clearance volume', tex: 'V_c = TCV - A L', sub: `${tnum(v.tcv)} - ${tnum(v.A)}\\times${tnum(v.L)}`, result: `= ${n(r.vc)}\\ \\text{m}^3`, cite: SRC.exam509('2022/23 Q2') },
+      { label: 'bmep', tex: 'bmep = \\dfrac{60\\,BP}{L A z (N/2)}', sub: `\\dfrac{60\\times${tnum(v.bp)}}{${tnum(v.L)}\\times${tnum(v.A)}\\times${tnum(v.z)}\\times${tnum(v.N / 2)}}`, result: `= ${n(r.bmep)}\\ \\text{kPa}` },
       { label: 'imep and friction power', tex: 'imep = \\dfrac{bmep}{\\eta_m},\\quad FP = \\dfrac{BP}{\\eta_m} - BP', result: `imep = ${n(r.imep)}\\ \\text{kPa},\\ FP = ${n(r.fp)}\\ \\text{kW}` },
     ],
     cite: SRC.exam509('2022/23 Q2'),
-    params: perf('genset'),
-  },
-  {
+    params: (v) => perf('genset', { cylinders: v.z, area: v.A, stroke: v.L * 1000, clrVal: v.tcv * 1000, outVal: v.bp, rpm: v.N, lossVal: v.etaM / 100 }, { bore: Math.round(Math.sqrt((4 * v.A) / Math.PI) * 1e4) / 10 }),
+  }),
+  parametric({
     id: '509-mahindra-1718',
     course: 'AEE509',
     topic: 'Swept volume & compression ratio',
     moduleId: 'engine',
     sceneId: 'performance',
     title: 'Mahindra tractor: piston displacement and CR',
-    statement: 'A tractor engine has a bore of 100 mm and a stroke of 124 mm. The clearance volume is one-sixth of the piston displacement. Find the piston displacement (per cylinder) and the compression ratio.',
+    inputs: [
+      { key: 'D', value: 100, min: 80, max: 130, step: 5 },
+      { key: 'L', value: 124, min: 90, max: 150, step: 2 },
+      { key: 'x', value: 6, min: 5, max: 20, step: 1 },
+    ],
+    statement: (v) => `A tractor engine has a bore of ${num(v.D)} mm and a stroke of ${num(v.L)} mm. The clearance volume is 1/${num(v.x)} of the piston displacement. Find the piston displacement (per cylinder) and the compression ratio.`,
     answers: [
       { key: 'pd', label: 'PD', unit: 'cm³', expected: 973.9 },
       { key: 'cr', label: 'CR', unit: '', expected: 7 },
     ],
-    solve: () => {
-      const r = enginePerformance({ ...base, bore: 0.1, stroke: 0.124, clearance: { kind: 'pdFraction', value: 1 / 6 } })
+    solve: (v) => {
+      const r = enginePerformance({ ...base, bore: v.D / 1000, stroke: v.L / 1000, clearance: { kind: 'pdFraction', value: 1 / v.x } })
       return { pd: r.PD * 1e6, cr: r.CR }
     },
-    working: (r) => [
-      { label: 'Piston displacement', tex: 'PD = \\tfrac{\\pi}{4} D^2 L', sub: '\\tfrac{\\pi}{4}(10)^2(12.4)', result: `= ${n(r.pd)}\\ \\text{cm}^3`, cite: SRC.exam509('2017/18 Q2b'), errata: 'The worked answer uses π = 3.14 and prints 973.4 cm³; both are accepted.' },
-      { label: 'Compression ratio', tex: 'CR = \\dfrac{PD + CV}{CV} = \\dfrac{PD + PD/6}{PD/6}', result: `= ${n(r.cr)}` },
+    // a sensible stroke/bore ratio for a tractor engine
+    valid: (v) => v.L / v.D >= 0.9 && v.L / v.D <= 1.5,
+    working: (v, r, original) => [
+      { label: 'Piston displacement', tex: 'PD = \\tfrac{\\pi}{4} D^2 L', sub: `\\tfrac{\\pi}{4}(${tnum(v.D / 10)})^2(${tnum(v.L / 10)})`, result: `= ${n(r.pd)}\\ \\text{cm}^3`, cite: SRC.exam509('2017/18 Q2b'), ...(original ? { errata: 'The worked answer uses π = 3.14 and prints 973.4 cm³; both are accepted.' } : {}) },
+      { label: 'Compression ratio', tex: `CR = \\dfrac{PD + CV}{CV} = \\dfrac{PD + PD/${tnum(v.x)}}{PD/${tnum(v.x)}}`, result: `= ${n(r.cr)}` },
     ],
     cite: SRC.exam509('2017/18 Q2b'),
-    params: perf('mahindra'),
-  },
-  {
+    params: (v) => perf('mahindra', { bore: v.D, stroke: v.L, clrVal: v.x }),
+  }),
+  parametric({
     id: '509-six-si-2122',
     course: 'AEE509',
     topic: 'Swept volume & compression ratio',
     moduleId: 'engine',
     sceneId: 'performance',
-    title: '6-cylinder SI engine: CR and air-standard efficiency',
-    statement: 'A four-stroke 6-cylinder SI engine has bore 100 mm and stroke 125 mm; the clearance volume is ⅛ of the stroke volume. Find the piston displacement per cylinder, the total cylinder volume, the compression ratio and the Otto air-standard efficiency (k = 1.4).',
+    title: 'SI engine: CR and air-standard efficiency',
+    inputs: [
+      { key: 'z', value: 6, min: 2, max: 8, step: 1 },
+      { key: 'D', value: 100, min: 75, max: 120, step: 5 },
+      { key: 'L', value: 125, min: 80, max: 140, step: 5 },
+      { key: 'x', value: 8, min: 6, max: 10, step: 1 },
+    ],
+    statement: (v) =>
+      `A four-stroke ${num(v.z)}-cylinder SI engine has bore ${num(v.D)} mm and stroke ${num(v.L)} mm; the clearance volume is 1/${num(v.x)} of the stroke volume. Find the piston displacement per cylinder, the total cylinder volume, the compression ratio and the Otto air-standard efficiency (k = 1.4).`,
     answers: [
       { key: 'pd', label: 'PD', unit: 'cm³', expected: 981.7 },
       { key: 'tcv', label: 'TCV', unit: 'cm³', expected: 1104.5 },
       { key: 'cr', label: 'CR', unit: '', expected: 9 },
       { key: 'eta', label: '\\eta_{Otto}', unit: '%', expected: 58.5, abs: 0.3 },
     ],
-    solve: () => {
-      const r = enginePerformance({ ...base, cylinders: 6, bore: 0.1, stroke: 0.125, clearance: { kind: 'pdFraction', value: 1 / 8 } })
+    solve: (v) => {
+      const r = enginePerformance({ ...base, cylinders: v.z, bore: v.D / 1000, stroke: v.L / 1000, clearance: { kind: 'pdFraction', value: 1 / v.x } })
       const c = airStandardCycle({ kind: 'otto', r: r.CR, P1: 100, T1: 300, alpha: 2, delta: 1 })
       return { pd: r.PD * 1e6, tcv: r.TCV * 1e6, cr: r.CR, eta: c.etaFormula * 100 }
     },
-    working: (r) => [
-      { label: 'Displacement and total volume', tex: 'PD = \\tfrac{\\pi}{4}D^2L,\\quad TCV = PD + PD/8', result: `PD = ${n(r.pd)},\\ TCV = ${n(r.tcv)}\\ \\text{cm}^3`, cite: SRC.exam509('2021/22 Q3b') },
+    // a sensible stroke/bore ratio
+    valid: (v) => v.L / v.D >= 0.8 && v.L / v.D <= 1.4,
+    working: (v, r) => [
+      { label: 'Displacement and total volume', tex: `PD = \\tfrac{\\pi}{4}D^2L,\\quad TCV = PD + PD/${tnum(v.x)}`, sub: `\\tfrac{\\pi}{4}(${tnum(v.D / 10)})^2(${tnum(v.L / 10)})`, result: `PD = ${n(r.pd)},\\ TCV = ${n(r.tcv)}\\ \\text{cm}^3`, cite: SRC.exam509('2021/22 Q3b') },
       { label: 'Compression ratio', tex: 'CR = TCV/CV', result: `= ${n(r.cr)}` },
-      { label: 'Otto efficiency', tex: '\\eta = 1 - \\dfrac{1}{r^{k-1}}', sub: '1 - \\dfrac{1}{9^{0.4}}', result: `= ${n(r.eta, 3)}\\,\\%`, cite: SRC.thermo509('Otto cycle') },
+      { label: 'Otto efficiency', tex: '\\eta = 1 - \\dfrac{1}{r^{k-1}}', sub: `1 - \\dfrac{1}{${n(r.cr)}^{0.4}}`, result: `= ${n(r.eta, 3)}\\,\\%`, cite: SRC.thermo509('Otto cycle') },
     ],
     cite: SRC.exam509('2021/22 Q3b'),
-    params: perf('six-si'),
-  },
-  {
+    params: (v) => perf('six-si', { cylinders: v.z, bore: v.D, stroke: v.L, clrVal: v.x }),
+  }),
+  parametric({
     id: '509-otto-ex9',
     course: 'AEE509',
     topic: 'Air-standard cycles',
     moduleId: 'engine',
     sceneId: 'four-stroke-diesel',
     title: 'Otto cycle: efficiency and mean effective pressure',
-    statement: 'An Otto cycle has a compression ratio of 10. At the start of compression the air is at 105 kPa, 295 K; the maximum pressure is 8902 kPa (2500 K). Take k = 1.4, cv = 0.718 kJ/kg·K. Find T₂, the air-standard efficiency and the mean effective pressure.',
+    inputs: [
+      { key: 'r', value: 10, min: 6, max: 11, step: 0.5 },
+      { key: 'P1', value: 105, min: 90, max: 110, step: 1 },
+      { key: 'T1', value: 295, min: 285, max: 320, step: 5 },
+      { key: 'Pmax', value: 8902, min: 4000, max: 10000, step: 50 },
+    ],
+    // the maximum temperature is shown for context, rounded to 10 K (2501 K → 2500 K as printed in the paper)
+    statement: (v) =>
+      `An Otto cycle has a compression ratio of ${num(v.r)}. At the start of compression the air is at ${num(v.P1)} kPa, ${num(v.T1)} K; the maximum pressure is ${num(v.Pmax)} kPa (${num(Math.round(ottoEx9(v).s3.T / 10) * 10)} K). Take k = 1.4, cv = 0.718 kJ/kg·K. Find T₂, the air-standard efficiency and the mean effective pressure.`,
     answers: [
       { key: 'T2', label: 'T_2', unit: 'K', expected: 741 },
       { key: 'eta', label: '\\eta', unit: '%', expected: 60.2, abs: 0.2 },
       { key: 'mep', label: 'mep', unit: 'kPa', expected: 1048 },
     ],
-    solve: () => {
-      const c = airStandardCycle({ kind: 'otto', r: 10, P1: 105, T1: 295, alpha: alphaFromPmax(8902, 10, 105, AIR), delta: 1 })
+    solve: (v) => {
+      const c = ottoEx9(v)
       return { T2: c.s2.T, eta: c.eta * 100, mep: c.mep }
     },
-    working: (r) => [
-      { label: 'End of compression', tex: 'T_2 = T_1 r^{k-1}', sub: '295 \\times 10^{0.4}', result: `= ${n(r.T2)}\\ \\text{K}`, cite: SRC.misc509('p9, Ex 9') },
+    // heat must be added (Pmax well above P2) and the peak temperature kept within 1800–3000 K
+    valid: (v) => {
+      const T3 = ottoEx9(v).s3.T
+      return T3 >= 1800 && T3 <= 3000
+    },
+    working: (v, r, original) => [
+      { label: 'End of compression', tex: 'T_2 = T_1 r^{k-1}', sub: `${tnum(v.T1)} \\times ${tnum(v.r)}^{0.4}`, result: `= ${n(r.T2)}\\ \\text{K}`, cite: SRC.misc509('p9, Ex 9') },
       { label: 'Efficiency', tex: '\\eta = 1 - r^{1-k}', result: `= ${n(r.eta, 3)}\\,\\%` },
-      { label: 'Mean effective pressure', tex: 'mep = \\dfrac{\\eta\\,c_v (T_3 - T_2)}{v_1 - v_2}', result: `= ${n(r.mep)}\\ \\text{kPa}`, errata: 'The worked example uses cv = 0.778 and prints 1135.7 kPa; with 0.718 the mep is ≈ 1048 kPa.' },
+      { label: 'Mean effective pressure', tex: 'mep = \\dfrac{\\eta\\,c_v (T_3 - T_2)}{v_1 - v_2}', result: `= ${n(r.mep)}\\ \\text{kPa}`, ...(original ? { errata: 'The worked example uses cv = 0.778 and prints 1135.7 kPa; with 0.718 the mep is ≈ 1048 kPa.' } : {}) },
     ],
     cite: SRC.misc509('p9, Example 9'),
     errata: 'otto-cv',
-    params: { cycle: 'otto', r: 10, P1: 105, T1: 295, q: 1263 },
-  },
-  {
+    params: (v) => {
+      const orig = v.r === 10 && v.P1 === 105 && v.T1 === 295 && v.Pmax === 8902
+      return { cycle: 'otto', r: v.r, P1: v.P1, T1: v.T1, q: orig ? 1263 : Math.round(ottoEx9(v).qIn) }
+    },
+  }),
+  parametric({
     id: '509-cutoff-ex13',
     course: 'AEE509',
     topic: 'Air-standard cycles',
     moduleId: 'engine',
     sceneId: 'four-stroke-diesel',
     title: 'Diesel cut-off ratio from the cut-off point',
-    statement: 'In a Diesel cycle with a compression ratio of 16, fuel is cut off at 10 % of the stroke. Find the cut-off ratio δ.',
+    inputs: [
+      { key: 'x', value: 10, min: 4, max: 15, step: 1 },
+      { key: 'r', value: 16, min: 12, max: 22, step: 0.5 },
+    ],
+    statement: (v) => `In a Diesel cycle with a compression ratio of ${num(v.r)}, fuel is cut off at ${num(v.x)} % of the stroke. Find the cut-off ratio δ.`,
     answers: [{ key: 'delta', label: '\\delta', unit: '', expected: 2.5 }],
-    solve: () => ({ delta: deltaFromCutoffFraction(0.1, 16) }),
-    working: (r) => [
-      { label: 'Cut-off ratio', tex: '\\delta = \\dfrac{V_3}{V_2} = 1 + x\\,(r - 1)', sub: '1 + 0.1(16 - 1)', result: `= ${n(r.delta)}`, cite: SRC.misc509('Ex 13') },
+    solve: (v) => ({ delta: deltaFromCutoffFraction(v.x / 100, v.r) }),
+    working: (v, r) => [
+      { label: 'Cut-off ratio', tex: '\\delta = \\dfrac{V_3}{V_2} = 1 + x\\,(r - 1)', sub: `1 + ${tnum(v.x / 100)}(${tnum(v.r)} - 1)`, result: `= ${n(r.delta)}`, cite: SRC.misc509('Ex 13') },
     ],
     cite: SRC.misc509('Example 13'),
-  },
-  {
+  }),
+  parametric({
     id: '509-dual-exam',
     course: 'AEE509',
     topic: 'Air-standard cycles',
     moduleId: 'engine',
     sceneId: 'four-stroke-diesel',
     title: 'Dual cycle: state at the end of compression',
-    statement: 'A dual cycle has r = 16, starting at 1 bar and 50 °C. The maximum pressure is 70 bar and equal heat is added at constant volume and at constant pressure. Find T₂ and P₂ at the end of compression.',
+    inputs: [
+      { key: 'r', value: 16, min: 12, max: 22, step: 0.5 },
+      { key: 'P1', value: 1, min: 0.9, max: 1.1, step: 0.05 },
+      { key: 't1', value: 50, min: 15, max: 60, step: 5 },
+      { key: 'Pmax', value: 70, min: 50, max: 120, step: 5 },
+    ],
+    statement: (v) =>
+      `A dual cycle has r = ${num(v.r)}, starting at ${num(v.P1)} bar and ${num(v.t1)} °C. The maximum pressure is ${num(v.Pmax)} bar and equal heat is added at constant volume and at constant pressure. Find T₂ and P₂ at the end of compression.`,
     answers: [
       { key: 'T2', label: 'T_2', unit: 'K', expected: 979.1 },
       { key: 'P2', label: 'P_2', unit: 'kPa', expected: 4850 },
     ],
-    solve: () => {
-      const { alpha, delta } = dualFromPmaxEqualHeat(7000, 16, 100, 323)
-      const c = airStandardCycle({ kind: 'dual', r: 16, P1: 100, T1: 323, alpha, delta })
+    solve: (v) => {
+      const P1 = v.P1 * 100
+      const T1 = v.t1 + 273
+      const { alpha, delta } = dualFromPmaxEqualHeat(v.Pmax * 100, v.r, P1, T1)
+      const c = airStandardCycle({ kind: 'dual', r: v.r, P1, T1, alpha, delta })
       return { T2: c.s2.T, P2: c.s2.P }
     },
-    working: (r) => [
-      { label: 'Isentropic compression', tex: 'T_2 = T_1 r^{k-1},\\quad P_2 = P_1 r^{k}', sub: '323 \\times 16^{0.4},\\ 100 \\times 16^{1.4}', result: `T_2 = ${n(r.T2)}\\ \\text{K},\\ P_2 = ${n(r.P2)}\\ \\text{kPa}`, cite: SRC.thermo509('dual cycle') },
+    // the maximum pressure must sit clearly above the compression pressure, or no heat is added at constant volume
+    valid: (v, r) => v.Pmax * 100 >= 1.1 * r.P2,
+    working: (v, r) => [
+      { label: 'Isentropic compression', tex: 'T_2 = T_1 r^{k-1},\\quad P_2 = P_1 r^{k}', sub: `${tnum(v.t1 + 273)} \\times ${tnum(v.r)}^{0.4},\\ ${tnum(v.P1 * 100)} \\times ${tnum(v.r)}^{1.4}`, result: `T_2 = ${n(r.T2)}\\ \\text{K},\\ P_2 = ${n(r.P2)}\\ \\text{kPa}`, cite: SRC.thermo509('dual cycle') },
     ],
     cite: SRC.exam509('dual cycle (recurring)'),
-  },
-  {
+  }),
+  parametric({
     id: '509-governor',
     course: 'AEE509',
     topic: 'Governing',
     moduleId: 'engine',
     sceneId: 'air-governor',
     title: 'Governor regulation',
-    statement: 'A governed engine runs at 1600 rpm with no load and 1500 rpm at full load. Find the governor regulation.',
+    inputs: [
+      { key: 'nl', value: 1600, min: 1300, max: 2800, step: 10 },
+      { key: 'fl', value: 1500, min: 1200, max: 2600, step: 10 },
+    ],
+    statement: (v) => `A governed engine runs at ${num(v.nl)} rpm with no load and ${num(v.fl)} rpm at full load. Find the governor regulation.`,
     answers: [{ key: 'reg', label: '\\text{regulation}', unit: '%', expected: 6.45 }],
-    solve: () => ({ reg: governorRegulation(1600, 1500) }),
-    working: (r) => [
-      { label: 'Regulation', tex: '\\text{reg} = \\dfrac{2(N_{nl} - N_{fl})}{N_{nl} + N_{fl}}\\times100', sub: '\\dfrac{2(1600-1500)}{1600+1500}\\times100', result: `= ${n(r.reg)}\\,\\%`, cite: SRC.supp509('governor') },
+    solve: (v) => ({ reg: governorRegulation(v.nl, v.fl) }),
+    // no-load speed above full-load speed, with a typical 2–12 % droop
+    valid: (_v, r) => r.reg >= 2 && r.reg <= 12,
+    working: (v, r) => [
+      { label: 'Regulation', tex: '\\text{reg} = \\dfrac{2(N_{nl} - N_{fl})}{N_{nl} + N_{fl}}\\times100', sub: `\\dfrac{2(${tnum(v.nl)}-${tnum(v.fl)})}{${tnum(v.nl)}+${tnum(v.fl)}}\\times100`, result: `= ${n(r.reg)}\\,\\%`, cite: SRC.supp509('governor') },
     ],
     cite: SRC.supp509('governor regulation example'),
-  },
-  {
+  }),
+  parametric({
     id: '509-pressure-cap',
     course: 'AEE509',
     topic: 'Cooling',
     moduleId: 'engine',
     sceneId: 'cooling',
     title: 'Boiling point under a pressure cap',
-    statement: 'A radiator pressure cap holds 90 kPa above atmospheric (101.325 kPa). At what temperature does the coolant (water) boil?',
+    inputs: [
+      { key: 'cap', value: 90, min: 30, max: 140, step: 5 },
+      // atmospheric pressure: sea level down to a high-altitude farm (~1500 m)
+      { key: 'atm', value: 101.325, min: 85, max: 101.5, step: 0.5 },
+    ],
+    statement: (v) => `A radiator pressure cap holds ${num(v.cap)} kPa above atmospheric (${num(v.atm)} kPa). At what temperature does the coolant (water) boil?`,
     answers: [{ key: 'T', label: 'T_{boil}', unit: '°C', expected: 118.9, abs: 1 }],
-    solve: () => ({ T: capBoilingPointC(90) }),
-    working: (r) => [
-      { label: 'Absolute pressure in the system', tex: 'p = p_{atm} + p_{cap}', sub: '101.3 + 90', result: '= 191.3\\ \\text{kPa}' },
-      { label: 'Saturation temperature', tex: 'T_{sat}(191.3\\ \\text{kPa})', result: `= ${n(r.T)}\\ ^\\circ\\text{C}`, cite: SRC.tb509('Ch 7, pressure cap') },
+    solve: (v) => ({ T: capBoilingPointC(v.cap, v.atm) }),
+    working: (v, r) => [
+      { label: 'Absolute pressure in the system', tex: 'p = p_{atm} + p_{cap}', sub: `${tnum(v.atm)} + ${tnum(v.cap)}`, result: `= ${n(v.atm + v.cap)}\\ \\text{kPa}` },
+      { label: 'Saturation temperature', tex: `T_{sat}(${n(v.atm + v.cap)}\\ \\text{kPa})`, result: `= ${n(r.T)}\\ ^\\circ\\text{C}`, cite: SRC.tb509('Ch 7, pressure cap') },
     ],
     cite: SRC.tb509('Ch 7, radiator pressure cap'),
-  },
+  }),
 ]
