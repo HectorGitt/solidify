@@ -24,7 +24,7 @@ export function Working({ steps }: { steps: WorkingStep[] }) {
   return (
     <ol className="space-y-2.5">
       {steps.map((s, i) => (
-        <li key={i} className="rounded-md border border-line bg-panel-2/60 px-3 py-2">
+        <li key={i} data-working-step={[s.label, s.tex, s.sub, s.result].filter(Boolean).join(' | ')} className="rounded-md border border-line bg-panel-2/60 px-3 py-2">
           <div className="mb-1 flex flex-wrap items-center gap-1.5">
             <span className="text-[12px] font-medium text-ink/90">{s.label}</span>
             {academic && s.beyond ? (

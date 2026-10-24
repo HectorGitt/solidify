@@ -10,6 +10,8 @@ import { Icon } from './icons'
 import { enterInside, exitInside, useInside } from './inside'
 import { goTo } from './navigate'
 import { PartExtras } from './PartExtras'
+import { useTutor } from '@/cloud/ui/Tutor'
+import { useReport } from '@/cloud/ui/ReportDialog'
 
 const ROLE_LABEL = { housing: 'Housing', moving: 'Moving part', fluid: 'Fluid', static: 'Stationary part' }
 
@@ -133,6 +135,14 @@ export function PartCard() {
             <Icon.explode width={14} height={14} /> {explodeScope === part.id ? 'Reassemble' : 'Explode this'}
           </button>
         ) : null}
+      </div>
+      <div className="flex items-center justify-between gap-2 border-t border-line px-3 py-1.5 text-[11.5px]">
+        <button className="font-medium text-accent hover:underline" onClick={() => useTutor.getState().setOpen(true)}>
+          Ask about this part
+        </button>
+        <button className="text-dim hover:text-ink" onClick={() => useReport.getState().open({ partId: part.id })}>
+          Report a problem
+        </button>
       </div>
     </div>
   )

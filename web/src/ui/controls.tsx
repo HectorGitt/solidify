@@ -128,9 +128,9 @@ export function Toggle({ label, checked, onChange, hint }: { label: ReactNode; c
 export function Readout({ label, value, unit, tone = 'ink' }: { label: ReactNode; value: ReactNode; unit?: string; tone?: 'ink' | 'accent' | 'warn' | 'info' }) {
   const toneCls = { ink: 'text-ink', accent: 'text-accent', warn: 'text-warn', info: 'text-info' }[tone]
   return (
-    <div className="rounded-xl border border-line bg-panel-2/90 px-3 py-2 shadow-sm ring-1 ring-white/[0.02]">
-      <div className="text-[10px] font-medium uppercase tracking-wider text-dim">{label}</div>
-      <div className={`mt-0.5 font-mono text-[14px] font-semibold ${toneCls}`}>
+    <div data-readout className="rounded-xl border border-line bg-panel-2/90 px-3 py-2 shadow-sm ring-1 ring-white/[0.02]">
+      <div data-readout-label className="text-[10px] font-medium uppercase tracking-wider text-dim">{label}</div>
+      <div data-readout-value className={`mt-0.5 font-mono text-[14px] font-semibold ${toneCls}`}>
         {value}
         {unit ? <span className="ml-1 text-[11.5px] font-normal text-mute">{unit}</span> : null}
       </div>

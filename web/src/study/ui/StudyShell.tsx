@@ -1,6 +1,7 @@
 import { useEffect, type ReactNode } from 'react'
 import { Link, NavLink } from 'react-router-dom'
 import { useAcademic } from '@/ui/audience'
+import { AccountMenu } from '@/cloud/ui/AccountMenu'
 import { AudienceSwitch } from '@/ui/AudienceSwitch'
 import { Logo } from '@/ui/Logo'
 import { courseTitle } from '../types'
@@ -52,8 +53,9 @@ export function StudyShell({ title, lead, children, right }: { title: string; le
             <Logo />
           </Link>
           <StudyLinks always className="ml-2 hidden sm:flex" />
-          <div className="ml-auto">
+          <div className="ml-auto flex items-center gap-2">
             <AudienceSwitch compact />
+            <AccountMenu compact />
           </div>
         </div>
         <StudyLinks always compact className="justify-center border-t border-line py-1 sm:hidden" />
