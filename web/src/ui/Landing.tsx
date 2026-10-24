@@ -1,15 +1,34 @@
-import { useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
+import { useSim } from '@/core/sim'
 import { MODULES, countScenes } from '@/modules/catalog'
-import type { ModuleDef } from '@/modules/types'
+import type { ModuleDef, SceneDef } from '@/modules/types'
+import { DEFAULT_CUT_PRESETS, useView } from '@/render/view'
 import { useAcademic, useAudience } from './audience'
+import { AccountMenu } from '@/cloud/ui/AccountMenu'
 import { AudienceSwitch } from './AudienceSwitch'
 import { Icon } from './icons'
 import { Logo } from './Logo'
+import { Stage } from './Stage'
 import { ModuleProgress } from '@/study/ui/badges'
 import { StudyLinks } from '@/study/ui/StudyShell'
 
 const MEDIA = './media'
+
+const HERO_SCENES = [
+  { moduleId: 'engine', sceneId: 'four-stroke-diesel', label: '4-Stroke Diesel', metric: 'bmep 7.2 bar · η 48.6%' },
+  { moduleId: 'powertrain', sceneId: 'mf-16-speed', label: '16-Speed Gearbox', metric: '16F / 12R Synchromesh' },
+  { moduleId: 'powertrain', sceneId: 'differential', label: 'Bevel Differential', metric: 'Crown & Pinion Lock' },
+  { moduleId: 'hydraulics', sceneId: 'pumps', label: 'Hydraulic Pump', metric: '42.5 L/min · 185 bar' },
+] as const
+
+const DISCIPLINES: { id: string; label: string; modules: string[] }[] = [
+  { id: 'all', label: 'All Systems', modules: [] },
+  { id: 'power', label: 'Power & Drivetrain', modules: ['engine', 'powertrain', 'pto', 'hydraulics', 'elements', 'vibration'] },
+  { id: 'field', label: 'Traction & Implements', modules: ['traction', 'steering', 'chassis', 'implements', 'testing', 'field'] },
+  { id: 'processing', label: 'Crop Processing', modules: ['processing'] },
+  { id: 'water-structures', label: 'Water & Structures', modules: ['water', 'structures'] },
+]
 
 /** Scene shown on each module card / opened by it. */
 const FEATURED: Record<string, string> = {
@@ -25,6 +44,9 @@ const FEATURED: Record<string, string> = {
   testing: 'dynamometers',
   vibration: 'isolation',
   field: 'field',
+  processing: 'size-reduction',
+  water: 'irrigation-methods',
+  structures: 'farmstead',
 }
 
 const COPY = {
@@ -177,11 +199,158 @@ function Stat({ value, label }: { value: ReactNode; label: string }) {
   )
 }
 
+function HeroInteractiveStage() {
+  const [heroIdx, setHeroIdx] = useState(0)
+  const [live3D, setLive3D] = useState(true)
+  const [scene, setScene] = useState<SceneDef | null>(null)
+  const cutEnabled = useView((s) => s.cut.enabled)
+  const explode = useView((s) => s.explode)
+  const currentHero = HERO_SCENES[heroIdx]
+
+  useEffect(() => {
+    if (!live3D) return
+    let alive = true
+    setScene(null)
+    const mod = MODULES.find((m) => m.id === currentHero.moduleId)
+    const entry = mod?.scenes.find((s) => s.id === currentHero.sceneId)
+    if (!entry?.load) return
+    entry
+      .load()
+      .then(async ({ default: def }) => {
+        await def.prepare?.()
+        return def
+      })
+      .then((def) => {
+        if (!alive) return
+        const v = useView.getState()
+        v.resetView()
+        v.setPresets(def.cutPresets ?? DEFAULT_CUT_PRESETS)
+        v.applyPreset(def.defaultPreset ?? (def.cutPresets ?? DEFAULT_CUT_PRESETS)[0].id)
+        useSim.setState({ playing: true, timeScale: def.timeScale ?? 1 / 40, time: 0 })
+        def.reset?.()
+        setScene(def)
+      })
+      .catch(() => {
+        if (alive) setLive3D(false)
+      })
+    return () => {
+      alive = false
+    }
+  }, [heroIdx, live3D, currentHero.moduleId, currentHero.sceneId])
+
+  return (
+    <div className="relative">
+      {/* Ambient specular bloom */}
+      <div className="absolute -inset-4 rounded-[32px] bg-accent/15 blur-3xl pointer-events-none" aria-hidden />
+
+      {/* Browser Window Container */}
+      <div className="relative overflow-hidden rounded-2xl border border-line-2 bg-panel shadow-2xl shadow-black/80 ring-1 ring-white/[0.06]">
+        <div className="flex items-center gap-2 border-b border-line bg-panel-2/90 px-4 py-2.5 backdrop-blur-md">
+          <div className="flex gap-1.5">
+            <span className="h-2.5 w-2.5 rounded-full bg-red-500/70" />
+            <span className="h-2.5 w-2.5 rounded-full bg-amber-500/70" />
+            <span className="h-2.5 w-2.5 rounded-full bg-emerald-500/70" />
+          </div>
+          <span className="ml-2 truncate font-mono text-[11px] text-dim">
+            solidify.studio · {currentHero.label}
+          </span>
+          <div className="ml-auto flex items-center gap-1.5">
+            {live3D && scene ? (
+              <>
+                <button
+                  onClick={() => useView.getState().setCut({ enabled: !cutEnabled })}
+                  className={`rounded-md px-2 py-0.5 font-mono text-[10px] font-semibold transition-colors ${
+                    cutEnabled ? 'bg-accent text-accent-ink' : 'border border-line-2 text-mute hover:text-ink'
+                  }`}
+                >
+                  {cutEnabled ? 'Cutaway: ON' : 'Cutaway: OFF'}
+                </button>
+                <button
+                  onClick={() => useView.getState().setExplode(explode > 0.1 ? 0 : 0.75)}
+                  className={`rounded-md px-2 py-0.5 font-mono text-[10px] font-semibold transition-colors ${
+                    explode > 0.1 ? 'bg-accent text-accent-ink' : 'border border-line-2 text-mute hover:text-ink'
+                  }`}
+                >
+                  {explode > 0.1 ? 'Assembled' : 'Explode'}
+                </button>
+              </>
+            ) : null}
+            <button
+              onClick={() => setLive3D((v) => !v)}
+              className="rounded-md bg-accent/15 px-2 py-0.5 font-mono text-[10px] font-semibold text-accent hover:bg-accent/25 transition-colors"
+              title="Toggle live interactive WebGL 3D stage"
+            >
+              {live3D ? '● LIVE 3D' : 'STATIC IMG'}
+            </button>
+          </div>
+        </div>
+
+        <div className="relative aspect-[16/11] w-full bg-[#09090b]">
+          {live3D && scene ? (
+            <Stage key={scene.id} scene={scene} />
+          ) : (
+            <Media
+              src={`${MEDIA}/hero.jpg`}
+              alt="Cutaway tractor showing the engine, gearbox and rear axle in section"
+              className="h-full w-full object-cover"
+            />
+          )}
+
+          {/* Scene Quick-Switch Bar inside Hero */}
+          <div className="absolute inset-x-3 bottom-3 z-10 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-white/10 bg-panel/90 px-2.5 py-2 backdrop-blur-xl shadow-lg">
+            <div className="flex flex-wrap items-center gap-1">
+              {HERO_SCENES.map((h, i) => (
+                <button
+                  key={`${h.moduleId}/${h.sceneId}`}
+                  onClick={() => {
+                    setHeroIdx(i)
+                    setLive3D(true)
+                  }}
+                  className={`rounded-lg px-2.5 py-1 text-[11px] font-medium transition-all ${
+                    i === heroIdx
+                      ? 'bg-accent text-accent-ink font-semibold shadow-sm'
+                      : 'text-mute hover:bg-panel-3 hover:text-ink'
+                  }`}
+                >
+                  {h.label}
+                </button>
+              ))}
+            </div>
+            <Link
+              to={`/m/${currentHero.moduleId}/${currentHero.sceneId}`}
+              className="ml-auto inline-flex items-center gap-1 rounded-lg border border-accent/40 bg-accent/10 px-2.5 py-1 font-mono text-[10.5px] font-semibold text-accent hover:bg-accent/20 transition-colors"
+            >
+              Full Workspace →
+            </Link>
+          </div>
+        </div>
+      </div>
+
+      {/* Floating Telemetry Indicator Chip */}
+      <div className="absolute -top-3.5 right-5 hidden rounded-xl border border-line-2 bg-panel-2/95 px-3.5 py-2 shadow-2xl backdrop-blur-xl ring-1 ring-white/[0.06] sm:block">
+        <div className="flex items-center gap-2">
+          <span className="h-2 w-2 rounded-full bg-accent animate-pulse" />
+          <span className="font-mono text-[10px] font-semibold uppercase tracking-wider text-accent">
+            {currentHero.metric}
+          </span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export function Landing() {
   const academic = useAcademic()
   const setAudience = useAudience((s) => s.setAudience)
   const copy = academic ? COPY.academic : COPY.professional
   const { total } = countScenes()
+  const [discipline, setDiscipline] = useState('all')
+
+  const activeDiscipline = DISCIPLINES.find((d) => d.id === discipline) ?? DISCIPLINES[0]
+  const filteredModules =
+    activeDiscipline.modules.length === 0
+      ? MODULES
+      : MODULES.filter((m) => activeDiscipline.modules.includes(m.id))
 
   return (
     <div className="h-full overflow-y-auto bg-bg text-ink selection:bg-accent/20 selection:text-accent">
@@ -211,6 +380,7 @@ export function Landing() {
           <StudyLinks compact className="hidden md:flex" />
           <div className="ml-auto flex items-center gap-3">
             <AudienceSwitch />
+            <AccountMenu compact />
             <Link
               to={copy.primary.to}
               className="hidden rounded-full bg-accent px-4 py-1.5 text-[13px] font-semibold text-accent-ink shadow-sm shadow-accent/20 transition-all hover:brightness-110 active:scale-95 sm:inline-block"
@@ -233,7 +403,7 @@ export function Landing() {
           }}
         />
 
-        <div className="relative mx-auto grid max-w-6xl items-center gap-12 px-5 lg:grid-cols-[1.05fr_0.95fr]">
+        <div className="relative mx-auto grid max-w-6xl items-center gap-12 px-5 lg:grid-cols-[1.02fr_0.98fr]">
           <div>
             <div className="inline-flex items-center gap-2.5 rounded-full border border-accent/25 bg-accent/[0.08] px-3.5 py-1 text-[12px] font-medium text-accent backdrop-blur-md shadow-sm">
               <span className="relative flex h-2 w-2">
@@ -271,39 +441,7 @@ export function Landing() {
             </div>
           </div>
 
-          <div className="relative">
-            {/* Ambient specular bloom */}
-            <div className="absolute -inset-4 rounded-[32px] bg-accent/15 blur-3xl pointer-events-none" aria-hidden />
-
-            {/* Window Container */}
-            <div className="relative overflow-hidden rounded-2xl border border-line-2 bg-panel shadow-2xl shadow-black/80 ring-1 ring-white/[0.05]">
-              <div className="flex items-center gap-2 border-b border-line bg-panel-2/80 px-4 py-3 backdrop-blur-md">
-                <div className="flex gap-1.5">
-                  <span className="h-2.5 w-2.5 rounded-full bg-white/20" />
-                  <span className="h-2.5 w-2.5 rounded-full bg-white/20" />
-                  <span className="h-2.5 w-2.5 rounded-full bg-white/20" />
-                </div>
-                <span className="ml-2 truncate font-mono text-[11px] text-dim">solidify.studio · Line of drive — section view</span>
-                <span className="ml-auto rounded-md bg-accent/15 px-2 py-0.5 font-mono text-[10px] font-semibold text-accent">
-                  LIVE 3D
-                </span>
-              </div>
-              <Media
-                src={`${MEDIA}/hero.jpg`}
-                alt="Cutaway tractor showing the engine, gearbox and rear axle in section"
-                className="aspect-[16/11] w-full object-cover transition-transform duration-700 hover:scale-[1.02]"
-              />
-            </div>
-
-            {/* Floating indicator chip */}
-            <div className="absolute -bottom-4 left-6 hidden rounded-xl border border-line-2 bg-panel-2/95 px-4 py-2.5 shadow-2xl backdrop-blur-xl ring-1 ring-white/[0.05] sm:block">
-              <div className="flex items-center gap-2">
-                <span className="h-2 w-2 rounded-full bg-accent animate-pulse" />
-                <span className="text-[10.5px] font-semibold uppercase tracking-wider text-accent">Section View</span>
-              </div>
-              <div className="mt-0.5 text-[12.5px] font-medium text-ink">Material hatching · Kinematic solver at 1/50×</div>
-            </div>
-          </div>
+          <HeroInteractiveStage />
         </div>
       </section>
 
@@ -353,9 +491,24 @@ export function Landing() {
               From the combustion chamber to the soil, each system opens straight into an active 3D cutaway.
             </p>
           </div>
+          <div className="flex flex-wrap items-center gap-1.5 rounded-2xl border border-line bg-panel-2/70 p-1.5">
+            {DISCIPLINES.map((d) => (
+              <button
+                key={d.id}
+                onClick={() => setDiscipline(d.id)}
+                className={`rounded-xl px-3 py-1.5 text-[12px] font-medium transition-all ${
+                  discipline === d.id
+                    ? 'bg-accent text-accent-ink font-semibold shadow-sm'
+                    : 'text-mute hover:bg-panel-3 hover:text-ink'
+                }`}
+              >
+                {d.label}
+              </button>
+            ))}
+          </div>
         </div>
         <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-          {MODULES.map((m) => (
+          {filteredModules.map((m) => (
             <ModuleCard key={m.id} m={m} academic={academic} />
           ))}
         </div>

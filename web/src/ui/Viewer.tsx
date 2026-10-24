@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { ChallengeHud, ChallengeMenu } from '@/challenges/ChallengeHud'
+import { ChallengeHud } from '@/challenges/ChallengeHud'
 import { challengesFor } from '@/challenges/registry'
 import { useChallenge } from '@/challenges/store'
 import { useSim } from '@/core/sim'
@@ -14,7 +14,7 @@ import { LogoMark } from './Logo'
 import { Icon } from './icons'
 import { PartCard } from './PartCard'
 import { PartsTree } from './PartsTree'
-import { Stage } from './Stage'
+import { OrientationGizmo, Stage } from './Stage'
 import { Toolbar } from './Toolbar'
 import { TourPlayer, useTour } from './TourPlayer'
 import { restoreCamera, useTrail } from './trail'
@@ -24,13 +24,16 @@ import { SeenIn } from './SeenIn'
 import { ComparePanel } from './Compare'
 import { dropInside, exitInside, useInside } from './inside'
 import { TelemetryTag } from './TelemetryTag'
-import { PowerPath, PowerPathButton } from './PowerPath'
-import { WholeButton, WholePanel } from './WholePanel'
+import { PowerPath } from './PowerPath'
+import { WholePanel } from './WholePanel'
 import { useParts } from '@/parts/registry'
-import { focusPart } from './camera'
+import { currentPose, flyTo, focusPart } from './camera'
 import { onSceneReady } from '@/study/bridge'
 import { SceneMark } from '@/study/ui/badges'
-import { StudyLinks } from '@/study/ui/StudyShell'
+import { InSceneExam, questionsForScene } from '@/study/ui/InSceneExam'
+import { AccountMenu } from '@/cloud/ui/AccountMenu'
+import { SceneMenu } from './SceneMenu'
+import { TutorButton, TutorPanel } from '@/cloud/ui/Tutor'
 
 function useMediaQuery(q: string) {
   const [m, setM] = useState(() => window.matchMedia(q).matches)
@@ -53,6 +56,7 @@ export function Viewer() {
   const wide = useMediaQuery('(min-width: 1100px)')
   const [leftOpen, setLeftOpen] = useState(wide)
   const [rightOpen, setRightOpen] = useState(wide)
+  const [rightTab, setRightTab] = useState<'controls' | 'exam'>('controls')
   const tourActive = useTour((s) => s.active)
   const academic = useAcademic()
   const startTour = useTour((s) => s.start)
@@ -67,6 +71,24 @@ export function Viewer() {
     return () => window.clearTimeout(t)
   }, [notice])
   const challengeId = search.get('challenge')
+  const sceneQuestions = entry && mod ? questionsForScene(mod.id, entry.id) : []
+
+  const copyShareLink = () => {
+    if (!mod || !entry) return
+    const v = useView.getState()
+    const params = new URLSearchParams()
+    params.set('cut', v.cut.enabled ? '1' : '0')
+    if (v.cut.planes[0]) params.set('pos', v.cut.planes[0].pos.toFixed(3))
+    if (v.explode > 0.01) params.set('explode', v.explode.toFixed(2))
+    if (v.xray) params.set('xray', '1')
+    const pose = currentPose()
+    if (pose) {
+      params.set('cam', [...pose.position, ...pose.target].map((n) => n.toFixed(2)).join(','))
+    }
+    const shareUrl = `${window.location.origin}${window.location.pathname}#/m/${mod.id}/${entry.id}?${params.toString()}`
+    void navigator.clipboard?.writeText(shareUrl)
+    setNotice('Copied shareable 3D view link to clipboard')
+  }
 
   useEffect(() => {
     setLeftOpen(wide)
@@ -123,6 +145,24 @@ export function Viewer() {
           }, 450)
         }
         window.setTimeout(() => useFade.getState().set(0), 120)
+        // Restore shared deep-link view parameters (?cut=...&pos=...&explode=...&xray=...&cam=...)
+        const qCut = search.get('cut')
+        const qPos = search.get('pos')
+        const qExp = search.get('explode')
+        const qXray = search.get('xray')
+        const qCam = search.get('cam')
+        if (qCut !== null) v.setCut({ enabled: qCut === '1' })
+        if (qPos !== null && !Number.isNaN(parseFloat(qPos))) v.setPlane(0, { pos: parseFloat(qPos) })
+        if (qExp !== null && !Number.isNaN(parseFloat(qExp))) v.setExplode(parseFloat(qExp))
+        if (qXray === '1') v.setXray(true)
+        if (qCam) {
+          const nums = qCam.split(',').map(Number)
+          if (nums.length === 6 && nums.every((x) => !Number.isNaN(x))) {
+            window.setTimeout(() => {
+              flyTo({ position: [nums[0], nums[1], nums[2]], target: [nums[3], nums[4], nums[5]] }, false)
+            }, 220)
+          }
+        }
         // coming back up a drill-down trail: put the camera and selection back
         const stop = useTrail.getState().consumeRestore(route)
         if (stop) {
@@ -230,18 +270,16 @@ export function Viewer() {
         <div className="ml-auto flex items-center gap-1.5">
           <button
             onClick={() => window.dispatchEvent(new Event('solidify:search'))}
-            className="hidden items-center gap-1.5 rounded-md border border-line-2 px-2 py-1 text-[12px] text-mute hover:text-ink md:flex"
+            aria-label="Search parts and scenes"
+            className="grid h-8 w-8 place-items-center rounded-md text-mute hover:bg-panel-3 hover:text-ink"
             title="Search every part and scene (Ctrl/⌘ K)"
           >
-            <Icon.target width={13} height={13} /> Search parts <kbd className="rounded border border-line-2 px-1 text-[10px]">Ctrl K</kbd>
+            <Icon.target width={16} height={16} />
           </button>
-          {scene ? <WholeButton /> : null}
-          {scene ? <PowerPathButton onStart={() => setPower(true)} /> : null}
-          <StudyLinks compact className="hidden lg:flex" />
+          {scene && entry ? <SceneMenu scene={scene} moduleId={mod.id} sceneId={entry.id} onPower={() => setPower(true)} onShare={copyShareLink} /> : null}
           <div className="hidden md:block">
             <AudienceSwitch compact />
           </div>
-          {scene && entry ? <ChallengeMenu moduleId={mod.id} sceneId={entry.id} scene={scene} /> : null}
           {scene?.tour?.length ? (
             <button
               onClick={() => (tourActive ? stopTour() : startTour())}
@@ -251,12 +289,15 @@ export function Viewer() {
               <span className="hidden sm:inline">{tourActive ? 'End tour' : 'Guided tour'}</span>
             </button>
           ) : null}
+          {scene ? <TutorButton /> : null}
+          <span className="mx-0.5 hidden h-5 w-px bg-line sm:block" aria-hidden />
           <button aria-label="Toggle parts panel" aria-pressed={leftOpen} onClick={() => setLeftOpen((o) => !o)} className={`grid h-8 w-8 place-items-center rounded-md ${leftOpen ? 'text-accent' : 'text-mute'} hover:bg-panel-3`}>
             <Icon.panel />
           </button>
           <button aria-label="Toggle controls panel" aria-pressed={rightOpen} onClick={() => setRightOpen((o) => !o)} className={`grid h-8 w-8 place-items-center rounded-md ${rightOpen ? 'text-accent' : 'text-mute'} hover:bg-panel-3`}>
             <Icon.sliders />
           </button>
+          <AccountMenu compact />
         </div>
       </header>
 
@@ -330,7 +371,8 @@ export function Viewer() {
                   <PowerPath onClose={() => setPower(false)} />
                 </div>
               ) : null}
-              <div className="pointer-events-none absolute right-3 top-3 z-10">
+              <div className="pointer-events-none absolute right-3 top-3 z-10 flex flex-col items-end gap-2">
+                <OrientationGizmo scene={scene} />
                 <ChallengeHud />
               </div>
               <InsidePill />
@@ -350,6 +392,7 @@ export function Viewer() {
             </>
           ) : null}
         </main>
+        <TutorPanel scene={scene ? { title: scene.title, summary: scene.summary } : undefined} route={mod && entry ? `/m/${mod.id}/${entry.id}` : ''} />
 
         {rightOpen && scene ? (
           <aside className={`${wide ? 'relative' : 'absolute inset-y-0 right-0 z-20 shadow-2xl'} flex w-[min(380px,100vw)] shrink-0 flex-col border-l border-line bg-panel`}>
@@ -362,10 +405,36 @@ export function Viewer() {
                   <Badge tone="warn">Frequently examined</Badge>
                 </div>
               ) : null}
+              {sceneQuestions.length > 0 ? (
+                <div className="mt-3 grid grid-cols-2 gap-1 rounded-xl border border-line bg-panel-2 p-1">
+                  <button
+                    onClick={() => setRightTab('controls')}
+                    className={`rounded-lg py-1 text-[11.5px] font-semibold transition-colors ${
+                      rightTab === 'controls' ? 'bg-panel-3 text-ink shadow-sm' : 'text-mute hover:text-ink'
+                    }`}
+                  >
+                    Controls & Physics
+                  </button>
+                  <button
+                    onClick={() => setRightTab('exam')}
+                    className={`rounded-lg py-1 text-[11.5px] font-semibold transition-colors ${
+                      rightTab === 'exam' ? 'bg-accent text-accent-ink shadow-sm' : 'text-accent hover:bg-accent/10'
+                    }`}
+                  >
+                    Exam Practice ({sceneQuestions.length})
+                  </button>
+                </div>
+              ) : null}
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto">
-              <ComparePanel key={scene.id} scene={scene} />
-              {scene.Panel ? <scene.Panel /> : null}
+              {rightTab === 'exam' && sceneQuestions.length > 0 && entry ? (
+                <InSceneExam key={scene.id} moduleId={mod.id} sceneId={entry.id} scene={scene} />
+              ) : (
+                <>
+                  <ComparePanel key={scene.id} scene={scene} />
+                  {scene.Panel ? <scene.Panel /> : null}
+                </>
+              )}
             </div>
           </aside>
         ) : null}
