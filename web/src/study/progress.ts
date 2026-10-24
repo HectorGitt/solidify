@@ -16,9 +16,11 @@ export interface ChallengeProgress {
   /** when it was first completed */
   done: number
   best?: number
+  /** which way a better score goes (lets the cloud copy keep the right best) */
+  better?: 'higher' | 'lower'
 }
 
-interface ProgressData {
+export interface ProgressData {
   scenes: Record<string, SceneProgress>
   questions: Record<string, QuestionProgress>
   challenges: Record<string, ChallengeProgress>
@@ -53,6 +55,8 @@ interface ProgressState extends ProgressData {
   markTour: (sceneId: string) => void
   recordAnswer: (questionId: string, correct: boolean) => void
   recordChallenge: (id: string, score?: number, better?: 'lower' | 'higher') => void
+  /** replace everything, e.g. with the merged copy from cloud sync */
+  replaceAll: (d: ProgressData) => void
   reset: () => void
 }
 
@@ -83,8 +87,9 @@ export const useProgress = create<ProgressState>((set, get) => {
       const prev = challenges[id]
       let best = prev?.best
       if (score !== undefined && Number.isFinite(score)) best = best === undefined ? score : better === 'lower' ? Math.min(best, score) : Math.max(best, score)
-      commit({ scenes, questions, challenges: { ...challenges, [id]: { done: prev?.done ?? Date.now(), ...(best !== undefined ? { best } : {}) } } })
+      commit({ scenes, questions, challenges: { ...challenges, [id]: { done: prev?.done ?? Date.now(), ...(best !== undefined ? { best, better } : {}) } } })
     },
+    replaceAll: (d) => commit({ scenes: { ...d.scenes }, questions: { ...d.questions }, challenges: { ...d.challenges } }),
     reset: () => commit({ ...EMPTY, scenes: {}, questions: {}, challenges: {} }),
   }
 })

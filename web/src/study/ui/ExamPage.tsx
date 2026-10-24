@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { ERRATA } from '@/content/errata'
 import { formatCitation } from '@/content/citations'
 import { findModule } from '@/modules/catalog'
@@ -9,7 +9,7 @@ import { Tex } from '@/ui/Tex'
 import { Working, n } from '@/ui/Working'
 import { queueParams } from '../bridge'
 import { useProgress } from '../progress'
-import { QUESTIONS } from '../questions'
+import { QUESTIONS, findQuestion } from '../questions'
 import { COURSES, checkAnswer, parseAnswer, type Course, type Question } from '../types'
 import { Bar, CourseLabel, Pills, StudyShell } from './StudyShell'
 
@@ -106,8 +106,8 @@ function Solution({ q }: { q: Question }) {
 
 /* ------------------------------------------------------------------ practice */
 
-function Practice({ list }: { list: Question[] }) {
-  const [i, setI] = useState(0)
+function Practice({ list, start }: { list: Question[]; start?: string }) {
+  const [i, setI] = useState(() => Math.max(0, start ? list.findIndex((x) => x.id === start) : 0))
   const [inputs, setInputs] = useState<Inputs>({})
   const [results, setResults] = useState<ReturnType<typeof fieldResults> | undefined>()
   const [reveal, setReveal] = useState(false)
@@ -121,7 +121,7 @@ function Practice({ list }: { list: Question[] }) {
     setResults(undefined)
     setReveal(false)
   }, [q?.id])
-  useEffect(() => setI(0), [list])
+  useEffect(() => setI(Math.max(0, start ? list.findIndex((x) => x.id === start) : 0)), [list, start])
 
   if (!q) return <p className="text-mute">No questions match these filters.</p>
   const check = () => {
@@ -312,9 +312,12 @@ function Mock({ pool }: { pool: Question[] }) {
 /* ------------------------------------------------------------------ page */
 
 export function ExamPage() {
+  // /exam?q=<question id> opens that question (used by class assignments)
+  const [params] = useSearchParams()
+  const start = useMemo(() => findQuestion(params.get('q') ?? ''), [params])
   const [mode, setMode] = useState<'practice' | 'mock'>('practice')
-  const [course, setCourse] = useState<Course | 'all'>('all')
-  const [topic, setTopic] = useState('all')
+  const [course, setCourse] = useState<Course | 'all'>(start?.course ?? 'all')
+  const [topic, setTopic] = useState(start?.topic ?? 'all')
   const academic = useAcademic()
   const qp = useProgress((s) => s.questions)
 
@@ -347,7 +350,7 @@ export function ExamPage() {
           <Bar value={solved} total={list.length} />
         </div>
       </div>
-      {mode === 'practice' ? <Practice list={list} /> : <Mock pool={list} />}
+      {mode === 'practice' ? <Practice list={list} start={start?.id} /> : <Mock pool={list} />}
     </StudyShell>
   )
 }
