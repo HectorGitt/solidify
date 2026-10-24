@@ -32,16 +32,31 @@ There are two modes:
 - three-bvh-csg, which builds cutaway geometry in a web worker
 - vitest, which runs over 1,000 tests on the physics libraries
 
+## Repository
+
+| Folder | What | Deploys to |
+|---|---|---|
+| `web/` | The Solidify app (Vite, React, three.js) | Netlify (see `netlify.toml`) |
+| `api/` | The API: accounts, progress sync, classes, shared links, feedback and the Gemini tutor (Hono on Node, Firestore, Firebase Auth) | Google Cloud Run, project `solidify-studio`, region `europe-west1` |
+
+The two are independent packages; each has its own `package.json`.
+
 ## Develop
 
 ```bash
+cd web
 npm install
 npm run dev        # http://localhost:5173
 npm test           # physics + UI unit tests
-npm run build      # type-check + production build to dist/
+npm run build      # type-check + production build to web/dist/
+
+cd ../api
+npm install
+npm test           # API tests (in-memory database, fake sign-in and tutor)
+npm run build      # compile to api/dist/
 ```
 
-## Layout
+## App layout (`web/`)
 
 | Path | Contents |
 | --- | --- |

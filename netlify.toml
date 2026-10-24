@@ -1,0 +1,5 @@
+# The Solidify web app lives in web/ (the API in api/ deploys to Cloud Run separately).
+[build]
+  base = "web"
+  command = "npm run build"
+  publish = "dist"
