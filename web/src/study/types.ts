@@ -1,16 +1,17 @@
 import type { Citation } from '@/content/citations'
 import type { WorkingStep } from '@/ui/Working'
+import type { Seed, Vals, VariantMaker } from './variants'
 
-/** The six 500L courses the study tools cover. */
+/** Subject areas. The ids are internal authoring keys and are never shown; users see the titles. */
 export type Course = 'AEE509' | 'AEE510' | 'AEE502' | 'AEE501' | 'AEE503' | 'AEE518'
 
 export const COURSES: { id: Course; title: string }[] = [
-  { id: 'AEE509', title: 'Farm Power I — engines' },
-  { id: 'AEE510', title: 'Farm Power II — transmission, hydraulics, tyres' },
-  { id: 'AEE502', title: 'Farm Machinery II — tractor mechanics, implements' },
+  { id: 'AEE509', title: 'Engines' },
+  { id: 'AEE510', title: 'Transmission, hydraulics & tyres' },
+  { id: 'AEE502', title: 'Tractor mechanics & implements' },
   { id: 'AEE501', title: 'Land clearing, tillage & machinery management' },
-  { id: 'AEE503', title: 'Machine elements design' },
-  { id: 'AEE518', title: 'Dynamic systems & vibration' },
+  { id: 'AEE503', title: 'Machine design' },
+  { id: 'AEE518', title: 'Vibration & dynamic systems' },
 ]
 
 export const courseTitle = (c: string) => COURSES.find((x) => x.id === c)?.title ?? c
@@ -49,6 +50,12 @@ export interface Question {
   errata?: string
   /** passed to the scene's applyParams when opened from the question */
   params?: Record<string, unknown>
+  /** parametric questions: makes variants with fresh numbers (see variants.ts) */
+  vary?: VariantMaker
+  /** which version this is: 'original' (the past paper) or a variant seed */
+  variant?: Seed
+  /** the input values of this version */
+  values?: Vals
 }
 
 export const DEFAULT_TOL = 0.01

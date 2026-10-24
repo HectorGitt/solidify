@@ -1,6 +1,5 @@
 import { useMemo, useState } from 'react'
 import { ERRATA } from '@/content/errata'
-import { formatCitation } from '@/content/citations'
 import type { SceneDef } from '@/modules/types'
 import { Badge } from '@/ui/controls'
 import { Tex } from '@/ui/Tex'
@@ -8,6 +7,7 @@ import { Working, n } from '@/ui/Working'
 import { useProgress } from '../progress'
 import { QUESTIONS } from '../questions'
 import { checkAnswer, parseAnswer, type Question } from '../types'
+import { instantiate, randomSeed, type Seed } from '../variants'
 import { CourseLabel } from './StudyShell'
 
 export function questionsForScene(moduleId: string, sceneId: string): Question[] {
@@ -21,16 +21,17 @@ export function InSceneExam({ moduleId, sceneId, scene }: { moduleId: string; sc
   const [checked, setChecked] = useState(false)
   const [showWorking, setShowWorking] = useState(false)
   const recordAnswer = useProgress((s) => s.recordAnswer)
+  const [seed, setSeed] = useState<Seed>('original')
 
   if (!list.length) {
     return (
       <div className="p-4 text-[12.5px] text-mute">
-        No past-question problems are directly bound to this scene yet. Browse all course questions in the Exam Bank.
+        No practice problems are linked to this scene yet. Browse every question in Exam practice.
       </div>
     )
   }
 
-  const q = list[Math.min(idx, list.length - 1)]
+  const q = instantiate(list[Math.min(idx, list.length - 1)], seed)
   const solved = q.solve()
   const results = checked
     ? q.answers.map((a) => ({
@@ -40,7 +41,8 @@ export function InSceneExam({ moduleId, sceneId, scene }: { moduleId: string; sc
       }))
     : undefined
 
-  const erratum = q.errata ? ERRATA.find((e) => e.id === q.errata) : undefined
+  // errata describe the past-paper numbers only
+  const erratum = q.errata && q.variant === 'original' ? ERRATA.find((e) => e.id === q.errata) : undefined
 
   const sync3D = () => {
     if (q.params) scene.applyParams?.(q.params)
@@ -61,6 +63,7 @@ export function InSceneExam({ moduleId, sceneId, scene }: { moduleId: string; sc
               key={item.id}
               onClick={() => {
                 setIdx(i)
+                setSeed('original')
                 setInputs({})
                 setChecked(false)
                 setShowWorking(false)
@@ -80,13 +83,36 @@ export function InSceneExam({ moduleId, sceneId, scene }: { moduleId: string; sc
           <CourseLabel course={q.course} />
         </Badge>
         <Badge>{q.topic}</Badge>
-        {erratum ? <Badge tone="warn">Note Errata Flagged</Badge> : null}
+        {q.variant !== 'original' ? <Badge tone="accent">new numbers</Badge> : null}
+        {erratum ? <Badge tone="warn">Published answer differs</Badge> : null}
       </div>
 
       <div>
         <h3 className="text-[14.5px] font-semibold text-ink">{q.title}</h3>
         <p className="mt-1 text-[12.5px] leading-relaxed text-ink/85">{q.statement}</p>
       </div>
+
+      {q.vary ? (
+        <div className="flex items-center gap-3 text-[12px]">
+          <button
+            onClick={() => {
+              setSeed(randomSeed())
+              setInputs({})
+              setChecked(false)
+              setShowWorking(false)
+            }}
+            className="rounded-lg border border-line-2 bg-panel-2 px-2.5 py-1 font-medium text-ink hover:border-accent/40"
+            title="The same problem with different numbers"
+          >
+            New numbers
+          </button>
+          {q.variant !== 'original' ? (
+            <button onClick={() => (setSeed('original'), setInputs({}), setChecked(false))} className="text-mute hover:text-ink">
+              Past-paper numbers
+            </button>
+          ) : null}
+        </div>
+      ) : null}
 
       {q.params ? (
         <button
@@ -146,10 +172,10 @@ export function InSceneExam({ moduleId, sceneId, scene }: { moduleId: string; sc
       {erratum && (checked || showWorking) ? (
         <div className="rounded-xl border border-warn/40 bg-warn/10 p-3 text-[12px] leading-relaxed text-ink">
           <div className="font-mono text-[10.5px] font-bold uppercase tracking-wider text-warn">
-            Note / Marking Guide Discrepancy ({formatCitation(q.cite)})
+            The published answer differs
           </div>
           <p className="mt-1 text-ink/90">
-            <b>Notes state:</b> {erratum.says}
+            <b>Published answer:</b> {erratum.says}
           </p>
           <p className="mt-0.5 text-accent">
             <b>Verified calculation:</b> {erratum.correct}

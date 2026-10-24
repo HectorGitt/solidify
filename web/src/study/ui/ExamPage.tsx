@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { ERRATA } from '@/content/errata'
-import { formatCitation } from '@/content/citations'
 import { findModule } from '@/modules/catalog'
 import { useAcademic } from '@/ui/audience'
 import { Badge } from '@/ui/controls'
@@ -11,6 +10,7 @@ import { queueParams } from '../bridge'
 import { useProgress } from '../progress'
 import { QUESTIONS, findQuestion } from '../questions'
 import { COURSES, checkAnswer, parseAnswer, type Course, type Question } from '../types'
+import { instantiate, randomSeed, type Seed } from '../variants'
 import { Bar, CourseLabel, Pills, StudyShell } from './StudyShell'
 
 type Inputs = Record<string, string>
@@ -68,7 +68,12 @@ function QuestionHead({ q, index, total }: { q: Question; index?: number; total?
         </Badge>
         <Badge>{q.topic}</Badge>
         {scene ? <span className="text-dim">· {scene.title}</span> : null}
-        {academic && q.errata ? (
+        {q.variant !== undefined && q.variant !== 'original' ? (
+          <Badge tone="accent" title="The same problem with new numbers; marked by the same calculations">
+            new numbers
+          </Badge>
+        ) : null}
+        {academic && q.errata && (q.variant ?? 'original') === 'original' ? (
           <Badge tone="warn" title={ERRATA.find((e) => e.id === q.errata)?.correct}>
             note discrepancy
           </Badge>
@@ -83,7 +88,7 @@ function QuestionHead({ q, index, total }: { q: Question; index?: number; total?
 function Solution({ q }: { q: Question }) {
   const academic = useAcademic()
   const r = q.solve()
-  const err = q.errata ? ERRATA.find((e) => e.id === q.errata) : undefined
+  const err = q.errata && (q.variant ?? 'original') === 'original' ? ERRATA.find((e) => e.id === q.errata) : undefined
   return (
     <div className="mt-3 space-y-2">
       <div className="flex flex-wrap gap-2 text-[12.5px]">
@@ -96,10 +101,9 @@ function Solution({ q }: { q: Question }) {
       <Working steps={q.working(r)} />
       {academic && err ? (
         <p className="rounded-md border border-warn/30 bg-warn/10 px-3 py-2 text-[12px] leading-snug text-warn">
-          <strong>The notes say:</strong> {err.says} <strong>Correct:</strong> {err.correct}
+          <strong>A published answer gives:</strong> {err.says} <strong>Correct:</strong> {err.correct}
         </p>
       ) : null}
-      {academic ? <p className="text-[11px] text-dim">Source: {formatCitation(q.cite)}</p> : null}
     </div>
   )
 }
@@ -114,13 +118,16 @@ function Practice({ list, start }: { list: Question[]; start?: string }) {
   const record = useProgress((s) => s.recordAnswer)
   const qp = useProgress((s) => s.questions)
   const open3d = useOpenIn3D()
-  const q = list[Math.min(i, list.length - 1)]
+  const base = list[Math.min(i, list.length - 1)]
+  const [seed, setSeed] = useState<Seed>('original')
+  const q = useMemo(() => (base ? instantiate(base, seed) : base), [base, seed])
 
   useEffect(() => {
     setInputs({})
     setResults(undefined)
     setReveal(false)
-  }, [q?.id])
+  }, [q?.id, q?.variant])
+  useEffect(() => setSeed('original'), [base?.id])
   useEffect(() => setI(Math.max(0, start ? list.findIndex((x) => x.id === start) : 0)), [list, start])
 
   if (!q) return <p className="text-mute">No questions match these filters.</p>
@@ -147,6 +154,20 @@ function Practice({ list, start }: { list: Question[]; start?: string }) {
         <button onClick={() => open3d(q)} className="rounded-lg border border-accent/50 px-3 py-1.5 text-[13px] text-accent hover:bg-accent/10">
           Open in 3D{q.params ? ' with this data' : ''}
         </button>
+        {q.vary ? (
+          <button
+            onClick={() => setSeed(randomSeed())}
+            className="rounded-lg border border-line-2 px-3 py-1.5 text-[13px] text-ink hover:border-accent/40"
+            title="The same problem with different numbers"
+          >
+            New numbers
+          </button>
+        ) : null}
+        {q.vary && seed !== 'original' ? (
+          <button onClick={() => setSeed('original')} className="text-[12.5px] text-mute hover:text-ink">
+            Past-paper numbers
+          </button>
+        ) : null}
         {results ? (
           <span className={`text-[12.5px] font-medium ${results.every((x) => x.ok) ? 'text-accent' : 'text-warn'}`}>
             {results.filter((x) => x.ok).length}/{results.length} correct
@@ -186,6 +207,7 @@ const fmtTime = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60
 function Mock({ pool }: { pool: Question[] }) {
   const [count, setCount] = useState<'5' | '10' | '15'>('5')
   const [minutes, setMinutes] = useState<'10' | '20' | '30'>('20')
+  const [fresh, setFresh] = useState<'new' | 'paper'>('new')
   const [paper, setPaper] = useState<Question[] | null>(null)
   const [answers, setAnswers] = useState<Record<string, Inputs>>({})
   const [i, setI] = useState(0)
@@ -225,11 +247,23 @@ function Mock({ pool }: { pool: Question[] }) {
             <span className="w-24 text-mute">Time</span>
             <Pills label="Minutes" value={minutes} onChange={setMinutes} options={['10', '20', '30'].map((v) => ({ value: v as typeof minutes, label: `${v} min` }))} />
           </div>
+          <div className="flex items-center gap-3">
+            <span className="w-24 text-mute">Numbers</span>
+            <Pills
+              label="Numbers"
+              value={fresh}
+              onChange={setFresh}
+              options={[
+                { value: 'new' as const, label: 'New for every question' },
+                { value: 'paper' as const, label: 'Past-paper' },
+              ]}
+            />
+          </div>
         </div>
         <button
           disabled={pool.length === 0}
           onClick={() => {
-            setPaper(shuffle(pool).slice(0, Number(count)))
+            setPaper(shuffle(pool).slice(0, Number(count)).map((q) => (fresh === 'new' ? instantiate(q, randomSeed()) : q)))
             setAnswers({})
             setI(0)
             setDone(false)
@@ -334,13 +368,13 @@ export function ExamPage() {
     >
       <div className="mb-4 space-y-2 rounded-2xl border border-line bg-panel-2/50 p-3">
         <Pills
-          label="Course"
+          label="Subject"
           value={course}
           onChange={(v) => {
             setCourse(v)
             setTopic('all')
           }}
-          options={[{ value: 'all' as const, label: 'All courses' }, ...COURSES.map((c) => ({ value: c.id, label: <CourseLabel course={c.id} /> }))]}
+          options={[{ value: 'all' as const, label: 'All subjects' }, ...COURSES.map((c) => ({ value: c.id, label: <CourseLabel course={c.id} /> }))]}
         />
         <Pills label="Topic" value={topic} onChange={setTopic} options={[{ value: 'all', label: 'All topics' }, ...topics.map((t) => ({ value: t, label: t }))]} />
         <div className="flex items-center gap-3 pt-1 text-[12px] text-mute">
