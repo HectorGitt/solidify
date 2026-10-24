@@ -20,6 +20,7 @@ export function Toolbar({ scene }: { scene: SceneDef }) {
 
   const cut = useView((s) => s.cut)
   const setCut = useView((s) => s.setCut)
+  const setPlane = useView((s) => s.setPlane)
   const presets = useView((s) => s.cutPresets)
   const activePreset = useView((s) => s.activePreset)
   const applyPreset = useView((s) => s.applyPreset)
@@ -33,14 +34,18 @@ export function Toolbar({ scene }: { scene: SceneDef }) {
   const setLabels = useView((s) => s.setLabels)
   const [openCut, setOpenCut] = useState(false)
 
+  const primaryPlane = cut.planes[0]
+  const cutRange = scene.extent * 0.6
+  const cutFill = primaryPlane ? ((primaryPlane.pos + cutRange) / (2 * cutRange)) * 100 : 50
+
   return (
     <div className="pointer-events-auto relative max-w-[calc(100vw-1.5rem)]">
-      <div className="flex items-center gap-1 overflow-x-auto rounded-2xl border border-line-2 bg-panel-2/85 px-2 py-1.5 shadow-2xl shadow-black/60 backdrop-blur-xl ring-1 ring-white/[0.04]">
+      <div className="flex items-center gap-1 overflow-x-auto rounded-2xl border border-line-2 bg-panel-2/85 px-2.5 py-1.5 shadow-2xl shadow-black/60 backdrop-blur-xl ring-1 ring-white/[0.04]">
         <IconButton label={playing ? 'Pause (space)' : 'Play (space)'} onClick={toggle} active={playing}>
           {playing ? <Icon.pause /> : <Icon.play />}
         </IconButton>
         <IconButton label="Step one frame" onClick={step}>
-          <Icon.step />
+          {Icon.step ? <Icon.step /> : null}
         </IconButton>
         <label className="ml-1 flex items-center gap-1 text-[11.5px] text-mute" title="Slow motion: sim seconds per real second">
           <span className="sr-only">Speed</span>
@@ -57,9 +62,24 @@ export function Toolbar({ scene }: { scene: SceneDef }) {
           </select>
         </label>
         <Divider />
-        <IconButton label={cut.enabled ? 'Section: on' : 'Section: off'} onClick={() => setCut({ enabled: !cut.enabled })} active={cut.enabled}>
+        <IconButton label={cut.enabled ? 'Section: on (C)' : 'Section: off (C)'} onClick={() => setCut({ enabled: !cut.enabled })} active={cut.enabled}>
           <Icon.cut />
         </IconButton>
+        {cut.enabled && primaryPlane ? (
+          <div className="hidden items-center gap-1.5 px-1 sm:flex" title="Sweep section plane across assembly">
+            <input
+              aria-label="Sweep section plane"
+              type="range"
+              className="slider w-20"
+              min={-cutRange}
+              max={cutRange}
+              step={scene.extent / 1000}
+              value={primaryPlane.pos}
+              style={{ ['--fill' as string]: `${Math.max(0, Math.min(100, cutFill))}%` }}
+              onChange={(e) => setPlane(0, { pos: parseFloat(e.target.value) })}
+            />
+          </div>
+        ) : null}
         <button
           className="whitespace-nowrap rounded-lg px-2 py-1 text-[11.5px] font-medium text-mute hover:bg-panel-3 hover:text-ink transition-colors"
           onClick={() => {

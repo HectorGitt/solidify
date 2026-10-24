@@ -1,5 +1,5 @@
 import { CameraControls, ContactShadows, Environment, Grid, Lightformer, Html, Line } from '@react-three/drei'
-import { Canvas, useFrame } from '@react-three/fiber'
+import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { Suspense, useCallback, useEffect, useMemo, useRef } from 'react'
 import type CameraControlsImpl from 'camera-controls'
 import * as THREE from 'three'
@@ -80,6 +80,19 @@ function HeadLight() {
   return <directionalLight ref={light} intensity={0.7} color="#fff8f0" />
 }
 
+/** Development only: the live scene (window.__scene), three.js (window.__THREE) and MeshBVH (window.__bvh), for model checks run against it. */
+function DevSceneHandle() {
+  const scene = useThree((s) => s.scene)
+  useEffect(() => {
+    if (!import.meta.env.DEV) return
+    ;(window as unknown as { __scene?: THREE.Scene; __THREE?: typeof THREE }).__scene = scene
+    ;(window as unknown as { __THREE?: typeof THREE }).__THREE = THREE
+    // and a spatial index for surface-distance checks
+    void import('three-mesh-bvh').then((m) => void ((window as unknown as { __bvh?: unknown }).__bvh = m.MeshBVH))
+  }, [scene])
+  return null
+}
+
 function Lights({ extent, follow }: { extent: number; follow: boolean }) {
   const s = extent
   const half = follow ? Math.min(1.4 * s, 18) : 1.4 * s
@@ -140,6 +153,7 @@ function Lights({ extent, follow }: { extent: number; follow: boolean }) {
  */
 function Floor({ y, extent }: { y: number; extent: number }) {
   const ref = useRef<THREE.Group>(null)
+  const studioMode = useView((s) => s.studioMode)
   useEffect(() => {
     ref.current?.traverse((o) => {
       const m = (o as THREE.Mesh).material
@@ -152,6 +166,8 @@ function Floor({ y, extent }: { y: number; extent: number }) {
       }
     })
   }, [extent])
+  const cellColor = studioMode === 'blueprint' ? '#0f294a' : studioMode === 'workshop' ? '#26211d' : '#1c1e24'
+  const sectionColor = studioMode === 'blueprint' ? '#1e4b85' : studioMode === 'workshop' ? '#3b332c' : '#2a2d37'
   return (
     <group ref={ref} position={[0, y, 0]}>
       <mesh rotation-x={-Math.PI / 2} receiveShadow>
@@ -164,10 +180,10 @@ function Floor({ y, extent }: { y: number; extent: number }) {
         args={[extent * 20, extent * 20]}
         cellSize={extent / 20}
         cellThickness={0.6}
-        cellColor="#1c1e24"
+        cellColor={cellColor}
         sectionSize={extent / 4}
         sectionThickness={1}
-        sectionColor="#2a2d37"
+        sectionColor={sectionColor}
         fadeDistance={extent * 7}
         fadeStrength={1.5}
         infiniteGrid
@@ -230,8 +246,6 @@ function CameraTracker({ controlsRef }: { controlsRef: React.RefObject<CameraCon
   return null
 }
 
-
-
 /** Keeps the camera on a moving part (e.g. a tractor driving down the field). */
 function FollowCamera({ partId, pose }: { partId: string; pose: CameraPose }) {
   const last = useRef<THREE.Vector3 | null>(null)
@@ -269,9 +283,74 @@ function FollowCamera({ partId, pose }: { partId: string; pose: CameraPose }) {
   return null
 }
 
+/**
+ * Interactive CAD Orientation Gizmo (Iso / Front / Side / Top) + Studio Lighting Preset switcher.
+ */
+export function OrientationGizmo({ scene }: { scene: SceneDef }) {
+  const studioMode = useView((s) => s.studioMode)
+  const setStudioMode = useView((s) => s.setStudioMode)
+  const d = scene.extent * 1.35
+  const [tx, ty, tz] = scene.camera.target
+
+  const snap = (dx: number, dy: number, dz: number) => {
+    flyTo({ position: [tx + dx, ty + dy, tz + dz], target: [tx, ty, tz] }, true)
+  }
+
+  return (
+    <div className="pointer-events-auto flex items-center gap-1 rounded-xl border border-line-2 bg-panel-2/85 p-1 shadow-xl backdrop-blur-xl ring-1 ring-white/[0.04]">
+      <div className="flex items-center gap-0.5 px-1">
+        <span className="mr-1 font-mono text-[10px] font-semibold uppercase tracking-wider text-dim">CAD</span>
+        <button
+          onClick={() => flyTo(scene.camera, true)}
+          className="rounded-md px-1.5 py-0.5 font-mono text-[10.5px] font-medium text-ink/90 hover:bg-accent/15 hover:text-accent transition-colors"
+          title="Isometric home camera"
+        >
+          ISO
+        </button>
+        <button
+          onClick={() => snap(0, dyOffset(d), d)}
+          className="rounded-md px-1.5 py-0.5 font-mono text-[10.5px] font-medium text-mute hover:bg-panel-3 hover:text-ink transition-colors"
+          title="Front elevation (+Z)"
+        >
+          FRONT
+        </button>
+        <button
+          onClick={() => snap(d, dyOffset(d), 0)}
+          className="rounded-md px-1.5 py-0.5 font-mono text-[10.5px] font-medium text-mute hover:bg-panel-3 hover:text-ink transition-colors"
+          title="Right side elevation (+X)"
+        >
+          SIDE
+        </button>
+        <button
+          onClick={() => snap(0, d * 1.15, 0.01)}
+          className="rounded-md px-1.5 py-0.5 font-mono text-[10.5px] font-medium text-mute hover:bg-panel-3 hover:text-ink transition-colors"
+          title="Top plan view (+Y)"
+        >
+          TOP
+        </button>
+      </div>
+      <span className="h-3.5 w-px bg-line-2" />
+      <button
+        onClick={() =>
+          setStudioMode(studioMode === 'dark' ? 'blueprint' : studioMode === 'blueprint' ? 'workshop' : 'dark')
+        }
+        className="rounded-md px-2 py-0.5 font-mono text-[10.5px] font-medium text-accent hover:bg-accent/15 transition-colors"
+        title="Cycle viewport environment preset (Dark CAD / Blueprint / Warm Workshop)"
+      >
+        {studioMode === 'dark' ? 'Studio' : studioMode === 'blueprint' ? 'Blueprint' : 'Workshop'}
+      </button>
+    </div>
+  )
+}
+
+function dyOffset(d: number) {
+  return d * 0.12
+}
+
 export function Stage({ scene, smooth = true }: { scene: SceneDef; smooth?: boolean }) {
   const ref = useRef<CameraControlsImpl>(null)
   const select = useView((s) => s.select)
+  const studioMode = useView((s) => s.studioMode)
 
   useEffect(() => {
     setCameraControls(ref.current)
@@ -289,6 +368,9 @@ export function Stage({ scene, smooth = true }: { scene: SceneDef; smooth?: bool
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [scene.id],
   )
+
+  const bgColor = studioMode === 'blueprint' ? '#06101e' : studioMode === 'workshop' ? '#12100e' : '#09090b'
+
   return (
     <Canvas
       shadows
@@ -309,8 +391,8 @@ export function Stage({ scene, smooth = true }: { scene: SceneDef; smooth?: bool
       // 3D labels (drei Html) carry huge z-indexes; keep them inside the canvas so cards and modals stay on top
       style={{ isolation: 'isolate', zIndex: 0 }}
     >
-      <color attach="background" args={['#09090b']} />
-      <fog attach="fog" args={['#09090b', scene.extent * 6, scene.extent * 16]} />
+      <color attach="background" args={[bgColor]} />
+      <fog attach="fog" args={[bgColor, scene.extent * 6, scene.extent * 16]} />
       <SimClockDriver />
       <HoverTelemetry />
       <InsideHider />
@@ -318,6 +400,7 @@ export function Stage({ scene, smooth = true }: { scene: SceneDef; smooth?: bool
       <CutController hatchScale={scene.hatchScale ?? scene.extent / 220} />
       <CaliperTool extent={scene.extent} />
       <Lights extent={scene.extent} follow={!!scene.follow} />
+      {import.meta.env.DEV ? <DevSceneHandle /> : null}
       <Suspense fallback={null}>
         <scene.Viewport />
       </Suspense>

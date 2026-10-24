@@ -52,6 +52,9 @@ export interface ViewState {
   tints: boolean
   setTints: (v: boolean) => void
   setFaultMode: (v: boolean) => void
+  /** Viewport lighting & background preset */
+  studioMode: 'dark' | 'workshop' | 'blueprint'
+  setStudioMode: (mode: 'dark' | 'workshop' | 'blueprint') => void
   labels: boolean
   caliperMode: boolean
   caliperPoints: [number, number, number][]
@@ -115,8 +118,10 @@ export const useView = create<ViewState>((set, get) => ({
   setXray: (xray) => set({ xray }),
   faultMode: false,
   tints: false,
+  studioMode: 'dark',
   setTints: (tints) => set({ tints }),
   setFaultMode: (faultMode) => set({ faultMode }),
+  setStudioMode: (studioMode) => set({ studioMode }),
   setLabels: (labels) => set({ labels }),
   setCut: (patch) => set((s) => ({ cut: { ...s.cut, ...patch } })),
   setPlane: (i, patch) =>
