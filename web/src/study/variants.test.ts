@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { QUESTIONS } from './questions'
-import { drawValues, instantiate, num, prng, snap } from './variants'
+import { drawValues, instantiate, num, prng, snap, tnum } from './variants'
 
 describe('variant engine', () => {
   it('snaps without floating-point dust', () => {
@@ -58,3 +58,11 @@ for (const q of QUESTIONS.filter((x) => x.vary)) {
     })
   })
 }
+
+describe('tnum', () => {
+  it('uses a KaTeX thin space for thousands, never a comma', () => {
+    expect(tnum(150000)).toBe(String.raw`150\,000`)
+    expect(tnum(150000)).not.toBe('150,000') // a bare comma would mean the backslash was lost
+    expect(tnum(2083)).toBe('2083')
+  })
+})

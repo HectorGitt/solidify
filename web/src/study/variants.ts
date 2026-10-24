@@ -123,5 +123,5 @@ export function num(x: number, maxDecimals = 4) {
 
 /** The same number for KaTeX working: exact, with `\,` thousands separators. */
 export function tnum(x: number, maxDecimals = 4) {
-  return num(x, maxDecimals).replace(/ /g, '\,')
+  return num(x, maxDecimals).replace(/ /g, '\\,')
 }
