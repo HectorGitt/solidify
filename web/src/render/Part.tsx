@@ -35,7 +35,8 @@ export interface PartProps extends Omit<GroupProps, 'id'> {
   beyondNotes?: boolean
   /**
    * local offset applied at full explode. Without one, a part nested in another part is pushed
-   * out from its parent's centre automatically; pass `false` to keep it in place.
+   * out from its parent's centre automatically (in the parent's frame, so parts on spinning
+   * shafts don't orbit); pass `false` to keep it in place.
    */
   explode?: [number, number, number] | false
   /** force sectioning on/off for this part and its children */
@@ -86,24 +87,33 @@ export function Part({ id, name, material, role, info, cites, beyondNotes, explo
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, name, parent.id, ctx.material, ctx.role])
 
-  const auto = useRef<[number, number, number] | null>(null)
+  /**
+   * Explode offsets are held in the whole machine's frame (the top-level part) and re-expressed
+   * in this part's frame every frame. Any motion in between — a spinning shaft, a swinging link —
+   * is cancelled, so a gear on a turning shaft lifts straight out and keeps spinning about its own
+   * axis instead of orbiting the shaft, while the offsets still follow the machine as it drives.
+   */
+  const offset = useRef<[number, number, number] | null>(null)
   useFrame((_, dt) => {
     const g = inner.current
     if (!g || explode === false) return
+    const frame = parent.id ? partObjects.get(ctx.path[0]) : undefined
+    // an explicit offset is authored in the part's own frame at rest: capture it once, on the
+    // first frame, before any animation has turned anything
+    if (explode && !offset.current) offset.current = frame ? toFrame(explode, outer.current, frame) : explode
     // with a scope set, only that assembly's sub-parts move
     const st = useView.getState()
     const depth = st.explodeScope ? ctx.path.length - 1 - ctx.path.indexOf(st.explodeScope) : 0
     const inScope = !!st.explodeScope && ctx.path.includes(st.explodeScope) && id !== st.explodeScope && (st.explodeDepth === null || depth <= st.explodeDepth)
     const target = st.explodeScope ? (inScope ? st.explode : 0) : st.explode
-    let e = explode
-    if (!e) {
-      // nothing to do until the view is exploded (or still easing back)
-      if (target <= 0 && g.position.lengthSq() < 1e-10) return
+    // nothing to do until the view is exploded (or still easing back)
+    if (target <= 0 && g.position.lengthSq() < 1e-10) return
+    if (!explode) {
       // top-level parts (grounds, landscapes, whole machines) stay where they are
       if (!parent.id) return
-      auto.current ??= autoExplode(outer.current, partObjects.get(parent.id))
-      e = auto.current
+      offset.current ??= autoExplode(outer.current, partObjects.get(parent.id), frame)
     }
+    const e = frame ? toLocal(offset.current!, frame, outer.current) : offset.current!
     const k = 1 - Math.exp(-dt * 10)
     g.position.x += (e[0] * target - g.position.x) * k
     g.position.y += (e[1] * target - g.position.y) * k
@@ -128,13 +138,14 @@ const _cs = new THREE.Vector3()
 const _ps = new THREE.Vector3()
 const _q = new THREE.Quaternion()
 const _s = new THREE.Vector3()
+const _v = new THREE.Vector3()
 
 /**
  * Default exploded-view offset: away from the parent assembly's centre, a quarter of its size
  * (nested offsets add up, so it stays modest). Parts nearly as big as their parent (housings, ground slabs) and parts centred on it
- * (shafts on the axis) stay put. Computed once, in the parent's frame at the moment of the call.
+ * (shafts on the axis) stay put. Computed once and held in the parent assembly's frame.
  */
-function autoExplode(part: THREE.Object3D | null, parentObj: THREE.Object3D | undefined): [number, number, number] {
+function autoExplode(part: THREE.Object3D | null, parentObj: THREE.Object3D | undefined, frame: THREE.Object3D | undefined): [number, number, number] {
   if (!part || !parentObj || !part.parent) return [0, 0, 0]
   _cb.setFromObject(part)
   _pb.makeEmpty()
@@ -152,11 +163,40 @@ function autoExplode(part: THREE.Object3D | null, parentObj: THREE.Object3D | un
   if (dir.y < 0) dir.y = 0
   if (dir.length() < 0.02 * pSize) return [0, 0, 0]
   dir.normalize().multiplyScalar(0.25 * pSize)
-  // into the frame the offset is applied in (the part's parent object)
-  part.parent.getWorldQuaternion(_q).invert()
-  part.parent.getWorldScale(_s)
+  // stored in the machine's frame (see toLocal)
+  const ref = frame ?? parentObj
+  ref.getWorldQuaternion(_q).invert()
+  ref.getWorldScale(_s)
   dir.applyQuaternion(_q).divide(_s)
   return [dir.x, dir.y, dir.z]
+}
+
+/** An offset in `part`'s own frame (where the explode is applied), expressed in `frame`. */
+export function toFrame(offset: [number, number, number], part: THREE.Object3D | null, frame: THREE.Object3D): [number, number, number] {
+  if (!part) return offset
+  _v.set(offset[0], offset[1], offset[2])
+  part.getWorldScale(_s)
+  _v.multiply(_s).applyQuaternion(part.getWorldQuaternion(_q))
+  frame.getWorldQuaternion(_q).invert()
+  frame.getWorldScale(_s)
+  _v.applyQuaternion(_q).divide(_s)
+  return [_v.x, _v.y, _v.z]
+}
+
+
+/**
+ * An offset held in the machine's frame, expressed in the frame the explode is applied in (inside
+ * `outer`). Any rotation between the two — a spinning shaft group — is cancelled.
+ */
+export function toLocal(offset: [number, number, number], frame: THREE.Object3D | undefined, outer: THREE.Object3D | null): [number, number, number] {
+  if (!frame || !outer) return offset
+  _v.set(offset[0], offset[1], offset[2])
+  frame.getWorldScale(_s)
+  _v.multiply(_s).applyQuaternion(frame.getWorldQuaternion(_q))
+  outer.getWorldQuaternion(_q).invert()
+  outer.getWorldScale(_s)
+  _v.applyQuaternion(_q).divide(_s)
+  return [_v.x, _v.y, _v.z]
 }
 
 type MeshProps = ThreeElements['mesh']
