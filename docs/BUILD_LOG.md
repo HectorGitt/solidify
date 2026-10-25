@@ -40,6 +40,12 @@ Each entry: **Symptom** · **Cause** · **Fix** · **Lesson**.
 ### Chrome stops repainting an element animated through `scale(0)` (promo video, 2026-10-11)
 - **Fix/lesson:** clamp scale animations to 0.001, never exactly 0.
 
+### A full-screen 3D hero swallowed page scrolling (2026-10-25)
+- **Symptom:** on the redesigned home page the live scene fills the hero, and scrolling over it zoomed the camera instead of scrolling the page; a one-finger swipe on a phone orbited the model.
+- **Cause:** camera-controls takes the mouse wheel and one-finger touch by default, and sets `touch-action: none` on the canvas.
+- **Fix:** `Stage pageScroll` turns off wheel and one-finger actions (drag and pinch still work), and the hero overrides the canvas to `touch-action: pan-y`.
+- **Lesson:** any canvas embedded in a scrolling page needs its scroll gestures given back to the page.
+
 ### Known, open: React "synchronously unmount a root" warning on scene switch
 - drei `Html` labels unmount while React is rendering. Harmless (no crash); listed in `web/docs/QA.md`.
 

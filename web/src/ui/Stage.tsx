@@ -349,7 +349,11 @@ function dyOffset(d: number) {
   return d * 0.12
 }
 
-export function Stage({ scene, smooth = true }: { scene: SceneDef; smooth?: boolean }) {
+/**
+ * `pageScroll`: the stage sits inside a scrolling page (the home hero), so the mouse wheel and a
+ * one-finger swipe scroll the page instead of zooming or orbiting; drag and pinch still move the camera.
+ */
+export function Stage({ scene, smooth = true, pageScroll = false }: { scene: SceneDef; smooth?: boolean; pageScroll?: boolean }) {
   const ref = useRef<CameraControlsImpl>(null)
   const select = useView((s) => s.select)
   const studioMode = useView((s) => s.studioMode)
@@ -365,10 +369,17 @@ export function Stage({ scene, smooth = true }: { scene: SceneDef; smooth?: bool
     (c: CameraControlsImpl | null) => {
       ref.current = c
       setCameraControls(c)
-      if (c) void c.setLookAt(...position, ...target, false)
+      if (c && pageScroll) {
+        c.mouseButtons.wheel = 0 // ACTION.NONE
+        c.touches.one = 0
+      }
+      // in the hero the headline covers the left half, so stand back a little further
+      const k = pageScroll ? 1.35 : 1
+      const p = position.map((v, i) => target[i] + (v - target[i]) * k) as [number, number, number]
+      if (c) void c.setLookAt(...p, ...target, false)
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [scene.id],
+    [scene.id, pageScroll],
   )
 
   const light = useIsLight()
