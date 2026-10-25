@@ -370,6 +370,10 @@ export function Landing() {
             <Link to="/about" className="hover:text-ink transition-colors">
               How it works
             </Link>
+            <Link to="/create" className="flex items-center gap-1.5 hover:text-ink transition-colors">
+              Create
+              <span className="rounded-full bg-warn/15 px-1.5 py-px text-[10px] font-semibold uppercase tracking-wide text-warn">Soon</span>
+            </Link>
             {/* in Study mode the study links (below) already include it */}
             {academic ? null : (
               <Link to="/challenges" className="hover:text-ink transition-colors">
