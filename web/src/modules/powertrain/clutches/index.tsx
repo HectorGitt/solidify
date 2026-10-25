@@ -52,6 +52,12 @@ const scene: SceneDef = {
       cut: 'half-all',
       select: 'springs',
       cites: [SRC.m503(8, 'T = n f F R_f')],
+      check: {
+        question: 'If the springs weaken so the clamp load falls from 7.2 kN to 3.6 kN, what is the clutch\'s torque capacity?',
+        options: ['About 1036 N·m', 'About 259 N·m', 'Still about 518 N·m'],
+        answer: 1,
+        explain: 'T = n f F R_f is **proportional to the clamp load**: 2 × 0.3 × 3.6 kN × 0.12 m ≈ 259 N·m. That leaves no margin over the engine torque, so the clutch would start to slip.',
+      },
     },
     {
       title: 'Pedal free play — 18 mm',
@@ -61,6 +67,12 @@ const scene: SceneDef = {
       select: 'release-bearing',
       params: { pedal: 15 },
       cites: [SRC.tts510('p3–4')],
+      check: {
+        question: 'As the friction lining wears thinner over the months, what happens to the pedal free play?',
+        options: ['It grows larger', 'It stays the same', 'It shrinks, and can vanish'],
+        answer: 2,
+        explain: 'As the lining thins, the pressure plate moves closer to the flywheel and the inner ends of the release levers move back towards the thrust bearing, so **free play shrinks**. With none left the bearing holds the levers and the clutch slips.',
+      },
     },
     {
       title: 'Releasing the clutch',
@@ -108,6 +120,12 @@ const scene: SceneDef = {
       select: 'friction-plates',
       params: { kind: 'ipto', spool: false },
       cites: [SRC.top510('p7'), SRC.m503(8, 'MG16')],
+      check: {
+        question: 'If the pack had ten driving plates and ten driven plates, how many friction surfaces would it have?',
+        options: ['19', '20', '21'],
+        answer: 0,
+        explain: 'Each pair of neighbouring plates makes one contact, so a stack of n₁ + n₂ plates has **n = n₁ + n₂ − 1** surfaces: 10 + 10 − 1 = 19.',
+      },
     },
   ],
 }

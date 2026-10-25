@@ -49,6 +49,12 @@ const scene: SceneDef = {
       select: 'crown',
       cut: 'front',
       cites: [SRC.tts510('p7, p10'), SRC.top510('p3 D·N = d·n')],
+      check: {
+        question: 'The bevel pinion turns at 600 rpm. How fast does the differential cage turn?',
+        options: ['About 600 rpm', 'About 2560 rpm', 'About 140 rpm'],
+        answer: 2,
+        explain: 'The 11-tooth pinion drives the 47-tooth crown wheel, a **4.27 : 1 reduction**: 600 / 4.27 ≈ 140 rpm. The torque rises by the same factor.',
+      },
     },
     {
       title: 'Going straight: one solid unit',
@@ -69,6 +75,12 @@ const scene: SceneDef = {
       cut: 'plan',
       params: { mode: 'cornering', turnRadius: 3, locked: false },
       cites: [SRC.pt510('p11'), SRC.top510('Fig A2.5b')],
+      check: {
+        question: 'On a corner the cage turns at 100 rpm and the inner wheel slows to 80 rpm. How fast does the outer wheel turn?',
+        options: ['120 rpm', '100 rpm', '80 rpm'],
+        answer: 0,
+        explain: 'The cage speed is always the **mean** of the two wheel speeds: (80 + 120) / 2 = 100 rpm. What one wheel loses, the other gains.',
+      },
     },
     {
       title: 'One wheel held: twice cage speed',
@@ -89,6 +101,13 @@ const scene: SceneDef = {
       cut: 'front',
       params: { mode: 'mud', locked: false, mudGrip: 250 },
       cites: [SRC.tts510('p8'), SRC.pt510('p12')],
+      check: {
+        question: 'The mud wheel can take only 250 N·m before it spins. With an open differential, how much torque reaches the firm wheel?',
+        options: ['All the rest of the torque', 'About 250 N·m, the same', 'None at all'],
+        answer: 1,
+        explain: 'An open differential always splits torque **equally**, so the firm wheel gets only what the mud wheel can hold: 250 N·m. The diff lock lets the firm wheel take the rest.',
+        reveal: { select: 'diff-lock', params: { mode: 'mud', locked: true } },
+      },
     },
     {
       title: 'The diff lock',

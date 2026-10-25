@@ -56,6 +56,12 @@ const scene: SceneDef = {
       select: 'pack-L',
       cut: 'all',
       cites: [SRC.pt510('p4 — clutch pack')],
+      check: {
+        question: 'If the oil pressure on the piston falls to half, what happens to the pack\'s torque capacity?',
+        options: ['It halves', 'It stays the same', 'It doubles'],
+        answer: 0,
+        explain: 'The clamp force is **pressure × piston area**, and capacity T = n f F R rises in proportion to it. Half the pressure gives half the capacity, so the pack may slip.',
+      },
     },
     {
       title: 'High: the direct clutch',
@@ -74,6 +80,12 @@ const scene: SceneDef = {
       select: 'countershaft',
       params: { sel: 'L' },
       cites: [SRC.pt510('p4 — underdrive clutch')],
+      check: {
+        question: 'In low, power goes from the input gear to the countershaft and back to the low gear. Which way does the output turn?',
+        options: ['Opposite to the input, slower', 'The same way as the input, slower', 'The same way as the input, faster'],
+        answer: 1,
+        explain: 'Each external mesh reverses the rotation, and **two meshes** reverse it twice, so the output turns the same way. The gear sizes make it slower than the input.',
+      },
     },
     {
       title: 'Reverse: one more mesh',
@@ -100,6 +112,12 @@ const scene: SceneDef = {
       select: null,
       params: { sel: 'L', overlap: idealOverlap(DEFAULTS.fill, DEFAULTS.torque) },
       cites: [SRC.pt510('p4'), SRC.beyond('overlapping-clutch shift dynamics')],
+      check: {
+        question: 'The off-going clutch is released before the on-coming clutch can carry the engine torque. What happens?',
+        options: ['The clutches fight and heat up', 'The shift is smoother and quicker', 'Output torque dips and the engine flares'],
+        answer: 2,
+        explain: 'For a moment **neither clutch carries the torque**: the drive to the wheels drops out and the unloaded engine speeds up (flares). Releasing too late gives the opposite fault: the clutches fight.',
+      },
     },
   ],
 }

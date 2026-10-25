@@ -57,6 +57,12 @@ const scene: SceneDef = {
       camera: { position: [0.9, 1.4, 1.7], target: [0.35, 0.6, 0] },
       select: 'tractor-gearbox',
       cites: [SRC.pt510('p3 jobs of the transmission'), SRC.tts510('p2, p4')],
+      check: {
+        question: 'The engine turns at 2000 rpm and the wheels at about 20 rpm. Ignoring losses, how does the wheel torque compare with the engine torque?',
+        options: ['About the same', 'About 100 times smaller', 'About 100 times larger'],
+        answer: 2,
+        explain: 'Power is torque × speed, and the power train cannot create power. Cutting the speed 100 times **multiplies the torque about 100 times**, less the small gear losses.',
+      },
     },
     {
       title: '2 · Crown wheel, pinion and differential',
@@ -66,6 +72,12 @@ const scene: SceneDef = {
       select: 'tractor-crown-wheel',
       cut: 'plan',
       cites: [SRC.tts510('p7–8')],
+      check: {
+        question: 'The 9-tooth pinion drives the 37-tooth crown wheel. If the pinion turns at 400 rpm, how fast does the crown wheel turn?',
+        options: ['About 97 rpm', 'About 400 rpm', 'About 1640 rpm'],
+        answer: 0,
+        explain: 'The speed falls by the tooth ratio **37 / 9 ≈ 4.1**: 400 / 4.1 ≈ 97 rpm. The torque rises by the same factor.',
+      },
     },
     {
       title: '3 · Final reduction and wheels',
@@ -96,6 +108,12 @@ const scene: SceneDef = {
       xray: false,
       params: { drive: '2wd', pull: 20 },
       cites: [SRC.mech502('Fig 2.3, eqs 2.5–2.8')],
+      check: {
+        question: 'The tyre surface moves at V₀ = 5.0 km/h but the tractor travels at V = 4.4 km/h. What is the wheelslip?',
+        options: ['About 14 %', '12 %', '0.6 %'],
+        answer: 1,
+        explain: 'Wheelslip is measured against the tyre speed: **s = (V₀ − V) / V₀** = (5.0 − 4.4) / 5.0 = 0.12, or 12 %.',
+      },
     },
     {
       title: 'Try the gears',

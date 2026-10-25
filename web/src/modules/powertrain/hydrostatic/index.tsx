@@ -67,6 +67,12 @@ const scene: SceneDef = {
       cut: 'plan',
       params: { pumpLever: 1 },
       cites: [SRC.pt510('p8–9')],
+      check: {
+        question: 'At the same pump speed, the swashplate is tilted further so tan β doubles. What happens to the motor speed?',
+        options: ['It roughly doubles', 'It halves', 'It stays the same, but pressure rises'],
+        answer: 0,
+        explain: 'Stroke = 2R·tan β, so the pump displacement and its flow **Q = D·N** double. The fixed motor must turn twice as fast to swallow that flow.',
+      },
     },
     {
       title: 'Through zero to reverse',
@@ -76,6 +82,12 @@ const scene: SceneDef = {
       select: 'line-a',
       params: { pumpLever: -0.6 },
       cites: [SRC.pt510('p8')],
+      check: {
+        question: 'The pump keeps turning the same way when the lever goes past zero. What reverses the motor?',
+        options: ['The pump\'s shaft turning backwards', 'A reverse gear behind the motor', 'Oil flowing the other way round the loop'],
+        answer: 2,
+        explain: 'Tilting the swashplate past zero swaps which pistons fill and which deliver, so the oil **flows the other way** and the high-pressure line changes sides.',
+      },
     },
     {
       title: 'Pressure gives power',
@@ -85,6 +97,12 @@ const scene: SceneDef = {
       select: 'motor',
       params: { pumpLever: 0.8, dp: 30 },
       cites: [SRC.pt510('p8–9')],
+      check: {
+        question: 'The tractor meets a heavier load with the lever left where it is. What changes most in the oil loop?',
+        options: ['The flow rises', 'The pressure rises', 'The swashplate angle rises'],
+        answer: 1,
+        explain: 'Flow is set by the pump displacement and speed; the load sets the **pressure**. The motor torque T = Δp·D/2π rises with it, up to the relief-valve setting.',
+      },
     },
     {
       title: 'Four combinations',

@@ -62,6 +62,12 @@ const scene: SceneDef = {
       select: 'brake-ring',
       params: { input: 'sun', output: 'carrier', held: 'ring' },
       cites: [SRC.pt510('p6 — low speed')],
+      check: {
+        question: 'With the ring held, the sun is driven at 240 rpm. How fast does the carrier turn?',
+        options: ['About 67 rpm, the same way', 'About 67 rpm, backwards', 'About 92 rpm, backwards'],
+        answer: 0,
+        explain: 'The planets walk round the held ring, carrying the carrier **the same way as the sun but slower**: 240 × 30/108 ≈ 67 rpm.',
+      },
     },
     {
       title: 'High speed: lock any two',
@@ -82,6 +88,12 @@ const scene: SceneDef = {
       select: 'carrier',
       params: { input: 'sun', output: 'ring', held: 'carrier' },
       cites: [SRC.pt510('p4 — direct coupler, reduction or reversing gear')],
+      check: {
+        question: 'With the carrier held, the sun is driven clockwise. What does the ring do?',
+        options: ['Turns clockwise, faster', 'Turns anticlockwise, slower', 'Stays still'],
+        answer: 1,
+        explain: 'With the carrier held the planets are **idlers**: sun to planet reverses the rotation and planet to ring keeps it, so the ring turns backwards at 30/78 = 0.385 of sun speed.',
+      },
     },
     {
       title: 'Overdrive: driving the carrier',
@@ -92,6 +104,12 @@ const scene: SceneDef = {
       select: 'sun',
       params: { input: 'carrier', output: 'sun', held: 'ring' },
       cites: [SRC.top510('p2, Fig A2.4')],
+      check: {
+        question: 'With the ring held, the carrier is driven at 100 rpm. How fast does the sun turn?',
+        options: ['About 28 rpm', 'About 100 rpm', 'About 360 rpm'],
+        answer: 2,
+        explain: 'Driving the carrier is the low-speed drive run backwards, so the sun is **speeded up** by (30 + 78)/30 = 3.6: 100 × 3.6 = 360 rpm, the same way.',
+      },
     },
     {
       title: 'Compound planetary',

@@ -48,6 +48,12 @@ const scene: SceneDef = {
       camera: { position: [LAY.mu.x + 0.35, LAY.mu.y + 0.3, 0.4], target: [LAY.mu.x, LAY.mu.y - 0.02, 0] },
       select: 'gerotor-rotor',
       cut: 'mu',
+      check: {
+        question: 'You turn the steering wheel twice as fast. What do the front wheels do?',
+        options: ['Steer twice as fast, in step with it', 'Steer at the same, fixed rate', 'Stop until the pump catches up'],
+        answer: 0,
+        explain: 'The gerotor meters a **fixed volume of oil per turn**, so turning the wheel faster sends oil to the cylinder faster and the front wheels follow, up to the pump\'s flow.',
+      },
     },
     {
       title: 'Steering cylinder',
@@ -63,6 +69,12 @@ const scene: SceneDef = {
       camera: { position: [0.1, 1.9, 0.6], target: [-0.1, AX.y, 0] },
       select: 'track-rod',
       cites: [ST('p1–2')],
+      check: {
+        question: 'Turning left, which front wheel turns through the larger angle?',
+        options: ['The right (outer) wheel', 'The left (inner) wheel', 'Both turn the same'],
+        answer: 1,
+        explain: 'The inner wheel runs on a **smaller circle** round the same turning centre, so it must turn more. The inward-angled steering arms give this, close to Ackermann.',
+      },
     },
     {
       title: 'Toe-in',
@@ -88,6 +100,12 @@ const scene: SceneDef = {
       select: 'manual-linkage',
       params: { variant: 'assisted', engineOn: false, auto: true },
       cites: [ST('p2')],
+      check: {
+        question: 'The pump belt breaks on a power-assisted tractor. What does the driver notice?',
+        options: ['The steering locks solid', 'The wheels run straight ahead', 'Steering goes heavy but still works'],
+        answer: 2,
+        explain: 'Power assistance only adds force to a **manual linkage**, so with no oil the driver steers through the box and drag link alone: heavy, but still in control.',
+      },
     },
     {
       title: 'Try it',

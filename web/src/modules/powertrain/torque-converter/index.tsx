@@ -56,6 +56,12 @@ const scene: SceneDef = {
       select: 'stator',
       params: { SR: 0 },
       cites: [SRC.pt510('p10 stator as a fluid fulcrum')],
+      check: {
+        question: 'At stall, with the turbine held, how does the turbine torque compare with the engine torque?',
+        options: ['Greater: about 2.2 times', 'Equal to it', 'Zero, since the turbine is still'],
+        answer: 0,
+        explain: 'The stator turns the returning oil to help the pump, so at stall the converter gives its greatest **torque multiplication**, about 2.2 : 1 for this design.',
+      },
     },
     {
       title: 'The turbine catches up',
@@ -65,6 +71,12 @@ const scene: SceneDef = {
       select: 'turbine',
       params: { SR: 0.6 },
       cites: [SRC.pt510('p10 decreasing torque')],
+      check: {
+        question: 'The turbine has reached 0.6 of pump speed. Compared with stall, the output torque is now…',
+        options: ['Larger than at stall', 'Lower, but still above engine torque', 'Below engine torque'],
+        answer: 1,
+        explain: 'The torque gain falls steadily from about 2.2 at stall to **1 : 1 at the coupling point** (0.85 of pump speed here); at 0.6 it is still about 1.35.',
+      },
     },
     {
       title: 'Coupling point: rotary flow',
@@ -74,6 +86,12 @@ const scene: SceneDef = {
       select: 'one-way',
       params: { SR: 0.9 },
       cites: [SRC.pt510('p10 "locked up"')],
+      check: {
+        question: 'Above the coupling point, what would happen if the stator were fixed solid instead of on a one-way clutch?',
+        options: ['Torque multiplication would carry on', 'Oil hitting the blade backs would cut the torque', 'The turbine would lock to the pump'],
+        answer: 1,
+        explain: 'The oil now strikes the **back of the stator blades**; a fixed stator would turn it against the pump, wasting power and lowering the output torque. The one-way clutch lets it freewheel instead.',
+      },
     },
     {
       title: 'Exploded view',

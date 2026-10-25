@@ -65,6 +65,12 @@ const scene: SceneDef = {
       cut: 'axle',
       params: { sweep: true },
       cites: C.manual,
+      check: {
+        question: 'On a left turn, why must the inner (left) wheel turn more than the outer one?',
+        options: ['It runs on a smaller circle round the same centre', 'It carries more weight while turning', 'The drag link pushes it directly'],
+        answer: 0,
+        explain: 'For both tyres to roll without scrubbing, their axles must point at **one turning centre**. The inner wheel is closer to it, so it needs the larger angle.',
+      },
     },
     {
       title: 'Toe-in',
@@ -75,6 +81,12 @@ const scene: SceneDef = {
       cut: false,
       params: { sweep: false, wheel: 0, exaggerate: true },
       cites: C.toe,
+      check: {
+        question: 'The gauge reads A = 1504 mm in front and B = 1500 mm behind. What do the wheels have?',
+        options: ['Toe-in, within the 3–6 mm', 'Toe-out of 4 mm', 'No toe at all'],
+        answer: 1,
+        explain: 'Toe-in means the rims are closer at the front (A less than B). Here A is larger, so the wheels splay outwards: **toe-out**, corrected by adjusting the track rod.',
+      },
     },
     {
       title: 'Changing the track width',
@@ -84,6 +96,13 @@ const scene: SceneDef = {
       select: 'track-rod',
       params: { sweep: false, wheel: 0, trackMM: 80, rodReset: false, exaggerate: false },
       cites: [...C.manual, ...C.axle],
+      check: {
+        question: 'The axle has been extended 80 mm. What must be done to the track rod to restore the toe-in?',
+        options: ['Shorten it by about 80 mm', 'Leave it: the toe recovers', 'Lengthen it by about 80 mm'],
+        answer: 2,
+        explain: 'Each side of the axle moved out 40 mm, taking its track-rod arm with it, so the rod must be **lengthened by about 80 mm** and the toe-in then reset.',
+        reveal: { params: { rodReset: true } },
+      },
     },
     {
       title: 'Try it',

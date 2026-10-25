@@ -49,6 +49,12 @@ const scene: SceneDef = {
       camera: { position: [0.12, 0.12, 0.34], target: [0, 0, BALL.z] },
       select: 'nut',
       cites: [ST('p3, Fig 46')],
+      check: {
+        question: 'If the thread had a shorter lead (finer pitch), how would one turn of the steering wheel move the drop arm?',
+        options: ['More, so steering is quicker', 'Less, so steering is lighter', 'The same; only the feel changes'],
+        answer: 1,
+        explain: 'A shorter lead moves the nut less per turn, so the drop arm swings less: a **higher steering ratio**, with less effort but more wheel turns from lock to lock.',
+      },
     },
     {
       title: 'Recirculating balls',
@@ -57,6 +63,12 @@ const scene: SceneDef = {
       camera: { position: [0.06, 0.1, 0.27], target: [0, 0.005, BALL.z] },
       select: 'balls',
       cites: [ST('p3')],
+      check: {
+        question: 'Why do the balls make the nut easier to move than a plain nut on the same thread?',
+        options: ['They let the nut turn with the shaft', 'They roll, and rolling friction is far lower', 'They hold the wheels in the straight-ahead'],
+        answer: 1,
+        explain: 'A plain nut would **slide** on the thread; the balls **roll**, and rolling friction is much lower, so the steering is smooth and light.',
+      },
     },
     {
       title: 'Peg (F), rocker arm (D) and shaft (E)',
@@ -73,6 +85,12 @@ const scene: SceneDef = {
       select: 'peg-c',
       cut: 'peg',
       cites: [ST('p3–4 (book pp92–93)')],
+      check: {
+        question: 'Compared with the recirculating-ball box, what would you expect of the worm-and-peg box?',
+        options: ['Less friction, so lighter steering', 'More friction, as the peg slides', 'No difference in friction at all'],
+        answer: 1,
+        explain: 'In the worm-and-peg box the peg **slides** in the thread, while the ball box\'s nut **rolls** on balls. Sliding friction is higher, so the steering is heavier and wears faster.',
+      },
     },
     {
       title: 'Maintenance',

@@ -57,6 +57,12 @@ const scene: SceneDef = {
       select: 'sliding-gears',
       params: { variant: 'sliding', gear: '1' },
       cites: [SRC.tts510('p6 Fig 33, p7')],
+      check: {
+        question: 'Why must the tractor be stopped before a gear is selected in the sliding-mesh box?',
+        options: ['The selector forks jam while the shafts turn', 'The gears turn at different speeds and would clash', 'Oil pressure is needed to slide the gears'],
+        answer: 1,
+        explain: 'Sliding mesh has nothing to **match the speeds** of the two gears, so teeth running at different speeds would clash. Synchromesh solves this with friction cones.',
+      },
     },
     {
       title: 'Reverse through an idler',
@@ -66,6 +72,12 @@ const scene: SceneDef = {
       select: 'idler',
       params: { variant: 'sliding', gear: 'R', range: 'L' },
       cites: [SRC.pt510('p3 — reverse the travel')],
+      check: {
+        question: 'If a second idler were added in series (three meshes from top to bottom shaft), which way would the output turn?',
+        options: ['Backwards, as in reverse', 'Forwards, as in a normal gear', 'It could not turn at all'],
+        answer: 1,
+        explain: 'Each external mesh **reverses the rotation**. One mesh (a normal gear) and three meshes both give an odd number of reversals, so the output turns forwards; two meshes give reverse.',
+      },
     },
     {
       title: 'Constant mesh and dog collars',
@@ -95,6 +107,12 @@ const scene: SceneDef = {
       timeScale: 1 / 20,
       params: { range: 'L' },
       cites: [SRC.tts510('p4')],
+      check: {
+        question: 'High range is 30 : 30 and low range is 18 : 42. In the same gear, how much slower does the output turn in low than in high?',
+        options: ['About 1.4 times', 'About 3.0 times', 'About 2.3 times'],
+        answer: 2,
+        explain: 'High is 1 : 1, while low reduces by **42 / 18 ≈ 2.33**, so every gear runs about 2.3 times slower, with about 2.3 times the torque, in low range.',
+      },
     },
     {
       title: 'Crown wheel and pinion',

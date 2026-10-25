@@ -48,6 +48,12 @@ const scene: SceneDef = {
       camera: { position: [0.3, 0.55, 0.9], target: [0.2, 0, 0] },
       select: 'crown',
       cites: [SRC.tts510('p1, p10')],
+      check: {
+        question: 'The overall ratio is about 100 : 1, the crown wheel gives about 4.3 : 1 and the final reduction 4.8 : 1. What must bottom gear in the gearbox give?',
+        options: ['About 90 : 1', 'About 5 : 1', 'About 10 : 1'],
+        answer: 1,
+        explain: 'Reductions in series **multiply**: 100 / (4.3 × 4.8) ≈ 5. Each stage also multiplies the torque by its ratio.',
+      },
     },
     {
       title: 'Spur reduction',
@@ -66,6 +72,12 @@ const scene: SceneDef = {
       select: 'planets',
       params: { layout: 'epicyclic' },
       cites: [SRC.tts510('Fig 35b'), SRC.pt510('p6')],
+      check: {
+        question: 'The half shaft drives the 15-tooth sun at 96 rpm, with the 57-tooth ring held. How fast does the wheel turn?',
+        options: ['About 25 rpm', 'About 96 rpm', 'About 20 rpm'],
+        answer: 2,
+        explain: 'With the ring held and the carrier as output the ratio is **1 + z_ring / z_sun** = 1 + 57/15 = 4.8, so the wheel turns at 96 / 4.8 = 20 rpm.',
+      },
     },
     {
       title: 'The MF 2000 rear axle',
@@ -84,6 +96,12 @@ const scene: SceneDef = {
       select: 'brake-disc',
       params: { braking: true },
       cites: [SRC.tts510('p11')],
+      check: {
+        question: 'To hold 4800 N·m at the wheel through a 4.8 : 1 final reduction, how much torque must the half-shaft brake hold?',
+        options: ['About 1000 N·m', 'About 4800 N·m', 'About 23 000 N·m'],
+        answer: 0,
+        explain: 'The half shaft turns 4.8 times faster than the wheel, so the brake there needs only **1/i of the wheel torque**: 4800 / 4.8 = 1000 N·m.',
+      },
     },
   ],
 }

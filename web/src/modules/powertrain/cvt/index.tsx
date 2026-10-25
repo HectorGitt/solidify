@@ -58,6 +58,12 @@ const scene: SceneDef = {
       cut: 'side',
       select: 'pump-swash',
       params: { target: 0, pull: 15 },
+      check: {
+        question: 'At active standstill the engine still turns the carrier, but the output is held. Where does that motion go?',
+        options: ['The ring spins, driving a pump that moves no oil', 'The sun turns and slowly creeps the output', 'Nowhere: the engine is held and stalls'],
+        answer: 0,
+        explain: 'The sun is fixed to the held output, so the carrier\'s motion makes the **ring** spin. With the pump swashplate upright the pump moves no oil and takes no torque, so nothing reaches the wheels.',
+      },
     },
     {
       title: 'Phase 1: the pump swings out',
@@ -74,6 +80,12 @@ const scene: SceneDef = {
       cut: 'side',
       select: 'motor-swash',
       params: { target: 30, pull: 10, rpm: 2100 },
+      check: {
+        question: 'Why is this transmission most efficient at the top of its range?',
+        options: ['The engine runs at its highest speed there', 'All the power then goes through gears', 'The oil is warmest and flows most easily'],
+        answer: 1,
+        explain: 'With the motor plate flat the ring stops, so the pump moves no oil and **all the power passes through gears**, which lose far less than a pump and motor do.',
+      },
     },
     {
       title: 'Reverse without a reverse gear',
@@ -82,6 +94,12 @@ const scene: SceneDef = {
       cut: 'side',
       select: 'ring',
       params: { target: -8, pull: 5 },
+      check: {
+        question: 'Why is reverse less efficient than going forward at the same speed?',
+        options: ['The planetary set slips under the load', 'The motor runs above its rated speed', 'Power circulates, so more passes through oil'],
+        answer: 2,
+        explain: 'In reverse the gear branch runs backwards and power **circulates** round the loop: the oil carries more power than reaches the wheels, and hydraulic losses are much larger than gear losses.',
+      },
     },
     {
       title: 'Speed is set by the lever, not the engine',

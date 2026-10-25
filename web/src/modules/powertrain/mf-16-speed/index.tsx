@@ -47,6 +47,12 @@ const scene: SceneDef = {
       playing: true,
       params: { ...DEFAULTS },
       cites: [SRC.top510('p3, Fig A2.6')],
+      check: {
+        question: 'If a fifth synchromesh gear were added to the basic box, how many forward speeds would the tractor have?',
+        options: ['18', '20', '24'],
+        answer: 1,
+        explain: 'The stages **multiply**: 5 gears × 2 ranges × 2 speed-shift steps = 20 forward speeds.',
+      },
     },
     {
       title: 'Speed-shift: an epicyclic changed on the move',
@@ -56,6 +62,12 @@ const scene: SceneDef = {
       select: 'speed-shift',
       params: { speedShift: 'L' },
       cites: [SRC.top510('p3'), SRC.pt510('p6 — ring held, lock two members')],
+      check: {
+        question: 'Why can the speed-shift change under load while the range gear cannot?',
+        options: ['Its gears stay in mesh; only a brake and clutch swap', 'It has synchromesh cones on each of its gears', 'It turns more slowly than the range gear does'],
+        answer: 0,
+        explain: 'In the epicyclic every gear is **always in mesh**: changing means releasing the ring brake and applying the lock-up clutch, which hydraulics can do under load. The range gear must slide teeth into mesh.',
+      },
     },
     {
       title: 'Shuttle: forward and reverse',
@@ -83,6 +95,13 @@ const scene: SceneDef = {
       select: 'pto-shaft',
       cut: 'all',
       cites: [SRC.top510('p3')],
+      check: {
+        question: 'With the engine speed steady, you change from 2nd gear to 4th while the PTO is working. What does the PTO speed do?',
+        options: ['Rises with the higher gear', 'Drops while the synchro engages', 'Stays the same'],
+        answer: 2,
+        explain: 'The PTO shaft runs **through the hollow layshaft** straight from the PTO clutch, so it never passes through the gears: its speed depends only on engine speed.',
+        reveal: { params: { gear: 4 } },
+      },
     },
     {
       title: 'Range change and the output shaft',

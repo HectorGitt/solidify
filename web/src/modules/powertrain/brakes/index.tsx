@@ -48,6 +48,12 @@ const scene: SceneDef = {
       select: 'cam',
       params: { type: 'shoe', left: 0.8 },
       cites: [SRC.m503(9)],
+      check: {
+        question: 'If the drum turns the other way (the tractor rolling backwards), what happens to the two shoes?',
+        options: ['They swap roles: the old trailing shoe now leads', 'Nothing changes: the same shoe still leads', 'Both shoes become self-energising'],
+        answer: 0,
+        explain: 'Which shoe leads depends on the drum\'s direction: drum friction drags the **leading shoe** into the drum. Reverse the drum and the other shoe becomes the self-energising one.',
+      },
     },
     {
       title: 'Dry disc brake',
@@ -85,6 +91,12 @@ const scene: SceneDef = {
       select: 'balancing-valve',
       params: { latched: false, left: 0.8, right: 0 },
       cites: [SRC.tts510('p13'), SRC.tts510('p8')],
+      check: {
+        question: 'Unlatched, you press only the left pedal until the left wheel stops. How fast does the right wheel turn?',
+        options: ['At cage speed, as before', 'At twice cage speed', 'It stops as well'],
+        answer: 1,
+        explain: 'The differential keeps the cage speed at the **mean** of the two wheel speeds: (0 + 2N)/2 = N. With the left wheel held, the right wheel runs at twice cage speed and the tractor pivots round the braked wheel.',
+      },
     },
     {
       title: 'Brakes on the fast shaft',
@@ -94,6 +106,12 @@ const scene: SceneDef = {
       select: null,
       params: { latched: true, left: 0.6, type: 'wet' },
       cites: [SRC.tts510('p11')],
+      check: {
+        question: 'A brake is moved from the wheel hub onto the half shaft, before the 4.8 : 1 final reduction. How much torque must it now hold?',
+        options: ['4.8 times as much', 'The same as at the hub', 'About 1/4.8 as much'],
+        answer: 2,
+        explain: 'The half shaft turns 4.8 times faster than the wheel, so for the same stopping power it carries **1/4.8 of the torque**. A smaller, lighter brake does the job.',
+      },
     },
   ],
 }
