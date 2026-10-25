@@ -45,6 +45,12 @@ const scene: SceneDef = {
       camera: { position: [0.5, 1.4, 3.6], target: [0.6, 0.6, 0] },
       select: 'platform',
       cites: [C.he('eq 11–12')],
+      check: {
+        question: 'If the seat were mounted further from the tractor’s centre of gravity, the floor motion under it would be…',
+        options: ['Larger, as the pitch adds more', 'Smaller, as the pitch cancels the bounce', 'Unchanged, as only the bounce counts'],
+        answer: 0,
+        explain: 'The pitch part of **z_input = z_t + Rθ** grows with the distance R from the CG, so a seat far from it moves more. Seats are placed as near the CG as practical.',
+      },
     },
     {
       title: 'Two-degree-of-freedom seat',
@@ -62,6 +68,12 @@ const scene: SceneDef = {
       select: 'seat-spring',
       params: { ...DEFAULTS },
       cites: [C.he('eq 14–17, Fig 10.10')],
+      check: {
+        question: 'The tractor bounces at about 3 Hz. Which seat suspension frequency isolates the operator?',
+        options: ['5 Hz', '3 Hz', '1.5 Hz'],
+        answer: 2,
+        explain: 'Isolation needs **ω_t/ω_s > 1.414**: 3/1.5 = 2 qualifies. At 3 Hz the seat resonates, and at 5 Hz it simply follows the floor.',
+      },
     },
     {
       title: 'A seat tuned to the tractor is worse than none',
@@ -70,6 +82,13 @@ const scene: SceneDef = {
       select: 'operator',
       params: { ...DEFAULTS, fs: 3, zs: 0.1 },
       cites: [C.he('importance of damping near ω_t/ω_s = 1')],
+      check: {
+        question: 'The seat is stuck at 3 Hz and the spring cannot be changed. Which change helps the operator most?',
+        options: ['Less suspension damping', 'More suspension damping', 'Removing the end stops'],
+        answer: 1,
+        explain: 'Near **ω_t/ω_s = 1** only damping limits the resonant motion, so raising ζ cuts the peak.',
+        reveal: { params: { fs: 3, zs: 0.5 } },
+      },
     },
     {
       title: 'Stops and nonlinearity',

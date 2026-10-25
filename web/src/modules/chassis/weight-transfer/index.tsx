@@ -54,6 +54,13 @@ const scene: SceneDef = {
       select: null,
       params: { chassis: 'exam', pull: 12, theta: 0, alpha: 0, yd: 0.58 },
       cites: [cite('AEE510', 'WhatsApp Image 2025-07-24 at 11.15.32 (2022/23 final exam)', 'Q2c')],
+      check: {
+        question: 'Using ΔW = P·h/L, how much weight moves if the pull doubles to 24 kN at the same 580 mm hitch on the 2083 mm wheelbase?',
+        options: ['3.34 kN', '6.68 kN', '13.4 kN'],
+        answer: 1,
+        explain: 'The transfer is proportional to the pull: **ΔW** = 24 × 0.58/2.083 = 6.68 kN, leaving only about 2.32 kN on the front axle.',
+        reveal: { params: { chassis: 'exam', pull: 24, theta: 0, alpha: 0, yd: 0.58 } },
+      },
     },
     {
       title: 'Slopes add to it',
@@ -62,6 +69,13 @@ const scene: SceneDef = {
       camera: { position: [1.0, 1.8, 6.6], target: [0, 0.8, 0] },
       params: { chassis: 'farmland', alpha: 10, pull: 6, theta: 5, yd: 0.45 },
       cites: [SRC.mac502('eqs 6.4, 6.8; Problem 6.6')],
+      check: {
+        question: 'Standing on a slope facing downhill instead, what happens to the front axle load?',
+        options: ['It rises', 'It falls', 'It stays the same'],
+        answer: 0,
+        explain: 'Downhill, the weight component **W sin α** acting at CG height turns the other way and moves weight onto the front: on a 10° slope the front carries about 9.9 kN instead of 8.0 kN.',
+        reveal: { params: { alpha: -10, pull: 0 } },
+      },
     },
     {
       title: 'Front lift — instability',
@@ -70,6 +84,13 @@ const scene: SceneDef = {
       camera: { position: [0.8, 1.4, 5.6], target: [0.2, 0.8, 0] },
       params: { alpha: 0, yd: 0.85, pull: 19, theta: 0 },
       cites: [SRC.mac502('eq 6.4, instability at Vf = 0')],
+      check: {
+        question: 'The front lifts at about 17.8 kN with y′ = 0.85 m. If you lower the drawbar to 0.45 m, the pull needed to lift the front…',
+        options: ['Falls', 'Rises', 'Stays at 17.8 kN'],
+        answer: 1,
+        explain: 'The front lifts when the pull’s moment P·y′ about the rear contact cancels the front’s static load moment, so the lifting pull goes as 1/y′: at 0.45 m it is about **33.6 kN**.',
+        reveal: { params: { alpha: 0, yd: 0.45, pull: 19, theta: 0 } },
+      },
     },
     {
       title: 'Finding the CG height',

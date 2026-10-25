@@ -53,6 +53,12 @@ const scene: SceneDef = {
       camera: { position: [1.4, 0.75, 1.5], target: [DIM.mountX, 0.4, DIM.mountZ] },
       select: 'mounts',
       cites: [C.ln('isolation efficiency (1 − TR) × 100 %')],
+      check: {
+        question: 'The running speed stays the same but you fit softer springs. What happens to the force reaching the floor?',
+        options: ['It rises', 'It falls', 'It stays the same'],
+        answer: 1,
+        explain: 'Softer springs lower **ω_n = √(k/M)**, so r = ω/ω_n moves further above √2 and the transmissibility, and with it the floor force, falls.',
+      },
     },
     {
       title: 'Through resonance',
@@ -62,6 +68,12 @@ const scene: SceneDef = {
       select: 'machine',
       params: { ...COMPRESSOR, r: 1 },
       cites: [C.ln('resonance at r = 1')],
+      check: {
+        question: 'The machine must pass through r = 1 every time it starts. How can you cut the force on the floor while it does?',
+        options: ['Fit stiffer springs', 'Remove the dampers', 'Add more damping to the mounts'],
+        answer: 2,
+        explain: 'At **r = 1** only damping limits the motion, so a higher ζ lowers the resonance peak, at the cost of slightly more force transmitted at running speed.',
+      },
     },
     {
       title: 'Below √2, mounts make it worse',
@@ -70,6 +82,12 @@ const scene: SceneDef = {
       camera: home,
       params: { ...COMPRESSOR, r: 1.2 },
       cites: [C.he('Fig 10.10: TR < 1 only for r > 1.414')],
+      check: {
+        question: 'This machine runs at r = 1.2 on its mounts. Compared with bolting it straight to the floor, the mounts…',
+        options: ['Pass more force to the floor', 'Pass less force to the floor', 'Make no difference'],
+        answer: 0,
+        explain: 'Below **r = √2** the transmissibility is above 1, so the mounts amplify the force. The cure is softer mounts that put r above √2.',
+      },
     },
     {
       title: 'The hopper shaker',

@@ -63,6 +63,12 @@ const scene: SceneDef = {
       cut: 'half',
       select: 'sprocket',
       cites: [TT('p50 — drive sprocket')],
+      check: {
+        question: 'Suppose the sprocket had 24 teeth at half the chain pitch instead of 25. What would change?',
+        options: ['The same 12 teeth would do all the driving', 'Every tooth would still drive on alternate turns', 'The chain would no longer fit the sprocket'],
+        answer: 0,
+        explain: 'With an even count the chain moves exactly 12 links per turn, so the bushings land on the same **12 teeth** every time and those wear twice as fast. The odd hunting-tooth count shares the work.',
+      },
     },
     {
       title: 'Rollers carry the machine',
@@ -80,6 +86,13 @@ const scene: SceneDef = {
       cut: 'half',
       params: { adjust: 0 },
       cites: [TT('p50'), TT('p52, Fig 11')],
+      check: {
+        question: 'You pump grease into the adjuster. What happens to the sag of the top strand?',
+        options: ['It increases', 'It decreases', 'It stays the same'],
+        answer: 1,
+        explain: 'Grease pushes the **front idler** forward, lengthening the path the track must wrap round, so the chain is drawn tighter and the sag falls.',
+        reveal: { params: { adjust: 5 } },
+      },
     },
     {
       title: 'Too tight, too loose',
@@ -88,6 +101,12 @@ const scene: SceneDef = {
       select: 'track',
       params: { adjust: -25, speed: 8 },
       cites: [TT('p53, Fig 12')],
+      check: {
+        question: 'Which sign points to a track that is too tight rather than too loose?',
+        options: ['The track whips and comes off in turns', 'The sprocket jumps teeth under load', 'Fast pin and bushing wear, and lost power'],
+        answer: 2,
+        explain: 'A tight track presses the pins hard into the bushings all the way round, so **friction** wears them quickly and absorbs engine power. Whipping, coming off and jumped teeth are signs of slack.',
+      },
     },
     {
       title: 'Idler alignment',

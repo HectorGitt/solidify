@@ -49,6 +49,13 @@ const scene: SceneDef = {
       select: 'brake-blocks',
       params: { kind: 'prony', load: 0.7 },
       cites: [C.prony],
+      check: {
+        question: 'You fit a longer torque arm l. At the same engine torque, the force on the scale will…',
+        options: ['Rise', 'Fall', 'Stay the same'],
+        answer: 1,
+        explain: 'The torque is set by the engine and **T = F·l**, so a longer arm needs a smaller force on the scale to balance it.',
+        reveal: { params: { kind: 'prony', load: 0.7, arm: 1.2 } },
+      },
     },
     {
       title: 'Hydraulic dynamometer',
@@ -59,6 +66,12 @@ const scene: SceneDef = {
       cut: 'half',
       params: { kind: 'hydraulic', load: 0.62 },
       cites: [C.hydraulic],
+      check: {
+        question: 'Capacity grows as N³D⁵. At the same speed, doubling the rotor diameter raises the power it can absorb about…',
+        options: ['4 times', '8 times', '32 times'],
+        answer: 2,
+        explain: '2⁵ = **32**: capacity grows with the fifth power of rotor diameter, so a modest increase in rotor size absorbs far more power.',
+      },
     },
     {
       title: 'Where the power goes',
@@ -101,6 +114,12 @@ const scene: SceneDef = {
       cut: 'half',
       params: { kind: 'hydraulic', load: 0.62, BPo: 94, ToC: 35 },
       cites: [C.correction],
+      check: {
+        question: 'This test runs at 94 kPa and 35 °C, in thinner air than the 99 kPa, 25 °C standard. How does the corrected power compare with the observed?',
+        options: ['It is higher', 'It is lower', 'It is the same'],
+        answer: 0,
+        explain: 'Thin, hot air carries less oxygen, so the engine makes less power than it would at standard conditions. **fa** = (99/94)(308/298)^0.7 ≈ 1.08 scales it back up.',
+      },
     },
   ],
 }

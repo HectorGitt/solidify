@@ -89,6 +89,12 @@ const scene: SceneDef = {
       select: 'ruts',
       params: { ideal: false, pull: 14 },
       cites: [SRC.mech502('p6–7, eqs 2.5–2.8'), SRC.l27('eq 3')],
+      check: {
+        question: 'With no slip the wheels would carry the tractor 10 m, but it actually travels 8.8 m. What is the wheel slip?',
+        options: ['8.8 %', '12 %', '88 %'],
+        answer: 1,
+        explain: 'i = (V₀ − V)/V₀ = (10 − 8.8)/10 = **0.12**, or 12 %: the wheel turns further than the tractor travels.',
+      },
     },
     {
       title: 'One wheel as a free body',
@@ -107,6 +113,12 @@ const scene: SceneDef = {
       select: null,
       params: { view: 'tractor', soil: 'soft', pull: 12 },
       cites: [SRC.l27('p31–32, eqs 14–16, Table 2')],
+      check: {
+        question: 'Switching from tilled to soft soil at the same 12 kN pull lowers the mobility number Bn. What happens?',
+        options: ['Slip rises and motion resistance falls', 'Slip and motion resistance both rise', 'Slip and motion resistance both fall'],
+        answer: 1,
+        explain: 'A lower **Bn** means a weaker soil for this tyre: the Brixius equations give less gross traction and more motion resistance at any slip, so more slip is needed to deliver the same pull.',
+      },
     },
     {
       title: 'Too much pull',
@@ -114,6 +126,12 @@ const scene: SceneDef = {
         'Ask for more net traction than the soil can give and the wheels **spin**: slip runs to 100 % and nothing useful is done. Adding ballast raises the traction limit — at the cost of more rolling resistance.',
       params: { soil: 'soft', pull: 14 },
       cites: [SRC.mech502('p7, p10'), SRC.l27('p40–44')],
+      check: {
+        question: 'The wheels spin at a 14 kN pull on soft soil. Which change would let the tractor carry this pull?',
+        options: ['Shift to a lower gear', 'Raise the engine speed', 'Add weight to the rear wheels'],
+        answer: 2,
+        explain: 'Spinning means the tyres have reached their **traction limit**, which rises with the weight on them. A lower gear or more engine speed only gives torque the wheels already cannot use.',
+      },
     },
     {
       title: 'Ballast cures it',

@@ -44,6 +44,12 @@ const scene: SceneDef = {
       select: 'tractor-rops',
       params: { station: 'rops' },
       cites: [C.he('p20–21')],
+      check: {
+        question: 'A tractor with a ROPS overturns and the operator has not fastened the seat belt. What is the main danger?',
+        options: ['The ROPS frame collapsing under the load', 'Being thrown outside the protected zone', 'The engine catching fire as it rolls'],
+        answer: 1,
+        explain: 'The **ROPS** only protects the zone inside it. The seat belt keeps the operator there; without it they can be thrown out and crushed by the tractor or the frame.',
+      },
     },
     {
       title: 'Noise: 96 against 88 dB(A)',
@@ -52,6 +58,13 @@ const scene: SceneDef = {
       select: 'cab',
       params: { station: 'cab', waves: true },
       cites: [C.he('p5–6, p22')],
+      check: {
+        question: 'OSHA allows 90 dB(A) for 8 h and halves the time for every 5 dB(A) more. What noise dose does an 8 h day at 96 dB(A) give?',
+        options: ['About 50 %', 'About 100 %', 'About 230 %'],
+        answer: 2,
+        explain: 'At 96 dB(A) the allowed time is about 3½ h, so 8 h is a **noise dose** of 8 ÷ 3.5 ≈ 230 %. The cab’s 88 dB(A) allows about 10½ h, a dose of about 76 %.',
+        reveal: { params: { station: 'open', hours: 8 } },
+      },
     },
     {
       title: 'Fitting the 5th to the 95th percentile',
@@ -61,6 +74,13 @@ const scene: SceneDef = {
       cut: 'seat',
       params: { station: 'cab', percentile: 95 },
       cites: [C.he('Table 10.6, p23')],
+      check: {
+        question: 'Which operator should the pedal reach be designed for?',
+        options: ['The 5th-percentile operator', 'The 50th-percentile operator', 'The 95th-percentile operator'],
+        answer: 0,
+        explain: 'If the **smallest** (5th-percentile) operator can reach the pedals, everyone larger can too. Headroom is set the other way, by the 95th percentile.',
+        reveal: { params: { station: 'cab', percentile: 5 } },
+      },
     },
     {
       title: 'Service intervals',

@@ -44,6 +44,13 @@ const scene: SceneDef = {
       camera: { position: [-0.32, 0.38, 0.55], target: [RIG.springX, 0.22, 0] },
       select: 'spring',
       cites: [C.ln('equivalent spring-mass: M_e = M + M_s/3')],
+      check: {
+        question: 'The same spring carries a mass four times heavier. What happens to the natural frequency?',
+        options: ['It halves', 'It falls to a quarter', 'It doubles'],
+        answer: 0,
+        explain: '**ω_n = √(k/m)**, so four times the mass gives √(1/4), half the natural frequency.',
+        reveal: { params: { m: 16 } },
+      },
     },
     {
       title: 'Dashpot: force ∝ velocity',
@@ -63,6 +70,13 @@ const scene: SceneDef = {
       cut: 'half',
       params: { m: 4, k: 5000, c: 12.5, mode: 'free', x0: 0.02 },
       cites: [C.ln('log decrement example')],
+      check: {
+        question: 'If the damping b were doubled to 25 N·s/m, how big would the swing be after five cycles?',
+        options: ['About a quarter of x₀', 'About a sixteenth of x₀', 'About half of x₀'],
+        answer: 1,
+        explain: 'For light damping δ ≈ 2πζ, so doubling b doubles the **log decrement** to about 0.56. Five cycles then shrink the amplitude by e^(−2.8) ≈ 1/16.',
+        reveal: { params: { m: 4, k: 5000, c: 25, mode: 'free', x0: 0.02 } },
+      },
     },
     {
       title: 'Step input: overdamped',
@@ -80,6 +94,13 @@ const scene: SceneDef = {
       select: 'dashpot',
       params: { m: 4, k: 5000, c: 282.8, mode: 'step', F0: 50 },
       cites: [C.ln('critically damped case')],
+      check: {
+        question: 'Here c_c = 282.8 N·s/m. What does the mass do after the step if b is cut to 140 N·s/m?',
+        options: ['Creeps up with no overshoot', 'Overshoots and settles after a few swings', 'Oscillates for ever'],
+        answer: 1,
+        explain: 'b = 140 gives ζ ≈ **0.5**, which is underdamped: the response overshoots by about 16 % and the swings die away.',
+        reveal: { params: { m: 4, k: 5000, c: 140, mode: 'step', F0: 50 } },
+      },
     },
     {
       title: 'Sinusoidal forcing near resonance',

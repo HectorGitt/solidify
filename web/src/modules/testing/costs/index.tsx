@@ -44,6 +44,12 @@ const scene: SceneDef = {
       camera: { position: [-8, 14, 26], target: [-6, 0, 2] },
       select: 'worked-strips',
       cites: [C.mgmt('p8 field capacity')],
+      check: {
+        question: 'What is the theoretical capacity of this 4 m disk at 8 km/h?',
+        options: ['3.2 ha/h', '32 ha/h', '0.32 ha/h'],
+        answer: 0,
+        explain: '**C_t = W·S/10** = 4 × 8/10 = 3.2 ha/h. That is the upper limit, with no overlap, turns or stops.',
+      },
     },
     {
       title: 'Overlap',
@@ -60,6 +66,13 @@ const scene: SceneDef = {
       select: 'headlands',
       params: { overlap: DEFAULTS.overlap },
       cites: [C.mgmt('p7 turning at the ends')],
+      check: {
+        question: 'If the passes were twice as long (60 m to 120 m), with the same kind of turns, the field efficiency would…',
+        options: ['Fall', 'Rise', 'Stay the same'],
+        answer: 1,
+        explain: 'Each turn costs about the same time, but a longer pass does more work between turns, so turning is a smaller share of the total and **field efficiency** rises: here from about 46 % to 59 %.',
+        reveal: { params: { L: 120 } },
+      },
     },
     {
       title: 'Field efficiency and effective capacity',
@@ -74,6 +87,12 @@ const scene: SceneDef = {
       camera: overview,
       params: { ...ISU_TRACTOR, ...ISU_DISK },
       cites: [C.mgmt('p1–4')],
+      check: {
+        question: 'A machine works 400 h a year instead of 200 h. Its ownership cost per hour…',
+        options: ['Roughly doubles', 'Stays the same', 'Roughly halves'],
+        answer: 2,
+        explain: 'Ownership costs are a roughly fixed amount per year, so twice the hours spreads them over twice the work and the **cost per hour** about halves. Operating costs per hour stay much the same.',
+      },
     },
     {
       title: 'Operating costs and cost per acre',

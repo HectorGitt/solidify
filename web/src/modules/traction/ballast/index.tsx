@@ -51,6 +51,13 @@ const scene: SceneDef = {
       playing: true,
       params: { ...DEFAULTS },
       cites: [TT('p7–8, Fig 14')],
+      check: {
+        question: 'If you add ballast to the rear wheels and keep the same drawbar pull, what happens to wheel slip?',
+        options: ['It rises', 'It falls', 'It does not change'],
+        answer: 1,
+        explain: 'The pull a tyre can develop rises with the **weight** on it, so the same pull is a smaller share of what the tyre can give and slip falls, at the cost of more compaction and rolling resistance.',
+        reveal: { params: { weights: 3 } },
+      },
     },
     {
       title: 'Liquid ballast',
@@ -68,6 +75,12 @@ const scene: SceneDef = {
       select: 'air',
       params: { fill: 1 },
       cites: [TT('p12, Fig 20')],
+      check: {
+        question: 'Why not fill the tyre to 100 % to get the most weight from the liquid?',
+        options: ['The air cushion is lost, so the tyre cannot absorb shocks', 'The calcium chloride would freeze at a full fill', 'The extra liquid would lift the bead off the rim'],
+        answer: 0,
+        explain: 'Water does not compress, so with no **air cushion** the tyre rides hard and bruises easily. Filling to 75 % (water up to the valve with the valve at the top) keeps the cushion.',
+      },
     },
     {
       title: 'Cast-iron wheel weights',
@@ -87,6 +100,12 @@ const scene: SceneDef = {
       select: 'chalk',
       params: { pull: 30 },
       cites: [TT('p9–10')],
+      check: {
+        question: 'Under load the wheel made 10 turns; driving back without load over the same distance takes only 7. What should you do?',
+        options: ['Leave it; the ballast is correct', 'Remove some ballast', 'Add ballast'],
+        answer: 2,
+        explain: 'Seven no-load turns means the wheel slipped (10 − 7)/10 = **30 %**, well above the 10–15 % target, so the tyre needs more weight on it.',
+      },
     },
     {
       title: 'Reading the tread marks',

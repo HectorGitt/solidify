@@ -58,6 +58,12 @@ const scene: SceneDef = {
       select: 'rod-oil',
       params: { motion: 'retract' },
       cites: [MG1617('Q(d)')],
+      check: {
+        question: 'The same 68.13 L/min now goes into the rod end. Compared with extending, how fast does the rod move?',
+        options: ['Slower, because the force is smaller', 'At the same speed, because the flow is the same', 'Faster, because the annulus fills sooner'],
+        answer: 2,
+        explain: 'Speed is flow divided by the area being filled. The **annulus** A − a is smaller than the full piston area, so the rod comes in faster: about 0.279 m/s against 0.249 m/s extending.',
+      },
     },
     {
       title: 'Piston and seals',
@@ -86,6 +92,13 @@ const scene: SceneDef = {
       select: 'cylinder',
       params: { bore: 0.05, rod: 0.025, p: 27.5, Q: 11.78, load: 60, motion: 'extend', stroke: 0.2, time: 2 },
       cites: [SRC.top510('p11')],
+      check: {
+        question: 'This 50 mm ram needs 306 bar for 60 kN, above the 275 bar relief setting. Which change lets it lift the load without raising the relief setting?',
+        options: ['A bigger pump, giving more flow', 'A larger bore, giving more piston area', 'A thicker rod, giving a stiffer ram'],
+        answer: 1,
+        explain: 'Force is pressure times area, **F = pA**. At 27.5 MPa, 60 kN needs at least 2180 mm² of piston (a bore of about 53 mm). More flow only makes the ram move faster.',
+        reveal: { params: { bore: 0.06 } },
+      },
     },
     {
       title: 'Control valve; single- vs double-acting',
@@ -96,6 +109,13 @@ const scene: SceneDef = {
       cut: 'half',
       params: { motion: 'cycle', acting: 'single', load: 20, bore: 0.0762, rod: 0.025, p: 17.2, Q: 68.13 },
       cites: [SRC.hy510('p1–2, Fig 40'), MG1617('Q(c)')],
+      check: {
+        question: 'The spool is centred, so both lands cover ports A and B. What does a loaded ram do?',
+        options: ['Holds its position on the trapped oil', 'Sinks slowly as the pump idles', 'Keeps extending at reduced speed'],
+        answer: 0,
+        explain: 'With both ports blocked the oil in the ram has nowhere to go, and oil is almost **incompressible**, so the load is held. Only leaking seals would let it creep.',
+        reveal: { params: { motion: 'hold' } },
+      },
     },
     {
       title: 'Exploded view',

@@ -49,6 +49,12 @@ const scene: SceneDef = {
       select: 'soil',
       params: { mode: 'position' },
       cites: C.other,
+      check: {
+        question: 'In position control the plough reaches a band of harder soil. What happens?',
+        options: ['The depth stays the same and the draft rises', 'The plough lifts and the draft stays the same', 'The depth and the draft both fall'],
+        answer: 0,
+        explain: 'Position control holds the lift arms where the lever puts them, so on level ground the **depth** is fixed and the draft simply follows the soil strength.',
+      },
     },
     {
       title: 'Draft control: the top link senses draft',
@@ -67,6 +73,12 @@ const scene: SceneDef = {
       camera: hyd,
       select: 'control-valve',
       cites: [...C.draft, ...C.circuit],
+      check: {
+        question: 'In draft control the plough runs into a compacted strip. What does the hitch do?',
+        options: ['Lowers the plough to hold the depth', 'Waits for the operator to move the lever', 'Lifts the plough a little to hold the draft'],
+        answer: 2,
+        explain: 'The higher draft compresses the top link and **sensing spring** further, the valve sends oil to the ram and the plough lifts until the draft is back at the setting. The depth is what gives way.',
+      },
     },
     {
       title: 'Response / damping',
@@ -77,6 +89,12 @@ const scene: SceneDef = {
       select: 'plough-bodies',
       params: { mode: 'draft', response: 1 },
       cites: C.draft,
+      check: {
+        question: 'The response knob is turned to fully fast. What is the risk?',
+        options: ['The draft strays far before the plough moves', 'The hitch overshoots and hunts up and down', 'The ram runs short of pump flow'],
+        answer: 1,
+        explain: 'A fast, lightly **damped** loop corrects too hard: the plough overshoots the target and hunts up and down. A slow setting has the opposite fault.',
+      },
     },
     {
       title: 'Other ways to sense draft',

@@ -59,6 +59,12 @@ const scene: SceneDef = {
       select: 'control-valve',
       params: { valve: 'lift' },
       cites: [MG1617('Q(a)')],
+      check: {
+        question: 'If the pump delivered twice the flow, 54 L/min instead of 27, what would change during the lift?',
+        options: ['The implement would rise twice as fast', 'The ram could lift twice the weight', 'The relief valve would open at a higher pressure'],
+        answer: 0,
+        explain: 'Flow sets **speed**: the ram moves at Q divided by its piston area. The weight it can lift is set by the relief pressure and the bore, not by the flow.',
+      },
     },
     {
       title: 'HOLD',
@@ -75,6 +81,13 @@ const scene: SceneDef = {
       select: 'implement',
       params: { valve: 'lower' },
       cites: [SRC.hy510('p2, p5')],
+      check: {
+        question: 'The pump plays no part in lowering. If you open the flow-control valve wider, the implement will…',
+        options: ['Drop at the same speed, set by its weight', 'Drop faster, as oil leaves the ram sooner', 'Rise slightly, as pump oil reaches the ram'],
+        answer: 1,
+        explain: 'The implement’s weight pushes oil out of the ram to the tank, and the **flow-control valve** restricts that return flow. A wider opening lets the oil out faster, so the implement drops faster.',
+        reveal: { params: { valve: 'lower', dropQ: 36 } },
+      },
     },
     {
       title: 'Overload: the relief valve',
@@ -84,6 +97,12 @@ const scene: SceneDef = {
       select: 'relief',
       params: { valve: 'lift', load: 25 },
       cites: [SRC.hy510('p3')],
+      check: {
+        question: 'With the relief setting unchanged, which change raises the heaviest load this hitch can lift?',
+        options: ['More pump delivery', 'A slower lowering rate', 'A larger ram bore'],
+        answer: 2,
+        explain: 'Lift capacity is the relief pressure times the ram’s piston area, divided by the linkage ratio. A larger **bore** gives more area; pump delivery only changes how fast it lifts.',
+      },
     },
     {
       title: 'Rockshaft and linkage',

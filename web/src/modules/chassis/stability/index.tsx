@@ -40,6 +40,13 @@ const scene: SceneDef = {
       body:
         'The front lifts when the tyres develop **ψ′ = tan α + (tan αs − tan α)/h**, with tan αs = xr/(r + yg) = 0.71 and h = y′/(r + yg). For the normal drawbar h = 0.59 and ψ′ must reach 1.2 on level ground — more than any field soil gives.',
       cites: [SRC.mac502('eq 6.35; h 0.6 typical, 0.7–0.8 dangerous')],
+      check: {
+        question: 'Pulling uphill from the same drawbar, how does the ψ′ needed to lift the front change?',
+        options: ['It rises, so rearing gets harder', 'It falls, so rearing gets easier', 'It stays at 1.2'],
+        answer: 1,
+        explain: 'With h = 0.59 the term (tan αs − tan α)/h falls faster than tan α rises, so the **ψ′** needed drops: about 1.08 on a 10° slope instead of 1.2. Pulling uphill brings rearing closer.',
+        reveal: { params: { alpha: 10 } },
+      },
     },
     {
       title: 'Hitched too high',
@@ -49,6 +56,13 @@ const scene: SceneDef = {
       select: 'drawbar',
       params: { mode: 'rear', hitchPoint: 'custom', yd: 0.87, alpha: 0 },
       cites: [SRC.mac502('Problem 6.16')],
+      check: {
+        question: 'On the same soil, what happens if the drawbar is lowered from 0.87 m to 0.6 m?',
+        options: ['The front lifts at a smaller pull', 'The tyres slip before the front lifts', 'The front lifts at the same pull'],
+        answer: 1,
+        explain: 'Lowering y′ cuts h, so the front would need **ψ′** ≈ 0.9 to lift, more than the 0.63 this soil can give: the tyres shear the soil and slip first.',
+        reveal: { params: { mode: 'rear', hitchPoint: 'custom', yd: 0.6, alpha: 0 } },
+      },
     },
     {
       title: 'Never tow from the top link',
@@ -57,6 +71,12 @@ const scene: SceneDef = {
       select: 'tractor-top-link',
       params: { mode: 'rear', hitchPoint: 'toplink' },
       cites: [SRC.mac502('eq 6.35'), SRC.he510('p20–21 ROPS')],
+      check: {
+        question: 'Chained to the top-link pin instead of the drawbar, on the same soil, the tractor will…',
+        options: ['Slip its tyres at a lower pull', 'Rear over before the tyres slip', 'Behave the same; only the pull matters'],
+        answer: 1,
+        explain: 'With h ≈ 1.2 the front lifts once the tyres develop **ψ′** = 0.71/1.18 ≈ 0.60, less than the 0.63 the soil can give, so the tractor rears before the tyres slip.',
+      },
     },
     {
       title: 'Slope limits',

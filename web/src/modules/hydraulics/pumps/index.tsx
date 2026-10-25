@@ -57,6 +57,13 @@ const scene: SceneDef = {
       camera: { position: [GEAR.x + 0.02, 0.05, 0.16], target: [GEAR.x, 0, 0] },
       select: 'gear-body',
       cites: [SRC.hy510('p2: 27 L/min (6 gal/min)')],
+      check: {
+        question: 'This gear pump displaces 13.9 cm³ per revolution. If the drive speed falls from 2000 to 1000 rpm, about how much does it deliver?',
+        options: ['27.8 L/min', '13.9 L/min', '55.6 L/min'],
+        answer: 1,
+        explain: 'A positive-displacement pump moves a fixed volume each turn, so **flow = D × N**: 13.9 cm³ × 1000 rpm ≈ 13.9 L/min, before leakage.',
+        reveal: { params: { rpm: 1000 } },
+      },
     },
     {
       title: 'Vane pump',
@@ -73,6 +80,13 @@ const scene: SceneDef = {
       select: 'ring',
       params: { ecc: 0.0015 },
       cites: [SRC.beyond('vane-pump displacement')],
+      check: {
+        question: 'How would you halve the vane pump’s delivery at the same drive speed?',
+        options: ['Double the number of vanes', 'Fit a higher relief setting', 'Halve the eccentricity e'],
+        answer: 2,
+        explain: 'Displacement D = 2eL(2πR − n·t) is proportional to the **eccentricity** e, so halving e halves the delivery. Extra vanes only take up a little more of the chamber volume.',
+        reveal: { params: { ecc: 0.002 } },
+      },
     },
     {
       title: 'Pump versus motor',
@@ -82,6 +96,12 @@ const scene: SceneDef = {
       select: null,
       params: { ecc: 0.004 },
       cites: [MG1617('pump vs motor table')],
+      check: {
+        question: 'A worn pump leaks more oil internally. At the same speed and pressure, what happens?',
+        options: ['Shaft torque falls below Δp·D/2π', 'Actual delivery falls further below D·N', 'Actual delivery rises above D·N'],
+        answer: 1,
+        explain: 'Internal **leakage** lets oil slip back from the outlet to the inlet, so the volumetric efficiency and the delivery fall. Friction, not leakage, is what raises the torque above Δp·D/2π.',
+      },
     },
     {
       title: 'Pump calculator',

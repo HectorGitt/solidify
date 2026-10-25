@@ -65,6 +65,12 @@ const scene: SceneDef = {
       select: 'belt-1',
       params: { build: 'radial', plies: 4 },
       cites: [TT('p3, Fig 4'), L27('p39')],
+      check: {
+        question: 'Why does a radial tyre usually pull better in the field than a bias tyre of the same size?',
+        options: ['Its flexible sidewall lets the tread lie flat', 'Its extra plies make the carcass stiffer', 'Its tread bars are deeper than a bias tyre’s'],
+        answer: 0,
+        explain: 'With body cords at about 90° the **sidewall** flexes freely while the belts keep the tread flat, giving a longer, even footprint and 5–7 % better tractive efficiency.',
+      },
     },
     {
       title: 'Tread classes and the directional arrow',
@@ -81,6 +87,13 @@ const scene: SceneDef = {
       select: null,
       params: { code: '24.5-32', build: 'bias' },
       cites: [TT('p5, Fig 7')],
+      check: {
+        question: 'What does the size code 20.8R42 tell you?',
+        options: ['A 20.8 in rim, 42 in wide, radial', '20.8 in wide, on a 42 in rim, radial', '20.8 in wide, 42 in tall, bias'],
+        answer: 1,
+        explain: 'The first number is the **section width** in inches and the last is the **rim diameter**; the “R” marks a radial, where a “-” would mean bias.',
+        reveal: { params: { code: '20.8R42', build: 'radial' } },
+      },
     },
     {
       title: 'Under-inflation',
@@ -99,6 +112,12 @@ const scene: SceneDef = {
       select: 'contact',
       params: { pressure: 1.6 },
       cites: [TT('p6, Fig 9'), L27('p39')],
+      check: {
+        question: 'Going from 0.8 to 1.6 bar at the same wheel load, what happens to the contact area?',
+        options: ['It roughly doubles', 'It stays about the same', 'It roughly halves'],
+        answer: 2,
+        explain: 'Contact area follows **A = W/p**: the ground pressure tracks the tyre pressure, so doubling the pressure at the same load roughly halves the footprint, and flotation and traction drop.',
+      },
     },
     {
       title: 'Correct pressure',

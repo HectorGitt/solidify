@@ -46,6 +46,12 @@ const scene: SceneDef = {
       cut: false,
       params: { hitch: 'trailed' },
       cites: [SRC.mac502('Fig 6.1, eqs 6.11–6.12')],
+      check: {
+        question: 'On the trailed hitch, if the drawbar were set higher, the weight transferred to the rear axle would be…',
+        options: ['Larger', 'Smaller', 'No different'],
+        answer: 0,
+        explain: 'The pull S cos θ acts at drawbar height y′, so its moment is S cos θ·y′ and **Vr = Wr + S cos θ·y′/x**: a higher drawbar moves more weight onto the rear (and brings the front closer to lifting).',
+      },
     },
     {
       title: 'Semi-mounted',
@@ -61,6 +67,13 @@ const scene: SceneDef = {
       camera: view,
       params: { hitch: 'mounted', theta: 20 },
       cites: [SRC.mac502('Fig 6.3, eqs 6.15–6.16')],
+      check: {
+        question: 'With the cultivator fully mounted, you steepen θ from 20° to 35°. What happens to the rear axle load?',
+        options: ['It falls', 'It stays the same', 'It rises'],
+        answer: 2,
+        explain: 'A steeper θ gives a larger downward component **S sin θ** acting on the tractor through the linkage, pressing the rear wheels down: here Vr rises from about 25.9 to 30.5 kN.',
+        reveal: { params: { hitch: 'mounted', theta: 35 } },
+      },
     },
     {
       title: 'When does mounting help?',
@@ -77,6 +90,13 @@ const scene: SceneDef = {
       select: 'wth-chain',
       params: { hitch: 'wth', theta: 20 },
       cites: [SRC.mac502('Fig 6.15, eqs 6.30–6.31')],
+      check: {
+        question: 'You raise the lift force F in the chain from 3 kN to 6 kN. What happens to the tractor’s rear axle load?',
+        options: ['It rises', 'It falls', 'It is unchanged'],
+        answer: 0,
+        explain: 'A larger **lift force** carries more of the implement’s weight on the tractor instead of the implement’s own wheels: here Vr rises from about 28.4 to 29.7 kN.',
+        reveal: { params: { hitch: 'wth', theta: 20, F: 6 } },
+      },
     },
     {
       title: 'Compare them',

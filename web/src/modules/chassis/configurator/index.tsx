@@ -69,6 +69,12 @@ const scene: SceneDef = {
       camera: REAR,
       select: 'ballast-rear',
       params: { pull: 35, target: 6, rear: 800, drive: 'mfwd' },
+      check: {
+        question: 'Rear ballast and front-wheel assist stop the 75 kW tractor spinning at 35 kN, with the same engine. Why does that work?',
+        options: ['It puts more weight on driven wheels, so they grip', 'It raises the torque the engine sends to the wheels', 'It lowers the rolling resistance of the tyres'],
+        answer: 0,
+        explain: 'Spinning is a **traction** limit: the pull a tyre can pass to the soil depends on the weight it carries. Ballast and driving the front axle put more weight on driven wheels; engine power was never the problem.',
+      },
     },
     {
       title: 'Too much of a good thing',
@@ -76,6 +82,12 @@ const scene: SceneDef = {
       camera: SIDE,
       select: 'ballast-rear',
       params: { rear: 2000 },
+      check: {
+        question: 'With 2 t of weights added to the same rear tyres, what happens to the pressure on the ground under them?',
+        options: ['It falls, because slip drops', 'It rises, so the subsoil compacts', 'It stays about the same'],
+        answer: 1,
+        explain: 'More load on the same tyres raises the contact pressure and pushes the stress deeper. Here it passes **110 kPa**, enough to compact the subsoil.',
+      },
     },
     {
       title: 'Gears versus a CVT',
@@ -83,6 +95,12 @@ const scene: SceneDef = {
       camera: SIDE,
       select: null,
       params: { trans: 'cvt' },
+      check: {
+        question: 'The job needs 7 km/h, between two gears of the 8-speed box. What does a CVT trade for hitting it exactly?',
+        options: ['It reaches 7 km/h but burns more fuel', 'It reaches 7 km/h and burns less fuel', 'It cannot pull as hard as the gearbox'],
+        answer: 0,
+        explain: 'A **CVT** reaches any speed, but part of the power passes through its hydrostatic branch, which loses more than gears do, so the same job costs more fuel.',
+      },
     },
   ],
 }

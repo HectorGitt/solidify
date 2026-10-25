@@ -60,6 +60,13 @@ const scene: SceneDef = {
       select: 'top-link',
       params: { top: 0.7, mode: 'hold', h: 0.4 },
       cites: [...C.fig65, ...C.linkage],
+      check: {
+        question: 'You shorten the top link with the turnbuckle. Where does the virtual hitch point V move?',
+        options: ['Lower and further back', 'Higher and further forward', 'Nowhere; only the mast tilts'],
+        answer: 1,
+        explain: 'A shorter **top link** changes the slope of the top-link line, so it meets the lower-link line higher and further forward: V rises and moves forward.',
+        reveal: { params: { top: 0.5, mode: 'hold', h: 0.4 } },
+      },
     },
     {
       title: 'Stage 1 · Penetration',
@@ -79,6 +86,12 @@ const scene: SceneDef = {
       select: 'v-point',
       params: { ...base, mode: 'float', h: H_EQ },
       cites: C.fig65,
+      check: {
+        question: 'Suppose the floating plough went deeper than this, so the soil-force line passed below V. What would it do?',
+        options: ['Keep sinking until something stops it', 'Stay at that depth, since it floats', 'Rise back towards this depth'],
+        answer: 2,
+        explain: 'With S passing **below V** its moment about V turns the plough out of the ground, so it rises until the line passes through V again. The free-link depth is a stable equilibrium.',
+      },
     },
     {
       title: 'Stage 3 · Restrained working',
@@ -88,6 +101,12 @@ const scene: SceneDef = {
       select: 'lift-rods',
       params: { ...base, mode: 'hold', h: H_EQ + 0.05 },
       cites: [...C.fig65, SRC.hy510('p3–4 draft control')],
+      check: {
+        question: 'Held shallower than its free depth, the plough still tries to go deeper. What stops it?',
+        options: ['The lift rods, held up by the ram oil', 'The top link, held by the turnbuckle', 'The hitch balls on the lower links'],
+        answer: 0,
+        explain: 'The soil-force line passes above V, so the plough tries to rotate into the ground. The **lift rods** carry that restraint, held up by the oil trapped in the lift ram.',
+      },
     },
     {
       title: 'Categories, coupler and care',

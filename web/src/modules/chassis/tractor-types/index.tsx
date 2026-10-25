@@ -41,6 +41,13 @@ const scene: SceneDef = {
         'A **row-crop** tractor has a narrow (tricycle) front and an adjustable rear track (1.32–1.93 m) to run between the rows. The **high-clearance** (cane) tractor lifts the whole machine on drop housings over tall crops — at the cost of a high CG.',
       params: { type: 'rowcrop' },
       cites: [SRC.vers502('row-crop, high-clearance'), SRC.tts510('p16 track widths')],
+      check: {
+        question: 'Compared with a standard tractor of the same track width, a high-clearance tractor on a side slope will tip over…',
+        options: ['At a gentler slope', 'At the same slope', 'At a steeper slope'],
+        answer: 0,
+        explain: 'Static side tipping starts when tan β equals half the track divided by the **CG height**, so raising the CG lowers the slope the tractor can stand.',
+        reveal: { params: { type: 'highClearance' } },
+      },
     },
     {
       title: 'Utility, orchard and lawn & garden',
@@ -64,6 +71,13 @@ const scene: SceneDef = {
       camera: view,
       params: { type: 'crawler' },
       cites: [SRC.vers502('crawler, skid-steer')],
+      check: {
+        question: 'A skid-steer has no steered wheels. How does it turn to the left?',
+        options: ['It folds its frame about a central hinge', 'It drives its right wheels faster than its left', 'It brakes only its front-left wheel'],
+        answer: 1,
+        explain: 'Driving the two sides at **different speeds** makes the tyres scrub sideways, so the machine swings towards the slower side, the same way a crawler steers.',
+        reveal: { params: { type: 'skidSteer' } },
+      },
     },
     {
       title: 'Four-wheel drive',
@@ -72,6 +86,12 @@ const scene: SceneDef = {
       camera: { position: [6.6, 3.6, 7.4], target: [0, 1.2, 0] },
       params: { type: 'articulated' },
       cites: [SRC.vers502('4WD types'), SRC.l27('Fig 47')],
+      check: {
+        question: 'Why can a 4WD tractor with equal wheels pull more than a 2WD of the same weight?',
+        options: ['Its wheels run at a higher slip', 'Its engine sits further back', 'All of its weight is on driven wheels'],
+        answer: 2,
+        explain: 'Pull is limited by the weight on driven wheels. With all four wheels driven, the **whole tractor weight** works for traction instead of only the rear axle’s share.',
+      },
     },
     {
       title: 'How we got here',

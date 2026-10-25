@@ -59,6 +59,13 @@ const scene: SceneDef = {
       cut: 'hitch',
       params: { meter: 'cylinder', damping: 0.85, pull: 14 },
       cites: [C.car],
+      check: {
+        question: 'If you close the throttling valve further, what happens to the pull reading?',
+        options: ['It fluctuates more', 'It settles nearer the mean pull', 'It reads a higher mean pull'],
+        answer: 1,
+        explain: 'The **throttling valve** restricts the oil passage to the transducer, so quick pressure spikes are smoothed out and the reading settles near the mean pull. The mean itself does not change.',
+        reveal: { params: { meter: 'cylinder', damping: 0.95 } },
+      },
     },
     {
       title: 'Dillon spring dial',
@@ -96,6 +103,12 @@ const scene: SceneDef = {
       select: null,
       params: { gear: 5, surface: 'concrete', run: true },
       cites: [C.criteria, SRC.mech502('Fig 2.2')],
+      check: {
+        question: 'Past the point of maximum drawbar power, the car keeps raising the load. Why does the power fall although the pull is higher?',
+        options: ['Speed falls faster than the pull rises', 'The car’s brake absorbs less power', 'The engine burns less fuel at high pull'],
+        answer: 0,
+        explain: 'Drawbar power is **pull × speed**. Once the engine lugs down its torque curve and slip climbs, the speed drops faster than the pull grows.',
+      },
     },
     {
       title: 'The chassis dynamometer',
@@ -124,6 +137,12 @@ const scene: SceneDef = {
       select: 'restraint',
       cut: false,
       cites: [C.chassis],
+      check: {
+        question: 'On the drums the front wheels do not roll. Compared with drawbar power from a track test, the result reads…',
+        options: ['A little low, as the drums slip on the tyres', 'The same, as the engine power is unchanged', 'A little high, as front rolling resistance is missing'],
+        answer: 2,
+        explain: 'On the track part of the drive-wheel effort goes into rolling the **front wheels**. Restrained on the drums they do not roll, so that loss is left out and the result reads a little high.',
+      },
     },
   ],
 }
