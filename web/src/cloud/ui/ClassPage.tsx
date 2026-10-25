@@ -6,6 +6,8 @@ import { api, ApiError, download } from '../api'
 import { useAuth } from '../auth'
 import { assignableChallenges, assignableQuestions, assignableScenes, assignmentRoute, assignmentStatus, type Assignable, type Assignment, type AssignmentKind, type AssignmentResult } from '../assignments'
 import { useProfile } from '../profile'
+import { ClassReport } from './ClassReport'
+import { StudentPapers, TeacherPapers, useClassPapers } from './ClassPapers'
 import { SignInFirst } from './ClassesPage'
 import { Notice, ghostBtn, inputCls, primaryBtn } from './Modal'
 
@@ -79,6 +81,8 @@ function StudentView({ info, assignments }: { info: ClassInfo; assignments: Assi
       <p className="mb-4 text-[13px] text-mute">
         Teacher: <span className="text-ink">{info.teacherName}</span> · {done}/{assignments.length} done
       </p>
+      <StudentPapers classId={info.id} />
+      {assignments.length ? <h2 className="mb-2 text-[12px] font-semibold uppercase tracking-[0.08em] text-mute">Assignments</h2> : null}
       {!assignments.length ? (
         <Notice>Nothing set yet. Assignments from your teacher will appear here.</Notice>
       ) : (
@@ -208,6 +212,7 @@ function AssignForm({ classId, onAdded }: { classId: string; onAdded: () => void
 }
 
 function TeacherView({ info, assignments, reload }: { info: ClassInfo; assignments: Assignment[]; reload: () => void }) {
+  const { papers } = useClassPapers(info.id)
   const [dash, setDash] = useState<Dashboard | null>(null)
   const [copied, setCopied] = useState(false)
   const loadDash = useCallback(() => {
@@ -245,6 +250,11 @@ function TeacherView({ info, assignments, reload }: { info: ClassInfo; assignmen
           {copied ? 'Copied' : 'Copy code'}
         </button>
       </div>
+
+      <section>
+        <h2 className="mb-2 text-[12px] font-semibold uppercase tracking-[0.08em] text-mute">Class report</h2>
+        <ClassReport classId={info.id} papers={papers} />
+      </section>
 
       <div className="grid gap-4 lg:grid-cols-[1fr_340px]">
         <section>
@@ -325,6 +335,11 @@ function TeacherView({ info, assignments, reload }: { info: ClassInfo; assignmen
           <AssignForm classId={info.id} onAdded={reload} />
         </aside>
       </div>
+
+      <section>
+        <h2 className="mb-2 text-[12px] font-semibold uppercase tracking-[0.08em] text-mute">Papers</h2>
+        <TeacherPapers classId={info.id} />
+      </section>
     </div>
   )
 }

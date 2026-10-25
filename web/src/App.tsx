@@ -19,6 +19,7 @@ const PromoPage = lazy(() => import('./ui/PromoPage'))
 const ClassesPage = lazy(() => import('./cloud/ui/ClassesPage'))
 const ClassPage = lazy(() => import('./cloud/ui/ClassPage'))
 const CreatePage = lazy(() => import('./cloud/ui/CreatePage'))
+const PaperPage = lazy(() => import('./cloud/ui/PaperPage'))
 const page = (el: ReactNode) => <Suspense fallback={<div className="grid h-full place-items-center text-[13px] text-mute">Loading…</div>}>{el}</Suspense>
 
 export default function App() {
@@ -42,6 +43,7 @@ export default function App() {
         <Route path="/promo" element={page(<PromoPage />)} />
         <Route path="/classes" element={page(<ClassesPage />)} />
         <Route path="/classes/:classId" element={page(<ClassPage />)} />
+        <Route path="/classes/:classId/papers/:paperId" element={page(<PaperPage />)} />
         <Route path="/create" element={page(<CreatePage />)} />
         <Route path="/m/:moduleId" element={<Viewer />} />
         <Route path="/m/:moduleId/:sceneId" element={<Viewer />} />
