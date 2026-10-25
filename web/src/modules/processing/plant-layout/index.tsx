@@ -74,6 +74,12 @@ const scene: SceneDef = {
       cut: 'roofs',
       params: { pattern: 'u-shape', line: 'garri', showHazards: true },
       cites: [C.hand('Note 4 Planning step 2')],
+      check: {
+        question: 'Why mount the hammer mill on its own heavy concrete plinth rather than straight on the floor slab?',
+        options: ['Its mass damps vibration before it spreads', 'It lifts the mill to conveyor height', 'It keeps floodwater off the motor'],
+        answer: 0,
+        explain: 'A heavy **inertia block**, separated from the slab, absorbs the mill’s vibration so it does not travel through the floor to other machines, instruments and the building.',
+      },
     },
     {
       title: 'Thermal Processing & Flue Gas Exhaust',
@@ -83,6 +89,12 @@ const scene: SceneDef = {
       cut: 'roofs',
       params: { pattern: 'u-shape', line: 'garri', showHazards: true },
       cites: [C.hand('Note 4 heat and steam isolation')],
+      check: {
+        question: 'The fryer is moved to the middle of the hall, beside the bagging area. What is the main risk?',
+        options: ['The fryer cools too fast to roast evenly', 'Steam condenses on the dry garri and sacks', 'Forklifts can no longer reach the fryer'],
+        answer: 1,
+        explain: 'Frying releases a lot of **steam**; away from an outside wall and its hood it spreads through the hall and **condenses** on dry product and packaging, which then cakes or moulds.',
+      },
     },
     {
       title: 'ASME Process Chart Flow Classification',
@@ -100,6 +112,12 @@ const scene: SceneDef = {
       cut: 'roofs',
       params: { pattern: 'u-shape', showHandling: true, showAisles: true },
       cites: [C.hand('Note 4 Good layout rules 1, 2, 4')],
+      check: {
+        question: 'The plant has one loading dock at the front. Why does a U-shaped line suit it better than a straight one?',
+        options: ['It shortens each machine’s processing time', 'It needs no aisles between the stations', 'Raw crop and finished bags meet at one dock, never crossing'],
+        answer: 2,
+        explain: 'The U brings the line back to the front, so intake and dispatch share the dock while the flow still **never crosses** itself and handling distance stays short.',
+      },
     },
   ],
 }

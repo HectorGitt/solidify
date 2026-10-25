@@ -36,6 +36,12 @@ const scene: SceneDef = {
       playing: true,
       params: { ...DEFAULTS, stage: 'splash', practice: 'none' },
       cites: [C.csb('p2 Fig. 2.1')],
+      check: {
+        question: 'A thick straw mulch is spread over this slope. What happens to splash detachment?',
+        options: ['It falls, as the mulch takes the impact', 'It rises, as drops bounce off the straw', 'It is unchanged; only slope matters'],
+        answer: 0,
+        explain: 'Detachment comes from the **impact** of the drops on bare soil. Mulch absorbs that energy before it reaches the soil, so far less is splashed loose.',
+      },
     },
     {
       title: 'Sheet and rill erosion',
@@ -63,6 +69,13 @@ const scene: SceneDef = {
       select: null,
       params: { ...DEFAULTS, practice: 'contour', stage: 'rill' },
       cites: [C.s1('Q1b')],
+      check: {
+        question: 'Keep contouring, but halve the cover factor C from 0.5 to 0.25. What soil loss does the USLE give?',
+        options: ['About 3.7, within the tolerance', 'About 7.4, still above the tolerance', 'About 14.7, unchanged'],
+        answer: 1,
+        explain: '**A = R·K·LS·C·P** is a product, so halving C halves A: 14.7 → about **7.4 Mg/ha/yr**, still above the 6.72 tolerance.',
+        reveal: { params: { Cf: 0.25 } },
+      },
     },
     {
       title: 'Diversion terraces',
@@ -72,6 +85,12 @@ const scene: SceneDef = {
       select: 'terraces',
       params: { practice: 'terraceUnderground', stage: 'sheet' },
       cites: [C.csb('p6–7'), C.s1('Q1c')],
+      check: {
+        question: 'Why is the terrace channel designed for a low velocity such as 0.9 m/s?',
+        options: ['So the water soaks in before the outlet', 'So the channel can be made shallower', 'So the flow does not scour the channel'],
+        answer: 2,
+        explain: 'Above a **permissible velocity** the flow scours the channel bed and becomes an erosion problem itself. A lower velocity needs more flow area, not less.',
+      },
     },
   ],
 }

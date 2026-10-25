@@ -43,6 +43,12 @@ const scene: SceneDef = {
       playing: true,
       params: { preset: 'mg17' },
       cites: [A503.m(1, 'merits of chain drives'), A503.mg17('Q1c')],
+      check: {
+        question: 'The 17-tooth sprocket turns at 200 rpm and drives the 57-tooth sprocket. How fast does the 57-tooth sprocket turn?',
+        options: ['About 670 rpm', 'About 60 rpm', 'Exactly 200 rpm'],
+        answer: 1,
+        explain: 'A chain cannot slip, so speeds go inversely as the teeth: **200 × 17/57 ≈ 59.6 rpm**.',
+      },
     },
     {
       title: 'Inside a roller chain',
@@ -73,6 +79,12 @@ const scene: SceneDef = {
       select: 'sprocket2',
       params: { preset: 'mg17', strands: 2 },
       cites: [A503.mg17('Q1c'), A503.mg21('chain drive')],
+      check: {
+        question: 'Keep the same pitch and sprockets, but let the design power rise to 5 kW. Is the duplex chain still enough?',
+        options: ['No, a duplex is rated only 4.25 kW', 'Yes, two strands give 2 × 2.5 = 5 kW', 'Yes, as long as it is well lubricated'],
+        answer: 0,
+        explain: 'Two strands never share the load perfectly, so a duplex is rated **1.7 ×** simplex = 4.25 kW, below 5 kW. A larger pitch or more teeth on the small sprocket would be needed.',
+      },
     },
     {
       title: 'Selecting a chain',
@@ -92,6 +104,12 @@ const scene: SceneDef = {
       select: 'planter',
       params: { preset: 'planter' },
       cites: [A503.mg16('Q1 planter')],
+      check: {
+        question: 'The tractor pulls the planter twice as fast. What happens to the spacing between seeds?',
+        options: ['It doubles', 'It halves', 'It stays the same'],
+        answer: 2,
+        explain: 'The seed plate is chain-driven from the **ground-driven** press wheel, so it turns a fixed amount per metre travelled: faster travel just turns it faster, and the spacing is unchanged.',
+      },
     },
   ],
 }

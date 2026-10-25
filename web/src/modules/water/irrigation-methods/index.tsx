@@ -46,6 +46,12 @@ const scene: SceneDef = {
       select: 'deep-percolation',
       params: { method: 'border', dHead: 1.8, dTail: 1.2, root: 1.6 },
       cites: [C.ipp('p5–6'), C.s1('Q3c')],
+      check: {
+        question: 'To wet the tail down to the full root zone, the water is left running longer. What happens at the head?',
+        options: ['Deep percolation there grows', 'The head dries out sooner', 'Nothing changes at the head'],
+        answer: 0,
+        explain: 'The head is already wetted below the **root zone**; running longer pushes it deeper still, so the extra water at the head is lost as **deep percolation**.',
+      },
     },
     {
       title: 'Basins',
@@ -64,6 +70,12 @@ const scene: SceneDef = {
       select: 'heads',
       params: { method: 'sprinkler', root: 0.9 },
       cites: [C.ipp('p7–9, Fig. 2')],
+      check: {
+        question: 'Why are sprinklers spaced so that their wetted circles overlap?',
+        options: ['To keep the risers from blowing over', 'So the pump can run at lower pressure', 'Each head puts less water near its edge'],
+        answer: 2,
+        explain: 'A rotating head applies the most water near the middle of its throw and less towards the edge; **overlapping** circles fill in the thin edges so the field is wetted evenly.',
+      },
     },
     {
       title: 'Drip and sub-irrigation',
@@ -73,6 +85,12 @@ const scene: SceneDef = {
       select: 'wetted-zone',
       params: { method: 'drip', root: 0.9 },
       cites: [C.ipp('p6–7, Fig. 1; p9–10')],
+      check: {
+        question: 'On a hot, windy day, which method loses the least water to evaporation?',
+        options: ['Sprinkler', 'Drip', 'Basin flooding'],
+        answer: 1,
+        explain: '**Drip** puts water straight into a bulb of soil at the roots and leaves most of the surface dry, while sprinkler spray drifts and evaporates and a flooded basin exposes a whole water surface.',
+      },
     },
   ],
 }

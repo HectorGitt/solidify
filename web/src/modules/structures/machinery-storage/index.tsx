@@ -53,6 +53,12 @@ const scene: SceneDef = {
       select: 'bench',
       cut: 'roof',
       cites: [C.ln('p24–25')],
+      check: {
+        question: 'The lifting gear must span 4.5 m over the workshop floor. What should carry it?',
+        options: ['A single timber beam', 'A truss or a travelling hoist', 'A rope slung over a rafter'],
+        answer: 1,
+        explain: 'A plain **timber beam** is good only up to about **3 m** span; beyond that the bending and deflection call for a truss or a proper hoist.',
+      },
     },
     {
       title: 'The machinery shed',
@@ -62,6 +68,12 @@ const scene: SceneDef = {
       cut: 'roof',
       params: { drive: false },
       cites: [C.ln('p26')],
+      check: {
+        question: 'Why build the machinery shed narrow and open-sided rather than as one deep, closed hall?',
+        options: ['Each machine can be driven straight out', 'It keeps rain off better than walls do', 'A narrow shed needs no roof trusses'],
+        answer: 0,
+        explain: 'With one row of machines along an **open side**, every machine has its own way out, so nothing has to be moved to reach another.',
+      },
     },
     {
       title: 'Drives and the fuel store',
@@ -71,6 +83,12 @@ const scene: SceneDef = {
       cut: 'none',
       params: { drive: true, driveW: ft(18), turnR: ft(45) },
       cites: [C.ln('p21–22, p27')],
+      check: {
+        question: 'A farm keeps 40 L of diesel and 20 L of petrol. Where should the fuel go?',
+        options: ['In the workshop, as both amounts are small', 'In the shed, beside the tractor', 'In a separate store at least 15 m away'],
+        answer: 2,
+        explain: 'The diesel is under 50 L, but the **petrol exceeds 10 L**, so it belongs in a separate, bunded, vented store at least **15 m** from any other building.',
+      },
     },
   ],
 }

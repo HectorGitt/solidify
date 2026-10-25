@@ -42,6 +42,13 @@ const scene: SceneDef = {
       playing: true,
       params: { machine: 'hammer' },
       cites: [CITES.red('Hammer Mills')],
+      check: {
+        question: 'The 1.5 mm screen is swapped for a 3 mm screen, with the same speed and feed. What happens?',
+        options: ['Finer product, lower capacity', 'Coarser product, higher capacity', 'The same product, less power'],
+        answer: 1,
+        explain: 'Particles leave as soon as they fit the **screen** holes, so bigger holes let coarser pieces out sooner: the product is coarser and the throughput rises.',
+        reveal: { params: { machine: 'hammer', screenHoleMm: 3 } },
+      },
     },
     {
       title: 'Burr (plate) mill',
@@ -69,6 +76,12 @@ const scene: SceneDef = {
       select: null,
       params: { machine: 'hammer' },
       cites: [CITES.red('Energy requirements'), CITES.fel('Ch 4')],
+      check: {
+        question: 'By Rittinger’s law, 6.5 kW grinds sorghum from 4.3 to 0.337 mm. About what power grinds it to half that size at the same rate?',
+        options: ['About 26 kW', 'About 6.5 kW', 'About 13.5 kW'],
+        answer: 2,
+        explain: 'Power scales with **(1/L₂ − 1/L₁)**: (1/0.169 − 1/4.3)/(1/0.337 − 1/4.3) ≈ 2.1, so about 6.5 × 2.1 ≈ **13.5 kW**.',
+      },
     },
     {
       title: 'Sieve analysis',
@@ -78,6 +91,12 @@ const scene: SceneDef = {
       select: 'ss-trays',
       params: { machine: 'shaker' },
       cites: [CITES.red('fineness modulus method')],
+      check: {
+        question: 'One ground sample has a fineness modulus of 3.12 and another of 2.71. Which is finer?',
+        options: ['The FM 2.71 sample', 'The FM 3.12 sample', 'Neither; FM measures spread'],
+        answer: 0,
+        explain: 'A lower **fineness modulus** means more of the sample sits on the finer sieves: D = 0.135(1.366)^FM gives about 0.31 mm against 0.36 mm.',
+      },
     },
   ],
 }

@@ -37,6 +37,13 @@ const scene: SceneDef = {
       playing: true,
       params: { ...DEFAULTS },
       cites: [C.ipp('p3'), C.s1('Q3c')],
+      check: {
+        question: 'The canal is lined, so 140 of the 175 L/s now reaches the field. What is the new conveyance efficiency?',
+        options: ['80 %', '60 %', '75 %'],
+        answer: 0,
+        explain: '**E_c = W_d/W_i** = 140/175 = **80 %**, up from 60 %: lining cuts the seepage loss in the canal.',
+        reveal: { params: { Qfield: 0.14 } },
+      },
     },
     {
       title: 'Stored, runoff and deep percolation',
@@ -54,6 +61,12 @@ const scene: SceneDef = {
       cut: 'long',
       select: 'root-zone',
       cites: [C.ipp('p4'), C.s1('Q3c')],
+      check: {
+        question: 'Application efficiency is 82 %, yet storage efficiency is only 57.5 %. What does that tell you about this irrigation?',
+        options: ['The canal leaked most of the water', 'The root zone was left far from full', 'Most of the water ran off the tail'],
+        answer: 1,
+        explain: 'Little of the delivered water was wasted, but **E_s = W_s/W_n** shows only 2484 of the 4320 m³ deficit was refilled: the field was **under-irrigated**.',
+      },
     },
     {
       title: 'Evapotranspiration',
@@ -72,6 +85,13 @@ const scene: SceneDef = {
       select: 'bucket',
       params: { speed: 4 },
       cites: [C.sg('p4'), C.ipp('p3, p5')],
+      check: {
+        question: 'The irrigation water becomes saltier, EC_i = 2.4 instead of 1.2, with the same EC_d = 8. What happens to the leaching requirement?',
+        options: ['It stays at 15 %', 'It halves to 7.5 %', 'It doubles to 30 %'],
+        answer: 2,
+        explain: '**LR = EC_i/EC_d** = 2.4/8 = **30 %**: twice the salt coming in needs twice the extra water to carry it below the roots.',
+        reveal: { params: { ECi: 2.4 } },
+      },
     },
   ],
 }

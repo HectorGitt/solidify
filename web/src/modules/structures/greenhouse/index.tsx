@@ -49,6 +49,12 @@ const scene: SceneDef = {
       select: 'vents',
       params: { cladding: 'glass', qFans: 8 },
       cites: [C.aee505('p30')],
+      check: {
+        question: 'This glass house has 413 m² of floor and needs 0.045 m³/s per m². With fans of 2.5 m³/s each, how many fans are needed?',
+        options: ['6 fans', '8 fans', '19 fans'],
+        answer: 1,
+        explain: 'Q = 0.045 × 413 ≈ **18.6 m³/s**, and 18.6/2.5 = 7.4, which rounds **up** to 8 fans.',
+      },
     },
     {
       title: 'Natural ventilation',
@@ -57,6 +63,12 @@ const scene: SceneDef = {
       select: 'doors',
       params: { doorsOpen: true, qFans: 0 },
       cites: [C.aee505('p30')],
+      check: {
+        question: 'To ventilate this 413 m² house naturally, about how much total door opening is needed?',
+        options: ['About 1–3 m²', 'About 40–60 m²', 'About 12–29 m²'],
+        answer: 2,
+        explain: 'Doors of **3–7 % of floor area**: 0.03 × 413 ≈ 12 m² to 0.07 × 413 ≈ 29 m².',
+      },
     },
     {
       title: 'Cooling and shading',
@@ -65,6 +77,12 @@ const scene: SceneDef = {
       select: 'shading',
       params: { whitewash: true },
       cites: [C.aee505('p30-31')],
+      check: {
+        question: 'In which weather does pad-and-fan evaporative cooling work best?',
+        options: ['Hot and dry', 'Hot and humid', 'Cool and overcast'],
+        answer: 0,
+        explain: 'Evaporation cools the air only as far as there is room for more moisture: **dry air** can take up a lot of water and cool well, while humid air is already near saturation.',
+      },
     },
   ],
 }

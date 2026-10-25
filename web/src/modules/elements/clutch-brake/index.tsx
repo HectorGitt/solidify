@@ -43,6 +43,13 @@ const scene: SceneDef = {
       playing: true,
       params: { preset: 'mg16' },
       cites: [A503.m(8, 'Fig 14-1, slides 2–4'), A503.mg16('Q5b')],
+      check: {
+        question: 'Add one more steel plate and one more bronze plate, with the same axial force. What happens to the torque capacity?',
+        options: ['Nothing, since F is unchanged', 'It rises by a quarter', 'It doubles'],
+        answer: 1,
+        explain: 'Each touching pair of faces carries F f R_f, so **T = F f R_f n**. With 6 + 5 plates, n = 6 + 5 − 1 = **10** pairs instead of 8: a quarter more torque for the same force.',
+        reveal: { params: { nSteel: 6, nBronze: 5 } },
+      },
     },
     {
       title: 'Engage and release',
@@ -77,6 +84,12 @@ const scene: SceneDef = {
       select: 'pivot',
       params: { c: 1.0 },
       cites: [A503.m(9, 'Example 1d–e')],
+      check: {
+        question: 'The same brake holds the same normal force while the drum runs at 1000 rpm instead of 500. How much heat does it now generate?',
+        options: ['About 11.8 kW, unchanged', 'About 47 kW, four times', 'About 23.6 kW, doubled'],
+        answer: 2,
+        explain: 'The heat is the friction force times rubbing speed, **H_g = fNV**. Doubling the rpm doubles V, so 11.8 kW becomes about **23.6 kW**.',
+      },
     },
     {
       title: 'The band brake',
@@ -85,6 +98,12 @@ const scene: SceneDef = {
       params: { preset: 'band' },
       select: 'band',
       cites: [A503.m(9, 'Example 2')],
+      check: {
+        question: 'Wrap the band further round the drum, with the same braking torque. What happens to the slack-side force F₂ on the lever?',
+        options: ['It falls', 'It rises', 'It stays at 455 N'],
+        answer: 0,
+        explain: 'F₁ − F₂ = T/r stays fixed while **F₁/F₂ = e^(fα)** grows with the wrap, so F₂ = (T/r)/(e^(fα) − 1) gets smaller: more wrap, lighter lever.',
+      },
     },
   ],
 }

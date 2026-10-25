@@ -58,6 +58,12 @@ const scene: SceneDef = {
       select: 'blancher-assembly',
       params: { apparatus: 'all' },
       cites: [P536.n536('§3B Blanching')],
+      check: {
+        question: 'A batch of vegetables is frozen without blanching. What happens to it over months in frozen storage?',
+        options: ['Microbes multiply quickly in the cold', 'Enzymes slowly spoil colour and flavour', 'Nothing, since freezing stops all change'],
+        answer: 1,
+        explain: 'Freezing slows but does not stop **enzymes**, so unblanched produce slowly loses colour, flavour and texture. Blanching at 70–100 °C inactivates them first.',
+      },
     },
     {
       title: 'Retort: D, z and the cold point',
@@ -68,6 +74,13 @@ const scene: SceneDef = {
       select: 'retort-basket',
       params: { preset: 'retort-12d' },
       cites: [P536.n536('Principles of thermal destruction, eqs 1.1–1.7; Sterilisation')],
+      check: {
+        question: 'The retort runs at 111.1 °C instead of 121.1 °C, with z = 10 °C. How long must the 12D cook now hold?',
+        options: ['About 2.5 min, the same', 'About 5 min, double', 'About 25 min, ten times'],
+        answer: 2,
+        explain: 'Dropping one **z-value** (10 °C) makes D ten times longer, 0.21 → 2.1 min, so 12D takes 12 × 2.1 ≈ **25 min**.',
+        reveal: { params: { preset: 'retort-12d', retortTempC: 111.1 } },
+      },
     },
     {
       title: 'Cold store and freezing time',
@@ -78,6 +91,12 @@ const scene: SceneDef = {
       select: 'coldstore-room',
       params: { preset: 'cooling-meat-90t' },
       cites: [P536.n536('Refrigeration load eq (1); Plank eq (2)')],
+      check: {
+        question: 'Of the 263 kW needed to take the meat from 2 °C to −12 °C, which part takes most of it?',
+        options: ['Freezing the water: the latent heat', 'Chilling from 2 °C down to freezing', 'Cooling the frozen meat to −12 °C'],
+        answer: 0,
+        explain: 'Per kg: 3.2 × 3 = 9.6 kJ above freezing, **h_l = 225 kJ** latent, and 1.63 × 11 ≈ 18 kJ below. The **latent heat** is nearly 90 % of the load.',
+      },
     },
     {
       title: 'Yam barn, silo and packaging',

@@ -48,6 +48,13 @@ const scene: SceneDef = {
       playing: true,
       params: { preset: 'pomb' },
       cites: [P504.pomb('per 1000 kg FFB')],
+      check: {
+        question: 'The same mill is scaled up to take 30 t of fresh fruit bunches an hour. About how much crude oil does it make per hour?',
+        options: ['About 6.75 t', 'About 2 t', 'About 22.5 t'],
+        answer: 0,
+        explain: 'At an **oil extraction rate** of 22.5 %, 30 t × 0.225 ≈ **6.75 t/h** of crude palm oil; about 2 t/h is kernels.',
+        reveal: { params: { preset: 'mill-30t' } },
+      },
     },
     {
       title: 'Sterilising and threshing',
@@ -58,6 +65,12 @@ const scene: SceneDef = {
       select: 'steriliser',
       params: { station: 'steriliser' },
       cites: [P504.cpo('sterilising, threshing')],
+      check: {
+        question: 'Bunches wait three days in the yard before they are sterilised. What happens to the oil?',
+        options: ['Yield rises as the fruit softens', 'Free fatty acid rises and quality falls', 'Nothing, sterilising later undoes it'],
+        answer: 1,
+        explain: 'Until steam stops them, the fruit’s **enzymes** keep splitting oil into **free fatty acid**; the damage already done is not reversed by sterilising later.',
+      },
     },
     {
       title: 'Digester and screw press',
@@ -78,6 +91,13 @@ const scene: SceneDef = {
       select: 'centrifuge',
       params: { preset: 'globule' },
       cites: [P504.sep('eqs 11–12, 18'), P504.pq('p5 Q v')],
+      check: {
+        question: 'A 50 µm oil globule rises at 1.36 × 10⁻⁴ m/s. How fast does a 100 µm globule rise in the same liquor?',
+        options: ['Just as fast', 'Twice as fast', 'Four times as fast'],
+        answer: 2,
+        explain: 'By **Stokes’ law** V = gD²Δρ/(18µ), the rising speed goes with the diameter squared: doubling D gives 4 × 1.36 × 10⁻⁴ ≈ 5.4 × 10⁻⁴ m/s.',
+        reveal: { params: { preset: 'globule', oilGlobuleDiaUm: 100 } },
+      },
     },
     {
       title: 'Nut and fibre separation',

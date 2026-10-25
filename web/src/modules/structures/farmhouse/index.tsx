@@ -45,6 +45,12 @@ const scene: SceneDef = {
       cut: 'sill',
       params: { plan: 'sp-huts', family: 6, roof: 'thatch', pitch: 45, wallH: 2.1 },
       cites: [C.ln('p14–15')],
+      check: {
+        question: 'A family moves its cooking out of the one-room house into a separate kitchen hut. What is the main gain?',
+        options: ['Smoke and heat leave the sleeping space', 'Less building material is needed', 'There are fewer doors to secure'],
+        answer: 0,
+        explain: 'Giving the hearth its own **single-purpose** hut keeps smoke, heat and fire risk away from where people sleep: better health, at the cost of more material and more doors.',
+      },
     },
     {
       title: 'Contemporary plans',
@@ -61,6 +67,12 @@ const scene: SceneDef = {
       cut: 'sill',
       params: { plan: 'courtyard', family: 7 },
       cites: [C.ln('p17'), C.ass('p3')],
+      check: {
+        question: 'Using the same rule, how much floor area does a bedroom for four children need?',
+        options: ['9 m², the minimum', '12 m²', '16 m²'],
+        answer: 1,
+        explain: 'The rule allows **3 m² per occupant** with a 9 m² minimum: max(9, 4 × 3) = **12 m²**.',
+      },
     },
     {
       title: 'Construction details',
@@ -69,6 +81,12 @@ const scene: SceneDef = {
       cut: 'section',
       select: 'roof',
       cites: [C.ln('p12, p19–20')],
+      check: {
+        question: 'Why lay the house with its long axis east–west in the tropics?',
+        options: ['The roof sheds rain more quickly', 'Prevailing winds pass along the house', 'The long walls face away from the low sun'],
+        answer: 2,
+        explain: 'The low morning and evening sun then strikes only the short **east and west** walls, while the long north and south walls see a high sun that the eaves can shade.',
+      },
     },
   ],
 }

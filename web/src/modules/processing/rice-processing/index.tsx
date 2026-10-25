@@ -58,6 +58,13 @@ const scene: SceneDef = {
       select: 'parboiler',
       params: { preset: 'parboiled' },
       cites: [R.parboil()],
+      check: {
+        question: 'The same long-grain paddy goes through the parboiled route instead of the raw one. What happens to the head-rice yield?',
+        options: ['It rises, as the grains break less', 'It falls, as steaming cracks the grains', 'It stays the same; only colour changes'],
+        answer: 0,
+        explain: 'Steaming **gelatinises** the starch and seals internal cracks, so the hardened grains survive shelling and whitening with far fewer brokens: more **head rice**.',
+        reveal: { params: { preset: 'parboiled' } },
+      },
     },
     {
       title: 'Rubber-roll huller',
@@ -68,6 +75,12 @@ const scene: SceneDef = {
       select: 'huller',
       params: { focusedStage: 'hulling' },
       cites: [R.flow('p9, shelling'), R.sepAero()],
+      check: {
+        question: 'If both rubber rolls turned at the same speed, what would happen to the grains passing the nip?',
+        options: ['The husk would come off faster', 'Most would pass with the husk still on', 'The kernels would be cut in half'],
+        answer: 1,
+        explain: 'The husk is removed by **shear** from the speed difference between the rolls. At equal speeds the grain is only squeezed and rolled through, so few husks are stripped.',
+      },
     },
     {
       title: 'Whitening',
@@ -78,6 +91,13 @@ const scene: SceneDef = {
       select: 'polisher',
       params: { focusedStage: 'polishing' },
       cites: [R.flow('p9, milling → bran'), R.anatomy()],
+      check: {
+        question: 'The degree of milling is raised from 8.5 % to 12 %. What happens to the head-rice yield?',
+        options: ['It rises, since the rice is whiter', 'It stays the same; only bran changes', 'It falls, as more kernels break'],
+        answer: 2,
+        explain: 'Harder whitening removes more bran but also more of the kernel and breaks more grains, so **head-rice yield** — the measure of the mill’s value — falls.',
+        reveal: { params: { preset: 'overmilled' } },
+      },
     },
     {
       title: 'Grading by length',

@@ -36,6 +36,12 @@ const scene: SceneDef = {
       playing: true,
       params: { ...DEFAULTS },
       cites: [C.wrd('p5–6, Fig. 3')],
+      check: {
+        question: 'Where in the cone of depression does the water table slope most steeply?',
+        options: ['Close to the well', 'Halfway out to R', 'Near the edge, at R'],
+        answer: 0,
+        explain: 'The same flow Q passes through ever smaller cylinders as it nears the well, so by **Darcy’s law** the gradient must rise: the cone steepens towards the well.',
+      },
     },
     {
       title: 'Dupuit–Thiem discharge',
@@ -44,6 +50,13 @@ const scene: SceneDef = {
       cut: 'half',
       select: 'well',
       cites: [C.s1('Q3d')],
+      check: {
+        question: 'The well radius is doubled from 0.305 to 0.61 m, with everything else the same. What happens to Q?',
+        options: ['It doubles', 'It rises only about 12 %', 'It falls slightly'],
+        answer: 1,
+        explain: 'r_w appears only inside **ln(R/r_w)**: ln(600) = 6.40 falls to ln(300) = 5.70, so Q rises by about 12 %. A bigger well barely helps.',
+        reveal: { params: { rw: 0.61 } },
+      },
     },
     {
       title: 'Observation wells',
@@ -62,6 +75,12 @@ const scene: SceneDef = {
       select: 'piezometric',
       params: { mode: 'confined', K: 13.5, H: 20, d: 10, sw: 6, R: 300, rw: 0.15 },
       cites: [C.wrd('p6, Fig. 2, Fig. 4')],
+      check: {
+        question: 'In this confined aquifer the drawdown (H − h_w) at the well is doubled. What happens to Q?',
+        options: ['It is unchanged', 'It rises, but less than double', 'It doubles'],
+        answer: 2,
+        explain: 'For a confined aquifer **Q = 2πKd(H − h_w)/ln(R/r_w)** is linear in the drawdown, because the saturated thickness d stays the same. In an unconfined well it would rise by less.',
+      },
     },
     {
       title: 'Farm pond',

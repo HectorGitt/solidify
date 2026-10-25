@@ -54,6 +54,12 @@ const scene: SceneDef = {
       select: 'grass',
       params: { shape: 'trapezoidal' },
       cites: [C.vw('Eq. 7.1–7.2, Fig. 7.2')],
+      check: {
+        question: 'The same channel, with the same depth and grass, is laid on a 6 % slope instead of 3 %. What happens to the velocity?',
+        options: ['It doubles', 'It rises about 41 %', 'It stays the same'],
+        answer: 1,
+        explain: 'In **Manning’s equation** v grows with **s^(1/2)**: doubling the slope multiplies v by √2 ≈ 1.41.',
+      },
     },
     {
       title: 'Design: 5.67 m³/s on 3 %',
@@ -63,6 +69,12 @@ const scene: SceneDef = {
       select: 'freeboard',
       params: { ...DEFAULTS },
       cites: [C.s1('Q2b')],
+      check: {
+        question: 'The grass can only stand a lower velocity than 1.75 m/s. For the same 5.67 m³/s, how must the waterway change?',
+        options: ['Wider, to give more flow area', 'Narrower, to speed the flow up', 'The same, since Q is unchanged'],
+        answer: 0,
+        explain: 'The flow area is **a = Q/v**, so a lower permissible velocity needs a bigger section, which in a shallow grassed channel means a wider bottom.',
+      },
     },
     {
       title: 'Grass retardance',
@@ -72,6 +84,12 @@ const scene: SceneDef = {
       select: 'grass',
       params: { flowFrac: 0.15 },
       cites: [C.vw('Fig. 7.3, Table 7.3')],
+      check: {
+        question: 'As the flow deepens, the grass lies flat and Manning’s n falls. At the same hydraulic radius and slope, what happens to the velocity?',
+        options: ['It falls', 'It stays the same', 'It rises'],
+        answer: 2,
+        explain: 'Velocity varies as **1/n**: flattened grass is a smoother lining, so the water runs faster — which is why the design must check the velocity at the low-retardance condition.',
+      },
     },
   ],
 }

@@ -35,6 +35,12 @@ const scene: SceneDef = {
       playing: true,
       params: { ...DEFAULTS, u: 10, windbreak: false },
       cites: [C.we('s4–6')],
+      check: {
+        question: 'A wind of 4 m/s, measured at 0.3 m, blows over dry, loose, bare mineral soil. What happens?',
+        options: ['Heavy saltation begins at once', 'Only the fine dust blows away', 'Nothing moves: it is below threshold'],
+        answer: 2,
+        explain: 'Movement starts only when the wind exceeds the soil’s **threshold**, about 5 m/s at 0.3 m for mineral soils. At 4 m/s no grains are lifted.',
+      },
     },
     {
       title: 'Saltation',
@@ -49,6 +55,12 @@ const scene: SceneDef = {
       camera: { position: [30, 6, 18], target: [14, 2, 0] },
       select: 'suspension',
       cites: [C.we('s8–10')],
+      check: {
+        question: 'Wind blows over a soil holding 0.02 mm silt, 0.2 mm sand and 0.8 mm coarse sand. Which is carried farthest from the field?',
+        options: ['The 0.02 mm silt', 'The 0.2 mm sand', 'The 0.8 mm coarse sand'],
+        answer: 0,
+        explain: 'Particles finer than 0.05 mm go into **suspension** and can travel far; the 0.2 mm sand hops by **saltation** and the 0.8 mm grains only **creep**.',
+      },
     },
     {
       title: 'Windbreaks',
@@ -57,6 +69,12 @@ const scene: SceneDef = {
       select: 'windbreak',
       params: { windbreak: true, H: 6 },
       cites: [C.we('s18–21')],
+      check: {
+        question: 'Where is the soil best protected by this shelterbelt?',
+        options: ['Just upwind of the belt', 'In its lee, a few heights downwind', 'Far downwind, beyond 30 heights'],
+        answer: 1,
+        explain: 'The belt slows the near-ground wind below the **threshold** in its **lee**; farther downwind the wind recovers its speed and erosion starts again.',
+      },
     },
     {
       title: 'Other controls',

@@ -51,6 +51,13 @@ const scene: SceneDef = {
       cut: 'across',
       select: 'carry-idlers',
       cites: [P504.hand('Note 3, Design (preliminary); Power to drive belt conveyors')],
+      check: {
+        question: 'The belt speed is raised from 2.5 to 3 m/s with the same troughing and surcharge. What happens to the capacity?',
+        options: ['It rises by 20 %', 'It rises by 44 %', 'It stays the same'],
+        answer: 0,
+        explain: 'The cross-section A + As is set by the belt width, troughing and surcharge angles, so **C = V(A + As)** grows in step with speed: 3/2.5 = 1.2, a 20 % rise.',
+        reveal: { params: { preset: 'grain-belt', v: 3 } },
+      },
     },
     {
       title: 'Screw conveyor',
@@ -60,6 +67,12 @@ const scene: SceneDef = {
       select: 'flight',
       params: { kind: 'screw' },
       cites: [P504.hand('Note 3, Screw or Auger conveyor')],
+      check: {
+        question: 'A screw conveyor is tilted well beyond 20°. What happens to its output at the same speed?',
+        options: ['It rises, as gravity helps the feed', 'It falls, as material slides back', 'It stays at one pitch per turn'],
+        answer: 1,
+        explain: 'The flight only pushes material that rests against it; on a steep incline more of it **slides back** over and round the flight, so the delivered fraction of the swept volume falls.',
+      },
     },
     {
       title: 'Bucket elevator',
@@ -69,6 +82,12 @@ const scene: SceneDef = {
       select: 'buckets',
       params: { preset: 'palm-elevator' },
       cites: [P504.hand('Note 3, Bucket elevators')],
+      check: {
+        question: 'Buckets pass over a head pulley of radius 0.25 m. Roughly how fast must they go to throw material out by centrifugal force?',
+        options: ['Over about 0.5 m/s', 'Over about 2.5 m/s', 'Over about 1.6 m/s'],
+        answer: 2,
+        explain: 'Centrifugal discharge needs **v²/gR > 1**, so v > √(9.81 × 0.25) ≈ 1.6 m/s. Slower buckets let the load fall out by gravity as they turn over.',
+      },
     },
     {
       title: 'Pneumatic conveyor',

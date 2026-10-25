@@ -42,6 +42,12 @@ const scene: SceneDef = {
       explode: 0,
       params: { preset: 'mg21-wahl' },
       cites: [A503.m(10, 'slides 2–3, 13'), A503.mg21('Q4d')],
+      check: {
+        question: 'Two of these 20 N/mm springs are stacked end to end under the same 500 N. How far does the stack deflect?',
+        options: ['25 mm, the same as one', '50 mm, twice as far', '12.5 mm, half as far'],
+        answer: 1,
+        explain: 'In series each spring carries the full 500 N and deflects 25 mm, so the stack moves **50 mm**: the combined stiffness is halved to 10 N/mm.',
+      },
     },
     {
       title: 'Stress in the wire: the Wahl factor',
@@ -52,6 +58,12 @@ const scene: SceneDef = {
       select: 'spring',
       params: { preset: 'mg21' },
       cites: [A503.m(10, 'slide 12'), A503.mg21('Q4d')],
+      check: {
+        question: 'The coil is wound tighter, so the spring index C = D/d falls from 8 to 4. What happens to the Wahl factor?',
+        options: ['It rises, to about 1.40', 'It falls toward 1.0', 'It stays at about 1.18'],
+        answer: 0,
+        explain: 'A tighter coil is more sharply curved, which concentrates more stress on the inside of the wire: **K = (4C − 1)/(4C − 4) + 0.615/C** rises from 1.184 at C = 8 to about 1.40 at C = 4.',
+      },
     },
     {
       title: 'The leaf spring',
@@ -81,6 +93,12 @@ const scene: SceneDef = {
       select: 'weld',
       params: { preset: 'bar' },
       cites: [A503.m(11, 'slides 14–21')],
+      check: {
+        question: 'The same fillet weld, same leg and length, is loaded across its length instead of along it. How much load can it carry?',
+        options: ['About 17 % less', 'Exactly the same', 'About 17 % more'],
+        answer: 2,
+        explain: 'A **transverse** weld fails on a wider 67½° throat: F = 0.828swL against 0.707swL for a **parallel** weld, which is about 17 % more.',
+      },
     },
     {
       title: 'A bar welded to a plate',

@@ -73,6 +73,13 @@ const scene: SceneDef = {
       select: 'press',
       params: { preset: 'standard' },
       cites: [CITE.garriFlow('fermentation and dewatering'), CITE.gstd('§3.3 acidity')],
+      check: {
+        question: 'To save time, the mash is fermented for only 1 day instead of 3. What is the likely result?',
+        options: ['Acidity stays under 0.6 % and more cyanide remains', 'Acidity overshoots 1.0 % and the garri turns sour', 'No change, since pressing sets the quality'],
+        answer: 0,
+        explain: 'Acidity builds up and the **cyanogens** break down over the days of fermentation. One day leaves the acidity below the **0.6 %** minimum and more cyanide in the product.',
+        reveal: { params: { preset: 'short-ferment' } },
+      },
     },
     {
       title: 'Garifying',
@@ -83,6 +90,12 @@ const scene: SceneDef = {
       select: 'fryer',
       params: { preset: 'underfried' },
       cites: [CITE.gstd('§2.1, §3.3')],
+      check: {
+        question: '100 kg of pressed cake at 47 % moisture is fried to 10.5 % moisture. About how much garri comes out?',
+        options: ['About 47 kg', 'About 59 kg', 'About 89 kg'],
+        answer: 1,
+        explain: 'Frying removes only water, so the **dry solids** are conserved: 53 kg of solids make up 89.5 % of the product, giving 53/0.895 ≈ **59 kg**.',
+      },
     },
     {
       title: 'Sifting, grading and bagging',
@@ -93,6 +106,13 @@ const scene: SceneDef = {
       select: 'sifter',
       params: { preset: 'standard', grade: 'fine' },
       cites: [CITE.gstd('Annex granularity, §6 packaging')],
+      check: {
+        question: 'A sample passes the 2 mm sieve completely, but only about a quarter of it passes 1.25 mm. Which grade is it?',
+        options: ['Fine', 'Medium', 'Coarse'],
+        answer: 2,
+        explain: 'Medium garri passes 1.25 mm completely. All through 2 mm with no more than 40 % through 1.25 mm is **coarse**.',
+        reveal: { params: { preset: 'coarse' } },
+      },
     },
   ],
 }

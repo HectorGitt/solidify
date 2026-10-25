@@ -43,6 +43,12 @@ const scene: SceneDef = {
       camera: { position: [0, 190, 10], target: [0, 0, -75] },
       select: 'zones',
       cites: [C.ln('p8–9')],
+      check: {
+        question: 'Why is the livestock zone placed at the far end of the layout, away from the road?',
+        options: ['So the animals are nearest to market', 'Room to expand, with odour kept from the home', 'Because it needs the narrowest ring'],
+        answer: 1,
+        explain: 'Livestock are the noisiest, smelliest centre and often grow, so **zone 4** goes farthest from the house and road, with open ground beyond it for expansion.',
+      },
     },
     {
       title: 'Prevailing wind',
@@ -51,6 +57,13 @@ const scene: SceneDef = {
       select: 'zone-4',
       params: { windFrom: 0, plume: true },
       cites: [C.ln('p10 air movement')],
+      check: {
+        question: 'On a farm whose prevailing wind blows from the south, where should the livestock buildings go relative to the house?',
+        options: ['To the north, downwind', 'To the south, upwind', 'To the east or west, across the wind'],
+        answer: 0,
+        explain: 'A south wind carries odour and dust **northwards**, so livestock to the north of the house are **downwind** and the plume drifts away from zone 1.',
+        reveal: { params: { windFrom: 180, plume: true } },
+      },
     },
     {
       title: 'Drives, parking and turning',
@@ -59,6 +72,12 @@ const scene: SceneDef = {
       select: 'courtyard',
       params: { windFrom: 200, driveW: ft(18), turnR: ft(45) },
       cites: [C.ln('p21–22')],
+      check: {
+        question: 'A tractor with its implement must turn round on the courtyard pad. About how wide must the pad be?',
+        options: ['About 6 m, one drive width', 'About 12 m', 'About 24–30 m'],
+        answer: 2,
+        explain: 'A **turning radius** of 12–15 m (40–50 ft) sweeps a circle twice that across, so the pad needs roughly **24–30 m** of clear width.',
+      },
     },
     {
       title: 'Services and hazards',

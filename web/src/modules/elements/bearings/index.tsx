@@ -54,6 +54,12 @@ const scene: SceneDef = {
       explode: 1,
       select: 'cage',
       cites: [A503.m(7, 'features of rolling bearing'), A503.mg15('Q4a')],
+      check: {
+        question: 'The inner race turns at 1000 rpm and the outer race is held still. Roughly how fast does the cage orbit?',
+        options: ['With the shaft, at 1000 rpm', 'Not at all; it stays with the outer race', 'A little under 500 rpm'],
+        answer: 2,
+        explain: 'Each ball rolls between a moving race and a still one, so its centre travels at about half the inner-race surface speed. Because the inner race is the smaller circle, the **cage** runs at a little under half shaft speed.',
+      },
     },
     {
       title: 'Straight rollers carry more',
@@ -63,6 +69,13 @@ const scene: SceneDef = {
       select: 'elements',
       params: { type: 'roller' },
       cites: [A503.m(7, 'slide 11')],
+      check: {
+        question: 'A shaft carries a heavy radial load plus a steady end thrust. Will a straight roller bearing on its own do?',
+        options: ['Yes, line contact carries both loads well', 'No, it takes no thrust; a tapered roller will', 'Yes, as long as it is kept well lubricated'],
+        answer: 1,
+        explain: 'Straight rollers can slide along their own axis, so they carry **no thrust**. A **tapered roller bearing** has angled contact and takes radial and thrust load together.',
+        reveal: { select: 'elements', cut: 'side', params: { type: 'taper', Fa: 4000 } },
+      },
     },
     {
       title: 'Tapered rollers: radial and thrust',
@@ -100,6 +113,12 @@ const scene: SceneDef = {
       select: null,
       params: { type: 'ball' },
       cites: [A503.m(7, 'slides 16–22')],
+      check: {
+        question: 'The equivalent load P on this ball bearing is doubled. What happens to its rating life?',
+        options: ['It falls to one-eighth', 'It falls to one-half', 'It falls to one-quarter'],
+        answer: 0,
+        explain: 'For ball bearings **L = (C/P)³**, so life varies as 1/P³: doubling P divides the life by 2³ = **8**.',
+      },
     },
   ],
 }

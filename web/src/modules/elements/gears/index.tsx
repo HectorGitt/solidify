@@ -43,6 +43,12 @@ const scene: SceneDef = {
       playing: true,
       params: { preset: 'spur' },
       cites: [A503.m(1, 'merits of gears'), A503.mg15('Q1a')],
+      check: {
+        question: 'The 20-tooth pinion turns at 100 rpm. How does the 50-tooth gear turn?',
+        options: ['At 40 rpm, the same way', 'At 40 rpm, the opposite way', 'At 250 rpm, the opposite way'],
+        answer: 1,
+        explain: 'Meshing teeth move at the same pitch-line speed, so speeds go inversely as the teeth: 100 × 20/50 = **40 rpm**. Two external gears always turn in **opposite** directions.',
+      },
     },
     {
       title: 'Nomenclature',
@@ -60,6 +66,12 @@ const scene: SceneDef = {
       select: null,
       cut: 'mid-face',
       cites: [A503.m(5, 'Example 1'), A503.mg19('Q3b')],
+      check: {
+        question: 'The same 200 N·m is applied through a pinion of Ø200 instead of Ø100. What happens to the tangential tooth force?',
+        options: ['It doubles to 8000 N', 'It stays at 4000 N', 'It halves to 2000 N'],
+        answer: 2,
+        explain: 'The tangential force is torque over pitch radius, **Fₜ = Mₜ/r**: doubling r from 50 to 100 mm halves Fₜ to 2000 N, and Fᵣ = Fₜ tan φ halves with it.',
+      },
     },
     {
       title: 'Helical gears push endwise',
@@ -69,6 +81,12 @@ const scene: SceneDef = {
       cut: false,
       params: { preset: 'helical' },
       cites: [A503.m(5, 'slides 9–12'), A503.mg16('Q3b'), A503.mg19('Q3c')],
+      check: {
+        question: 'The helix angle is increased beyond 30° while the torque stays the same. What happens to the end thrust on the shafts?',
+        options: ['It rises', 'It falls', 'It stays at 924 N'],
+        answer: 0,
+        explain: 'The thrust is **Fₐ = Fₜ tan α**: Fₜ is fixed by the torque, and tan α grows with the helix angle, so the bearings must take more axial load.',
+      },
     },
     {
       title: 'Straight bevel gears',

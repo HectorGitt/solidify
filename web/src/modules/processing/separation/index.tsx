@@ -51,6 +51,12 @@ const scene: SceneDef = {
       select: 'scalp-screen',
       params: { preset: 'q3b-is30' },
       cites: [P504.sep('The Screening Operation; eqs 1–9'), P504.pq('p3 Q3b')],
+      check: {
+        question: 'A blocked screen sends all the feed over the top, so every oversize particle reaches the overflow. What is its effectiveness E?',
+        options: ['1, since all the oversize is recovered', 'About 0.5, halfway', '0, since no undersize is separated'],
+        answer: 2,
+        explain: 'E = E_A·E_B: the overflow recovery E_A is 1, but with no underflow **E_B = 0**, so E = 0. A screen must recover both streams to score well.',
+      },
     },
     {
       title: 'Aspirator',
@@ -60,6 +66,13 @@ const scene: SceneDef = {
       select: 'aspirator-column',
       params: { kind: 'aspirator' },
       cites: [P504.sep('Air classifiers; Aerodynamics eqs 1–12')],
+      check: {
+        question: 'The air speed is raised above the grain’s terminal velocity of about 8.5 m/s. What happens?',
+        options: ['Grain is blown off with the chaff', 'Chaff now falls with the grain', 'Separation becomes even cleaner'],
+        answer: 0,
+        explain: 'Anything whose **terminal velocity** is below the air speed is carried up. Above 8.5 m/s that includes the grain, so it is lost with the chaff.',
+        reveal: { params: { kind: 'aspirator', airVelocity: 10 } },
+      },
     },
     {
       title: 'Cyclone',
@@ -69,6 +82,12 @@ const scene: SceneDef = {
       select: 'vortex-finder',
       params: { kind: 'cyclone' },
       cites: [P504.sep('Cyclone separator eqs 13–17')],
+      check: {
+        question: 'A cyclone of half the radius is used, with the same inlet speed. What happens to its separation factor S = V²/gR?',
+        options: ['It halves', 'It doubles', 'It stays the same'],
+        answer: 1,
+        explain: 'S is inversely proportional to R, so halving the radius **doubles** the separation factor: smaller cyclones catch finer dust, at a higher pressure drop.',
+      },
     },
     {
       title: 'Sieve shaker',

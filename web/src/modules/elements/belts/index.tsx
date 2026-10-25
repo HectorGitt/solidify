@@ -54,6 +54,13 @@ const scene: SceneDef = {
       select: 'belt',
       params: { preset: 'crossed' },
       cites: [A503.m(4, 'slides 9–12')],
+      check: {
+        question: 'Keep the same 250 and 500 mm pulleys 1.25 m apart, but run the belt open instead of crossed. What happens to the wrap on the small pulley?',
+        options: ['It falls below 180°', 'It stays at 214.9°', 'It rises above 214.9°'],
+        answer: 0,
+        explain: 'An open belt wraps the small pulley **α₁ = 180° − 2β**, with sin β = (250 − 125)/1250 mm = 0.1, so α₁ ≈ **168.5°**: less grip than the crossed belt’s 214.9°.',
+        reveal: { select: 'belt', params: { preset: 'crossed', layout: 'open' } },
+      },
     },
     {
       title: 'Tight side, slack side and creep',
@@ -63,6 +70,12 @@ const scene: SceneDef = {
       select: 'markers',
       params: { preset: 'fan', creep: 0.06 },
       cites: [A503.m(4, 'slides 2–8')],
+      check: {
+        question: 'T₁ and T₂ stay the same, but the belt now runs twice as fast. What happens to the power it transmits?',
+        options: ['It stays the same', 'It halves', 'It doubles'],
+        answer: 2,
+        explain: 'Power is the net pull times belt speed, **P = (T₁ − T₂)v**: the same tension difference at twice the speed carries twice the power.',
+      },
     },
     {
       title: 'V-belts: the wedge',
@@ -73,6 +86,12 @@ const scene: SceneDef = {
       select: 'driven',
       params: { preset: 'vbelts' },
       cites: [A503.m(4, 'slides 5–8'), A503.mg19('Q3a')],
+      check: {
+        question: 'With the same friction and wrap, the groove angle is made narrower than 36°. What happens to the tension ratio the belt can hold?',
+        options: ['It falls', 'It rises', 'It stays at 4.86'],
+        answer: 1,
+        explain: 'The wedge multiplies the normal force by **1/sin(θ/2)**; a smaller θ makes sin(θ/2) smaller, so the friction and the ratio e^(fα/sin(θ/2)) both rise.',
+      },
     },
     {
       title: 'Several belts on one sheave',
