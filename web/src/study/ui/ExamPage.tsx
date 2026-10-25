@@ -9,15 +9,16 @@ import { Working, n } from '@/ui/Working'
 import { queueParams } from '../bridge'
 import { useProgress } from '../progress'
 import { QUESTIONS, findQuestion } from '../questions'
-import { COURSES, checkAnswer, parseAnswer, type Course, type Question } from '../types'
+import { COURSES, parseAnswer, type Course, type Question } from '../types'
+import { markAnswers } from '../marking'
 import { instantiate, randomSeed, type Seed } from '../variants'
 import { Bar, CourseLabel, Pills, StudyShell } from './StudyShell'
 
 type Inputs = Record<string, string>
 
 function fieldResults(q: Question, inputs: Inputs) {
-  const r = q.solve()
-  return q.answers.map((a) => ({ a, computed: r[a.key], ok: checkAnswer(a, r[a.key], parseAnswer(inputs[a.key] ?? '')) }))
+  const given = Object.fromEntries(q.answers.map((a) => [a.key, parseAnswer(inputs[a.key] ?? '')]))
+  return markAnswers(q.answers, q.solve(), given).map((m) => ({ a: m.field, computed: m.computed, ok: m.ok, diagnosis: m.diagnosis }))
 }
 
 function useOpenIn3D() {
@@ -34,7 +35,8 @@ function AnswerInputs({ q, inputs, setInputs, results }: { q: Question; inputs: 
       {q.answers.map((a, i) => {
         const res = results?.[i]
         return (
-          <label key={a.key} className="flex items-center gap-2 rounded-lg border border-line bg-panel-2/60 px-3 py-2">
+          <div key={a.key}>
+          <label className="flex items-center gap-2 rounded-lg border border-line bg-panel-2/60 px-3 py-2">
             <span className="min-w-[64px] text-[13px] text-ink">
               <Tex tex={a.label} />
             </span>
@@ -50,6 +52,8 @@ function AnswerInputs({ q, inputs, setInputs, results }: { q: Question; inputs: 
             <span className="shrink-0 text-[12px] text-mute">{a.unit}</span>
             {res ? <span className={`shrink-0 text-[12px] font-semibold ${res.ok ? 'text-accent' : 'text-danger'}`}>{res.ok ? '✓' : '✗'}</span> : null}
           </label>
+          {res?.diagnosis ? <p className="mt-1 px-1 text-[11.5px] leading-snug text-warn">{res.diagnosis.message}</p> : null}
+          </div>
         )
       })}
     </div>

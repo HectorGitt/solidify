@@ -7,6 +7,7 @@ import { Working, n } from '@/ui/Working'
 import { useProgress } from '../progress'
 import { QUESTIONS } from '../questions'
 import { checkAnswer, parseAnswer, type Question } from '../types'
+import { markAnswers } from '../marking'
 import { instantiate, randomSeed, type Seed } from '../variants'
 import { CourseLabel } from './StudyShell'
 
@@ -34,11 +35,7 @@ export function InSceneExam({ moduleId, sceneId, scene }: { moduleId: string; sc
   const q = instantiate(list[Math.min(idx, list.length - 1)], seed)
   const solved = q.solve()
   const results = checked
-    ? q.answers.map((a) => ({
-        a,
-        computed: solved[a.key],
-        ok: checkAnswer(a, solved[a.key], parseAnswer(inputs[a.key] ?? '')),
-      }))
+    ? markAnswers(q.answers, solved, Object.fromEntries(q.answers.map((a) => [a.key, parseAnswer(inputs[a.key] ?? '')]))).map((m) => ({ a: m.field, computed: m.computed, ok: m.ok, diagnosis: m.diagnosis }))
     : undefined
 
   // errata describe the past-paper numbers only
@@ -127,7 +124,8 @@ export function InSceneExam({ moduleId, sceneId, scene }: { moduleId: string; sc
         {q.answers.map((a, i) => {
           const res = results?.[i]
           return (
-            <label key={a.key} className="flex items-center gap-2 rounded-xl border border-line bg-panel-2/70 px-3 py-2">
+            <div key={a.key} className="space-y-1">
+            <label className="flex items-center gap-2 rounded-xl border border-line bg-panel-2/70 px-3 py-2">
               <span className="min-w-[56px] text-[12.5px] text-ink">
                 <Tex tex={a.label} />
               </span>
@@ -150,6 +148,8 @@ export function InSceneExam({ moduleId, sceneId, scene }: { moduleId: string; sc
                 </span>
               ) : null}
             </label>
+            {res?.diagnosis ? <p className="px-1 text-[11.5px] leading-snug text-warn">{res.diagnosis.message}</p> : null}
+            </div>
           )
         })}
       </div>
