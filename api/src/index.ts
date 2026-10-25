@@ -23,7 +23,7 @@ const app = createApp({
   config: {
     allowedOrigins: list(env('ALLOWED_ORIGINS', 'https://solidify.studio,http://localhost:5173,http://localhost:5180')),
     tutorDailyLimit: Number(env('TUTOR_DAILY_LIMIT', '40')),
-    adminEmails: list(env('ADMIN_EMAILS', 'ola@solidify.studio')),
+    adminEmails: list(env('ADMIN_EMAILS', 'ola@solidify.studio,admin@solidify.studio')),
   },
 })
 
