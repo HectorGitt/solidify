@@ -50,6 +50,13 @@ const scene: SceneDef = {
       select: 'implement',
       params: { implement: 'plough', unitDraft: 2, depth: 0.2 },
       cites: [C.am('§12')],
+      check: {
+        question: 'You plough 30 cm deep instead of 20 cm, same soil and bottoms. What draft should you expect?',
+        options: ['About 4.2 kN', 'About 6.3 kN', 'About 9.5 kN'],
+        answer: 1,
+        explain: 'Draft = unit draft × furrow area, and the area grows in proportion to depth: 3 × 35 × 30 cm² × 2 N/cm² = **6.3 kN**.',
+        reveal: { params: { implement: 'plough', unitDraft: 2, depth: 0.3 } },
+      },
     },
     {
       title: 'Gear, pull and slip',
@@ -58,6 +65,13 @@ const scene: SceneDef = {
       select: 'tractor-rear-wheels',
       params: { implement: 'plough', unitDraft: 5, gear: 3 },
       cites: [C.mech('Fig 2.2, eq 2.5'), C.l27('eqs 14–16')],
+      check: {
+        question: 'Why can the engine pull this heavy draft in 3rd gear but stall in 7th?',
+        options: ['The engine makes more torque in 3rd gear', 'A low gear multiplies torque at the wheels', 'The draft is smaller at low speed'],
+        answer: 1,
+        explain: 'A lower gear has a bigger **reduction ratio**: the same wheel pull asks for less engine torque, at the cost of speed.',
+        reveal: { params: { implement: 'plough', unitDraft: 5, gear: 7 } },
+      },
     },
     {
       title: 'X-ray: the drivetrain at work',
@@ -76,6 +90,12 @@ const scene: SceneDef = {
       xray: false,
       params: { implement: 'disc', unitDraft: 2, gear: 5 },
       cites: [C.mgmt('p7–8')],
+      check: {
+        question: 'A 3 m implement works at 6 km/h with a field efficiency of 75 %. What is its effective capacity?',
+        options: ['About 1.8 ha/h', 'About 13.5 ha/h', 'About 1.35 ha/h'],
+        answer: 2,
+        explain: 'Effective capacity = **W·S·FE/10** = 3 × 6 × 0.75 / 10 = **1.35 ha/h**; turning at the headlands costs the other quarter.',
+      },
     },
   ],
 }

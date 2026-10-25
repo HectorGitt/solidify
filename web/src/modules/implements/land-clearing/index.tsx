@@ -50,6 +50,12 @@ const scene: SceneDef = {
       select: 'count-strip',
       params: { stage: 'survey', auto: false },
       cites: [C.am('§11.2.2'), C.bush('p2 survey, p3 factors')],
+      check: {
+        question: 'Along the 100 m line you count 180 stems within 5 m either side. What is the tree density?',
+        options: ['180 stems/ha', '1800 stems/ha', '18 000 stems/ha'],
+        answer: 1,
+        explain: 'The strip is 100 m × 10 m = **0.1 ha**, so stems per hectare = 10 × 180 = **1800**.',
+      },
     },
     {
       title: 'Knock down: anchor chaining',
@@ -58,6 +64,12 @@ const scene: SceneDef = {
       select: 'anchor-chain',
       params: { stage: 'knockdown', method: 'chain', veg: 'regrowth', auto: false },
       cites: [C.am('§11.3.5'), C.bush('p2')],
+      check: {
+        question: 'The survey finds most trees about 60 cm thick, at 1500 stems/ha. Will anchor chaining work?',
+        options: ['Yes: the density is below 2500 stems/ha', 'No: trees that thick stand up to the chain', 'Yes: a chain pulls down any size of tree'],
+        answer: 1,
+        explain: 'Both limits must hold. The density is fine, but trees over **45 cm** stand up to the chain, so they must be pushed or sheared one by one.',
+      },
     },
     {
       title: 'Tree pusher and shear blade',
@@ -66,6 +78,12 @@ const scene: SceneDef = {
       select: 'crawler-blade',
       params: { stage: 'knockdown', method: 'dozer', veg: 'savanna', auto: false },
       cites: [C.bush('p3–4, Figs 1–2'), C.am('§11')],
+      check: {
+        question: 'Why not clear the bush with a plain straight dozer blade at ground level?',
+        options: ['It leaves every stump standing', 'It cannot push over trees of any size', 'It scrapes off the topsoil with the trees'],
+        answer: 2,
+        explain: 'A straight blade pushing at the surface takes the **topsoil** with the debris, and the topsoil is what the farm needs. The pusher and shear blade avoid this.',
+      },
     },
     {
       title: 'Windrow, burn and root-plough',

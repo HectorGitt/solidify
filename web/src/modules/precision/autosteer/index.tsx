@@ -42,6 +42,12 @@ const scene: SceneDef = {
       camera: HIGH,
       select: 'base',
       params: { fix: 'rtk', ff: 20 },
+      check: {
+        question: 'How can a base station a few kilometres away correct the tractor’s position?',
+        options: ['It sends a stronger signal than the satellites', 'Its errors are nearly the same as the tractor’s', 'It tracks the tractor directly by radar'],
+        answer: 1,
+        explain: 'Satellite and atmosphere errors are almost the **same** over a short distance. The base knows where it really is, so the error it measures can be subtracted at the tractor.',
+      },
     },
     {
       title: 'Uncorrected: a metre of wander',
@@ -56,6 +62,12 @@ const scene: SceneDef = {
       camera: HIGH,
       select: 'coverage',
       params: { fix: 'manual', ff: 20 },
+      check: {
+        question: 'On a 200 ha farm the driver overlaps 7.5 % on every pass. How much ground is worked twice per operation?',
+        options: ['About 1.5 ha', 'About 30 ha', 'About 15 ha'],
+        answer: 2,
+        explain: '7.5 % of 200 ha = **15 ha** given seed, fertiliser or spray twice, every operation. Auto-steer pays for itself by removing that **overlap**.',
+      },
     },
     {
       title: 'How the controller steers',
@@ -63,6 +75,13 @@ const scene: SceneDef = {
       camera: { position: [-9, 5, -5], target: [3, 0.5, 0] },
       select: 'steer-motor',
       params: { fix: 'rtk', lookahead: 2, lag: 0.5, ff: 1 },
+      check: {
+        question: 'You cut the look-ahead from 3.5 m to 1 m. How does the tractor track the line?',
+        options: ['Smoother, but slower to correct', 'Tighter, but it weaves from side to side', 'No different; RTK sets the accuracy'],
+        answer: 1,
+        explain: 'A short **look-ahead** aims at a point just in front, so small errors produce sharp steering and the tractor overshoots and weaves. A long one smooths it out.',
+        reveal: { params: { fix: 'rtk', lookahead: 1, lag: 0.5, ff: 1 } },
+      },
     },
   ],
 }

@@ -52,6 +52,13 @@ const scene: SceneDef = {
       cut: 'half',
       params: { gate: 0.6 },
       cites: [C.am('§14.4.1')],
+      check: {
+        question: 'The gate lets out a fixed mass per minute. If you drive faster with the gate unchanged, what happens to the rate per hectare?',
+        options: ['It rises', 'It falls', 'It stays the same'],
+        answer: 1,
+        explain: 'The flow through the **gate** does not depend on ground speed, so the same kilograms per minute are spread over more hectares per minute: the rate falls.',
+        reveal: { params: { speed: 12 } },
+      },
     },
     {
       title: 'Disc speed sets the width',
@@ -61,6 +68,12 @@ const scene: SceneDef = {
       cut: false,
       params: { discRpm: 250, gate: 0.4 },
       cites: [C.am('§14.4.1 — rate depends on disc speed')],
+      check: {
+        question: 'The disc is slowed to 250 rpm while you keep driving at the same bout spacing. What goes wrong?',
+        options: ['Strips between the bouts are missed', 'The bouts overlap and get a double dose', 'Nothing; the granules just land softer'],
+        answer: 0,
+        explain: 'Exit speed is about **√2 × tip speed**, so a slower disc throws shorter. The band becomes narrower than the bout spacing and leaves unfertilized strips.',
+      },
     },
     {
       title: 'The manure spreader',
@@ -79,6 +92,12 @@ const scene: SceneDef = {
       cut: false,
       params: { machine: 'manure', teeth: 3 },
       cites: [C.am('§14.3.1')],
+      check: {
+        question: 'You move the rate lever so the pawl advances 3 teeth per stroke instead of 2. What happens to the rate?',
+        options: ['It falls by about a third', 'It does not change', 'It rises by about half'],
+        answer: 2,
+        explain: 'The apron speed is proportional to the **teeth per stroke**, and the apron speed sets the volume spread: 3/2 = **1.5×** the manure per hectare.',
+      },
     },
   ],
 }

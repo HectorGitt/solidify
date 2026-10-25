@@ -51,6 +51,13 @@ const scene: SceneDef = {
       select: 'pitman',
       timeScale: 1 / 30,
       cites: [C.am('§16.2.1')],
+      check: {
+        question: 'You drive faster but keep the PTO at 540 rpm. What happens at the knife?',
+        options: ['Each stroke has more grass to cut', 'The knife speeds up to match', 'The knife stroke gets longer'],
+        answer: 0,
+        explain: 'The knife is driven from the **PTO**, not the wheels, so its stroke rate is fixed. Driving faster gives each stroke more crop, and too fast leaves a ragged cut.',
+        reveal: { params: { speed: 12 } },
+      },
     },
     {
       title: 'Registration and lead',
@@ -60,6 +67,12 @@ const scene: SceneDef = {
       cut: 'knife',
       params: { exaggerate: true, regOffset: 0 },
       cites: [C.am('§16.2.2')],
+      check: {
+        question: 'At 6 mm per metre, how far ahead should the outer end of a 2 m cutter bar be set?',
+        options: ['6 mm', '12 mm', '3 mm'],
+        answer: 1,
+        explain: 'The **lead** scales with bar length: 6 mm/m × 2 m = **12 mm**, so the crop drag pulls the bar back to square when cutting.',
+      },
     },
     {
       title: 'The pick-up baler',
@@ -79,6 +92,12 @@ const scene: SceneDef = {
       cut: 'chamber',
       params: { mode: 'baler' },
       cites: [C.am('§16.2.3')],
+      check: {
+        question: 'A heavier windrow feeds more hay with every ram stroke. What changes?',
+        options: ['The ram slows down', 'Each bale comes out longer', 'Bales are finished more often'],
+        answer: 2,
+        explain: 'The knotter ties at a set **bale length**, so a bigger charge per stroke fills that length in fewer strokes: more bales per minute, each the same size.',
+      },
     },
   ],
 }

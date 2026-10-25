@@ -62,6 +62,13 @@ const scene: SceneDef = {
       camera: LOW,
       select: 'cams',
       params: {},
+      check: {
+        question: 'The cameras find 90 % of the weeds. What happens to the other 10 %?',
+        options: ['A neighbouring nozzle catches them', 'They are sprayed late, behind the boom', 'They are left unsprayed and survive'],
+        answer: 2,
+        explain: 'Only weeds the camera **detects** get a squirt, so the detection rate caps the weed control. False detections cost chemical; missed weeds cost control.',
+        reveal: { params: { recall: 0.9 } },
+      },
     },
     {
       title: 'Hitting it on time',
@@ -69,6 +76,13 @@ const scene: SceneDef = {
       camera: LOW,
       select: 'nozzles',
       params: { compensate: false },
+      check: {
+        question: 'With the early firing switched off, you slow from 12 km/h to 6 km/h. How far behind each weed does the spray land?',
+        options: ['About 20 cm', 'About 40 cm', 'About 80 cm'],
+        answer: 0,
+        explain: 'The miss is speed × **latency**: 1.67 m/s × 0.12 s ≈ **20 cm**, half the 40 cm at 12 km/h.',
+        reveal: { params: { compensate: false, speed: 6 } },
+      },
     },
     {
       title: 'Where it pays',
@@ -76,6 +90,12 @@ const scene: SceneDef = {
       camera: CHASE,
       select: 'weeds',
       params: { density: 3 },
+      check: {
+        question: 'Weeds cover most of the field. Which approach is the better choice?',
+        options: ['Spot spraying: the saving is largest', 'Blanket spraying: the patches join up', 'Either: the saving stays above 90 %'],
+        answer: 1,
+        explain: 'Spot spraying saves the chemical you would put on **bare ground**. When weeds are everywhere there is little bare ground left, and blanket spraying is simpler and surer.',
+      },
     },
   ],
 }

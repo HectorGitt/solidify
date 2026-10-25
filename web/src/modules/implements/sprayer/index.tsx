@@ -69,6 +69,13 @@ const scene: SceneDef = {
       cut: 'valves',
       params: { sections: [true, true, true] },
       cites: [C.sprayer('relief valve, gauge, cut-off device')],
+      check: {
+        question: 'You close one of the three boom sections. What happens to the flow from the pump?',
+        options: ['It stays the same; more goes back to the tank', 'It drops by a third to match the nozzles', 'It stays the same and all goes to the boom'],
+        answer: 0,
+        explain: 'A **positive-displacement** pump delivers a fixed flow at a given speed. The relief valve holds the pressure and sends the surplus back to the tank.',
+        reveal: { params: { sections: [true, false, true] } },
+      },
     },
     {
       title: 'Three filters',
@@ -109,6 +116,12 @@ const scene: SceneDef = {
       cut: false,
       params: { speed: 8 },
       cites: [C.perf('8 km/h instead of 4 km/h cuts the rate by half'), C.nozzle('flow ∝ √p')],
+      check: {
+        question: 'Flow ∝ √pressure. To double the flow from a nozzle by pressure alone, how much pressure would you need?',
+        options: ['Twice the pressure', 'Four times the pressure', '√2 times the pressure'],
+        answer: 1,
+        explain: 'Flow goes with the **square root** of pressure, so 2× the flow needs 2² = **4×** the pressure. That is why big rate changes call for a different nozzle or speed.',
+      },
     },
     {
       title: 'Calibrate it',
@@ -118,6 +131,12 @@ const scene: SceneDef = {
       select: null,
       params: { speed: 6 },
       cites: [C.calib('procedure'), C.guide1819('Q4(e)')],
+      check: {
+        question: 'This boom has 12 nozzles at 0.5 m. How far must you drive to spray a 0.1 ha test area?',
+        options: ['About 600 m', 'About 1667 m', 'About 167 m'],
+        answer: 2,
+        explain: 'W = 12 × 0.5 = **6 m**, and 0.1 ha = 1000 m², so L = 1000/W = 1000/6 ≈ **167 m**.',
+      },
     },
   ],
 }

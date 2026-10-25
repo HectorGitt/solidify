@@ -65,6 +65,13 @@ const scene: SceneDef = {
       select: 'cylinder',
       explode: 0,
       cites: [C.am('§18.4, §19.2')],
+      check: {
+        question: 'You close the concave clearance but leave the cylinder speed alone. What happens to the threshing?',
+        options: ['It is gentler, so more heads go out unthreshed', 'It is harsher, with more risk of cracked grain', 'It is unchanged; only the straw flow changes'],
+        answer: 1,
+        explain: 'A smaller **concave clearance** squeezes and rubs the crop harder between the rasp bars and the concave: fewer unthreshed heads, but more cracked grain.',
+        reveal: { params: { clearance: 6 } },
+      },
     },
     {
       title: 'Separating: straw walkers',
@@ -73,6 +80,13 @@ const scene: SceneDef = {
       select: 'walkers',
       cut: 'panel',
       cites: [C.am('§19.2')],
+      check: {
+        question: 'You drive faster in the same crop, feeding more straw than the walkers can handle. Where does the extra loss come from?',
+        options: ['More unthreshed heads at the cylinder', 'More cracked grain at the concave', 'Free grain carried out over the walkers'],
+        answer: 2,
+        explain: 'The walkers only separate well up to their **rated feed**: a thicker straw mat traps loose grain and carries it out of the back. Each unit must match the next.',
+        reveal: { params: preset('overload') },
+      },
     },
     {
       title: 'Cleaning: sieves and fan',
@@ -81,6 +95,13 @@ const scene: SceneDef = {
       select: 'shoe',
       cut: 'half',
       cites: [C.am('§18.4, §19.2')],
+      check: {
+        question: 'The fan is set far too strong. What goes wrong at the cleaning shoe?',
+        options: ['Grain is blown out of the back with the chaff', 'Chaff stays mixed in with the clean grain', 'The sieves choke and stop shaking'],
+        answer: 0,
+        explain: 'Cleaning relies on grain being **heavier** than chaff. Too strong a blast lifts the grain as well and blows it out with the chaff; too weak a blast leaves chaff in the tank.',
+        reveal: { params: { fan: 1.55 } },
+      },
     },
     {
       title: 'Grain delivery and tailings',

@@ -54,6 +54,12 @@ const scene: SceneDef = {
       select: 'share',
       params: { mode: 'bottom', exaggerate: true },
       cites: [C.am('§12 suction 0.48–1.25 cm')],
+      check: {
+        question: 'The share wears and loses its vertical suction. What will the bottom tend to do?',
+        options: ['Dig deeper and deeper', 'Ride up out of the ground', 'Cut a wider furrow'],
+        answer: 1,
+        explain: '**Vertical suction** is what draws the bottom down into the soil. Without it the bottom tends to climb out and will not hold its depth.',
+      },
     },
     {
       title: 'The furrow slice',
@@ -72,6 +78,13 @@ const scene: SceneDef = {
       select: null,
       params: { mode: 'field', bottoms: 1, width: 0.15, depth: 0.06, unitDraft: 2, speed: 3.6 },
       cites: [C.am('§12 draft example')],
+      check: {
+        question: 'The same 150 × 60 mm furrow at 1 m/s, but in sand (unit draft about 1 N/cm²). What power does it take?',
+        options: ['About 90 W', 'About 180 W', 'About 360 W'],
+        answer: 0,
+        explain: 'Draft = 1 N/cm² × 90 cm² = **90 N**, half the clay value; power = 90 N × 1 m/s = **90 W**.',
+        reveal: { params: { unitDraft: 1 } },
+      },
     },
     {
       title: 'Centre of draft and line of draft',
@@ -79,6 +92,12 @@ const scene: SceneDef = {
       camera: { position: [-2, 6, 0.5], target: [-1.5, 0, 0] },
       params: { ...DEFAULTS, mode: 'field', showDraft: true },
       cites: [C.am('§12 hitching the plough')],
+      check: {
+        question: 'The plough is hitched so the centre of power sits well off the line of draft. What does the driver notice?',
+        options: ['The plough runs straight but deeper', 'The draft falls as the plough crabs', 'The tractor is pulled sideways off line'],
+        answer: 2,
+        explain: 'An offset hitch gives a **side pull**: the tractor crabs and must be steered against it all the time, and the plough does not run true.',
+      },
     },
   ],
 }

@@ -49,6 +49,12 @@ const scene: SceneDef = {
       select: 'blade',
       cut: 'half',
       cites: [C.am('§20 cassava digger-elevator')],
+      check: {
+        question: 'The blade is set too shallow for the tubers. What is the result?',
+        options: ['Less soil to sieve and better recovery', 'Cut and broken tubers, and some left behind', 'The elevator runs faster to compensate'],
+        answer: 1,
+        explain: 'The **wedge** must run under the roots, about 300 mm for cassava. Too shallow and it slices through them, damaging tubers and leaving the lower parts in the ground.',
+      },
     },
     {
       title: 'Elevator faster than the ground',
@@ -58,6 +64,13 @@ const scene: SceneDef = {
       cut: false,
       params: { ratio: 1.5, agitators: true },
       cites: [C.am('§20')],
+      check: {
+        question: 'You set the elevator slower than the forward speed. What happens?',
+        options: ['The soil sieves out even better', 'Nothing; only the rods wear faster', 'Soil piles up and is carried off the end'],
+        answer: 2,
+        explain: 'An elevator faster than the ground **stretches the slab** so soil falls between the rods. Slower than the ground, the slab bunches up and the soil goes out with the roots.',
+        reveal: { params: { ratio: 0.8 } },
+      },
     },
     {
       title: 'Depth wheels and overload clutch',
@@ -74,6 +87,12 @@ const scene: SceneDef = {
       cut: false,
       params: { ...DEFAULTS, machine: 'groundnut', depth: 0.12, yield: 1.5, ratio: 1.4 },
       cites: [C.am('§20 groundnut')],
+      check: {
+        question: 'Why does the inverter leave the groundnut plants pods-up in the windrow?',
+        options: ['So the pods dry in the air, off the damp soil', 'So the next pass can pick up the soil first', 'So the leaves shade the pods from the sun'],
+        answer: 0,
+        explain: 'Pods turned **upward** dry in sun and air and are kept off the moist soil, which cuts mould and makes later threshing easier.',
+      },
     },
   ],
 }
