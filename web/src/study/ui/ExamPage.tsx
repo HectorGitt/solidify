@@ -11,6 +11,8 @@ import { useProgress } from '../progress'
 import { QUESTIONS, findQuestion } from '../questions'
 import { COURSES, parseAnswer, type Course, type Question } from '../types'
 import { markAnswers } from '../marking'
+import { dueQuestions } from '../review'
+import { ExplainMistake } from './ExplainMistake'
 import { instantiate, randomSeed, type Seed } from '../variants'
 import { Bar, CourseLabel, Pills, StudyShell } from './StudyShell'
 
@@ -20,6 +22,9 @@ function fieldResults(q: Question, inputs: Inputs) {
   const given = Object.fromEntries(q.answers.map((a) => [a.key, parseAnswer(inputs[a.key] ?? '')]))
   return markAnswers(q.answers, q.solve(), given, q.follow).map((m) => ({ a: m.field, computed: m.computed, ok: m.ok, carried: m.carried, diagnosis: m.diagnosis }))
 }
+
+/** Fraction of the marks, 0–1 (method-only boxes count ½). */
+const scoreOf = (results: { ok: boolean; carried?: boolean }[]) => (results.length ? results.reduce((s, r) => s + (r.ok ? 1 : r.carried ? 0.5 : 0), 0) / results.length : 0)
 
 /** "2½/4 marks": 1 per correct box, ½ for method only (error carried forward). */
 function marksLabel(results: { ok: boolean; carried?: boolean }[]) {
@@ -126,7 +131,8 @@ function Solution({ q }: { q: Question }) {
 
 /* ------------------------------------------------------------------ practice */
 
-function Practice({ list, start }: { list: Question[]; start?: string }) {
+/** `fresh`: start every question with new numbers (review sessions). */
+function Practice({ list, start, fresh = false }: { list: Question[]; start?: string; fresh?: boolean }) {
   const [i, setI] = useState(() => Math.max(0, start ? list.findIndex((x) => x.id === start) : 0))
   const [inputs, setInputs] = useState<Inputs>({})
   const [results, setResults] = useState<ReturnType<typeof fieldResults> | undefined>()
@@ -135,7 +141,7 @@ function Practice({ list, start }: { list: Question[]; start?: string }) {
   const qp = useProgress((s) => s.questions)
   const open3d = useOpenIn3D()
   const base = list[Math.min(i, list.length - 1)]
-  const [seed, setSeed] = useState<Seed>('original')
+  const [seed, setSeed] = useState<Seed>(() => (fresh ? randomSeed() : 'original'))
   const q = useMemo(() => (base ? instantiate(base, seed) : base), [base, seed])
 
   useEffect(() => {
@@ -143,14 +149,14 @@ function Practice({ list, start }: { list: Question[]; start?: string }) {
     setResults(undefined)
     setReveal(false)
   }, [q?.id, q?.variant])
-  useEffect(() => setSeed('original'), [base?.id])
+  useEffect(() => setSeed(fresh ? randomSeed() : 'original'), [base?.id, fresh])
   useEffect(() => setI(Math.max(0, start ? list.findIndex((x) => x.id === start) : 0)), [list, start])
 
   if (!q) return <p className="text-mute">No questions match these filters.</p>
   const check = () => {
     const res = fieldResults(q, inputs)
     setResults(res)
-    record(q.id, res.every((x) => x.ok))
+    record(q.id, res.every((x) => x.ok), scoreOf(res))
   }
   const stat = qp[q.id]
   return (
@@ -202,6 +208,7 @@ function Practice({ list, start }: { list: Question[]; start?: string }) {
           </button>
         </div>
       </div>
+      {results ? <ExplainMistake q={q} results={results} inputs={inputs} /> : null}
       {reveal ? <Solution q={q} /> : null}
     </div>
   )
@@ -239,7 +246,10 @@ function Mock({ pool }: { pool: Question[] }) {
 
   const finish = () => {
     if (!paper || done) return
-    for (const q of paper) record(q.id, fieldResults(q, answers[q.id] ?? {}).every((x) => x.ok))
+    for (const q of paper) {
+      const res = fieldResults(q, answers[q.id] ?? {})
+      record(q.id, res.every((x) => x.ok), scoreOf(res))
+    }
     setDone(true)
   }
   useEffect(() => {
@@ -365,9 +375,23 @@ export function ExamPage() {
   // /exam?q=<question id> opens that question (used by class assignments)
   const [params] = useSearchParams()
   const start = useMemo(() => findQuestion(params.get('q') ?? ''), [params])
-  const [mode, setMode] = useState<'practice' | 'mock'>('practice')
+  const qp = useProgress((s) => s.questions)
+  const [mode, setMode] = useState<'practice' | 'mock' | 'review'>('practice')
+  // reviews due now, across every subject; frozen when a review session starts
+  const dueNow = useMemo(() => dueQuestions(qp, QUESTIONS.map((q) => q.id), Date.now()), [qp])
+  const [reviewList, setReviewList] = useState<Question[]>([])
+  const startMode = (m: typeof mode) => {
+    if (m === 'review') setReviewList(dueNow.map((id) => findQuestion(id)!).filter(Boolean))
+    setMode(m)
+  }
   const [course, setCourse] = useState<Course | 'all'>(start?.course ?? 'all')
   const [topic, setTopic] = useState(start?.topic ?? 'all')
+  // /exam?mode=review opens a review session (from the progress page)
+  const wantReview = params.get('mode') === 'review'
+  useEffect(() => {
+    if (wantReview) startMode('review')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wantReview])
   // following another question link while already on this page: show that question
   useEffect(() => {
     if (!start) return
@@ -376,7 +400,6 @@ export function ExamPage() {
     setTopic(start.topic)
   }, [start])
   const academic = useAcademic()
-  const qp = useProgress((s) => s.questions)
 
   const byCourse = useMemo(() => QUESTIONS.filter((q) => course === 'all' || q.course === course), [course])
   const topics = useMemo(() => [...new Set(byCourse.map((q) => q.topic))], [byCourse])
@@ -387,8 +410,20 @@ export function ExamPage() {
     <StudyShell
       title="Exam practice"
       lead={`${QUESTIONS.length} worked problems${academic ? ' from past papers, marking guides and worked examples' : ''}. Every answer is computed by the same tested calculations that drive the 3D scenes.`}
-      right={<Pills label="Mode" value={mode} onChange={setMode} options={[{ value: 'practice', label: 'Practice' }, { value: 'mock', label: 'Mock exam' }]} />}
+      right={
+        <Pills
+          label="Mode"
+          value={mode}
+          onChange={startMode}
+          options={[
+            { value: 'practice', label: 'Practice' },
+            { value: 'review', label: dueNow.length ? `Review · ${dueNow.length} due` : 'Review' },
+            { value: 'mock', label: 'Mock exam' },
+          ]}
+        />
+      }
     >
+      {mode !== 'review' ? (
       <div className="mb-4 space-y-2 rounded-2xl border border-line bg-panel-2/50 p-3">
         <Pills
           label="Subject"
@@ -407,7 +442,25 @@ export function ExamPage() {
           <Bar value={solved} total={list.length} />
         </div>
       </div>
-      {mode === 'practice' ? <Practice list={list} start={start?.id} /> : <Mock pool={list} />}
+      ) : null}
+      {mode === 'review' ? (
+        reviewList.length ? (
+          <>
+            <p className="mb-3 text-[12.5px] text-mute">
+              {reviewList.length} question{reviewList.length === 1 ? '' : 's'} due for review, each with new numbers. Get one fully right and it comes back later; miss it and it returns tomorrow.
+            </p>
+            <Practice list={reviewList} fresh />
+          </>
+        ) : (
+          <div className="rounded-2xl border border-line bg-panel p-5 text-[13px] text-mute">
+            Nothing is due for review. Questions you answer come back here on a schedule: tomorrow if you missed them, then after 3, 7 and 21 days as you keep getting them right.
+          </div>
+        )
+      ) : mode === 'practice' ? (
+        <Practice list={list} start={start?.id} />
+      ) : (
+        <Mock pool={list} />
+      )}
     </StudyShell>
   )
 }

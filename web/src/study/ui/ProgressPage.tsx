@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom'
 import { MODULES } from '@/modules/catalog'
 import { useProgress, summarise } from '../progress'
 import { QUESTIONS } from '../questions'
+import { suggestTopic, topicMastery, type TopicMastery } from '../review'
 import { COURSES } from '../types'
 import { SceneMark } from './badges'
 import { Bar, CourseLabel, StudyShell } from './StudyShell'
@@ -23,6 +24,85 @@ function Stat({ label, value, total, tone }: { label: string; value: number; tot
   )
 }
 
+function MasteryRow({ t }: { t: TopicMastery }) {
+  const pct = Math.round(t.mastery * 100)
+  return (
+    <li className="flex items-center gap-3 text-[12.5px]">
+      <Link to={`/exam?q=${encodeURIComponent(t.ids[0])}`} className="w-44 shrink-0 truncate text-ink/85 hover:text-accent" title={`Practise ${t.topic}`}>
+        {t.topic}
+      </Link>
+      <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-panel-3">
+        <div className={`h-full rounded-full ${pct >= 75 ? 'bg-accent' : pct >= 35 ? 'bg-info' : 'bg-warn'}`} style={{ width: `${Math.max(pct, t.attempted ? 3 : 0)}%` }} />
+      </div>
+      <span className="w-10 shrink-0 text-right font-mono text-[11.5px] text-ink/80">{pct}%</span>
+      <span className="w-14 shrink-0 text-right text-[11px] text-dim">{t.due ? `${t.due} due` : t.attempted ? '' : 'new'}</span>
+    </li>
+  )
+}
+
+/** Review queue, what to practise next, and mastery per topic for each subject. */
+function Learning() {
+  const qp = useProgress((s) => s.questions)
+  const now = Date.now()
+  const all = topicMastery(qp, QUESTIONS, now)
+  const due = all.reduce((n, t) => n + t.due, 0)
+  const next = suggestTopic(all)
+  return (
+    <>
+      <section className="mb-6 grid gap-3 sm:grid-cols-2">
+        <div className="rounded-2xl border border-line bg-panel p-4">
+          <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-mute">Review</div>
+          <p className="mt-1 text-[14px] text-ink">{due ? `${due} question${due === 1 ? '' : 's'} due now` : 'Nothing due right now'}</p>
+          <p className="mt-0.5 text-[12px] text-dim">Missed questions come back tomorrow with new numbers, then after 3, 7 and 21 days as you get them right.</p>
+          {due ? (
+            <Link to="/exam?mode=review" className="mt-3 inline-block rounded-lg bg-accent px-3 py-1.5 text-[12.5px] font-semibold text-accent-ink hover:brightness-110">
+              Start review
+            </Link>
+          ) : null}
+        </div>
+        <div className="rounded-2xl border border-line bg-panel p-4">
+          <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-mute">Practise next</div>
+          {next ? (
+            <>
+              <p className="mt-1 text-[14px] text-ink">{next.topic}</p>
+              <p className="mt-0.5 text-[12px] text-dim">{next.due ? `${next.due} review${next.due === 1 ? '' : 's'} due` : next.attempted ? `${Math.round(next.mastery * 100)}% mastered so far` : 'Not started yet'}</p>
+              <Link to={`/exam?q=${encodeURIComponent((next.due ? next.ids.find((id) => (qp[id]?.due ?? Infinity) <= now) : undefined) ?? next.ids[0])}`} className="mt-3 inline-block rounded-lg border border-accent/50 px-3 py-1.5 text-[12.5px] text-accent hover:bg-accent/10">
+                Practise this topic
+              </Link>
+            </>
+          ) : (
+            <p className="mt-1 text-[14px] text-ink">Everything mastered. Nice work.</p>
+          )}
+        </div>
+      </section>
+
+      <h2 className="mb-2 text-[15px] font-semibold">Mastery by topic</h2>
+      <section className="mb-8 grid gap-3 lg:grid-cols-2">
+        {COURSES.map((c) => {
+          const qs = QUESTIONS.filter((q) => q.course === c.id)
+          const topics = topicMastery(qp, qs, now)
+          const overall = topics.length ? topics.reduce((s, t) => s + t.mastery * t.ids.length, 0) / qs.length : 0
+          return (
+            <div key={c.id} className="rounded-2xl border border-line bg-panel-2/60 p-4">
+              <div className="mb-3 flex items-baseline justify-between">
+                <span className="text-[14px] font-semibold">
+                  <CourseLabel course={c.id} />
+                </span>
+                <span className="font-mono text-[12px] text-mute">{Math.round(overall * 100)}%</span>
+              </div>
+              <ul className="space-y-1.5">
+                {topics.map((t) => (
+                  <MasteryRow key={t.topic} t={t} />
+                ))}
+              </ul>
+            </div>
+          )
+        })}
+      </section>
+    </>
+  )
+}
+
 export function ProgressPage() {
   const p = useProgress()
   const allScenes = liveScenes()
@@ -31,7 +111,7 @@ export function ProgressPage() {
   return (
     <StudyShell
       title="Your progress"
-      lead="Scenes you have opened, guided tours you have finished and exam questions you have answered. Stored only in this browser."
+      lead="Scenes you have opened, guided tours you have finished and exam questions you have answered. Saved in this browser, and synced to your account when you’re signed in."
       right={
         <button
           onClick={() => {
@@ -49,7 +129,9 @@ export function ProgressPage() {
         <Stat label="Questions solved" value={all.solved} total={all.questions} tone="warn" />
       </section>
 
-      <h2 className="mb-2 text-[15px] font-semibold">By course</h2>
+      <Learning />
+
+      <h2 className="mb-2 text-[15px] font-semibold">By subject</h2>
       <section className="mb-8 grid gap-3 sm:grid-cols-2">
         {COURSES.map((c) => {
           const mods = MODULES.filter((m) => m.courses.includes(c.id)).map((m) => m.id)

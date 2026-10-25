@@ -6,8 +6,8 @@ import { Tex } from '@/ui/Tex'
 import { Working, n } from '@/ui/Working'
 import { useProgress } from '../progress'
 import { QUESTIONS } from '../questions'
-import { checkAnswer, parseAnswer, type Question } from '../types'
-import { markAnswers } from '../marking'
+import { parseAnswer, type Question } from '../types'
+import { markAnswers, scoreMarks } from '../marking'
 import { instantiate, randomSeed, type Seed } from '../variants'
 import { CourseLabel } from './StudyShell'
 
@@ -46,9 +46,10 @@ export function InSceneExam({ moduleId, sceneId, scene }: { moduleId: string; sc
   }
 
   const onCheck = () => {
-    const res = q.answers.map((a) => checkAnswer(a, solved[a.key], parseAnswer(inputs[a.key] ?? '')))
+    const marks = markAnswers(q.answers, solved, Object.fromEntries(q.answers.map((a) => [a.key, parseAnswer(inputs[a.key] ?? '')])), q.follow)
     setChecked(true)
-    recordAnswer(q.id, res.every(Boolean))
+    const { got, of } = scoreMarks(marks)
+    recordAnswer(q.id, got === of, of ? got / of : 0)
   }
 
   return (
