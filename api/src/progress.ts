@@ -3,7 +3,7 @@ import { z } from 'zod'
 /**
  * Mirrors src/study/progress.ts in the app. Timestamps are epoch milliseconds.
  * Merging two copies (this device vs the cloud) must never lose progress:
- *  - scenes: earliest `opened`, latest `tour`
+ *  - scenes: earliest `opened`, latest `tour`; tour checkpoints merged, keeping a right answer
  *  - questions: the larger attempts / correct counts and the latest `last`; the review
  *    schedule (box, due, score) comes from whichever copy has the latest attempt
  *    (counts are not summed: the same attempts would otherwise be counted twice on every sync)
@@ -13,7 +13,12 @@ import { z } from 'zod'
 const key = z.string().min(1).max(120)
 const time = z.number().int().nonnegative()
 
-export const sceneProgress = z.object({ opened: time.optional(), tour: time.optional() })
+export const sceneProgress = z.object({
+  opened: time.optional(),
+  tour: time.optional(),
+  /** tour checkpoints: step index → 1 right first time, 0 not */
+  checks: z.record(z.string().regex(/^\d{1,3}$/), z.union([z.literal(0), z.literal(1)])).optional(),
+})
 export const questionProgress = z.object({
   attempts: z.number().int().nonnegative(),
   correct: z.number().int().nonnegative(),
@@ -53,6 +58,11 @@ function mergeScene(a?: SceneProgress, b?: SceneProgress): SceneProgress {
   const tour = maxDef(a?.tour, b?.tour)
   if (opened !== undefined) out.opened = opened
   if (tour !== undefined) out.tour = tour
+  if (a?.checks || b?.checks) {
+    const checks: Record<string, 0 | 1> = { ...(a?.checks ?? {}) }
+    for (const [k, v] of Object.entries(b?.checks ?? {})) checks[k] = Math.max(checks[k] ?? 0, v) as 0 | 1
+    out.checks = checks
+  }
   return out
 }
 

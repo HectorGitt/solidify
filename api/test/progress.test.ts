@@ -46,3 +46,16 @@ describe('progress merge', () => {
     expect(progressSchema.safeParse({ questions: { q: { attempts: -1, correct: 0 } } }).success).toBe(false)
   })
 })
+
+describe('tour checkpoints in progress', () => {
+  it('merges checkpoint results across devices, keeping a right answer', () => {
+    const a = { ...emptyProgress(), scenes: { belts: { opened: 5, checks: { '1': 0 as const, '3': 1 as const } } } }
+    const b = { ...emptyProgress(), scenes: { belts: { opened: 9, tour: 20, checks: { '1': 1 as const, '4': 0 as const } } } }
+    expect(mergeProgress(a, b).scenes.belts).toEqual({ opened: 5, tour: 20, checks: { '1': 1, '3': 1, '4': 0 } })
+  })
+  it('accepts only step-number keys and 0/1 values', () => {
+    expect(progressSchema.safeParse({ scenes: { s: { checks: { '2': 1 } } } }).success).toBe(true)
+    expect(progressSchema.safeParse({ scenes: { s: { checks: { two: 1 } } } }).success).toBe(false)
+    expect(progressSchema.safeParse({ scenes: { s: { checks: { '2': 0.5 } } } }).success).toBe(false)
+  })
+})
