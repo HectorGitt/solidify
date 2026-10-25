@@ -2,6 +2,7 @@ import { useState, type FormEvent, type ReactNode } from 'react'
 import { StudyShell } from '@/study/ui/StudyShell'
 import { api, ApiError } from '../api'
 import { useAuth } from '../auth'
+import { SUPPORT_EMAIL } from '../config'
 import { Field, Notice, inputCls, primaryBtn } from './Modal'
 
 type Role = 'student' | 'teacher' | 'engineer' | 'other'
@@ -137,7 +138,11 @@ export default function CreatePage() {
             </div>
           ))}
           <p className="text-[12px] leading-relaxed text-dim sm:col-span-2">
-            Built on the same parts library and tested calculations as every Solidify scene. Create in 3D will be part of Solidify’s paid plans, with a free trial.
+            Built on the same parts library and tested calculations as every Solidify scene. Create in 3D will be part of Solidify’s paid plans, with a free trial. Questions, or interested for your school or company? Email{' '}
+            <a className="text-accent hover:underline" href={`mailto:${SUPPORT_EMAIL}`}>
+              {SUPPORT_EMAIL}
+            </a>
+            .
           </p>
         </section>
         <aside>

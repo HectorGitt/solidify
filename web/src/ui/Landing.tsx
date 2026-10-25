@@ -6,6 +6,7 @@ import type { ModuleDef, SceneDef } from '@/modules/types'
 import { DEFAULT_CUT_PRESETS, useView } from '@/render/view'
 import { useAcademic, useAudience } from './audience'
 import { AccountMenu } from '@/cloud/ui/AccountMenu'
+import { SUPPORT_EMAIL } from '@/cloud/config'
 import { AudienceSwitch } from './AudienceSwitch'
 import { Icon } from './icons'
 import { Logo } from './Logo'
@@ -597,6 +598,9 @@ export function Landing() {
             <Link to="/about" className="hover:text-ink transition-colors">
               How it works
             </Link>
+            <a href={`mailto:${SUPPORT_EMAIL}`} className="hover:text-ink transition-colors">
+              Contact
+            </a>
             <StudyLinks always compact />
           </nav>
         </div>

@@ -3,6 +3,7 @@ import { create } from 'zustand'
 import { useParts } from '@/parts/registry'
 import { api, ApiError } from '../api'
 import { useAuth } from '../auth'
+import { SUPPORT_EMAIL } from '../config'
 import { Field, Modal, Notice, inputCls, primaryBtn } from './Modal'
 
 type Kind = 'error' | 'bug' | 'idea'
@@ -99,7 +100,13 @@ export function ReportDialog() {
               <input className={inputCls} type="email" value={contact} onChange={(e) => setContact(e.target.value)} autoComplete="email" />
             </Field>
           ) : null}
-          <p className="mb-3 text-[11.5px] text-dim">The page you’re on{partName ? ' and the selected part are' : ' is'} included automatically.</p>
+          <p className="mb-3 text-[11.5px] text-dim">
+            The page you’re on{partName ? ' and the selected part are' : ' is'} included automatically. Prefer email? Write to{' '}
+            <a className="text-accent hover:underline" href={`mailto:${SUPPORT_EMAIL}`}>
+              {SUPPORT_EMAIL}
+            </a>
+            .
+          </p>
           {error ? <div className="mb-3"><Notice tone="warn">{error}</Notice></div> : null}
           <button type="submit" className={`${primaryBtn} w-full`} disabled={state === 'sending' || message.trim().length < 3}>
             {state === 'sending' ? 'Sending…' : 'Send report'}

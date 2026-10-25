@@ -12,3 +12,6 @@ export const FIREBASE_CONFIG = {
 
 /** The Solidify API on Cloud Run. Override with VITE_API_URL (e.g. a local `npm run dev` in api/). */
 export const API_URL: string = (import.meta.env.VITE_API_URL as string | undefined) ?? 'https://solidify-api-6b27sr35hq-ew.a.run.app'
+
+/** Where people can write to us (an alias on the admin mailbox). */
+export const SUPPORT_EMAIL = 'support@solidify.studio'
