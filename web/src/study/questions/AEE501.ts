@@ -70,6 +70,8 @@ export const AEE501: Question[] = [
         { label: 'Total', tex: '\\text{ownership} + \\text{operating}', result: `= \\$${n(r.total)}/\\text{h}` },
       ]
     },
+    // the total follows from the student's ownership and operating costs
+    follow: (_v, g) => ('own' in g && 'op' in g ? { total: g.own + g.op } : {}),
     cite: ISU,
     errata: 'isu-operating',
   }),
@@ -116,6 +118,8 @@ export const AEE501: Question[] = [
         { label: 'Cost per acre', tex: `\\dfrac{\\$${tnum(v.T)} + \\$${n(r.disk)}}{${Math.round(r.C)}}`, result: `= \\$${n(r.acre, 3)}/\\text{acre}` },
       ]
     },
+    // cost per acre follows from the student's disk cost and field capacity
+    follow: (v, g) => ('disk' in g && 'C' in g ? { acre: (v.T + g.disk) / Math.round(g.C) } : {}),
     cite: ISU,
   }),
   parametric({
@@ -145,6 +149,8 @@ export const AEE501: Question[] = [
       { label: 'Theoretical capacity', tex: 'C_t = \\dfrac{W S}{10}', sub: `\\dfrac{${n(v.W * FT, 4)}\\times${n(v.S * MILE_KM, 4)}}{10}`, result: `= ${n(r.Ct, 3)}\\ \\text{ha/h}`, cite: SRC.mgmt501('field capacity') },
       { label: 'Effective capacity', tex: 'C_e = FE\\cdot C_t', sub: `${tnum(v.FE / 100)}\\times${n(r.Ct, 3)}`, result: `= ${n(r.Ce, 3)}\\ \\text{ha/h}`, ...(original ? { errata: 'The question’s “8 m/h” is ambiguous; read as 8 km/h it gives 1.22 and 1.04 ha/h.' } : {}) },
     ],
+    // effective capacity follows from the student's theoretical capacity
+    follow: (v, g) => ('Ct' in g ? { Ce: (v.FE / 100) * g.Ct } : {}),
     cite: SRC.mgmt501('exam 2019/20, 2023/24 capacity question'),
     params: (v) => ({ W: v.W * FT, S: v.S * MILE_KM, feModel: false, FE: v.FE / 100, units: 'si', overlap: 0.05, passes: 10, L: 60 }),
   }),
@@ -183,6 +189,8 @@ export const AEE501: Question[] = [
         { label: 'Depreciation', tex: 'D = P - S', result: `= ₦${n(r.dep)}\\ \\text{M}` },
       ]
     },
+    // depreciation follows from the student's salvage percentage
+    follow: (v, g) => ('pct' in g ? { dep: (v.P * 1e6 - (g.pct / 100) * ((v.P * 1e6) / (1 - v.disc / 100))) / 1e6 } : {}),
     cite: SRC.mgmt501('SANDEL example'),
   }),
   parametric({
@@ -246,6 +254,8 @@ export const AEE501: Question[] = [
       { label: 'Bale loader', tex: `\\dfrac{${tnum(v.A)}}{${tnum(v.br)}}`, result: `= ${n(r.bd)}\\ \\text{days}` },
       { label: 'Manual', tex: `${tnum(v.A)}\\times(${tnum(v.slash)} + ${tnum(v.stump)}),\\quad \\dfrac{${tnum(v.A)}}{${tnum(v.mr)}\\ \\text{acre/day}}`, result: `= ₦${n(r.mc, 7)},\\ ${n(r.md)}\\ \\text{days}`, ...(original ? { errata: 'The guide gives 25 days, which needs 4 acres/day, not 1.' } : {}) },
     ],
+    // the dozer cost follows from the student's dozer days
+    follow: (v, g) => ('dd' in g ? { dc: g.dd * v.dh } : {}),
     cite: SRC.bush501('2018/19 Q2c'),
     errata: 'clearing-days',
   }),
