@@ -12,7 +12,7 @@ import {
   squareBore,
 } from '@/physics/engine'
 import { enginePerformance } from '@/physics/engineExtra'
-import { fuelRateForPower, powerFromAir, specificAirConsumption } from '@/physics/fuel'
+import { fuelRateForPower, powerFromAir, specificAirConsumption, thermalEfficiency } from '@/physics/fuel'
 import { AIR, airStandardCycle, alphaFromPmax, deltaFromCutoffFraction, dualFromPmaxEqualHeat } from '@/physics/thermo'
 import { n } from '@/ui/Working'
 import type { Question } from '../types'
@@ -80,6 +80,8 @@ export const AEE509: Question[] = [
       { label: 'Air rate', tex: '\\dot m_a = (A/F)\\,\\dot m_f', sub: `${tnum(v.af)} \\times ${n(r.mf)}`, result: `= ${n(r.ma)}\\ \\text{kg/min}` },
       { label: 'Specific consumptions', tex: 'sfc = \\dfrac{\\dot m_f}{BP},\\quad sac = (A/F)\\,sfc', sub: `\\dfrac{${n(r.mf * 60)}}{${tnum(v.P)}},\\ ${tnum(v.af)} \\times ${n(r.sfc)}`, result: `= ${n(r.sfc)},\\ ${n(r.sac)}\\ \\text{kg/kWh}` },
     ],
+    // air rate and sfc follow from the student's fuel rate, sac from their sfc
+    follow: (v, g) => ({ ...('mf' in g ? { ma: g.mf * v.af, sfc: sfc(g.mf * 60, v.P) } : {}), ...('sfc' in g ? { sac: specificAirConsumption(g.sfc, v.af) } : {}) }),
     cite: SRC.misc509('p5, Example 1'),
     params: (v) => perf('ex1', { outVal: v.P, fuelVal: v.eta / 100, af: v.af, hv: v.HV / 1000 }),
   }),
@@ -112,6 +114,8 @@ export const AEE509: Question[] = [
       { label: 'bmep (four-stroke: N/2 cycles per minute)', tex: 'bmep = \\dfrac{60\\,BP}{L A\\,(N/2)}', sub: `\\dfrac{60 \\times ${tnum(v.P)}\\times10^3}{${tnum(v.Vs)} \\times ${tnum(v.N / 2)}}`, result: `= ${n(r.bmep)}\\ \\text{kPa}`, cite: SRC.misc509('Ex 2') },
       { label: 'imep', tex: 'imep = \\dfrac{bmep}{\\eta_m}', sub: `\\dfrac{${n(r.bmep)}}{${tnum(v.etaM / 100)}}`, result: `= ${n(r.imep)}\\ \\text{kPa}` },
     ],
+    // imep follows from the student's bmep
+    follow: (v, g) => ('bmep' in g ? { imep: imepFromBmep(g.bmep * 1000, v.etaM / 100) / 1000 } : {}),
     cite: SRC.misc509('Example 2'),
     // the scene draws one equivalent cylinder of area 0.2 m², so the stroke carries the volume
     params: (v) => perf('ex1', { outVal: v.P, rpm: v.N, lossVal: v.etaM / 100 }, { stroke: (v.Vs / 0.2) * 1000 }),
@@ -146,6 +150,8 @@ export const AEE509: Question[] = [
       { label: 'Fuel rate', tex: '\\dot m_f = \\dot m_a\\,(F/A)', sub: `${tnum(v.ma)} \\times ${n(1 / r.af)}`, result: `= ${n(r.mf)}\\ \\text{kg/min}` },
       { label: 'Brake power', tex: 'BP = \\eta\\,\\dot m_f\\,HV', sub: `${tnum(v.eta / 100)} \\times \\tfrac{${n(r.mf)}}{60} \\times ${tnum(v.HV * 1000)}`, result: `= ${n(r.bp)}\\ \\text{kW}`, cite: SRC.misc509('p5, Ex 3') },
     ],
+    // fuel rate follows from the student's A/F, brake power from their fuel rate
+    follow: (v, g) => ({ ...('af' in g ? { mf: v.ma / g.af } : {}), ...('mf' in g ? { bp: powerFromAir(v.eta / 100, v.HV * 1e6, v.ma / 60, g.mf / v.ma) / 1000 } : {}) }),
     cite: SRC.misc509('p5, Example 3'),
   }),
   parametric({
@@ -188,6 +194,8 @@ export const AEE509: Question[] = [
         { label: 'Brake power and bmep', tex: 'BP = \\eta_{bth}\\,\\dot m_f\\,HV,\\quad bmep = \\dfrac{60\\,BP}{L A z (N/2)}', result: `BP = ${n(r.bp)}\\ \\text{kW},\\ bmep = ${n(r.bmep)}\\ \\text{kPa}` },
       ]
     },
+    // bmep follows from the student's brake power
+    follow: (v, g) => ('bp' in g ? { bmep: bmep(g.bp * 1e3, v.L / 1000, (Math.PI / 4) * (v.D / 1000) ** 2, v.N, v.z, 4) / 1000 } : {}),
     cite: SRC.misc509('Example 4'),
     params: (v) => perf('ex4', { cylinders: v.z, bore: v.D, stroke: v.L, rpm: v.N, airVal: v.etaV, pAmb: v.p, TAmb: v.T, af: v.af, outVal: v.eta / 100, hv: v.hv }),
   }),
@@ -226,6 +234,8 @@ export const AEE509: Question[] = [
         { label: 'Indicated thermal efficiency', tex: '\\eta_{ith} = \\dfrac{IP}{\\dot m_f\\,HV}', sub: `\\dfrac{${n(r.ip)}}{(${n(mfh)}/3600)\\times ${tnum(v.hv * 1000)}}`, result: `= ${n(r.eta, 3)}\\,\\%` },
       ]
     },
+    // indicated thermal efficiency follows from the student's indicated power
+    follow: (v, g) => ('ip' in g ? { eta: indicatedThermalEfficiency(g.ip * 1e3, (v.V * 1e-3 * v.rho) / 3600, v.hv * 1e6) * 100 } : {}),
     cite: SRC.misc509('p6, Example 5'),
   }),
   parametric({
@@ -261,6 +271,13 @@ export const AEE509: Question[] = [
       { label: 'Bore = stroke', tex: `\\tfrac{\\pi}{4}D^3 = V_s/${tnum(v.z)}`, result: `D = ${n(r.D)}\\ \\text{mm}` },
       { label: `Power at ${num(v.b2)} kPa`, tex: 'BP = \\dfrac{bmep\\,V_s\\,N}{120}', sub: `\\dfrac{${tnum(v.b2)}\\times10^3 \\times ${n(r.Vs / 1000)} \\times ${tnum(v.N)}}{120}`, result: `= ${n(r.bp)}\\ \\text{kW}` },
     ],
+    // bore and brake power follow from the student's swept volume
+    follow: (v, g) => {
+      if (!('Vs' in g)) return {}
+      const D = squareBore((g.Vs / 1e3) / v.z)
+      const r = enginePerformance({ ...base, cylinders: v.z, bore: D, stroke: D, rpm: v.N, clearance: { kind: 'cr', value: 9 }, output: { kind: 'bmep', value: v.b2 * 1e3 } })
+      return { D: D * 1000, bp: r.bp! / 1000 }
+    },
     cite: SRC.misc509('Example 6'),
     params: (v) => {
       const D = Math.round(squareDesign(v).D * 1e5) / 100
@@ -307,6 +324,8 @@ export const AEE509: Question[] = [
         { label: 'Brake thermal efficiency', tex: '\\eta_{bth} = \\dfrac{BP}{\\dot m_f HV}', sub: `\\dfrac{${n(r.bp)}}{(${tnum(v.mf)}/3600)\\times ${tnum(v.hv * 1000)}}`, result: `= ${n(r.eta)}\\,\\%` },
       ]
     },
+    // bmep and brake thermal efficiency follow from the student's brake power
+    follow: (v, g) => ('bp' in g ? { bmep: bmep(g.bp * 1e3, v.L / 1000, (Math.PI / 4) * (v.D / 1000) ** 2, v.N, v.z, 4) / 1e5, eta: thermalEfficiency(g.bp * 1e3, v.mf / 3600, v.hv * 1e6) * 100 } : {}),
     cite: SRC.misc509('Example 7'),
     params: (v) => perf('ex7', { cylinders: v.z, bore: v.D, stroke: v.L, clrVal: v.Vc, fuelVal: v.mf, hv: v.hv, outVal: v.T, rpm: v.N }),
   }),
@@ -345,6 +364,8 @@ export const AEE509: Question[] = [
       { label: 'bmep', tex: 'bmep = \\dfrac{60\\,BP}{L A z (N/2)}', sub: `\\dfrac{60\\times${tnum(v.bp)}}{${tnum(v.L)}\\times${tnum(v.A)}\\times${tnum(v.z)}\\times${tnum(v.N / 2)}}`, result: `= ${n(r.bmep)}\\ \\text{kPa}` },
       { label: 'imep and friction power', tex: 'imep = \\dfrac{bmep}{\\eta_m},\\quad FP = \\dfrac{BP}{\\eta_m} - BP', result: `imep = ${n(r.imep)}\\ \\text{kPa},\\ FP = ${n(r.fp)}\\ \\text{kW}` },
     ],
+    // imep follows from the student's bmep
+    follow: (v, g) => ('bmep' in g ? { imep: imepFromBmep(g.bmep * 1000, v.etaM / 100) / 1000 } : {}),
     cite: SRC.exam509('2022/23 Q2'),
     params: (v) => perf('genset', { cylinders: v.z, area: v.A, stroke: v.L * 1000, clrVal: v.tcv * 1000, outVal: v.bp, rpm: v.N, lossVal: v.etaM / 100 }, { bore: Math.round(Math.sqrt((4 * v.A) / Math.PI) * 1e4) / 10 }),
   }),
@@ -411,6 +432,12 @@ export const AEE509: Question[] = [
       { label: 'Compression ratio', tex: 'CR = TCV/CV', result: `= ${n(r.cr)}` },
       { label: 'Otto efficiency', tex: '\\eta = 1 - \\dfrac{1}{r^{k-1}}', sub: `1 - \\dfrac{1}{${n(r.cr)}^{0.4}}`, result: `= ${n(r.eta, 3)}\\,\\%`, cite: SRC.thermo509('Otto cycle') },
     ],
+    // TCV follows from the student's PD, CR from their TCV and PD, the efficiency from their CR
+    follow: (v, g) => ({
+      ...('pd' in g ? { tcv: g.pd * (1 + 1 / v.x) } : {}),
+      ...('pd' in g && 'tcv' in g ? { cr: g.tcv / (g.pd / v.x) } : {}),
+      ...('cr' in g ? { eta: airStandardCycle({ kind: 'otto', r: g.cr, P1: 100, T1: 300, alpha: 2, delta: 1 }).etaFormula * 100 } : {}),
+    }),
     cite: SRC.exam509('2021/22 Q3b'),
     params: (v) => perf('six-si', { cylinders: v.z, bore: v.D, stroke: v.L, clrVal: v.x }),
   }),
@@ -449,6 +476,12 @@ export const AEE509: Question[] = [
       { label: 'Efficiency', tex: '\\eta = 1 - r^{1-k}', result: `= ${n(r.eta, 3)}\\,\\%` },
       { label: 'Mean effective pressure', tex: 'mep = \\dfrac{\\eta\\,c_v (T_3 - T_2)}{v_1 - v_2}', result: `= ${n(r.mep)}\\ \\text{kPa}`, ...(original ? { errata: 'The worked example uses cv = 0.778 and prints 1135.7 kPa; with 0.718 the mep is ≈ 1048 kPa.' } : {}) },
     ],
+    // mep follows from the student's T₂ and efficiency
+    follow: (v, g) => {
+      if (!('T2' in g && 'eta' in g)) return {}
+      const c = ottoEx9(v)
+      return { mep: ((g.eta / 100) * AIR.cv * (c.s3.T - g.T2)) / (c.s1.v - c.s2.v) }
+    },
     cite: SRC.misc509('p9, Example 9'),
     errata: 'otto-cv',
     params: (v) => {
