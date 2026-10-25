@@ -42,6 +42,9 @@ export function seriesInk(color: string, light: boolean): string {
   const m = /^#([0-9a-f]{6})$/i.exec(color)
   if (!light || !m) return color
   const n = parseInt(m[1], 16)
+  const rgb = [16, 8, 0].map((shift) => (n >> shift) & 255)
+  // a near-white line (the "current" curve) becomes ink rather than grey
+  if (Math.max(...rgb) - Math.min(...rgb) < 31 && Math.min(...rgb) > 190) return '#0e120c'
   const ch = (shift: number) => Math.round(((n >> shift) & 255) * 0.6)
   return `rgb(${ch(16)}, ${ch(8)}, ${ch(0)})`
 }
