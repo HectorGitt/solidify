@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { schedule } from './review'
 
 /** Per-scene study record. Keyed by scene id (unique across the catalogue). */
 export interface SceneProgress {
@@ -10,6 +11,12 @@ export interface QuestionProgress {
   attempts: number
   correct: number
   last?: number
+  /** spaced-repetition box 0–4 (see review.ts) */
+  box?: number
+  /** when the next review is due */
+  due?: number
+  /** score of the last attempt, 0–1 (method marks count ½ per box) */
+  score?: number
 }
 
 export interface ChallengeProgress {
@@ -53,7 +60,8 @@ function save(d: ProgressData) {
 interface ProgressState extends ProgressData {
   markOpened: (sceneId: string) => void
   markTour: (sceneId: string) => void
-  recordAnswer: (questionId: string, correct: boolean) => void
+  /** `score` is 0–1 (defaults to 1 when correct, 0 otherwise) */
+  recordAnswer: (questionId: string, correct: boolean, score?: number) => void
   recordChallenge: (id: string, score?: number, better?: 'lower' | 'higher') => void
   /** replace everything, e.g. with the merged copy from cloud sync */
   replaceAll: (d: ProgressData) => void
@@ -77,10 +85,12 @@ export const useProgress = create<ProgressState>((set, get) => {
       const now = Date.now()
       commit({ questions, challenges, scenes: { ...scenes, [id]: { opened: scenes[id]?.opened ?? now, tour: now } } })
     },
-    recordAnswer: (id, correct) => {
+    recordAnswer: (id, correct, score) => {
       const { scenes, questions, challenges } = get()
       const q = questions[id] ?? { attempts: 0, correct: 0 }
-      commit({ scenes, challenges, questions: { ...questions, [id]: { attempts: q.attempts + 1, correct: q.correct + (correct ? 1 : 0), last: Date.now() } } })
+      const now = Date.now()
+      const s = correct ? 1 : Math.min(0.99, Math.max(0, score ?? 0))
+      commit({ scenes, challenges, questions: { ...questions, [id]: { attempts: q.attempts + 1, correct: q.correct + (correct ? 1 : 0), last: now, score: s, ...schedule(q, s, now) } } })
     },
     recordChallenge: (id, score, better = 'higher') => {
       const { scenes, questions, challenges } = get()
