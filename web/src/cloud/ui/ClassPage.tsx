@@ -165,7 +165,7 @@ function AssignForm({ classId, onAdded }: { classId: string; onAdded: () => void
   }
 
   return (
-    <form onSubmit={(e) => void submit(e)} className="rounded-2xl border border-line bg-panel-2/50 p-4">
+    <form onSubmit={(e) => void submit(e)} className="rounded-3xl border border-line bg-panel-2/50 p-4">
       <h3 className="mb-2 text-[13.5px] font-semibold">Set work</h3>
       <div role="radiogroup" aria-label="Kind" className="mb-2 flex gap-1">
         {(['scene', 'question', 'challenge'] as const).map((k) => (

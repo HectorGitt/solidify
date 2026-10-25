@@ -8,7 +8,7 @@ import { Notice, inputCls, primaryBtn } from './Modal'
 
 export function SignInFirst({ what }: { what: string }) {
   return (
-    <div className="rounded-2xl border border-line bg-panel-2/50 px-5 py-8 text-center">
+    <div className="rounded-3xl border border-line bg-panel-2/50 px-5 py-8 text-center">
       <p className="mb-3 text-[13.5px] text-mute">Sign in to {what}.</p>
       <button className={primaryBtn} onClick={() => useAuth.getState().openDialog()}>
         Sign in
@@ -37,7 +37,7 @@ function JoinForm() {
     }
   }
   return (
-    <form onSubmit={(e) => void submit(e)} className="rounded-2xl border border-line bg-panel-2/50 p-4">
+    <form onSubmit={(e) => void submit(e)} className="rounded-3xl border border-line bg-panel-2/50 p-4">
       <h2 className="mb-1 text-[14px] font-semibold">Join a class</h2>
       <p className="mb-3 text-[12.5px] text-mute">Enter the 6-character code your teacher gave you.</p>
       <div className="flex gap-2">
@@ -78,7 +78,7 @@ function CreateForm() {
     }
   }
   return (
-    <form onSubmit={(e) => void submit(e)} className="rounded-2xl border border-line bg-panel-2/50 p-4">
+    <form onSubmit={(e) => void submit(e)} className="rounded-3xl border border-line bg-panel-2/50 p-4">
       <h2 className="mb-1 text-[14px] font-semibold">Create a class</h2>
       <p className="mb-3 text-[12.5px] text-mute">You’ll get a join code to share with your students.</p>
       <div className="flex gap-2">
@@ -95,7 +95,7 @@ function CreateForm() {
 function ClassList({ classes }: { classes: ClassRef[] }) {
   if (!classes.length) return <p className="text-[13px] text-mute">You’re not in any classes yet.</p>
   return (
-    <ul className="divide-y divide-line overflow-hidden rounded-2xl border border-line">
+    <ul className="divide-y divide-line overflow-hidden rounded-3xl border border-line">
       {classes.map((c) => (
         <li key={c.id}>
           <Link to={`/classes/${c.id}`} className="flex items-center justify-between gap-3 bg-panel-2/40 px-4 py-3 hover:bg-panel-3">

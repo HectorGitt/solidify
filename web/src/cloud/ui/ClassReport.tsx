@@ -61,7 +61,7 @@ export function ClassReport({ classId, papers }: { classId: string; papers: Pape
 
   return (
     <div className="grid gap-4 lg:grid-cols-2">
-      <div className="rounded-2xl border border-line bg-panel-2/50 p-4">
+      <div className="rounded-3xl border border-line bg-panel-2/50 p-4">
         <h3 className="mb-1 text-[13.5px] font-semibold">Weakest topics</h3>
         <p className="mb-3 text-[11.5px] text-dim">Average mastery among students who have started each topic.</p>
         {!progress ? (
@@ -90,7 +90,7 @@ export function ClassReport({ classId, papers }: { classId: string; papers: Pape
           </ul>
         )}
       </div>
-      <div className="rounded-2xl border border-line bg-panel-2/50 p-4">
+      <div className="rounded-3xl border border-line bg-panel-2/50 p-4">
         <h3 className="mb-1 text-[13.5px] font-semibold">Most common mistakes</h3>
         <p className="mb-3 text-[11.5px] text-dim">From the marker’s notes on this class’s papers.</p>
         {!slips ? (

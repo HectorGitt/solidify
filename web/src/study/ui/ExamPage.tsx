@@ -160,7 +160,7 @@ function Practice({ list, start, fresh = false }: { list: Question[]; start?: st
   }
   const stat = qp[q.id]
   return (
-    <div className="rounded-2xl border border-line bg-panel p-5">
+    <div className="rounded-3xl border border-line bg-panel p-5">
       <QuestionHead q={q} index={i} total={list.length} />
       <div className="mt-4">
         <AnswerInputs q={q} inputs={inputs} setInputs={setInputs} results={results} />
@@ -261,7 +261,7 @@ function Mock({ pool }: { pool: Question[] }) {
 
   if (!paper) {
     return (
-      <div className="rounded-2xl border border-line bg-panel p-5">
+      <div className="rounded-3xl border border-line bg-panel p-5">
         <h2 className="text-[16px] font-semibold">Timed mock exam</h2>
         <p className="mt-1 text-[13px] text-mute">Random questions from the current filter ({pool.length} available). No working is shown until you submit.</p>
         <div className="mt-4 space-y-3 text-[12.5px]">
@@ -321,7 +321,7 @@ function Mock({ pool }: { pool: Question[] }) {
           </button>
         </div>
         {paper.map((q, k) => (
-          <details key={q.id} className="rounded-2xl border border-line bg-panel p-4">
+          <details key={q.id} className="rounded-3xl border border-line bg-panel p-4">
             <summary className="cursor-pointer text-[13.5px]">
               <span className={scores[k].every((x) => x.ok) ? 'text-accent' : 'text-danger'}>{scores[k].every((x) => x.ok) ? '✓' : '✗'}</span> Q{k + 1}. {q.title}
             </summary>
@@ -340,7 +340,7 @@ function Mock({ pool }: { pool: Question[] }) {
 
   const q = paper[i]
   return (
-    <div className="rounded-2xl border border-line bg-panel p-5">
+    <div className="rounded-3xl border border-line bg-panel p-5">
       <div className="mb-3 flex items-center gap-3">
         <span className={`font-mono text-[15px] font-semibold ${left < 60 ? 'text-danger' : 'text-ink'}`}>{fmtTime(left)}</span>
         <div className="flex-1">
@@ -424,7 +424,7 @@ export function ExamPage() {
       }
     >
       {mode !== 'review' ? (
-      <div className="mb-4 space-y-2 rounded-2xl border border-line bg-panel-2/50 p-3">
+      <div className="mb-4 space-y-2 rounded-3xl border border-line bg-panel-2/50 p-3">
         <Pills
           label="Subject"
           value={course}
@@ -452,7 +452,7 @@ export function ExamPage() {
             <Practice list={reviewList} fresh />
           </>
         ) : (
-          <div className="rounded-2xl border border-line bg-panel p-5 text-[13px] text-mute">
+          <div className="rounded-3xl border border-line bg-panel p-5 text-[13px] text-mute">
             Nothing is due for review. Questions you answer come back here on a schedule: tomorrow if you missed them, then after 3, 7 and 21 days as you keep getting them right.
           </div>
         )

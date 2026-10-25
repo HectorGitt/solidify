@@ -16,7 +16,7 @@ export function Modal({ open, onClose, title, children, width = 420 }: { open: b
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className="w-full overflow-hidden rounded-xl border border-line-2 bg-panel shadow-2xl"
+        className="w-full overflow-hidden rounded-3xl border border-line-2 bg-panel shadow-2xl"
         style={{ maxWidth: width }}
         onMouseDown={(e) => e.stopPropagation()}
       >
@@ -42,15 +42,15 @@ export function Field({ label, children }: { label: string; children: ReactNode 
 }
 
 export const inputCls =
-  'w-full rounded-md border border-line-2 bg-panel-2 px-3 py-2 text-[13.5px] text-ink outline-none placeholder:text-dim focus:border-accent/60 focus:ring-2 focus:ring-accent/15'
+  'w-full rounded-xl border border-line-2 bg-panel-2 px-3.5 py-2.5 text-[13.5px] text-ink outline-none placeholder:text-dim focus:border-accent/60 focus:ring-2 focus:ring-accent/15'
 
 export const primaryBtn =
-  'inline-flex items-center justify-center gap-2 rounded-md bg-accent px-3.5 py-2 text-[13px] font-semibold text-accent-ink transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50'
+  'inline-flex items-center justify-center gap-2 rounded-full bg-accent px-5 py-2.5 text-[13.5px] font-semibold text-accent-ink transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50'
 
 export const ghostBtn =
-  'inline-flex items-center justify-center gap-2 rounded-md border border-line-2 bg-panel-2 px-3.5 py-2 text-[13px] font-medium text-ink/90 transition-colors hover:border-accent/40 hover:text-accent disabled:cursor-not-allowed disabled:opacity-50'
+  'inline-flex items-center justify-center gap-2 rounded-full border border-line-2 bg-panel-2 px-5 py-2.5 text-[13.5px] font-medium text-ink/90 transition-colors hover:border-ink/40 hover:text-ink disabled:cursor-not-allowed disabled:opacity-50'
 
 export function Notice({ tone = 'mute', children }: { tone?: 'mute' | 'warn' | 'ok'; children: ReactNode }) {
   const cls = { mute: 'border-line-2 text-mute', warn: 'border-warn/40 bg-warn/10 text-warn', ok: 'border-accent/40 bg-accent/10 text-accent' }[tone]
-  return <p className={`rounded-md border px-3 py-2 text-[12.5px] leading-snug ${cls}`}>{children}</p>
+  return <p className={`rounded-xl border px-3.5 py-2.5 text-[12.5px] leading-snug ${cls}`}>{children}</p>
 }

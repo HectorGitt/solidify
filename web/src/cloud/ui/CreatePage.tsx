@@ -75,7 +75,7 @@ function WaitlistForm() {
     )
 
   return (
-    <form onSubmit={(e) => void submit(e)} className="rounded-2xl border border-line bg-panel p-5">
+    <form onSubmit={(e) => void submit(e)} className="rounded-3xl border border-line bg-panel p-5">
       <h2 className="mb-1 text-[16px] font-semibold">Join the waiting list</h2>
       <p className="mb-4 text-[12.5px] text-mute">Be first in when it opens. We’ll only email you about Create in 3D.</p>
       <div className="grid gap-x-3 sm:grid-cols-2">
@@ -132,7 +132,7 @@ export default function CreatePage() {
       <div className="grid gap-5 lg:grid-cols-[1fr_400px]">
         <section className="grid content-start gap-3 sm:grid-cols-2">
           {FEATURES.map((f) => (
-            <div key={f.title} className="rounded-2xl border border-line bg-panel-2/50 p-4">
+            <div key={f.title} className="rounded-3xl border border-line bg-panel-2/50 p-4">
               <h3 className="mb-1 text-[14px] font-semibold text-ink">{f.title}</h3>
               <p className="text-[12.5px] leading-relaxed text-mute">{f.body}</p>
             </div>

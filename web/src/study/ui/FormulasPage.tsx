@@ -68,7 +68,7 @@ export function FormulasPage() {
 
   return (
     <StudyShell title="Formula sheet" lead={`${FORMULAS.length} equations used across the scenes, grouped by course and topic. Each links to the scene where it runs live.`}>
-      <div className="mb-5 space-y-2 rounded-2xl border border-line bg-panel-2/50 p-3">
+      <div className="mb-5 space-y-2 rounded-3xl border border-line bg-panel-2/50 p-3">
         <input
           type="search"
           value={q}

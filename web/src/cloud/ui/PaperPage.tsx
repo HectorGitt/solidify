@@ -50,7 +50,7 @@ function markQuestion(q: Question, given: Record<string, string>) {
 function QuestionBlock({ q, index, answers, onChange, marks, showWorking }: { q: Question; index: number; answers: Record<string, string>; onChange?: (key: string, v: string) => void; marks?: FieldMark[]; showWorking?: boolean }) {
   const [open, setOpen] = useState(false)
   return (
-    <article className="rounded-2xl border border-line bg-panel p-5">
+    <article className="rounded-3xl border border-line bg-panel p-5">
       <div className="mb-1 text-[11.5px] font-mono text-dim">Q{index + 1}</div>
       <h2 className="text-[15.5px] font-semibold text-ink">{q.title}</h2>
       <p className="mt-1.5 text-[13.5px] leading-relaxed text-ink/85">{q.statement}</p>
@@ -237,7 +237,7 @@ export default function PaperPage() {
           </div>
         </>
       ) : !running ? (
-        <div className="rounded-2xl border border-line bg-panel p-5">
+        <div className="rounded-3xl border border-line bg-panel p-5">
           <h2 className="text-[16px] font-semibold">
             {questions.length} question{questions.length === 1 ? '' : 's'} · {paper.minutes} minutes
           </h2>
@@ -250,7 +250,7 @@ export default function PaperPage() {
         </div>
       ) : (
         <>
-          <div className="sticky top-14 z-30 mb-4 flex items-center gap-3 rounded-2xl border border-line bg-panel/95 px-4 py-2.5 backdrop-blur">
+          <div className="sticky top-14 z-30 mb-4 flex items-center gap-3 rounded-3xl border border-line bg-panel/95 px-4 py-2.5 backdrop-blur">
             <span className={`font-mono text-[18px] font-semibold ${endsAt! - now < 60_000 ? 'text-danger' : 'text-ink'}`}>{clock(endsAt! - now)}</span>
             <span className="text-[12px] text-mute">
               {questions.filter((q) => Object.values(answers[q.id] ?? {}).some((v) => v.trim())).length}/{questions.length} answered · saved as you type

@@ -50,7 +50,7 @@ function Learning() {
   return (
     <>
       <section className="mb-6 grid gap-3 sm:grid-cols-2">
-        <div className="rounded-2xl border border-line bg-panel p-4">
+        <div className="rounded-3xl border border-line bg-panel p-4">
           <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-mute">Review</div>
           <p className="mt-1 text-[14px] text-ink">{due ? `${due} question${due === 1 ? '' : 's'} due now` : 'Nothing due right now'}</p>
           <p className="mt-0.5 text-[12px] text-dim">Missed questions come back tomorrow with new numbers, then after 3, 7 and 21 days as you get them right.</p>
@@ -60,7 +60,7 @@ function Learning() {
             </Link>
           ) : null}
         </div>
-        <div className="rounded-2xl border border-line bg-panel p-4">
+        <div className="rounded-3xl border border-line bg-panel p-4">
           <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-mute">Practise next</div>
           {next ? (
             <>
@@ -83,7 +83,7 @@ function Learning() {
           const topics = topicMastery(qp, qs, now)
           const overall = topics.length ? topics.reduce((s, t) => s + t.mastery * t.ids.length, 0) / qs.length : 0
           return (
-            <div key={c.id} className="rounded-2xl border border-line bg-panel-2/60 p-4">
+            <div key={c.id} className="rounded-3xl border border-line bg-panel-2/60 p-4">
               <div className="mb-3 flex items-baseline justify-between">
                 <span className="text-[14px] font-semibold">
                   <CourseLabel course={c.id} />
@@ -123,7 +123,7 @@ export function ProgressPage() {
         </button>
       }
     >
-      <section className="mb-6 flex flex-wrap gap-4 rounded-2xl border border-line bg-panel p-4">
+      <section className="mb-6 flex flex-wrap gap-4 rounded-3xl border border-line bg-panel p-4">
         <Stat label="Scenes opened" value={all.opened} total={all.scenes} />
         <Stat label="Tours finished" value={all.toured} total={all.scenes} tone="info" />
         <Stat label="Questions solved" value={all.solved} total={all.questions} tone="warn" />
@@ -139,7 +139,7 @@ export function ProgressPage() {
           const sc = liveScenes(mods)
           const s = summarise(p, sc.map((x) => x.s.id), qs.map((q) => q.id))
           return (
-            <div key={c.id} className="rounded-2xl border border-line bg-panel-2/60 p-4">
+            <div key={c.id} className="rounded-3xl border border-line bg-panel-2/60 p-4">
               <div className="mb-3 text-[14px] font-semibold">
                 <CourseLabel course={c.id} />
               </div>
@@ -161,7 +161,7 @@ export function ProgressPage() {
           const qs = QUESTIONS.filter((q) => q.moduleId === m.id)
           const s = summarise(p, scenes.map((x) => x.id), qs.map((q) => q.id))
           return (
-            <details key={m.id} className="rounded-2xl border border-line bg-panel p-4">
+            <details key={m.id} className="rounded-3xl border border-line bg-panel p-4">
               <summary className="flex cursor-pointer flex-wrap items-center gap-4">
                 <span className="w-48 text-[14px] font-semibold">{m.title}</span>
                 <Stat label="Opened" value={s.opened} total={s.scenes} />

@@ -25,7 +25,7 @@ export function StudyLinks({ compact = false, always = false, className = '' }: 
           key={l.to}
           to={l.to}
           className={({ isActive }) =>
-            `rounded-md px-2 py-1 text-[12.5px] font-medium transition-colors ${isActive ? 'bg-accent/15 text-accent' : 'text-mute hover:bg-panel-3 hover:text-ink'}`
+            `rounded-full px-3 py-1.5 text-[12.5px] font-medium transition-colors ${isActive ? 'bg-ink text-bg' : 'text-mute hover:bg-ink/[0.06] hover:text-ink'}`
           }
         >
           {compact ? l.short : l.label}
@@ -47,25 +47,25 @@ export function StudyShell({ title, lead, children, right }: { title: string; le
   }, [title])
   return (
     <div className="h-full overflow-y-auto bg-bg text-ink">
-      <header className="sticky top-0 z-40 border-b border-line bg-bg/85 backdrop-blur-xl">
-        <div className="mx-auto flex h-14 max-w-5xl items-center gap-3 px-4">
-          <Link to="/" aria-label="Solidify home">
+      <header className="sticky top-0 z-40 bg-bg/80 backdrop-blur-xl">
+        <div className="mx-auto flex h-16 max-w-6xl items-center gap-3 px-4 sm:px-6">
+          <Link to="/" aria-label="Solidify home" className="rounded-full border border-line-2 bg-panel/70 py-1.5 pl-2.5 pr-3.5">
             <Logo />
           </Link>
-          <StudyLinks always className="ml-2 hidden sm:flex" />
+          <StudyLinks always className="ml-1 hidden rounded-full border border-line-2 bg-panel/70 p-1 sm:flex" />
           <div className="ml-auto flex items-center gap-2">
             <AudienceSwitch compact />
             <ThemeToggle />
             <AccountMenu compact />
           </div>
         </div>
-        <StudyLinks always compact className="justify-center border-t border-line py-1 sm:hidden" />
+        <StudyLinks always compact className="justify-center border-y border-line py-1.5 sm:hidden" />
       </header>
-      <main className="mx-auto max-w-5xl px-4 py-6">
-        <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
+      <main className="mx-auto max-w-6xl px-4 pb-16 pt-8 sm:px-6">
+        <div className="mb-7 flex flex-wrap items-end justify-between gap-4">
           <div>
-            <h1 className="text-[24px] font-semibold tracking-tight">{title}</h1>
-            {lead ? <p className="mt-1 max-w-2xl text-[13.5px] leading-relaxed text-mute">{lead}</p> : null}
+            <h1 className="text-[30px] font-semibold tracking-[-0.03em] sm:text-[38px]">{title}</h1>
+            {lead ? <p className="mt-2 max-w-2xl text-[14.5px] leading-relaxed text-mute">{lead}</p> : null}
           </div>
           {right}
         </div>
@@ -86,7 +86,7 @@ export function Pills<T extends string>({ value, options, onChange, label }: { v
           aria-checked={value === o.value}
           onClick={() => onChange(o.value)}
           className={`rounded-full border px-2.5 py-1 text-[12px] font-medium transition-colors ${
-            value === o.value ? 'border-accent/60 bg-accent/15 text-accent' : 'border-line-2 text-mute hover:border-accent/40 hover:text-ink'
+            value === o.value ? 'border-ink bg-ink text-bg' : 'border-line-2 text-mute hover:border-ink/40 hover:text-ink'
           }`}
         >
           {o.label}

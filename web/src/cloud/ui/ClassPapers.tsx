@@ -89,7 +89,7 @@ function PaperForm({ classId, onAdded }: { classId: string; onAdded: () => void 
   }
 
   return (
-    <form onSubmit={(e) => void submit(e)} className="rounded-2xl border border-line bg-panel-2/50 p-4">
+    <form onSubmit={(e) => void submit(e)} className="rounded-3xl border border-line bg-panel-2/50 p-4">
       <h3 className="mb-1 text-[13.5px] font-semibold">Set a paper</h3>
       <p className="mb-2 text-[11.5px] text-dim">A timed test. Every student gets the same questions with their own numbers, marked automatically.</p>
       <input className={inputCls} value={title} onChange={(e) => setTitle(e.target.value)} maxLength={160} placeholder="Title, e.g. Week 6 test: hydraulics" aria-label="Paper title" />
