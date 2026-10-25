@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 
 /**
- * Light or dark, or follow the device. The resolved theme is written to <html data-theme> so the
+ * Light (the default), dark, or follow the device. The resolved theme is written to <html data-theme> so the
  * colour tokens in index.css switch; index.html applies the saved choice before first paint so
  * pages don't flash the wrong theme.
  */
@@ -18,7 +18,7 @@ function load(): ThemeChoice {
   } catch {
     /* storage unavailable (private mode, previews) */
   }
-  return 'system'
+  return 'light'
 }
 
 const resolve = (c: ThemeChoice): Theme => (c === 'system' ? (media?.matches ? 'light' : 'dark') : c)

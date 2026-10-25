@@ -281,7 +281,7 @@ export function Viewer() {
           <div className="hidden md:block">
             <AudienceSwitch compact />
           </div>
-          <ThemeToggle className="!h-8 !w-8" />
+          <ThemeToggle />
           {scene?.tour?.length ? (
             <button
               onClick={() => (tourActive ? stopTour() : startTour())}
