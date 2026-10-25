@@ -5,7 +5,7 @@ import { beltCapacity, beltMassPerMetre, beltSpeed, beltsRequired, crossedBeltWr
 import { bandTensions, heatGenerated, shoeLeverForce, shoeNormalForce } from '@/physics/brakes'
 import { designPower, speedRatio, strandRating, strandsNeeded } from '@/physics/chains'
 import { bevelForces, bevelMeanRadius, helicalForces, idlerTrain, pinionConeAngle, spurForces, torqueFromPower } from '@/physics/gearforces'
-import { activeCoils, barWeld, bracketWeld, shearStressFactor, wireDiameter } from '@/physics/springs'
+import { activeCoils, barWeld, bracketWeld, shearStressFactor, WELD_ALLOWABLE, wireDiameter } from '@/physics/springs'
 import { n } from '@/ui/Working'
 import type { Question } from '../types'
 import { num, parametric, tnum } from '../variants'
@@ -148,6 +148,8 @@ export const AEE503: Question[] = [
       { label: 'Speed', tex: 'v = \\dfrac{\\pi d N}{60}', sub: `\\dfrac{\\pi\\times${tnum(v.d / 1000)}\\times${tnum(v.N)}}{60}`, result: `= ${n(r.v)}\\ \\text{m/s}` },
       { label: 'Width', tex: '\\dfrac{T_1 - T_c}{T_2 - T_c} = e^{f\\alpha},\\quad P = (T_1 - T_2)v,\\quad b = \\dfrac{T_1}{s_1 t}', result: `b = ${n(r.b)}\\ \\text{mm}`, ...(original ? { errata: 'The guide rounds e^(fα) to 3.10 (exact 3.08); the width is still ≈ 92 mm.' } : {}) },
     ],
+    // belt width follows from the student's wrap angle and belt speed
+    follow: (v, g) => ('wrap' in g && 'v' in g ? { b: flatBeltWidth(v.P * 1000, g.v, v.s * 1e6, v.rho, tensionFactor(v.f, rad(g.wrap)), v.t / 1000).b * 1000 } : {}),
     cite: SRC.m503(4, 'MG15 Q2c, MG19 Q2c'),
     params: () => ({ preset: 'crossed' }),
   }),
@@ -203,6 +205,8 @@ export const AEE503: Question[] = [
         { label: 'Power', tex: `P = (T_1 - T_2)v,\\quad \\dfrac{T_1 - T_c}{T_2 - T_c} = ${n(g.k, 3)}`, result: `= ${n(r.P)}\\ \\text{kW}` },
       ]
     },
+    // power follows from the student's belt speed
+    follow: (v, g) => ('v' in g ? { P: beltCapacity(v.s * 1e6 * (v.t / 1000) * (v.b / 1000), beltMassPerMetre(v.b / 1000, v.t / 1000, v.rho), g.v, governingFactor([{ f: v.f1, alpha: rad(v.a1) }, { f: v.f2, alpha: rad(v.a2) }]).k).P / 1000 } : {}),
     cite: SRC.m503(4, 'MG16 Q2b'),
     params: () => ({ preset: 'compressor' }),
   }),
@@ -245,6 +249,8 @@ export const AEE503: Question[] = [
         { label: 'Belts', tex: `n = \\left\\lceil \\dfrac{${tnum(v.P)}}{P} \\right\\rceil`, result: `= ${n(r.nb)}` },
       ]
     },
+    // power per belt follows from the student's T₂, the belt count from their power per belt
+    follow: (v, g) => ({ ...('T2' in g ? { P: ((v.T - g.T2) * beltSpeed(v.d / 1000, v.N)) / 1000 } : {}), ...('P' in g ? { nb: beltsRequired(v.P * 1000, g.P * 1000).n } : {}) }),
     cite: MG1920,
     errata: 'v-belts',
     params: () => ({ preset: 'vbelts' }),
@@ -307,6 +313,8 @@ export const AEE503: Question[] = [
       { label: 'Ratio', tex: 'i = \\dfrac{N_1}{N_2}', sub: `\\dfrac{${tnum(v.N1)}}{${tnum(v.N2)}}`, result: `= ${n(r.i, 3)}` },
       { label: 'Strands', tex: `${tnum(v.Ps)} < ${n(r.P)} \\Rightarrow \\text{duplex: } ${tnum(v.k)}\\times${tnum(v.Ps)}`, result: `= ${n(r.dup)}\\ \\text{kW} \\ge ${n(r.P)}` },
     ],
+    // the strand count follows from the student's design power
+    follow: (v, g) => ('P' in g ? { s: strandsNeeded(g.P, v.Ps) ?? NaN } : {}),
     cite: SRC.m503(3, 'MG17, MG21'),
     params: () => ({ preset: 'mg17' }),
   }),
@@ -369,6 +377,8 @@ export const AEE503: Question[] = [
       { label: 'Tangential', tex: 'F_t = \\dfrac{M_t}{r}', sub: `\\dfrac{${tnum(v.Mt)}}{${tnum(v.d / 2000)}}`, result: `= ${n(r.Ft)}\\ \\text{N}`, cite: SRC.m503(5, 'Example 1') },
       { label: 'Radial', tex: 'F_r = F_t\\tan\\phi', sub: `${n(r.Ft)}\\tan${tnum(v.phi)}^\\circ`, result: `= ${n(r.Fr)}\\ \\text{N}` },
     ],
+    // radial force follows from the student's tangential force
+    follow: (v, g) => ('Ft' in g ? { Fr: g.Ft * Math.tan(rad(v.phi)) } : {}),
     cite: SRC.m503(5, 'Example 1'),
     params: () => ({ preset: 'spur' }),
   }),
@@ -399,6 +409,8 @@ export const AEE503: Question[] = [
       { label: 'Tangential', tex: 'F_t = M_t/r', sub: `${tnum(v.Mt)}/${tnum(v.d / 2000)}`, result: `= ${n(r.Ft)}\\ \\text{N}`, cite: SRC.m503(5, 'helical forces') },
       { label: 'Radial and axial', tex: 'F_r = F_t\\tan\\phi,\\quad F_a = F_t\\tan\\alpha', sub: `${n(r.Ft)}\\tan${tnum(v.phi)}^\\circ,\\ ${n(r.Ft)}\\tan${tnum(v.helix)}^\\circ`, result: `= ${n(r.Fr)},\\ ${n(r.Fa)}\\ \\text{N}`, ...(original ? { errata: 'One guide prints F_a = 928 N; 1600 tan 30° = 923.8 N.' } : {}) },
     ],
+    // radial and axial forces follow from the student's tangential force
+    follow: (v, g) => ('Ft' in g ? { Fr: g.Ft * Math.tan(rad(v.phi)), Fa: g.Ft * Math.tan(rad(v.helix)) } : {}),
     cite: SRC.m503(5, 'MG16 Q3b, MG19 Q3c'),
     params: () => ({ preset: 'helical' }),
   }),
@@ -450,6 +462,15 @@ export const AEE503: Question[] = [
         { label: 'Forces', tex: 'F_t = \\dfrac{M_t}{r_m},\\ F_p = F_t\\tan\\phi\\sin\\beta,\\ F_g = F_t\\tan\\phi\\cos\\beta', result: `= ${n(r.Ft)},\\ ${n(r.Fp)},\\ ${n(r.Fg)}\\ \\text{N}` },
       ]
     },
+    // F_t follows from the student's torque and mean radius, F_p and F_g from their F_t
+    follow: (v, g) => {
+      const beta = pinionConeAngle(v.dp / 2000, (v.dp / 2000 * v.gn) / v.gd)
+      const fromFt = (Ft: number) => bevelForces(Ft, 1, rad(v.phi), beta)
+      return {
+        ...('Mt' in g && 'rm' in g ? { Ft: bevelForces(g.Mt, g.rm / 1000, rad(v.phi), beta).Ft } : {}),
+        ...('Ft' in g ? { Fp: fromFt(g.Ft).Fp, Fg: fromFt(g.Ft).Fg } : {}),
+      }
+    },
     cite: SRC.m503(5, 'MG15 Q3c'),
     params: () => ({ preset: 'bevel' }),
   }),
@@ -486,6 +507,8 @@ export const AEE503: Question[] = [
       { label: 'The idler cancels', tex: 'N_C = N_A\\dfrac{z_A}{z_C}', sub: `${tnum(v.N)}\\times\\dfrac{${tnum(v.zA)}}{${tnum(v.zC)}}`, result: `= ${n(r.NC)}\\ \\text{rpm}` },
       { label: 'Output torque', tex: 'T_C = T_A\\dfrac{z_C}{z_A}', sub: `${n(r.TA)}\\times\\dfrac{${tnum(v.zC)}}{${tnum(v.zA)}}`, result: `= ${n(r.TC)}\\ \\text{N·m}` },
     ],
+    // the output torque follows from the student's input torque
+    follow: (v, g) => ('TA' in g ? { TC: (g.TA * v.zC) / v.zA } : {}),
     cite: SRC.m503(5, 'MG17, MG21 Q2c'),
     params: () => ({ preset: 'idler' }),
   }),
@@ -518,6 +541,11 @@ export const AEE503: Question[] = [
       { label: 'Force per unit length', tex: 'f_b = \\dfrac{M}{Z_w},\\ f_s = \\dfrac{V}{\\pi d},\\ f = \\sqrt{f_b^2 + f_s^2}', sub: `M = ${tnum(v.V * 1000)}\\times${tnum(v.e / 1000)}`, result: `= ${n(r.f)}\\ \\text{MN/m}` },
       { label: 'Leg size', tex: 'w = \\dfrac{f}{0.707\\,s}', result: `= ${n(r.w)}\\ \\text{mm}` },
     ],
+    // force per length follows from the student's Z_w, the leg size from their f
+    follow: (v, g) => ({
+      ...('Zw' in g ? { f: Math.hypot((v.V * 1e3 * (v.e / 1000)) / (g.Zw / 1e3), (v.V * 1e3) / (Math.PI * (v.d / 1000))) / 1e6 } : {}),
+      ...('f' in g ? { w: ((g.f * 1e6) / (0.707 * WELD_ALLOWABLE)) * 1000 } : {}),
+    }),
     cite: SRC.m503(11, 'MG15 Q6c, MG17, MG19, MG21'),
     params: () => ({ preset: 'bar' }),
   }),
@@ -552,6 +580,16 @@ export const AEE503: Question[] = [
       { label: 'Resultant', tex: 'f = \\sqrt{f_h^2 + (f_{v0} + f_{vT})^2}', sub: `T = ${tnum(v.V * 1000)}\\times${tnum(v.e / 1000)}`, result: `= ${n(r.f)}\\ \\text{MN/m}` },
       { label: 'Leg size', tex: 'w = \\dfrac{f}{0.707\\,s}', result: `= ${n(r.w)}\\ \\text{mm}` },
     ],
+    // force per length follows from the student's J_w, the leg size from their f
+    follow: (v, g) => {
+      const r = bracketWeld(v.V * 1e3, v.e / 1000, v.b / 1000, v.d / 1000)
+      const fh = (J: number) => (r.T * (v.d / 2000)) / J
+      const fvT = (J: number) => (r.T * (v.b / 1000 - r.Ny)) / J
+      return {
+        ...('Jw' in g ? { f: Math.hypot(fh(g.Jw / 1e3), r.fv0 + fvT(g.Jw / 1e3)) / 1e6 } : {}),
+        ...('f' in g ? { w: ((g.f * 1e6) / (0.707 * WELD_ALLOWABLE)) * 1000 } : {}),
+      }
+    },
     cite: SRC.m503(11, 'Example 1'),
     params: () => ({ preset: 'bracket' }),
   }),
@@ -628,6 +666,8 @@ export const AEE503: Question[] = [
       { label: 'Lever force (moments about the pivot)', tex: 'F b = N a - f N c', sub: `F\\times${tnum(v.b / 1000)} = ${n(r.N)}\\times${tnum(v.a / 1000)} - ${tnum(v.f)}\\times${n(r.N)}\\times${tnum(v.c / 1000)}`, result: `F = ${n(r.F)}\\ \\text{N}` },
       { label: 'Heat', tex: 'H_g = f N V', sub: `${tnum(v.f)}\\times${n(r.N)}\\times${n((2 * Math.PI * v.N * (v.R / 1000)) / 60)}`, result: `= ${n(r.H)}\\ \\text{kW}` },
     ],
+    // lever force and heat follow from the student's normal force
+    follow: (v, g) => ('N' in g ? { F: shoeLeverForce(g.N, v.f, v.a / 1000, v.b / 1000, v.c / 1000, 'aiding'), H: heatGenerated(v.f, g.N, (2 * Math.PI * v.N * (v.R / 1000)) / 60) / 1000 } : {}),
     cite: SRC.m503(9, 'Example 1'),
     params: () => ({ preset: 'shoe' }),
   }),
@@ -657,6 +697,8 @@ export const AEE503: Question[] = [
       { label: 'Tension ratio', tex: '\\dfrac{F_1}{F_2} = e^{f\\alpha}', sub: `e^{${tnum(v.f)}\\times${n(rad(v.wrap))}}`, result: `= ${n(Math.exp(v.f * rad(v.wrap)), 3)}`, cite: SRC.m503(9, 'Example 2') },
       { label: 'Torque', tex: 'T = (F_1 - F_2) r', sub: `${tnum(v.T)} = (F_1 - F_2)\\times${tnum(v.D / 2000)}`, result: `F_1 = ${n(r.F1)},\\ F_2 = ${n(r.F2)}\\ \\text{N}` },
     ],
+    // slack-side tension follows from the student's tight-side tension
+    follow: (v, g) => ('F1' in g ? { F2: g.F1 - v.T / (v.D / 2000) } : {}),
     cite: SRC.m503(9, 'Example 2'),
     params: () => ({ preset: 'band' }),
   }),
