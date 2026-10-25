@@ -68,6 +68,13 @@ export const AEE518: Question[] = [
         { label: 'Response', tex: resp, result: `\\theta(\\infty) = ${n(r.final)}` },
       ]
     },
+    // damping ratio follows from the student's ωn, the roots from both
+    follow: (v, g) => ({
+      ...('wn' in g ? { zeta: v.c / (2 * g.wn) } : {}),
+      ...('wn' in g && 'zeta' in g
+        ? { r1: -g.zeta * g.wn + g.wn * Math.sqrt(g.zeta * g.zeta - 1), r2: -g.zeta * g.wn - g.wn * Math.sqrt(g.zeta * g.zeta - 1) }
+        : {}),
+    }),
     cite: SRC.ln518('exam 2016/17; marking guides 2017/18, 2018/19'),
     params: (v) => ({ m: 1, c: v.c, k: v.k, mode: 'step', F0: v.F }),
   }),
@@ -99,6 +106,11 @@ export const AEE518: Question[] = [
       { label: 'Damping ratio', tex: '\\zeta = \\dfrac{\\delta}{\\sqrt{4\\pi^2 + \\delta^2}}', result: `= ${n(r.z, 3)}` },
       { label: 'Damping coefficient', tex: 'b = 2\\zeta\\sqrt{m k}', sub: `2\\times${n(r.z, 3)}\\sqrt{${tnum(v.m)}\\times${tnum(v.k * 1000)}}`, result: `= ${n(r.b)}\\ \\text{N·s/m}` },
     ],
+    // damping ratio follows from the student's δ, the coefficient from ζ
+    follow: (v, g) => ({
+      ...('d' in g ? { z: zetaFromLogDecrement(g.d) } : {}),
+      ...('z' in g ? { b: dampingForRatio(g.z, v.k * 1000, v.m) } : {}),
+    }),
     cite: SRC.ln518('log decrement example'),
     params: (v) => ({ m: v.m, k: v.k * 1000, c: Math.round(decay(v).b * 10) / 10, mode: 'free', x0: 0.02 }),
   }),
@@ -145,6 +157,11 @@ export const AEE518: Question[] = [
         { label: 'Isolation efficiency', tex: '(1 - TR)\\times100', result: `= ${n(r.eff)}\\,\\%` },
       ]
     },
+    // natural frequency follows from the student's r, stiffness from ωn
+    follow: (v, g) => ({
+      ...('r' in g ? { wn: rpmToRad(v.N) / g.r } : {}),
+      ...('wn' in g ? { k: (v.M * g.wn * g.wn) / 1000 } : {}),
+    }),
     cite: SRC.ln518('compressor isolation example'),
   }),
   parametric({
@@ -228,6 +245,8 @@ export const AEE518: Question[] = [
         { label: 'Natural frequency', tex: '\\omega_n = \\sqrt{k_e/M_e}', result: `= ${n(r.wn)}\\ \\text{rad/s}` },
       ]
     },
+    // natural frequency follows from the student's stiffness and effective mass
+    follow: (_v, g) => ('k' in g && 'Me' in g ? { wn: naturalFrequency(g.k, g.Me) } : {}),
     cite: SRC.ln518('equivalent systems example'),
     errata: 'cantilever-E',
   }),
