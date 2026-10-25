@@ -72,6 +72,12 @@ Each entry: **Symptom** · **Cause** · **Fix** · **Lesson**.
 
 ## Backend, cloud and deployment
 
+### A second paper hand-in in the same millisecond was accepted (2026-10-25)
+- **Symptom:** a test showed a student could submit a paper twice when both requests carried the same timestamp.
+- **Cause:** "already submitted?" was decided by comparing the stored submission time with this request's time.
+- **Fix:** the transaction records whether this request created the submission (`api/src/app.ts`, paper submit).
+- **Lesson:** never infer "did I write this?" from timestamps; record it explicitly inside the transaction.
+
 ### Firebase was added to the wrong project
 - **Cause:** the Firebase console defaulted to an auto-created "My First Project".
 - **Fix:** once the Firebase terms were accepted, Firebase was added to `solidify-studio` through the API.

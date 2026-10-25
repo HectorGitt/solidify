@@ -62,6 +62,25 @@ interface AssignmentDoc {
   createdAt: number
 }
 
+interface PaperDoc {
+  [k: string]: unknown
+  title: string
+  questionIds: string[]
+  minutes: number
+  due?: number
+  createdAt: number
+}
+
+interface SubmissionDoc {
+  [k: string]: unknown
+  startedAt: number
+  submittedAt?: number
+  late?: boolean
+  answers?: Record<string, Record<string, string>>
+  results?: Record<string, { score: number; slips: string[] }>
+  total?: number
+}
+
 type Env = { Variables: { user: AuthUser | null } }
 
 const fail = (status: 400 | 401 | 403 | 404 | 409 | 413 | 429, message: string) => new HTTPException(status, { message })
@@ -318,6 +337,126 @@ export function createApp({ db, verifier, tutor, config }: Deps) {
     await requireTeacherOf(c, id)
     await db.delete(`classes/${id}/assignments/${c.req.param('aid')}`)
     return c.body(null, 204)
+  })
+
+  /* ------------------------------------------------------------------ papers (timed; every student gets their own numbers) */
+
+  const paperInput = z.object({
+    title: z.string().trim().min(1).max(160),
+    questionIds: z.array(z.string().min(1).max(120)).min(1).max(40),
+    minutes: z.number().int().min(5).max(240),
+    due: z.number().int().positive().optional(),
+  })
+
+  app.post('/v1/classes/:id/papers', async (c) => {
+    const id = c.req.param('id')
+    await requireTeacherOf(c, id)
+    const p = await body(c, paperInput)
+    const pid = randomId()
+    const doc: PaperDoc = { ...p, questionIds: [...new Set(p.questionIds)], createdAt: now() }
+    await db.set(`classes/${id}/papers/${pid}`, doc)
+    return c.json({ id: pid, ...doc }, 201)
+  })
+
+  /** Papers in the class; a student also sees their own attempt. */
+  app.get('/v1/classes/:id/papers', async (c) => {
+    const id = c.req.param('id')
+    const { u, isTeacher } = await requireMemberOrTeacher(c, id)
+    const papers = await db.list<PaperDoc>(`classes/${id}/papers`)
+    const out = await Promise.all(
+      papers.map(async (p) => {
+        const mine = isTeacher ? null : await db.get<SubmissionDoc>(`classes/${id}/papers/${p.id}/submissions/${u.uid}`)
+        return { id: p.id, ...p.data, attempt: mine ? { startedAt: mine.startedAt, submittedAt: mine.submittedAt ?? null, total: mine.total ?? null } : null }
+      }),
+    )
+    return c.json({ papers: out.sort((a, b) => (a.due ?? Infinity) - (b.due ?? Infinity) || a.createdAt - b.createdAt) })
+  })
+
+  app.get('/v1/classes/:id/papers/:pid', async (c) => {
+    const id = c.req.param('id')
+    const { u, isTeacher } = await requireMemberOrTeacher(c, id)
+    const p = await db.get<PaperDoc>(`classes/${id}/papers/${c.req.param('pid')}`)
+    if (!p) throw fail(404, 'Paper not found.')
+    const mine = isTeacher ? null : await db.get<SubmissionDoc>(`classes/${id}/papers/${c.req.param('pid')}/submissions/${u.uid}`)
+    return c.json({ id: c.req.param('pid'), ...p, isTeacher, attempt: mine })
+  })
+
+  app.delete('/v1/classes/:id/papers/:pid', async (c) => {
+    const id = c.req.param('id')
+    await requireTeacherOf(c, id)
+    await db.delete(`classes/${id}/papers/${c.req.param('pid')}`)
+    return c.body(null, 204)
+  })
+
+  /** A student starts the paper: the start time is recorded once, so reloading doesn't reset the clock. */
+  app.post('/v1/classes/:id/papers/:pid/start', async (c) => {
+    const id = c.req.param('id')
+    const pid = c.req.param('pid')
+    const { u, isTeacher } = await requireMemberOrTeacher(c, id)
+    if (isTeacher) throw fail(403, 'Teachers preview papers; students sit them.')
+    const p = await db.get<PaperDoc>(`classes/${id}/papers/${pid}`)
+    if (!p) throw fail(404, 'Paper not found.')
+    const t = now()
+    const s = await db.transact<SubmissionDoc>(`classes/${id}/papers/${pid}/submissions/${u.uid}`, (prev) => prev ?? { startedAt: t })
+    return c.json({ startedAt: s.startedAt, endsAt: s.startedAt + p.minutes * 60_000, submittedAt: s.submittedAt ?? null })
+  })
+
+  const submitInput = z.object({
+    /** what the student typed, per question and answer box */
+    answers: z.record(z.string().max(120), z.record(z.string().max(40), z.string().max(40))),
+    /** marks per question (0–1) and the mistakes the marker named */
+    results: z.record(z.string().max(120), z.object({ score: z.number().min(0).max(1), slips: z.array(z.string().max(40)).max(10).default([]) })),
+  })
+
+  /** One submission per student. Marking runs in the browser with the app's question bank. */
+  app.post('/v1/classes/:id/papers/:pid/submit', async (c) => {
+    const id = c.req.param('id')
+    const pid = c.req.param('pid')
+    const { u, isTeacher } = await requireMemberOrTeacher(c, id)
+    if (isTeacher) throw fail(403, 'Teachers preview papers; students sit them.')
+    const p = await db.get<PaperDoc>(`classes/${id}/papers/${pid}`)
+    if (!p) throw fail(404, 'Paper not found.')
+    const sub = await body(c, submitInput)
+    const t = now()
+    const results = Object.fromEntries(p.questionIds.map((q) => [q, sub.results[q] ?? { score: 0, slips: [] }]))
+    const total = p.questionIds.reduce((s, q) => s + results[q].score, 0) / p.questionIds.length
+    let already = false
+    const saved = await db.transact<SubmissionDoc>(`classes/${id}/papers/${pid}/submissions/${u.uid}`, (prev) => {
+      already = !!prev?.submittedAt
+      if (already) return prev!
+      const startedAt = prev?.startedAt ?? t
+      return { startedAt, submittedAt: t, late: t > startedAt + p.minutes * 60_000 + 60_000, answers: sub.answers, results, total }
+    })
+    if (already) throw fail(409, 'You have already handed in this paper.')
+    return c.json({ submittedAt: t, total, late: saved.late }, 201)
+  })
+
+  /** Teacher: every student's result on a paper. */
+  app.get('/v1/classes/:id/papers/:pid/results', async (c) => {
+    const id = c.req.param('id')
+    const pid = c.req.param('pid')
+    await requireTeacherOf(c, id)
+    const p = await db.get<PaperDoc>(`classes/${id}/papers/${pid}`)
+    if (!p) throw fail(404, 'Paper not found.')
+    const members = await db.list<MemberDoc>(`classes/${id}/members`)
+    const subs = await db.list<SubmissionDoc>(`classes/${id}/papers/${pid}/submissions`)
+    const byUid = new Map(subs.map((s) => [s.id, s.data]))
+    return c.json({
+      paper: { id: pid, ...p },
+      students: members.map((m) => {
+        const s = byUid.get(m.id)
+        return { uid: m.id, displayName: m.data.displayName, startedAt: s?.startedAt ?? null, submittedAt: s?.submittedAt ?? null, late: !!s?.late, total: s?.total ?? null, results: s?.results ?? null }
+      }),
+    })
+  })
+
+  /** Teacher: each student's question progress, for the class weak-spot report (topics are known to the app). */
+  app.get('/v1/classes/:id/progress', async (c) => {
+    const id = c.req.param('id')
+    await requireTeacherOf(c, id)
+    const members = await db.list<MemberDoc>(`classes/${id}/members`)
+    const progress = await Promise.all(members.map((m) => db.get<Progress>(`progress/${m.id}`)))
+    return c.json({ students: members.map((m, i) => ({ uid: m.id, displayName: m.data.displayName, questions: progress[i]?.questions ?? {} })) })
   })
 
   /** Per-student status for every assignment, from each student's synced progress. */
