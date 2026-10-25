@@ -1,7 +1,7 @@
 import { SRC, cite } from '@/content/citations'
 import { ulvRateKmh } from '@/physics/application'
 import { armPower } from '@/physics/dynamometer'
-import { cylinder, pump } from '@/physics/hydraulics'
+import { cylinder, hydraulicPower, pump } from '@/physics/hydraulics'
 import { hookeAcceleration, hookeInertiaTorque, hookeSpeedRange, inertiaFromWeight, rpmToRad } from '@/physics/joints'
 import { ploughPerformance, ploughWork, travelForArea } from '@/physics/tillage'
 import { gearTrainEfficiency, overallEfficiency, tractiveEfficiency } from '@/physics/tractor'
@@ -48,6 +48,14 @@ export const AEE502: Question[] = [
       { label: 'Torques', tex: 'T_T = \\dfrac{\\Delta p\\,D}{2\\pi},\\quad T_A = \\dfrac{T_T}{\\eta_T}', sub: `\\dfrac{${tnum(v.dp)}\\times${tnum(v.D)}}{2\\pi},\\ \\dfrac{${n(r.TT)}}{${tnum(v.et)}}`, result: `= ${n(r.TT)},\\ ${n(r.TA)}\\ \\text{N·m}` },
       { label: 'Powers', tex: 'P_h = \\dfrac{Q_A\\,\\Delta p}{60},\\quad P_s = \\dfrac{2\\pi N T_A}{60}', result: `P_h = ${n(r.Ph)},\\ P_s = ${n(r.Ps)},\\ \\text{heat} = ${n(r.heat)}\\ \\text{kW}` },
     ],
+    // actual flow and torque follow from the theoretical ones, powers from those, heat from both powers
+    follow: (v, g) => ({
+      ...('QT' in g ? { QA: v.ev * g.QT } : {}),
+      ...('TT' in g ? { TA: g.TT / v.et } : {}),
+      ...('QA' in g ? { Ph: hydraulicPower(g.QA, v.dp) } : {}),
+      ...('TA' in g ? { Ps: (2 * Math.PI * v.N * g.TA) / 60 / 1000 } : {}),
+      ...('Ph' in g && 'Ps' in g ? { heat: g.Ps - g.Ph } : {}),
+    }),
     cite: G1617,
     params: (v) => ({ source: 'manual', D: v.D, rpm: v.N, dp: v.dp, etaV: v.ev, etaT: v.et }),
   }),
@@ -84,6 +92,8 @@ export const AEE502: Question[] = [
       { label: 'Speeds', tex: 'v = \\dfrac{Q}{A}', sub: `\\dfrac{${tnum(v.Q)}/60\\,000}{A}`, result: `v_{ext} = ${n(r.ve)},\\ v_{ret} = ${n(r.vr)}\\ \\text{m/s}` },
       { label: 'Return flow (cap end empties while retracting)', tex: 'Q_{ret} = v_{ret}\\,\\tfrac{\\pi}{4}D^2', result: `= ${n(r.Qr)}\\ \\text{L/min}` },
     ],
+    // the return flow follows from the student's retracting speed
+    follow: (v, g) => ('vr' in g ? { Qr: g.vr * (Math.PI / 4) * (v.bore / 1000) ** 2 * 60000 } : {}),
     cite: G1617,
     params: (v) => ({ bore: v.bore / 1000, rod: v.rod / 1000, p: v.p, Q: v.Q, load: 20 }),
   }),
@@ -145,6 +155,8 @@ export const AEE502: Question[] = [
       { label: 'Acceleration', tex: '\\alpha_B = \\dfrac{-\\omega_A^2\\cos\\delta\\sin^2\\delta\\sin2\\theta}{(1-\\cos^2\\theta\\sin^2\\delta)^2}', result: `|\\alpha_B| = ${n(r.alpha)}\\ \\text{rad/s}^2`, ...(original ? { errata: 'The book rounds sin²20° to 0.1175 and prints −1365 rad/s² and 1278.4 N·m.' } : {}) },
       { label: 'Inertia torque', tex: 'T_B = I\\,\\alpha_B', result: `= ${n(r.TB)}\\ \\text{N·m}` },
     ],
+    // the inertia torque follows from the student's inertia and acceleration
+    follow: (_v, g) => ('I' in g && 'alpha' in g ? { TB: g.I * g.alpha } : {}),
     cite: SRC.hj502('Example 26.3'),
     errata: 'hooke-inertia',
     params: (v) => ({ delta: v.delta, rpm: v.N, weight: v.W, k: v.k, thetaProbe: v.theta }),
@@ -181,6 +193,8 @@ export const AEE502: Question[] = [
       { label: 'Draft', tex: 'D = k\\,A', sub: `${tnum(v.k)}\\times${n(r.A)}`, result: `= ${n(r.D)}\\ \\text{N}` },
       { label: 'Power', tex: 'P = D\\,v', sub: `${n(r.D)}\\times\\dfrac{${tnum(v.S)}}{3.6}`, result: `= ${n(r.P)}\\ \\text{W}` },
     ],
+    // draft follows from the student's furrow area, power from the draft
+    follow: (v, g) => ({ ...('A' in g ? { D: v.k * g.A } : {}), ...('D' in g ? { P: (g.D * v.S) / 3.6 } : {}) }),
     cite: G1819,
     errata: 'two-bottom',
     params: (v) => ({ bottoms: v.b, width: v.w / 1000, depth: v.d / 1000, unitDraft: v.k, speed: v.S }),
@@ -215,6 +229,8 @@ export const AEE502: Question[] = [
       { label: 'Draft', tex: 'D = k\\,w\\,d', sub: `${tnum(v.k)}\\times${tnum(v.w / 10)}\\times${tnum(v.d / 10)}`, result: `= ${n(r.D)}\\ \\text{N}`, cite: SRC.am502('§12') },
       { label: 'Power', tex: 'P = D\\,v', sub: `${n(r.D)}\\times${tnum(v.S)}`, result: `= ${n(r.P)}\\ \\text{W} = ${n(r.hp, 3)}\\ \\text{hp}`, ...(original ? { errata: 'The notes treat newtons as kgf and print 2.4 hp.' } : {}) },
     ],
+    // power follows from the student's draft, horsepower from the power
+    follow: (v, g) => ({ ...('D' in g ? { P: g.D * v.S } : {}), ...('P' in g ? { hp: g.P / 735.5 } : {}) }),
     cite: SRC.am502('§12, draft example'),
     errata: 'plough-hp',
     params: (v) => ({ bottoms: 1, width: v.w / 1000, depth: v.d / 1000, unitDraft: v.k, speed: v.S * 3.6 }),
