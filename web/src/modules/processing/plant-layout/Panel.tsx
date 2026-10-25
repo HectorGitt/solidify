@@ -294,7 +294,7 @@ export function Panel() {
             </thead>
             <tbody>
               {a.stations.map((s, i) => (
-                <tr key={s.id} className="border-b border-line/40 hover:bg-white/[0.02]">
+                <tr key={s.id} className="border-b border-line/40 hover:bg-ink/[0.02]">
                   <td className="px-2 py-1 text-dim">{i + 1}</td>
                   <td className="px-2 py-1 font-sans text-ink">{s.short}</td>
                   <td className="px-2 py-1">

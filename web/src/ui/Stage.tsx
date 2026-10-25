@@ -9,6 +9,7 @@ import { CutController, CutPlaneHelpers } from '@/render/CutController'
 import { HoverTelemetry } from '@/render/Telemetry'
 import { InsideHider } from '@/render/InsideHider'
 import { useView } from '@/render/view'
+import { useIsLight } from './theme'
 import { flyTo, followOrigin, getCameraControls, isRecording, setCameraControls, trackedPartId } from './camera'
 import { installDevBridge } from './devBridge'
 import { partObjects } from '@/parts/registry'
@@ -41,7 +42,7 @@ function CaliperTool({ extent }: { extent: number }) {
           </mesh>
           <Line points={[p1, p2]} color="#ef4444" lineWidth={3} depthTest={false} transparent opacity={0.8} />
           <Html position={mid} center className="pointer-events-none">
-            <div className="rounded-md bg-panel-2/95 px-2 py-1 text-[11px] font-mono font-medium text-ink shadow-2xl backdrop-blur-xl ring-1 ring-white/10">
+            <div className="rounded-md bg-panel-2/95 px-2 py-1 text-[11px] font-mono font-medium text-ink shadow-2xl backdrop-blur-xl ring-1 ring-ink/10">
               {(dist * 1000).toFixed(1)} mm
             </div>
           </Html>
@@ -154,6 +155,7 @@ function Lights({ extent, follow }: { extent: number; follow: boolean }) {
 function Floor({ y, extent }: { y: number; extent: number }) {
   const ref = useRef<THREE.Group>(null)
   const studioMode = useView((s) => s.studioMode)
+  const light = useIsLight()
   useEffect(() => {
     ref.current?.traverse((o) => {
       const m = (o as THREE.Mesh).material
@@ -166,8 +168,8 @@ function Floor({ y, extent }: { y: number; extent: number }) {
       }
     })
   }, [extent])
-  const cellColor = studioMode === 'blueprint' ? '#0f294a' : studioMode === 'workshop' ? '#26211d' : '#1c1e24'
-  const sectionColor = studioMode === 'blueprint' ? '#1e4b85' : studioMode === 'workshop' ? '#3b332c' : '#2a2d37'
+  const cellColor = studioMode === 'blueprint' ? '#0f294a' : studioMode === 'workshop' ? '#26211d' : light ? '#cfd4ca' : '#1a1e1f'
+  const sectionColor = studioMode === 'blueprint' ? '#1e4b85' : studioMode === 'workshop' ? '#3b332c' : light ? '#b3baad' : '#282e2f'
   return (
     <group ref={ref} position={[0, y, 0]}>
       <mesh rotation-x={-Math.PI / 2} receiveShadow>
@@ -297,7 +299,7 @@ export function OrientationGizmo({ scene }: { scene: SceneDef }) {
   }
 
   return (
-    <div className="pointer-events-auto flex items-center gap-1 rounded-xl border border-line-2 bg-panel-2/85 p-1 shadow-xl backdrop-blur-xl ring-1 ring-white/[0.04]">
+    <div className="pointer-events-auto flex items-center gap-1 rounded-xl border border-line-2 bg-panel-2/85 p-1 shadow-xl backdrop-blur-xl ring-1 ring-ink/[0.04]">
       <div className="flex items-center gap-0.5 px-1">
         <span className="mr-1 font-mono text-[10px] font-semibold uppercase tracking-wider text-dim">CAD</span>
         <button
@@ -369,7 +371,8 @@ export function Stage({ scene, smooth = true }: { scene: SceneDef; smooth?: bool
     [scene.id],
   )
 
-  const bgColor = studioMode === 'blueprint' ? '#06101e' : studioMode === 'workshop' ? '#12100e' : '#09090b'
+  const light = useIsLight()
+  const bgColor = studioMode === 'blueprint' ? '#06101e' : studioMode === 'workshop' ? '#12100e' : light ? '#e7eae3' : '#07090a'
 
   return (
     <Canvas

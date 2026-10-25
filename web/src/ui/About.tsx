@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom'
 import { ERRATA } from '@/content/errata'
 import { useAcademic } from './audience'
 import { AudienceSwitch } from './AudienceSwitch'
+import { ThemeToggle } from './ThemeToggle'
 import { Icon } from './icons'
 import { Logo } from './Logo'
 
@@ -36,8 +37,9 @@ export function About() {
           <Link to="/" aria-label="Solidify home">
             <Logo />
           </Link>
-          <div className="ml-auto">
+          <div className="ml-auto flex items-center gap-2">
             <AudienceSwitch />
+            <ThemeToggle />
           </div>
         </div>
       </header>

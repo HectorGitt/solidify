@@ -21,7 +21,7 @@ export function AudienceSwitch({ compact = false }: { compact?: boolean }) {
           className={`rounded-full px-2.5 py-1 text-[11.5px] font-medium transition-all ${
             audience === o.value
               ? 'bg-ink text-bg font-semibold shadow-sm shadow-black/30'
-              : 'text-mute hover:text-ink hover:bg-white/[0.04]'
+              : 'text-mute hover:text-ink hover:bg-ink/[0.04]'
           }`}
         >
           {compact ? o.short : o.label}

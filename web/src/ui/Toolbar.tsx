@@ -40,7 +40,7 @@ export function Toolbar({ scene }: { scene: SceneDef }) {
 
   return (
     <div className="pointer-events-auto relative max-w-[calc(100vw-1.5rem)]">
-      <div className="flex items-center gap-1 overflow-x-auto rounded-2xl border border-line-2 bg-panel-2/85 px-2.5 py-1.5 shadow-2xl shadow-black/60 backdrop-blur-xl ring-1 ring-white/[0.04]">
+      <div className="flex items-center gap-1 overflow-x-auto rounded-2xl border border-line-2 bg-panel-2/85 px-2.5 py-1.5 shadow-2xl shadow-black/60 backdrop-blur-xl ring-1 ring-ink/[0.04]">
         <IconButton label={playing ? 'Pause (space)' : 'Play (space)'} onClick={toggle} active={playing}>
           {playing ? <Icon.pause /> : <Icon.play />}
         </IconButton>
@@ -124,7 +124,7 @@ export function Toolbar({ scene }: { scene: SceneDef }) {
       </div>
 
       {openCut ? (
-        <div className="absolute bottom-[calc(100%+10px)] left-1/2 w-72 -translate-x-1/2 rounded-2xl border border-line-2 bg-panel-2/95 p-3.5 shadow-2xl shadow-black/70 backdrop-blur-xl ring-1 ring-white/[0.05]">
+        <div className="absolute bottom-[calc(100%+10px)] left-1/2 w-72 -translate-x-1/2 rounded-2xl border border-line-2 bg-panel-2/95 p-3.5 shadow-2xl shadow-black/70 backdrop-blur-xl ring-1 ring-ink/[0.05]">
           <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-mute">Section view</div>
           <div className="mb-3 grid grid-cols-2 gap-1.5">
             {presets.map((p) => (

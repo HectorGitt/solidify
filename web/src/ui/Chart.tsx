@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import uPlot from 'uplot'
 import 'uplot/dist/uPlot.min.css'
+import { useIsLight } from './theme'
 
 export interface ChartSeries {
   label: string
@@ -28,12 +29,21 @@ export interface ChartProps {
   yRange?: [number, number]
 }
 
-const AXIS = {
-  stroke: '#9ca3af',
-  grid: { stroke: 'rgba(255, 255, 255, 0.07)', width: 1 },
-  ticks: { stroke: 'rgba(255, 255, 255, 0.15)', width: 1 },
+const axis = (light: boolean) => ({
+  stroke: light ? '#4c5648' : '#a3aaa0',
+  grid: { stroke: light ? 'rgba(14, 18, 12, 0.08)' : 'rgba(255, 255, 255, 0.07)', width: 1 },
+  ticks: { stroke: light ? 'rgba(14, 18, 12, 0.2)' : 'rgba(255, 255, 255, 0.15)', width: 1 },
   font: '10.5px JetBrains Mono, monospace',
-  labelFont: '11px Inter, sans-serif',
+  labelFont: '11px Sora, sans-serif',
+})
+
+/** Series colours are picked for a dark panel; on a light one, take them 40 % toward black so lines keep their contrast. */
+export function seriesInk(color: string, light: boolean): string {
+  const m = /^#([0-9a-f]{6})$/i.exec(color)
+  if (!light || !m) return color
+  const n = parseInt(m[1], 16)
+  const ch = (shift: number) => Math.round(((n >> shift) & 255) * 0.6)
+  return `rgb(${ch(16)}, ${ch(8)}, ${ch(0)})`
 }
 
 /** Small uPlot wrapper tuned for engineering plots with a live state marker. */
@@ -44,6 +54,7 @@ export function Chart({ data, series, xLabel, yLabel, height = 190, logX, logY, 
   markerRef.current = marker
   const dataRef = useRef(data)
   dataRef.current = data
+  const light = useIsLight()
 
   useEffect(() => {
     const el = host.current
@@ -70,17 +81,17 @@ export function Chart({ data, series, xLabel, yLabel, height = 190, logX, logY, 
         y: { distr: logY ? 3 : 1, ...(yRange ? { range: yRange } : {}) },
       },
       axes: [
-        { ...AXIS, label: xLabel, size: 34, labelSize: 16 },
-        { ...AXIS, label: yLabel, size: 48, labelSize: 16 },
+        { ...axis(light), label: xLabel, size: 34, labelSize: 16 },
+        { ...axis(light), label: yLabel, size: 48, labelSize: 16 },
       ],
       series: [
         {},
         ...series.map((s) => ({
           label: s.label,
-          stroke: s.color,
+          stroke: seriesInk(s.color, light),
           width: s.width ?? 1.75,
           dash: s.dash,
-          points: { show: s.points ?? false, size: 5, fill: s.color },
+          points: { show: s.points ?? false, size: 5, fill: seriesInk(s.color, light) },
           spanGaps: false,
         })),
       ],
@@ -97,10 +108,10 @@ export function Chart({ data, series, xLabel, yLabel, height = 190, logX, logY, 
             ctx.save()
             ctx.beginPath()
             ctx.arc(cx, cy, 5 * devicePixelRatio, 0, Math.PI * 2)
-            ctx.fillStyle = markerColor
+            ctx.fillStyle = seriesInk(markerColor, light)
             ctx.fill()
             ctx.lineWidth = 2 * devicePixelRatio
-            ctx.strokeStyle = '#09090b'
+            ctx.strokeStyle = light ? '#ffffff' : '#050607'
             ctx.stroke()
             ctx.restore()
           },
@@ -128,7 +139,7 @@ export function Chart({ data, series, xLabel, yLabel, height = 190, logX, logY, 
     }
     // series/axes structure is fixed per mount; data updates are handled below
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [height, logX, logY, xLabel, yLabel, series.length])
+  }, [height, logX, logY, xLabel, yLabel, series.length, light])
 
   useEffect(() => {
     plot.current?.setData(data as uPlot.AlignedData, true)

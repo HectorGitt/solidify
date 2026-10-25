@@ -9,6 +9,7 @@ import type { SceneDef } from '@/modules/types'
 import { DEFAULT_CUT_PRESETS, useView } from '@/render/view'
 import { useAcademic } from './audience'
 import { AudienceSwitch } from './AudienceSwitch'
+import { ThemeToggle } from './ThemeToggle'
 import { Badge } from './controls'
 import { LogoMark } from './Logo'
 import { Icon } from './icons'
@@ -280,6 +281,7 @@ export function Viewer() {
           <div className="hidden md:block">
             <AudienceSwitch compact />
           </div>
+          <ThemeToggle className="!h-8 !w-8" />
           {scene?.tour?.length ? (
             <button
               onClick={() => (tourActive ? stopTour() : startTour())}

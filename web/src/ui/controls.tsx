@@ -98,7 +98,7 @@ export function Segmented<T extends string>({
             title={o.title}
             onClick={() => onChange(o.value)}
             className={`flex-1 rounded-md px-2 ${size === 'sm' ? 'py-0.5 text-[11.5px]' : 'py-1 text-[12px]'} font-medium transition-all ${
-              o.value === value ? 'bg-ink font-semibold text-bg shadow-sm' : 'text-mute hover:bg-white/[0.04] hover:text-ink'
+              o.value === value ? 'bg-ink font-semibold text-bg shadow-sm' : 'text-mute hover:bg-ink/[0.04] hover:text-ink'
             }`}
           >
             {o.label}
@@ -128,7 +128,7 @@ export function Toggle({ label, checked, onChange, hint }: { label: ReactNode; c
 export function Readout({ label, value, unit, tone = 'ink' }: { label: ReactNode; value: ReactNode; unit?: string; tone?: 'ink' | 'accent' | 'warn' | 'info' }) {
   const toneCls = { ink: 'text-ink', accent: 'text-accent', warn: 'text-warn', info: 'text-info' }[tone]
   return (
-    <div data-readout className="rounded-xl border border-line bg-panel-2/90 px-3 py-2 shadow-sm ring-1 ring-white/[0.02]">
+    <div data-readout className="rounded-xl border border-line bg-panel-2/90 px-3 py-2 shadow-sm ring-1 ring-ink/[0.02]">
       <div data-readout-label className="text-[10px] font-medium uppercase tracking-wider text-dim">{label}</div>
       <div data-readout-value className={`mt-0.5 font-mono text-[14px] font-semibold ${toneCls}`}>
         {value}
