@@ -260,3 +260,40 @@ describe('helpers', () => {
     expect(assignmentStatus({ kind: 'challenge', ref: 'c' }, { ...emptyProgress(), challenges: { c: { done: 1 } } })).toMatchObject({ complete: true, label: 'Done' })
   })
 })
+
+describe('waiting list', () => {
+  const join = (extra: Record<string, unknown> = {}) => as(null).send('POST', '/v1/waitlist', { email: 'Ada@School.edu', role: 'teacher', interest: ['describe', 'classroom'], useCase: 'Gearbox models for my class', ...extra })
+
+  it('takes sign-ups without an account, once per email, answering the same both times', async () => {
+    expect((await join()).status).toBe(201)
+    expect((await join({ name: 'Ada' })).status).toBe(201)
+    const list = await (await as('boss').get('/v1/waitlist')).json()
+    expect(list.count).toBe(1)
+    expect(list.entries[0]).toMatchObject({ email: 'ada@school.edu', role: 'teacher', interest: ['describe', 'classroom'] })
+  })
+
+  it('silently drops bots that fill the hidden field, and rejects bad emails', async () => {
+    expect((await join({ email: 'bot@spam.test', website: 'http://spam' })).status).toBe(201)
+    expect((await as(null).send('POST', '/v1/waitlist', { email: 'not-an-email', role: 'other' })).status).toBe(400)
+    expect((await (await as('boss').get('/v1/waitlist')).json()).count).toBe(0)
+  })
+
+  it('shows the list and CSV to admins only', async () => {
+    await join()
+    expect((await as('ada').get('/v1/waitlist')).status).toBe(403)
+    const csv = await (await as('boss').get('/v1/waitlist.csv')).text()
+    const [head, row] = csv.split('\r\n')
+    expect(head).toBe('Joined,Email,Name,Role,Interested in,Organisation,What they would make')
+    expect(row).toContain('ada@school.edu,,teacher,describe; classroom,,Gearbox models for my class')
+  })
+})
+
+describe('progress sync keeps the review schedule', () => {
+  it('takes box, due and score from the copy with the latest attempt', async () => {
+    await as('ada').send('POST', '/v1/progress/sync', { progress: { questions: { q: { attempts: 3, correct: 2, last: 100, box: 2, due: 5000, score: 1 } } } })
+    const res = await (await as('ada').send('POST', '/v1/progress/sync', { progress: { questions: { q: { attempts: 4, correct: 2, last: 200, box: 0, due: 900, score: 0.5 } } } })).json()
+    expect(res.progress.questions.q).toEqual({ attempts: 4, correct: 2, last: 200, box: 0, due: 900, score: 0.5 })
+    const older = await (await as('ada').send('POST', '/v1/progress/sync', { progress: { questions: { q: { attempts: 1, correct: 1, last: 50, box: 4, due: 99999, score: 1 } } } })).json()
+    expect(older.progress.questions.q).toMatchObject({ last: 200, box: 0, due: 900 })
+  })
+})

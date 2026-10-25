@@ -402,6 +402,56 @@ export function createApp({ db, verifier, tutor, config }: Deps) {
     return c.json({ route: s.route, title: s.title, state: s.state, createdAt: s.createdAt })
   })
 
+  /* ------------------------------------------------------------------ waiting list */
+
+  const waitlistInput = z.object({
+    email: z.string().trim().toLowerCase().email().max(200),
+    name: z.string().trim().max(80).optional(),
+    role: z.enum(['student', 'teacher', 'engineer', 'other']),
+    interest: z.array(z.enum(['describe', 'photo', 'customize', 'chat', 'classroom'])).max(5).default([]),
+    useCase: z.string().trim().max(1000).optional(),
+    organisation: z.string().trim().max(120).optional(),
+    /** honeypot: a hidden field people never fill in */
+    website: z.string().max(200).optional(),
+  })
+
+  /** Join the "Create in 3D" waiting list. Same answer whether new or already listed. */
+  app.post('/v1/waitlist', async (c) => {
+    const w = await body(c, waitlistInput)
+    if (w.website) return c.json({ ok: true }, 201) // a bot: accept silently, store nothing
+    const { website: _ignored, ...entry } = w
+    void _ignored
+    const u = c.get('user')
+    await db.create(`waitlist/${encodeURIComponent(entry.email)}`, { ...entry, uid: u?.uid ?? null, createdAt: now() })
+    return c.json({ ok: true }, 201)
+  })
+
+  const requireAdmin = (c: Context<Env>) => {
+    const u = requireUser(c)
+    if (!u.email || !config.adminEmails.includes(u.email.toLowerCase())) throw fail(403, 'Admins only.')
+    return u
+  }
+
+  app.get('/v1/waitlist', async (c) => {
+    requireAdmin(c)
+    const rows = await db.list<Record<string, unknown> & { createdAt: number }>('waitlist', { limit: 5000 })
+    return c.json({ count: rows.length, entries: rows.map((r) => r.data).sort((a, b) => a.createdAt - b.createdAt) })
+  })
+
+  app.get('/v1/waitlist.csv', async (c) => {
+    requireAdmin(c)
+    const rows = (await db.list<Record<string, unknown> & { createdAt: number }>('waitlist', { limit: 5000 })).map((r) => r.data).sort((a, b) => a.createdAt - b.createdAt)
+    const esc = (v: unknown) => {
+      const s = Array.isArray(v) ? v.join('; ') : String(v ?? '')
+      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
+    }
+    const head = ['Joined', 'Email', 'Name', 'Role', 'Interested in', 'Organisation', 'What they would make']
+    const lines = rows.map((r) => [new Date(r.createdAt).toISOString().slice(0, 10), r.email, r.name, r.role, r.interest, r.organisation, r.useCase].map(esc).join(','))
+    c.header('Content-Type', 'text/csv; charset=utf-8')
+    c.header('Content-Disposition', 'attachment; filename="solidify-waitlist.csv"')
+    return c.body([head.join(','), ...lines].join('\r\n'))
+  })
+
   /* ------------------------------------------------------------------ feedback */
 
   const feedbackInput = z.object({

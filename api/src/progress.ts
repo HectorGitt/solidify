@@ -4,7 +4,8 @@ import { z } from 'zod'
  * Mirrors src/study/progress.ts in the app. Timestamps are epoch milliseconds.
  * Merging two copies (this device vs the cloud) must never lose progress:
  *  - scenes: earliest `opened`, latest `tour`
- *  - questions: the larger attempts / correct counts and the latest `last`
+ *  - questions: the larger attempts / correct counts and the latest `last`; the review
+ *    schedule (box, due, score) comes from whichever copy has the latest attempt
  *    (counts are not summed: the same attempts would otherwise be counted twice on every sync)
  *  - challenges: earliest `done`, and the better `best` in the challenge's direction
  */
@@ -17,6 +18,10 @@ export const questionProgress = z.object({
   attempts: z.number().int().nonnegative(),
   correct: z.number().int().nonnegative(),
   last: time.optional(),
+  /** spaced-repetition box 0–4, next review time and last score (0–1): see the app's review.ts */
+  box: z.number().int().min(0).max(10).optional(),
+  due: time.optional(),
+  score: z.number().min(0).max(1).optional(),
 })
 export const challengeProgress = z.object({
   done: time,
@@ -57,6 +62,12 @@ function mergeQuestion(a?: QuestionProgress, b?: QuestionProgress): QuestionProg
   const out: QuestionProgress = { attempts, correct }
   const last = maxDef(a?.last, b?.last)
   if (last !== undefined) out.last = last
+  // the review schedule belongs to the most recent attempt
+  const recent = (a?.last ?? -1) >= (b?.last ?? -1) ? a : b
+  for (const k of ['box', 'due', 'score'] as const) {
+    const v = recent?.[k] ?? (recent === a ? b : a)?.[k]
+    if (v !== undefined) out[k] = v
+  }
   return out
 }
 
