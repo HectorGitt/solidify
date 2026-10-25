@@ -1,11 +1,12 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { create } from 'zustand'
 import { useSim } from '@/core/sim'
-import type { SceneDef, TourStep } from '@/modules/types'
+import type { SceneDef, TourCheck, TourStep } from '@/modules/types'
 import { useView } from '@/render/view'
 import { flyTo } from './camera'
 import { Icon } from './icons'
 import { onTourFinished } from '@/study/bridge'
+import { useProgress } from '@/study/progress'
 
 interface TourState {
   active: boolean
@@ -57,10 +58,61 @@ function Rich({ text }: { text: string }) {
   )
 }
 
+/** A checkpoint: pick an answer, see why, and the scene shows it. */
+function Checkpoint({ check, sceneId, step, scene, onAnswered }: { check: TourCheck; sceneId: string; step: number; scene: SceneDef; onAnswered: () => void }) {
+  const [picked, setPicked] = useState<number | null>(null)
+  useEffect(() => setPicked(null), [sceneId, step])
+  const answered = picked !== null
+  const right = picked === check.answer
+  const pick = (i: number) => {
+    if (answered) return
+    setPicked(i)
+    useProgress.getState().recordCheck(sceneId, step, i === check.answer)
+    if (check.reveal) applyStep({ title: '', body: '', ...check.reveal }, scene)
+    onAnswered()
+  }
+  return (
+    <div className="mt-2.5 rounded-lg border border-info/30 bg-info/5 px-3 py-2.5">
+      <div className="mb-1.5 text-[10.5px] font-semibold uppercase tracking-wider text-info">Checkpoint</div>
+      <p className="mb-2 text-[13px] font-medium text-ink">
+        <Rich text={check.question} />
+      </p>
+      <div className="grid gap-1.5" role="radiogroup" aria-label="Checkpoint answers">
+        {check.options.map((o, i) => {
+          const state = !answered ? 'idle' : i === check.answer ? 'right' : i === picked ? 'wrong' : 'other'
+          return (
+            <button
+              key={i}
+              role="radio"
+              aria-checked={picked === i}
+              disabled={answered}
+              onClick={() => pick(i)}
+              className={`rounded-md border px-2.5 py-1.5 text-left text-[12.5px] transition-colors ${
+                state === 'right' ? 'border-accent/60 bg-accent/15 text-accent' : state === 'wrong' ? 'border-danger/50 bg-danger/10 text-danger' : state === 'other' ? 'border-line text-dim' : 'border-line-2 text-ink/90 hover:border-info/50'
+              }`}
+            >
+              {o}
+            </button>
+          )
+        })}
+      </div>
+      {answered ? (
+        <p className={`mt-2 text-[12.5px] leading-relaxed ${right ? 'text-accent' : 'text-ink/85'}`}>
+          <strong className="font-semibold">{right ? 'Right. ' : 'Not quite. '}</strong>
+          <Rich text={check.explain} />
+          {check.reveal ? <span className="text-dim"> Watch the scene.</span> : null}
+        </p>
+      ) : null}
+    </div>
+  )
+}
+
 export function TourPlayer({ scene }: { scene: SceneDef }) {
   const { active, index, go, stop } = useTour()
   const steps = scene.tour ?? []
   const step = steps[index]
+  const [answered, setAnswered] = useState(false)
+  useEffect(() => setAnswered(false), [index, active])
 
   useEffect(() => {
     if (active && step) applyStep(step, scene)
@@ -98,6 +150,7 @@ export function TourPlayer({ scene }: { scene: SceneDef }) {
             </p>
           ))}
         </div>
+        {step.check ? <Checkpoint check={step.check} sceneId={scene.id} step={index} scene={scene} onAnswered={() => setAnswered(true)} /> : null}
       </div>
       <div className="flex items-center gap-2 border-t border-line px-3 py-2">
         <div className="flex flex-1 gap-1" aria-hidden>
@@ -109,8 +162,8 @@ export function TourPlayer({ scene }: { scene: SceneDef }) {
           Back
         </button>
         {index < steps.length - 1 ? (
-          <button onClick={() => go(index + 1)} className="rounded-md bg-accent px-3 py-1 text-[12.5px] font-semibold text-accent-ink hover:brightness-110">
-            Next
+          <button onClick={() => go(index + 1)} className={`rounded-md px-3 py-1 text-[12.5px] font-semibold ${step.check && !answered ? 'text-mute hover:bg-panel-3 hover:text-ink' : 'bg-accent text-accent-ink hover:brightness-110'}`}>
+            {step.check && !answered ? 'Skip' : 'Next'}
           </button>
         ) : (
           <button

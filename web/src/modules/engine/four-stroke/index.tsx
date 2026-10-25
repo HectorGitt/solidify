@@ -65,6 +65,12 @@ const scene: SceneDef = {
       select: 'piston',
       cut: 'half',
       cites: [SRC.l3_509('compression pressure 30–45 kg/cm², ~500 °C')],
+      check: {
+        question: 'A diesel has no spark plug. What ignites the fuel when it is injected?',
+        options: ['A glow plug that stays hot all the time', 'The heat of the air, raised by compressing it', 'Hot exhaust gas left over from the last cycle'],
+        answer: 1,
+        explain: 'Compressing air to about 1/17 of its volume heats it to around **500 °C**, above the self-ignition temperature of diesel fuel. Glow plugs only help cold starting.',
+      },
     },
     {
       title: '3 · Injection and power',
@@ -93,6 +99,12 @@ const scene: SceneDef = {
       select: 'camshaft',
       cut: 'exhaust-plane',
       cites: [SRC.tb509('Fig 2.2'), SRC.man509('timing gears')],
+      check: {
+        question: 'Each valve opens once per cycle, and a cycle takes two crankshaft turns. How fast does the camshaft turn?',
+        options: ['Twice crankshaft speed', 'The same as the crankshaft', 'Half crankshaft speed'],
+        answer: 2,
+        explain: 'One cam lobe per valve, one opening every two revolutions: the timing gears drive the camshaft at **half** crankshaft speed (2 : 1).',
+      },
     },
     {
       title: 'Crank, rod and flywheel',

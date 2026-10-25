@@ -9,6 +9,20 @@ export interface CameraPose {
   target: Vec3
 }
 
+/** A quick prediction question on a tour step (a "checkpoint"). */
+export interface TourCheck {
+  /** e.g. "If you add ballast to the rear wheels, what happens to wheel slip?" */
+  question: string
+  /** 2–4 short choices */
+  options: string[]
+  /** index of the right choice */
+  answer: number
+  /** why, in one or two sentences (shown after answering) */
+  explain: string
+  /** scene changes applied after answering, so the scene shows the answer */
+  reveal?: Omit<TourStep, 'title' | 'body' | 'check' | 'cites'>
+}
+
 export interface TourStep {
   title: string
   /** short paragraphs; **bold** supported */
@@ -27,6 +41,8 @@ export interface TourStep {
   timeScale?: number
   /** scene-specific parameter changes, applied via SceneDef.applyParams */
   params?: Record<string, unknown>
+  /** optional checkpoint question for this step */
+  check?: TourCheck
 }
 
 export interface SceneDef {

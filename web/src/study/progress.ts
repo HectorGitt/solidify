@@ -5,6 +5,8 @@ import { schedule } from './review'
 export interface SceneProgress {
   opened?: number
   tour?: number
+  /** tour checkpoints: step index → 1 if right first time, 0 if not */
+  checks?: Record<string, number>
 }
 
 export interface QuestionProgress {
@@ -60,6 +62,8 @@ function save(d: ProgressData) {
 interface ProgressState extends ProgressData {
   markOpened: (sceneId: string) => void
   markTour: (sceneId: string) => void
+  /** first answer to a tour checkpoint (later answers don't change it) */
+  recordCheck: (sceneId: string, step: number, correct: boolean) => void
   /** `score` is 0–1 (defaults to 1 when correct, 0 otherwise) */
   recordAnswer: (questionId: string, correct: boolean, score?: number) => void
   recordChallenge: (id: string, score?: number, better?: 'lower' | 'higher') => void
@@ -83,7 +87,13 @@ export const useProgress = create<ProgressState>((set, get) => {
     markTour: (id) => {
       const { scenes, questions, challenges } = get()
       const now = Date.now()
-      commit({ questions, challenges, scenes: { ...scenes, [id]: { opened: scenes[id]?.opened ?? now, tour: now } } })
+      commit({ questions, challenges, scenes: { ...scenes, [id]: { ...scenes[id], opened: scenes[id]?.opened ?? now, tour: now } } })
+    },
+    recordCheck: (id, step, correct) => {
+      const { scenes, questions, challenges } = get()
+      const prev = scenes[id]?.checks ?? {}
+      if (String(step) in prev) return
+      commit({ questions, challenges, scenes: { ...scenes, [id]: { ...scenes[id], opened: scenes[id]?.opened ?? Date.now(), checks: { ...prev, [step]: correct ? 1 : 0 } } } })
     },
     recordAnswer: (id, correct, score) => {
       const { scenes, questions, challenges } = get()
