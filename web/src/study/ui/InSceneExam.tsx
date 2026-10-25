@@ -35,7 +35,7 @@ export function InSceneExam({ moduleId, sceneId, scene }: { moduleId: string; sc
   const q = instantiate(list[Math.min(idx, list.length - 1)], seed)
   const solved = q.solve()
   const results = checked
-    ? markAnswers(q.answers, solved, Object.fromEntries(q.answers.map((a) => [a.key, parseAnswer(inputs[a.key] ?? '')]))).map((m) => ({ a: m.field, computed: m.computed, ok: m.ok, diagnosis: m.diagnosis }))
+    ? markAnswers(q.answers, solved, Object.fromEntries(q.answers.map((a) => [a.key, parseAnswer(inputs[a.key] ?? '')])), q.follow).map((m) => ({ a: m.field, computed: m.computed, ok: m.ok, carried: m.carried, diagnosis: m.diagnosis }))
     : undefined
 
   // errata describe the past-paper numbers only
@@ -143,12 +143,12 @@ export function InSceneExam({ moduleId, sceneId, scene }: { moduleId: string; sc
               />
               <span className="shrink-0 font-mono text-[11.5px] text-mute">{a.unit}</span>
               {res ? (
-                <span className={`shrink-0 font-mono text-[12px] font-bold ${res.ok ? 'text-accent' : 'text-danger'}`}>
-                  {res.ok ? '✓' : `✗ (${n(res.computed)})`}
+                <span className={`shrink-0 font-mono text-[12px] font-bold ${res.ok ? 'text-accent' : res.carried ? 'text-info' : 'text-danger'}`}>
+                  {res.ok ? '✓' : res.carried ? '½' : `✗ (${n(res.computed)})`}
                 </span>
               ) : null}
             </label>
-            {res?.diagnosis ? <p className="px-1 text-[11.5px] leading-snug text-warn">{res.diagnosis.message}</p> : null}
+            {res?.diagnosis ? <p className={`px-1 text-[11.5px] leading-snug ${res.carried ? 'text-info' : 'text-warn'}`}>{res.diagnosis.message}</p> : null}
             </div>
           )
         })}

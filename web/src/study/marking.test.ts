@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { SLIPS, SLIP_TOL, diagnose, markAnswers } from './marking'
-import type { AnswerField } from './types'
+import { SLIPS, SLIP_TOL, diagnose, markAnswers, scoreMarks } from './marking'
+import { QUESTIONS } from './questions'
+import { checkAnswer, type AnswerField } from './types'
+import { instantiate } from './variants'
 
 const f = (key: string, unit = 'kW'): AnswerField => ({ key, label: key, unit, expected: 0 })
 
@@ -53,4 +55,41 @@ describe('mistake diagnosis', () => {
     expect(m[0].diagnosis?.kind).toBe('slip')
     expect(m[1].diagnosis).toBeNull()
   })
+})
+
+describe('method marks (error carried forward)', () => {
+  const fields = [f('dW', 'kN'), f('front', 'kN'), f('rear', 'kN')]
+  const computed = { dW: 3.34, front: 5.66, rear: 22.84 }
+  const follow = (g: Record<string, number>) => ('dW' in g ? { front: 9 - g.dW, rear: 19.5 + g.dW } : {})
+
+  it('gives the method mark when a later answer is right from the student’s own wrong value', () => {
+    const m = markAnswers(fields, computed, { dW: 4, front: 5, rear: 23.5 }, follow)
+    expect(m.map((x) => [x.ok, x.carried])).toEqual([[false, false], [false, true], [false, true]])
+    expect(m[1].diagnosis?.kind).toBe('carried')
+    expect(scoreMarks(m)).toEqual({ got: 1, of: 3 })
+  })
+
+  it('full marks stay full marks, and wrong method earns nothing', () => {
+    expect(scoreMarks(markAnswers(fields, computed, { dW: 3.34, front: 5.66, rear: 22.84 }, follow))).toEqual({ got: 3, of: 3 })
+    const m = markAnswers(fields, computed, { dW: 4, front: 7, rear: 20 }, follow)
+    expect(m.some((x) => x.carried)).toBe(false)
+  })
+})
+
+describe('every follow-on rule agrees with the real calculation', () => {
+  for (const q of QUESTIONS.filter((x) => x.follow || x.vary)) {
+    it(q.id, () => {
+      const versions = [q, ...Array.from({ length: 50 }, (_, k) => instantiate(q, k + 1))]
+      for (const v of versions) {
+        if (!v.follow) continue
+        const r = v.solve()
+        const out = v.follow(r)
+        for (const [key, value] of Object.entries(out)) {
+          const field = q.answers.find((a) => a.key === key)
+          expect(field, `${key} is an answer`).toBeDefined()
+          expect(checkAnswer(field!, r[key], value!), `${key} (${v.variant})`).toBe(true)
+        }
+      }
+    })
+  }
 })

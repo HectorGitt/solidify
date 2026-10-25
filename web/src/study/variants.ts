@@ -23,7 +23,7 @@ export interface InputSpec {
 
 export interface VariantMaker {
   inputs: InputSpec[]
-  at: (v: Vals) => Pick<Question, 'statement' | 'solve' | 'working' | 'params'>
+  at: (v: Vals) => Pick<Question, 'statement' | 'solve' | 'working' | 'params' | 'follow'>
   /** extra physical sanity check for a generated variant */
   valid?: (v: Vals, r: Record<string, number>) => boolean
 }
@@ -66,7 +66,7 @@ export function drawValues(inputs: InputSpec[], seed: number): Vals {
 
 export const originalValues = (inputs: InputSpec[]): Vals => Object.fromEntries(inputs.map((i) => [i.key, i.value]))
 
-type Base = Omit<Question, 'statement' | 'solve' | 'working' | 'params' | 'vary' | 'variant' | 'values'>
+type Base = Omit<Question, 'statement' | 'solve' | 'working' | 'params' | 'vary' | 'variant' | 'values' | 'follow'>
 
 export interface ParametricSpec extends Base {
   inputs: InputSpec[]
@@ -76,11 +76,13 @@ export interface ParametricSpec extends Base {
   working: (v: Vals, r: Record<string, number>, original: boolean) => WorkingStep[]
   params?: (v: Vals) => Record<string, unknown>
   valid?: (v: Vals, r: Record<string, number>) => boolean
+  /** method marks: later answers worked from the student's own earlier answers (`given`) */
+  follow?: (v: Vals, given: Record<string, number>) => Partial<Record<string, number>>
 }
 
 /** Author a parametric question. The returned question *is* the past-paper version. */
 export function parametric(spec: ParametricSpec): Question {
-  const { inputs, statement, solve, working, params, valid, ...base } = spec
+  const { inputs, statement, solve, working, params, valid, follow, ...base } = spec
   const orig = originalValues(inputs)
   const same = (v: Vals) => inputs.every((i) => v[i.key] === i.value)
   const at = (v: Vals) => ({
@@ -88,6 +90,7 @@ export function parametric(spec: ParametricSpec): Question {
     solve: () => solve(v),
     working: (r: Record<string, number>) => working(v, r, same(v)),
     params: params?.(v),
+    follow: follow ? (given: Record<string, number>) => follow(v, given) : undefined,
   })
   return { ...base, ...at(orig), vary: { inputs, at, valid }, variant: 'original', values: orig }
 }

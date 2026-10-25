@@ -18,7 +18,15 @@ type Inputs = Record<string, string>
 
 function fieldResults(q: Question, inputs: Inputs) {
   const given = Object.fromEntries(q.answers.map((a) => [a.key, parseAnswer(inputs[a.key] ?? '')]))
-  return markAnswers(q.answers, q.solve(), given).map((m) => ({ a: m.field, computed: m.computed, ok: m.ok, diagnosis: m.diagnosis }))
+  return markAnswers(q.answers, q.solve(), given, q.follow).map((m) => ({ a: m.field, computed: m.computed, ok: m.ok, carried: m.carried, diagnosis: m.diagnosis }))
+}
+
+/** "2½/4 marks": 1 per correct box, ½ for method only (error carried forward). */
+function marksLabel(results: { ok: boolean; carried?: boolean }[]) {
+  const got = results.reduce((s, r) => s + (r.ok ? 1 : r.carried ? 0.5 : 0), 0)
+  const whole = Math.floor(got)
+  const text = got % 1 ? `${whole ? whole : ''}½` : `${whole}`
+  return results.length === 1 ? (got === 1 ? 'Correct' : got ? 'Method mark' : 'Not yet') : `${text}/${results.length} marks`
 }
 
 function useOpenIn3D() {
@@ -50,9 +58,13 @@ function AnswerInputs({ q, inputs, setInputs, results }: { q: Question; inputs: 
               aria-label={`${a.key} in ${a.unit || 'no unit'}`}
             />
             <span className="shrink-0 text-[12px] text-mute">{a.unit}</span>
-            {res ? <span className={`shrink-0 text-[12px] font-semibold ${res.ok ? 'text-accent' : 'text-danger'}`}>{res.ok ? '✓' : '✗'}</span> : null}
+            {res ? (
+              <span className={`shrink-0 text-[12px] font-semibold ${res.ok ? 'text-accent' : res.carried ? 'text-info' : 'text-danger'}`} title={res.carried ? 'Method mark' : undefined}>
+                {res.ok ? '✓' : res.carried ? '½' : '✗'}
+              </span>
+            ) : null}
           </label>
-          {res?.diagnosis ? <p className="mt-1 px-1 text-[11.5px] leading-snug text-warn">{res.diagnosis.message}</p> : null}
+          {res?.diagnosis ? <p className={`mt-1 px-1 text-[11.5px] leading-snug ${res.carried ? 'text-info' : 'text-warn'}`}>{res.diagnosis.message}</p> : null}
           </div>
         )
       })}
@@ -174,7 +186,7 @@ function Practice({ list, start }: { list: Question[]; start?: string }) {
         ) : null}
         {results ? (
           <span className={`text-[12.5px] font-medium ${results.every((x) => x.ok) ? 'text-accent' : 'text-warn'}`}>
-            {results.filter((x) => x.ok).length}/{results.length} correct
+            {marksLabel(results)}
           </span>
         ) : null}
         {stat ? <span className="text-[11.5px] text-dim">· {stat.correct}/{stat.attempts} attempts correct</span> : null}
@@ -356,6 +368,13 @@ export function ExamPage() {
   const [mode, setMode] = useState<'practice' | 'mock'>('practice')
   const [course, setCourse] = useState<Course | 'all'>(start?.course ?? 'all')
   const [topic, setTopic] = useState(start?.topic ?? 'all')
+  // following another question link while already on this page: show that question
+  useEffect(() => {
+    if (!start) return
+    setMode('practice')
+    setCourse(start.course)
+    setTopic(start.topic)
+  }, [start])
   const academic = useAcademic()
   const qp = useProgress((s) => s.questions)
 

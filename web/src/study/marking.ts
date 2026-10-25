@@ -36,7 +36,7 @@ export const SLIPS: Slip[] = [
   { id: 'two', factor: 2, big: 'Off by 2: diameter used where the radius was needed?', small: 'Off by 2: radius used where the diameter was needed, or a missing factor of 2?' },
 ]
 
-export type Diagnosis = { kind: 'slip'; slip: string; message: string } | { kind: 'sign' | 'swap' | 'rounding'; message: string }
+export type Diagnosis = { kind: 'slip'; slip: string; message: string } | { kind: 'sign' | 'swap' | 'rounding' | 'carried'; message: string }
 
 const near = (a: number, b: number, rel: number) => Math.abs(a - b) <= rel * Math.max(Math.abs(b), 1e-12)
 
@@ -70,15 +70,46 @@ export interface FieldMark {
   computed: number
   given: number
   ok: boolean
+  /** wrong, but worked correctly from the student's own earlier (wrong) answer */
+  carried: boolean
   diagnosis: Diagnosis | null
 }
 
-/** Mark every answer box of a question, with feedback on the wrong ones. */
-export function markAnswers(fields: AnswerField[], computed: Record<string, number>, given: Record<string, number>): FieldMark[] {
+/**
+ * Mark every answer box of a question, with feedback on the wrong ones. `follow` (from the
+ * question) gives what later answers should be when worked from the student's own earlier
+ * answers: a match earns the method mark, as an examiner would ("error carried forward").
+ */
+export function markAnswers(
+  fields: AnswerField[],
+  computed: Record<string, number>,
+  given: Record<string, number>,
+  follow?: (given: Record<string, number>) => Partial<Record<string, number>>,
+): FieldMark[] {
+  const finiteGiven = Object.fromEntries(Object.entries(given).filter(([, v]) => Number.isFinite(v)))
+  let followed: Partial<Record<string, number>> = {}
+  try {
+    followed = follow ? follow(finiteGiven) : {}
+  } catch {
+    followed = {}
+  }
   return fields.map((f) => {
     const value = given[f.key]
     const ok = Number.isFinite(value) && checkAnswer(f, computed[f.key], value)
+    const ecf = followed[f.key]
+    const carried = !ok && Number.isFinite(value) && ecf !== undefined && Number.isFinite(ecf) && checkAnswer(f, ecf, value)
     const others = fields.filter((o) => o.key !== f.key).map((o) => ({ field: o, value: computed[o.key] }))
-    return { field: f, computed: computed[f.key], given: value, ok, diagnosis: ok || !Number.isFinite(value) ? null : diagnose(f, computed[f.key], value, others) }
+    const diagnosis: Diagnosis | null = ok || !Number.isFinite(value)
+      ? null
+      : carried
+        ? { kind: 'carried', message: 'Method correct from your earlier answer: method mark awarded, but fix the earlier step.' }
+        : diagnose(f, computed[f.key], value, others)
+    return { field: f, computed: computed[f.key], given: value, ok, carried, diagnosis }
   })
+}
+
+/** Examiner-style score: 1 per correct box, ½ for a box with only the method right. */
+export function scoreMarks(marks: FieldMark[]) {
+  const got = marks.reduce((s, m) => s + (m.ok ? 1 : m.carried ? 0.5 : 0), 0)
+  return { got, of: marks.length }
 }

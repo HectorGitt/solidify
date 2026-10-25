@@ -47,6 +47,12 @@ Each entry: **Symptom** · **Cause** · **Fix** · **Lesson**.
 
 ## Study tools and content
 
+### Following one question link to another showed the old question (2026-10-25)
+- **Symptom:** while on Exam practice, opening another `/exam?q=…` link kept showing the previous question.
+- **Cause:** the subject and topic filters were read from the link only when the page first opened, so the new question was filtered out.
+- **Fix:** a new `?q=` re-applies the subject, topic and practice mode (`web/src/study/ui/ExamPage.tsx`).
+- **Lesson:** state initialised from the URL must also react to URL changes; class assignment links depend on it.
+
 ### Exam questions had fixed numbers (2026-10-24)
 - **Symptom:** once a student had seen an answer, the question was spent; students could share answers.
 - **Fix:** parametric questions (`web/src/study/variants.ts`). Every question declares its inputs with realistic ranges and builds its statement, answers, working and 3D setup from them. All 68 questions are converted, and each is tested against 200 variants.

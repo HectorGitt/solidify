@@ -56,6 +56,11 @@ export interface Question {
   variant?: Seed
   /** the input values of this version */
   values?: Vals
+  /**
+   * Method marks (error carried forward): what each later answer should be when worked
+   * correctly from the student's own earlier answers. Return only the keys that follow.
+   */
+  follow?: (given: Record<string, number>) => Partial<Record<string, number>>
 }
 
 export const DEFAULT_TOL = 0.01

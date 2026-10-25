@@ -60,6 +60,8 @@ export const AEE510: Question[] = [
       { label: 'Weight transfer', tex: '\\Delta W = \\dfrac{P h}{L}', sub: `\\dfrac{${tnum(v.P)} \\times ${tnum(v.h)}}{${tnum(v.L)}}`, result: `= ${n(r.dW)}\\ \\text{kN}` },
       { label: 'Dynamic loads', tex: 'W_f = R_f - \\Delta W,\\quad W_r = R_r + \\Delta W', sub: `${tnum(v.Wf)} - ${n(r.dW)},\\ ${tnum(v.W - v.Wf)} + ${n(r.dW)}`, result: `= ${n(r.front)},\\ ${n(r.rear)}\\ \\text{kN}` },
     ],
+    // front and rear loads follow from the student's ΔW
+    follow: (v, g) => ('dW' in g ? { front: v.Wf - g.dW, rear: v.W - v.Wf + g.dW } : {}),
     cite: SRC.l27('2022/23 Q2c'),
     params: (v) => ({ chassis: 'exam', pull: v.P, theta: 0, alpha: 0, yd: v.h / 1000, xd: 0.6 }),
   }),
@@ -105,6 +107,8 @@ export const AEE510: Question[] = [
       { label: 'Pressure', tex: `p = ${tnum(v.pk)} \\times 0.0981`, result: `= ${n(r.p)}\\ \\text{MPa}` },
       { label: 'Hydraulic power', tex: 'P_h = \\dfrac{Q\\,p}{60}\\ (\\text{L/min, MPa} \\to \\text{kW})', sub: `\\dfrac{${tnum(v.Q)}\\times${n(r.p)}}{60}`, result: `= ${n(r.Ph)}\\ \\text{kW}`, cite: SRC.hy510('p2–3') },
     ],
+    // hydraulic power follows from the student's converted pressure
+    follow: (v, g) => ('p' in g ? { Ph: hydraulicPower(v.Q, g.p) } : {}),
     cite: SRC.hy510('p2–3'),
   }),
   parametric({
@@ -237,6 +241,8 @@ export const AEE510: Question[] = [
       { label: 'Rear weight', tex: 'W = \\text{hp}\\times(\\text{lb/hp})', sub: `${tnum(v.hp)}\\times${tnum(v.lo)},\\ ${tnum(v.hp)}\\times${tnum(v.hi)}`, result: `= ${n(r.lo, 5)}\\ \\text{to}\\ ${n(r.hi, 5)}\\ \\text{lb}`, cite: SRC.tt510('p11') },
       { label: '¾ load', tex: `W = 0.75\\times${tnum(v.hp)}\\times${tnum(v.lo)}`, result: `= ${n(r.q, 5)}\\ \\text{lb}`, ...(original ? { errata: 'The notes print 7,550 lb — an arithmetic slip for 7,560.' } : {}) },
     ],
+    // the ¾-load figure follows from the student's lower limit
+    follow: (_v, g) => ('lo' in g ? { q: 0.75 * g.lo } : {}),
     cite: SRC.tt510('p11 worked example'),
   }),
   parametric({
@@ -264,6 +270,8 @@ export const AEE510: Question[] = [
       { label: 'Section height', tex: 'h = \\text{aspect}\\times b', sub: `${tnum(v.a / 100)}\\times${tnum(v.w)}`, result: `= ${n(r.h)}\\ \\text{mm}`, cite: SRC.l27('p32') },
       { label: 'Overall diameter', tex: 'd = d_{rim} + 2h', sub: `${tnum(v.rim)}\\times25.4 + 2\\times${n(r.h)}`, result: `= ${n(r.d, 5)}\\ \\text{mm}` },
     ],
+    // the overall diameter follows from the student's section height
+    follow: (v, g) => ('h' in g ? { d: v.rim * 25.4 + 2 * g.h } : {}),
     cite: SRC.l27('p32'),
   }),
   parametric({
