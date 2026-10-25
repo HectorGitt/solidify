@@ -50,6 +50,12 @@ const scene: SceneDef = {
       camera: { position: [0.3, 0.06, 0.2], target: [0.135, -0.035, 0] },
       select: 'breaker',
       cites: [SRC.l4_509('contact breaker cam has 4 corners'), SRC.tb509('Table 5.1')],
+      check: {
+        question: 'The four-cornered cam turns at half engine speed. How many sparks does the coil make per crankshaft revolution?',
+        options: ['One', 'Two', 'Four'],
+        answer: 1,
+        explain: 'Four lobes on half a turn give **two** openings of the points per crankshaft revolution, one every 180° — just right for a four-cylinder four-stroke firing every 720°/4.',
+      },
     },
     {
       title: 'Distributor: sparks in firing order, 25° BTDC',
@@ -58,6 +64,12 @@ const scene: SceneDef = {
       camera: { position: [0.5, 0.35, 0.35], target: [0.08, 0.02, 0] },
       select: 'rotor',
       cites: [SRC.tb509('§5.2.1, §5.5')],
+      check: {
+        question: 'As the engine speeds up, why must the spark come earlier before TDC?',
+        options: ['The piston needs a harder push at high speed', 'The points stay open longer at high speed', 'The burn takes about the same time, so it spans more degrees'],
+        answer: 2,
+        explain: 'The mixture needs a roughly fixed **time** to burn. At higher speed the crank turns through more degrees in that time, so the spark is **advanced** to keep peak pressure just after TDC.',
+      },
     },
     {
       title: 'Magneto and impulse coupling',
@@ -80,6 +92,13 @@ const scene: SceneDef = {
       params: { sub: 'plug', load: 0.3 },
       timeScale: 1 / 50,
       cites: [SRC.tb509('§5.4, Fig 5.4')],
+      check: {
+        question: 'A tractor works under heavy load all day. Which plug suits it?',
+        options: ['The cold plug, whose short nose sheds heat fast', 'The hot plug, whose long nose keeps it hot', 'Either; the heat range only matters at idle'],
+        answer: 0,
+        explain: 'Heavy load means hot combustion. A **cold plug** carries heat away quickly through its short nose, so the tip does not overheat and cause **pre-ignition**.',
+        reveal: { select: 'plug-cold', params: { load: 0.9 } },
+      },
     },
     {
       title: 'Starter motor',

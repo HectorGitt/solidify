@@ -71,6 +71,12 @@ const scene: SceneDef = {
       playing: true,
       timeScale: 1 / 60,
       cites: [SRC.uj502('p2–3'), HJ2('§26.2.2')],
+      check: {
+        question: 'The driver turns at a steady 1000 rpm with δ = 20°. What is the top speed of the driven shaft?',
+        options: ['1000 rpm', '1064 rpm', '1132 rpm'],
+        answer: 1,
+        explain: 'Top speed is **ω_A / cos δ** = 1000 / cos 20° ≈ 1064 rpm, when the driving yoke lies in the plane of the shafts; the lowest is 1000 × cos 20° ≈ 940 rpm.',
+      },
     },
     {
       title: 'Bigger angle, bigger fluctuation',
@@ -80,6 +86,12 @@ const scene: SceneDef = {
       params: { delta: 40 },
       select: 'gauge',
       cites: [SRC.top510('p4–5'), HJ2('Fig 26.9')],
+      check: {
+        question: 'Why do PTO drivelines keep each joint angle small whenever they can?',
+        options: ['The speed swing grows rapidly with the angle', 'The cross cannot pivot more than about 10°', 'Small angles let the needle rollers run dry'],
+        answer: 0,
+        explain: 'The driven speed swings between **cos δ** and **1/cos δ** times the input: about ±0.4 % at 5°, but 0.77–1.31 at 40°. Small angles keep the drive free of shaking torques.',
+      },
     },
     {
       title: 'Inertia torque',
@@ -89,6 +101,12 @@ const scene: SceneDef = {
       params: { delta: 20, rpm: 1000, weight: 147, k: 0.25, thetaProbe: 45 },
       select: 'mass',
       cites: [HJ2('Example 26.3'), SRC.hj502('disadvantages')],
+      check: {
+        question: 'Keep 20° but run the driver at 2000 rpm. Roughly what inertia torque is needed at θ = 45°?',
+        options: ['About 1.3 kN·m, unchanged', 'About 2.5 kN·m, double', 'About 5.1 kN·m, four times'],
+        answer: 2,
+        explain: 'The angular acceleration of the driven shaft scales with **ω_A²**, so doubling the speed makes T = I·α_B four times larger: about 4 × 1.27 ≈ 5.1 kN·m.',
+      },
     },
     {
       title: 'Speed table and charts',

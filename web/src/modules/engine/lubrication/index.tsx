@@ -51,6 +51,12 @@ const scene: SceneDef = {
       select: 'oil-pump',
       cut: 'half',
       cites: [SRC.tb509('Fig 6.2, p35')],
+      check: {
+        question: 'Engine speed doubles. Before the relief valve opens, what does the delivery of the gear pump do?',
+        options: ['It roughly doubles', 'It stays about the same', 'It roughly halves'],
+        answer: 0,
+        explain: 'A gear pump is **positive displacement**: each turn carries a fixed volume round between the teeth and casing, so its delivery rises in step with speed.',
+      },
     },
     {
       title: '2 · The pressure-relief valve',
@@ -60,6 +66,12 @@ const scene: SceneDef = {
       select: 'relief-valve',
       params: { tempC: 10, rpm: 1800 },
       cites: [SRC.tb509('Fig 6.2 — relief valve')],
+      check: {
+        question: 'On a cold morning the oil is very thick. What does the relief valve do?',
+        options: ['It stays shut so all the oil reaches the bearings', 'It closes off the filter to let the oil through', 'It lifts and spills the surplus back to the sump'],
+        answer: 2,
+        explain: 'Thick oil drives the pump pressure past the **spring setting** (5.5 bar here). The plunger lifts and returns the surplus to the sump, protecting the pump, filter and seals.',
+      },
     },
     {
       title: '3 · Full-flow filter',
@@ -69,6 +81,13 @@ const scene: SceneDef = {
       cut: 'gallery',
       params: { tempC: 90, rpm: 1500 },
       cites: [SRC.tb509('Fig 6.2 — filter')],
+      check: {
+        question: 'The filter element slowly clogs. What does the gallery pressure gauge show?',
+        options: ['Higher pressure, as the pump works harder', 'Lower pressure, as the element chokes the flow', 'No change, as the pump delivers the same'],
+        answer: 1,
+        explain: 'The pressure is lost across the **clogged element**, before the gallery. Less oil reaches the bearings, so the **gallery pressure falls** even though the pump works as hard.',
+        reveal: { params: { filterClog: 5 } },
+      },
     },
     {
       title: '4 · Main gallery and drillings',

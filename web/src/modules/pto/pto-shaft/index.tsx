@@ -45,6 +45,13 @@ const scene: SceneDef = {
       select: 'pto-yoke',
       params: { std: '540' },
       cites: C.std,
+      check: {
+        question: 'For the same power, how does the torque on a 1000 rpm shaft compare with a 540 rpm shaft?',
+        options: ['About 54 % of it', 'About 185 % of it', 'The same torque'],
+        answer: 0,
+        explain: 'Power = torque × angular speed, so at the same power **torque ∝ 1/N**: 540/1000 = 0.54. Less torque is why larger machines use 1000 rpm.',
+        reveal: { params: { std: '1000' } },
+      },
     },
     {
       title: 'Lifting changes angles and length',
@@ -61,6 +68,13 @@ const scene: SceneDef = {
       select: 'crosses',
       params: { mode: 'trailed', gamma: 50, b2: B1, phaseErr: 0 },
       cites: C.uj,
+      check: {
+        question: 'A yoke on the telescopic shaft is refitted a quarter-turn out of line. What does the implement get?',
+        options: ['A steady speed, since the angles are still equal', 'A bigger speed swing than one joint alone', 'A smaller speed swing than one joint alone'],
+        answer: 1,
+        explain: 'With the intermediate yokes **90° out of line**, the second joint adds its swing to the first instead of cancelling it, even with equal angles.',
+        reveal: { params: { phaseErr: 90 } },
+      },
     },
     {
       title: 'BS 1495: pin midway',
@@ -77,6 +91,12 @@ const scene: SceneDef = {
       select: 'guards',
       params: { ...DEFAULTS },
       cites: C.guard,
+      check: {
+        question: 'Why are the guard cones and tubes made to stay still while the shaft turns inside them?',
+        options: ['To keep the grease in the joints and the dirt out', 'To cut the air drag on the shaft at 540 rpm', 'So clothing that touches them is not caught and wound in'],
+        answer: 2,
+        explain: 'A bare 540 rpm shaft wraps **7 ft of string in one second**. A guard that does not turn cannot catch clothing or hair, so brushing against it is harmless.',
+      },
     },
   ],
 }

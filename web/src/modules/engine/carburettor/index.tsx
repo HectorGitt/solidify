@@ -59,6 +59,12 @@ const scene: SceneDef = {
       select: 'float',
       timeScale: 1 / 10,
       cites: [SRC.tb509('Fig 4.7')],
+      check: {
+        question: 'As the engine uses fuel, the level in the float chamber falls. What happens at the needle valve?',
+        options: ['The float drops, the needle leaves its seat and fuel flows in', 'The needle presses harder on its seat to hold the level', 'The needle stays shut until the chamber is nearly empty'],
+        answer: 0,
+        explain: 'The **float** follows the fuel level. As it drops it lets the needle off its seat, the pump refills the chamber, and the rising float shuts it again — so the level stays nearly constant.',
+      },
     },
     {
       title: 'Venturi and main jet',
@@ -68,6 +74,12 @@ const scene: SceneDef = {
       select: 'carb-body',
       timeScale: 1 / 20,
       cites: [SRC.tb509('§4.4.3 venturi')],
+      check: {
+        question: 'If the vent on the float chamber were blocked, what would happen to the fuel from the main jet?',
+        options: ['It would increase, because the venturi suction is stronger', 'It would fall away and stop as the chamber pressure dropped', 'Nothing would change; the venturi alone lifts the fuel'],
+        answer: 1,
+        explain: 'Fuel is **pushed** up the jet by the difference between atmospheric pressure in the vented chamber and the low pressure at the venturi. Blocked, the chamber pressure falls as fuel leaves until that difference is gone.',
+      },
     },
     {
       title: 'Throttle and idle circuit',
@@ -76,6 +88,12 @@ const scene: SceneDef = {
       select: 'throttle',
       params: { rpm: 700, throttle: 0.04, choke: 0 },
       cites: [SRC.tb509('Fig 4.7 throttle')],
+      check: {
+        question: 'At idle the throttle is almost closed. Why does the main jet stop supplying fuel?',
+        options: ['The float shuts the needle valve at low speed', 'The choke closes over the main jet at idle', 'Air through the venturi is too slow to lift the fuel'],
+        answer: 2,
+        explain: 'Jet flow depends on the **venturi depression**, which falls with air speed. With the butterfly nearly shut the airflow is tiny, so the **idle jet**, below the butterfly where the manifold suction is strong, takes over.',
+      },
     },
     {
       title: 'Choke for cold starting',

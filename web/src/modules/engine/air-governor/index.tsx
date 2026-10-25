@@ -51,6 +51,12 @@ const scene: SceneDef = {
       camera: { position: [OB.x + 0.35, 0.3, 0.55], target: [OB.x, 0.16, 0] },
       select: 'oil-bath',
       cites: [SRC.tb509('Fig 4.4')],
+      check: {
+        question: 'Why does the incoming air make a sharp turn over the oil before it rises through the mesh?',
+        options: ['Heavy dust cannot follow the turn and is thrown into the oil', 'The turn slows the air so the oil can cool it first', 'The turn picks up oil mist to lubricate the inlet valves'],
+        answer: 0,
+        explain: 'Dust is far denser than air, so its **inertia** carries it straight on into the oil while the air turns. The oil-wetted mesh then catches the fine dust that followed the air.',
+      },
     },
     {
       title: 'Take air from high up',
@@ -77,6 +83,12 @@ const scene: SceneDef = {
       cut: 'half',
       params: { cleaner: 'oil-bath', load: 0, damping: 200, setRpm: 1600 },
       cites: [SRC.tb509('Fig 4.10')],
+      check: {
+        question: 'The load comes off and the engine starts to speed up. What does the governor do to the rack?',
+        options: ['Moves it to more fuel, to keep the flyweights balanced', 'Moves it to less fuel as the flyweights swing out', 'Leaves it alone until the driver moves the speed lever'],
+        answer: 1,
+        explain: 'More speed means more **centrifugal force** on the flyweights. They swing out, push the sleeve against the spring, and the fork lever moves the rack to **less fuel**, so the speed falls back.',
+      },
     },
     {
       title: 'Throw on the load',
@@ -94,6 +106,13 @@ const scene: SceneDef = {
       select: 'sleeve',
       params: { load: 0, damping: 15 },
       cites: [SRC.supp509('hunting'), SRC.ln518('Routh–Hurwitz')],
+      check: {
+        question: 'The engine speed keeps swinging fast–slow–fast. Which change will settle it?',
+        options: ['A weaker governor spring', 'Less damping on the sleeve', 'More damping on the sleeve'],
+        answer: 2,
+        explain: 'Hunting is the governor **over-correcting**. **Damping** on the sleeve slows its movement, so the rack stops overshooting and the speed settles.',
+        reveal: { params: { damping: 200 } },
+      },
     },
     {
       title: 'The speed-control lever',

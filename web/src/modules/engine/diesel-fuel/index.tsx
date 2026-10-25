@@ -67,6 +67,12 @@ const scene: SceneDef = {
       cut: 'half',
       timeScale: 1 / 100,
       cites: [SRC.tb509('§4.5.3, Fig 4.8')],
+      check: {
+        question: 'If the helical groove uncovered the spill port earlier in the plunger lift, what would change?',
+        options: ['The same fuel would be delivered, only earlier', 'Less fuel per stroke: the effective stroke is shorter', 'More fuel per stroke: the plunger rises further'],
+        answer: 1,
+        explain: 'Delivery lasts only from **port closing to spill**. Spilling earlier shortens this **effective stroke**, so less fuel is pushed out, although the total lift of the plunger is unchanged.',
+      },
     },
     {
       title: 'The rack meters the fuel',
@@ -77,6 +83,13 @@ const scene: SceneDef = {
       cut: 'all-moving',
       params: { rack: RACK_MAX * 0.85 },
       cites: [SRC.tb509('p25 helical groove')],
+      check: {
+        question: 'The rack is moved towards less fuel. What happens to the total lift of each plunger?',
+        options: ['It stays the same; only the effective stroke shrinks', 'It shrinks, because the cam lifts it less far', 'It grows, so that more fuel spills back'],
+        answer: 0,
+        explain: 'The **cam** fixes the total lift. The rack only rotates the plunger, so the helix reaches the spill port sooner and the **effective stroke** — the part that delivers fuel — gets shorter.',
+        reveal: { params: { rack: RACK_MAX * 0.3 } },
+      },
     },
     {
       title: 'Delivery valve and high-pressure pipe',
@@ -95,6 +108,12 @@ const scene: SceneDef = {
       select: 'injector',
       timeScale: 1 / 100,
       cites: [SRC.tb509('Fig 4.9'), SRC.supp509('injector')],
+      check: {
+        question: 'The pressure-adjusting screw is tightened, compressing the spring more. What happens?',
+        options: ['The needle lifts sooner, at a lower pressure', 'More fuel leaks off past the needle', 'The needle lifts only at a higher fuel pressure'],
+        answer: 2,
+        explain: 'The needle lifts when fuel pressure on its shoulder beats the **spring force**. More preload means a higher **opening pressure** (140 kg/cm² in this scene).',
+      },
     },
     {
       title: 'Air locks and bleeding',

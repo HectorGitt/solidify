@@ -50,6 +50,12 @@ const scene: SceneDef = {
       camera: { position: [0.1, 0.17, 0.2], target: [0, 0, 0] },
       select: 'rz-cage',
       cites: CV_CITES.rzeppa,
+      check: {
+        question: 'This Rzeppa joint works at 30° with the input at 600 rpm. What does the output do?',
+        options: ['Turns at a steady 600 rpm', 'Swings between about 520 and 690 rpm', 'Turns steadily at 600 × cos 30° ≈ 520 rpm'],
+        answer: 0,
+        explain: 'With the balls held in the **bisecting plane**, each ball is the same distance from both shafts, so input and output turn together. A single Hooke’s joint at 30° would swing between about 520 and 690 rpm.',
+      },
     },
     {
       title: 'Weiss: four balls in crossing tracks',
@@ -85,6 +91,12 @@ const scene: SceneDef = {
       select: 'dc-centring',
       params: { type: 'double', delta: 30 },
       cites: CV_CITES.double,
+      check: {
+        question: 'What would happen if the centring ball let the two halves take unequal angles?',
+        options: ['The joint would lock solid at the centre yoke', 'Some speed fluctuation would reach the output', 'Nothing; the centre yoke absorbs any difference'],
+        answer: 1,
+        explain: 'Cancellation needs **equal angles**. With unequal halves the second joint undoes only part of the first one’s swing, so the output speed fluctuates a little.',
+      },
     },
     {
       title: 'Why PTO shafts still use Hooke’s joints',
@@ -94,6 +106,12 @@ const scene: SceneDef = {
       select: null,
       params: { type: 'rzeppa', delta: 40 },
       cites: [TOP5],
+      check: {
+        question: 'Why does a field PTO shaft use a pair of Hooke’s joints rather than CV joints?',
+        options: ['CV joints are far less efficient than Hooke’s joints', 'CV joints cannot carry PTO torque at 540 rpm', 'A single CV joint gives only about 40° of articulation'],
+        answer: 2,
+        explain: 'A pair of roller-bearing Hooke’s joints cancels its speed swing and handles large angles, while a single CV joint allows only about **40°** — not enough for normal field work.',
+      },
     },
   ],
 }

@@ -50,6 +50,12 @@ const scene: SceneDef = {
       cut: 'inlet',
       select: 'crankcase',
       cites: [SRC.add509('inlet port opens beneath the piston into the crankcase'), SRC.tb509('Fig 2.4(a) induction and compression')],
+      check: {
+        question: 'Why must the crankcase of this engine be sealed?',
+        options: ['It is the pump that draws in and pre-compresses the charge', 'It holds the oil, because it doubles as the sump', 'It stops exhaust gas from reaching the main bearings'],
+        answer: 0,
+        explain: 'The underside of the piston works as a **crankcase pump**: rising, it draws mixture in; falling, it compresses it to drive it up the transfer port. A leak would lose that charge.',
+      },
     },
     {
       title: 'Spark and power',
@@ -59,6 +65,12 @@ const scene: SceneDef = {
       select: 'plug',
       timeScale: 1 / 100,
       cites: [SRC.tb509('§5.5 ignition timing'), SRC.l3_509('one power stroke per revolution')],
+      check: {
+        question: 'At 1500 rpm, how many power strokes a minute does this engine make, compared with a four-stroke single?',
+        options: ['750, the same as the four-stroke', '3000, four times the four-stroke', '1500, twice the four-stroke'],
+        answer: 2,
+        explain: 'A two-stroke fires **every revolution**: 1500 power strokes a minute, against 750 for a four-stroke that fires every other turn.',
+      },
     },
     {
       title: 'Exhaust first, then transfer',
@@ -68,6 +80,12 @@ const scene: SceneDef = {
       select: 'barrel',
       timeScale: 1 / 50,
       cites: [SRC.tb509('Fig 2.4(b) power and exhaust'), SRC.add509('crank scoops the mixture into the transfer port')],
+      check: {
+        question: 'What would happen if the transfer port opened before the exhaust port?',
+        options: ['The fresh charge would scavenge the cylinder better', 'Hot cylinder gas would blow back into the crankcase', 'Nothing; the order of the ports does not matter'],
+        answer: 1,
+        explain: 'Just after the power stroke the cylinder pressure is far above the crankcase pressure. Opening the **exhaust first** lets it blow down, so the fresh charge can flow up the transfer port instead of being driven back.',
+      },
     },
     {
       title: 'The deflector',

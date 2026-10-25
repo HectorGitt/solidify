@@ -54,6 +54,12 @@ const scene: SceneDef = {
       camera: { position: [1.23, 0.57, -0.26], target: [0.15, 0.1, -0.76] },
       select: 'dyno',
       cites: [SRC.tests502('p6, Fig 15.3 hydraulic dynamometer')],
+      check: {
+        question: 'The engine torque stays the same, but the torque arm is made twice as long. What does the scale read?',
+        options: ['Twice the force', 'Half the force', 'The same force'],
+        answer: 1,
+        explain: 'The casing reaction equals the engine torque, and **T = F × R**. With R doubled, half the force on the scale balances the same torque.',
+      },
     },
     {
       title: 'Swept volume and compression ratio',
@@ -72,6 +78,12 @@ const scene: SceneDef = {
       select: 'torque-arm',
       params: preset('ex7'),
       cites: [SRC.misc509('Example 7')],
+      check: {
+        question: 'Keep the 160 N·m but halve the speed to 2250 rpm. What is the brake power now?',
+        options: ['37.7 kW', '75.4 kW', '150.8 kW'],
+        answer: 0,
+        explain: 'At constant torque **BP = 2πNT/60** is proportional to speed: 2π × 2250 × 160 / 60 ≈ 37.7 kW, half of 75.4 kW.',
+      },
     },
     {
       title: 'Power from the air the engine breathes',
@@ -88,6 +100,12 @@ const scene: SceneDef = {
       select: 'crank',
       params: preset('genset'),
       cites: [SRC.misc509('p2–3 IP, FP, ηm'), SRC.exam509('2022/23 Q2')],
+      check: {
+        question: 'If friction rose so that ηm fell to 60 % with imep still 400 kPa, what would bmep be?',
+        options: ['300 kPa', '667 kPa', '240 kPa'],
+        answer: 2,
+        explain: '**bmep = ηm × imep** = 0.60 × 400 = 240 kPa. More friction leaves less of the indicated work to reach the flywheel.',
+      },
     },
     {
       title: 'Where the fuel energy goes',

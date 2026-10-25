@@ -64,6 +64,12 @@ const scene: SceneDef = {
       select: 'thermostat',
       cut: 'half',
       cites: [SRC.tb509('Fig 7.3 — thermostat and bypass')],
+      check: {
+        question: 'The engine has just started from cold. Where does the coolant leaving the head go until it reaches about 80 °C?',
+        options: ['Through the radiator, at reduced flow', 'Back to the pump through the bypass', 'Out through the overflow pipe'],
+        answer: 1,
+        explain: 'The shut **thermostat** blocks the way to the radiator, so the pump circulates coolant round the engine through the **bypass**. No heat is thrown away, and the engine warms up quickly and evenly.',
+      },
     },
     {
       title: '3 · Pump, fan and belt',
@@ -79,6 +85,12 @@ const scene: SceneDef = {
       camera: { position: [0.6, 0.65, 0.85], target: [0, (RAD.y0 + RAD.y1) / 2, 0.3] },
       select: 'radiator',
       cites: [SRC.tb509('Fig 7.4 radiator, pressure cap')],
+      check: {
+        question: 'If the pressure-cap seal failed and the system ran at atmospheric pressure, what would happen?',
+        options: ['The coolant would boil at a higher temperature', 'Nothing; the cap only stops coolant splashing out', 'The coolant would boil at about 100 °C, not ≈ 119 °C'],
+        answer: 2,
+        explain: 'Boiling point rises with pressure: the cap holds 0.9 bar and lifts it to ≈ 119 °C. Without that pressure the coolant **boils at about 100 °C**, much closer to its working temperature.',
+      },
     },
     {
       title: 'Thermosiphon circulation',
@@ -96,6 +108,12 @@ const scene: SceneDef = {
       select: 'pressure-cap',
       params: { mode: 'forced', load: 0.8, rpm: 2000, thermostat: 'stuck-shut', thermalSpeed: 40, coldStart: true },
       cites: [SRC.tb509('Ch 7 faults'), SRC.l4_509('care of the cooling system')],
+      check: {
+        question: 'With the thermostat stuck shut on a working engine, what would you find?',
+        options: ['A hot engine but a cool radiator', 'A cool engine but a hot radiator', 'A slow warm-up but normal running'],
+        answer: 0,
+        explain: 'Almost no coolant reaches the **radiator**, so it stays cool while heat builds up in the jacket. A slow warm-up is the sign of a thermostat stuck open.',
+      },
     },
     {
       title: 'Air cooling',

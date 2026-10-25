@@ -51,6 +51,12 @@ const scene: SceneDef = {
       camera: { position: [0.94, 0.07, 1.01], target: [0, 0.05, 0] },
       select: 'crankshaft',
       cites: [SRC.tb509('p10–11, Fig 2.5')],
+      check: {
+        question: 'In order 1-3-4-2, cylinder 1 has just fired and pistons 2 and 3 are at BDC. Which one is starting its compression stroke?',
+        options: ['Cylinder 2', 'Cylinder 3', 'Both of them'],
+        answer: 1,
+        explain: 'Cylinder **3 fires next**, 180° later, so it is starting compression. Piston 2 moves with it but is a full revolution behind in the cycle: it has just finished power and is starting exhaust.',
+      },
     },
     {
       title: 'Firing order 1-3-4-2',
@@ -60,6 +66,13 @@ const scene: SceneDef = {
       select: 'gas',
       timeScale: 1 / 50,
       cites: [SRC.tb509('Table 2.3, Q12'), SRC.l4_509('firing order 1-2-4-3 or 1-3-4-2')],
+      check: {
+        question: 'Following the same rule, how often would a three-cylinder four-stroke fire?',
+        options: ['Every 120°', 'Every 180°', 'Every 240°'],
+        answer: 2,
+        explain: 'A four-stroke cycle takes **720°** of crank rotation, shared equally between the cylinders: 720°/3 = **240°**, so there are short gaps between power strokes.',
+        reveal: { params: { n: 3, layout: '1-2-3' } },
+      },
     },
     {
       title: 'Six cylinders: power every 120°',
@@ -87,6 +100,12 @@ const scene: SceneDef = {
       params: { n: 8, layout: '1-7-5-3-8-6-2-4' },
       select: 'flywheel',
       cites: [SRC.exam509('2022/23 Q2'), SRC.tb509('p11 flywheel')],
+      check: {
+        question: 'Why can the eight-cylinder genset engine get by with a small flywheel?',
+        options: ['Impulses every 90° overlap and keep the torque even', 'Its crankshaft is heavy enough to store the energy', 'A genset runs at a lower speed than a tractor'],
+        answer: 0,
+        explain: 'The **flywheel** only has to carry the engine between impulses. With a power stroke every 90° and two cylinders always on power, the torque hardly dips.',
+      },
     },
     {
       title: 'Across one cylinder',

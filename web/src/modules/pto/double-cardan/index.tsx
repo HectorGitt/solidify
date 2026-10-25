@@ -49,6 +49,12 @@ const scene: SceneDef = {
       camera: { position: [0.3, 0.42, 0.62], target: [0.22, 0, -0.06] },
       select: 'intermediate',
       cites: [HJ2('§26.2.3, Figs 26.11, 26.13')],
+      check: {
+        question: 'Joint 2 cancels joint 1 at the output. What would a very heavy intermediate shaft cause?',
+        options: ['A worse speed fluctuation at the output', 'A better cancellation between the joints', 'Large inertia torques in both joints'],
+        answer: 2,
+        explain: 'The intermediate shaft still speeds up and slows down twice a revolution (939.7–1064 rpm). A heavy one needs large **inertia torques** to do that, loading both crosses — so it should be light.',
+      },
     },
     {
       title: 'Condition 3: yokes in line',
@@ -67,6 +73,12 @@ const scene: SceneDef = {
       select: 'cross-2',
       params: { phase: 0, equal: false, delta1: 20, delta2: 15, arrangement: 'Z' },
       cites: [MS1718('Q4(d)')],
+      check: {
+        question: 'With the yokes in line, joint 1 at 20° and joint 2 at 15°, how does the output compare with a single 20° joint?',
+        options: ['It fluctuates more: the two joints add', 'It fluctuates less: joint 2 cancels only part', 'It is steady: any two joints cancel'],
+        answer: 1,
+        explain: 'The 15° joint undoes a smaller swing than the 20° joint makes. The difference is left at the output, so the drive is **better than one joint but not uniform**.',
+      },
     },
     {
       title: 'Condition 1: one plane',
@@ -85,6 +97,13 @@ const scene: SceneDef = {
       select: null,
       params: { mode: 'turn', psi: 40, hitch: 0.25, twist: 0 },
       cites: [SRC.top510('p5 BS 1495 Part 1:1970')],
+      check: {
+        question: 'The implement turns 40° with the hitch pin midway between the joints. What angle does each joint take?',
+        options: ['20° each', '40° and 0°', '10° each'],
+        answer: 0,
+        explain: 'With the pin midway the turn is shared equally: each joint takes **ψ/2** = 20°, the angles stay equal and the implement shaft still turns uniformly.',
+        reveal: { params: { hitch: 0.5 } },
+      },
     },
     {
       title: 'Check the charts and conditions',

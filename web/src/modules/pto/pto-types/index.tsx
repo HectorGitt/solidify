@@ -60,6 +60,13 @@ const scene: SceneDef = {
       cut: 'clutch',
       params: { type: 'live', pedal: 'half' },
       cites: [SRC.pt510('p2–3 continuous-running'), SRC.top510('p6 Fig A2.9'), SRC.tts510('p3')],
+      check: {
+        question: 'On a live PTO, what happens when the pedal is pushed all the way down?',
+        options: ['The wheels stop but the PTO keeps turning', 'The wheels and the PTO both stop', 'The PTO stops but the wheels keep turning'],
+        answer: 1,
+        explain: 'The **dual clutch** releases the transmission plate in the first half of the travel and the PTO plate at **full travel**, so both drives stop.',
+        reveal: { params: { pedal: 'down' } },
+      },
     },
     {
       title: '3 · Independent PTO',
@@ -79,6 +86,12 @@ const scene: SceneDef = {
       select: 'pto-counter',
       params: { type: 'ground', pedal: 'up', gear: 'R' },
       cites: [SRC.tts510('p10 ground-speed PTO')],
+      check: {
+        question: 'With a ground-speed PTO, the driver shifts to a higher gear at the same engine speed. What happens to PTO turns per metre travelled?',
+        options: ['They rise with the higher gear', 'They fall with the higher gear', 'They stay the same'],
+        answer: 2,
+        explain: 'The PTO is driven from the gearbox **output**, after the speed gears, so it turns in step with the wheels: a fixed number of turns per metre in any gear.',
+      },
     },
     {
       title: '540 and 1000 rpm',
@@ -89,6 +102,12 @@ const scene: SceneDef = {
       cut: 'half',
       params: { type: 'independent', gear: 'F', std: '1000', lever: true },
       cites: [SRC.tts510('p10'), SRC.pto502('540 rpm, 6 splines')],
+      check: {
+        question: 'A machine takes 30 kW from a 1000 rpm shaft. About what torque does the shaft carry?',
+        options: ['≈ 530 N·m', '≈ 983 N·m', '≈ 286 N·m'],
+        answer: 2,
+        explain: '**T = P/ω** = 30 000 / (2π × 1000/60) ≈ 286 N·m. At 540 rpm the same 30 kW would need ≈ 530 N·m.',
+      },
     },
     {
       title: 'Guard it',
