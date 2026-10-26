@@ -13,23 +13,49 @@
         document.documentElement.dataset.theme = t
       } catch (e) {}
     </script>
-    <meta name="description" content="Solidify — interactive 3D cutaways of tractors and farm machinery: engines, transmissions, hydraulics, hitches and implements, with live engineering calculations." />
+    <meta name="description" content="Explore tractors and farm machinery in interactive 3D. Cut open engines, gearboxes, hydraulics and implements, with live engineering calculations and exam practice." />
     <link rel="canonical" href="https://solidify.studio/" />
     <meta property="og:site_name" content="Solidify" />
-    <meta property="og:title" content="Solidify — see inside every machine" />
-    <meta property="og:description" content="Interactive 3D cutaways of tractors and farm machinery, with live engineering calculations." />
+    <meta property="og:title" content="Solidify — Interactive 3D Tractor & Farm Machinery" />
+    <meta property="og:description" content="Cut open a running tractor in 3D: engines, gearboxes, hydraulics, traction and implements, with the engineering calculations worked live." />
     <meta property="og:url" content="https://solidify.studio/" />
     <meta property="og:type" content="website" />
-    <meta property="og:image" content="https://solidify.studio/og.jpg" />
+    <meta property="og:image" content="https://solidify.studio/media/og.jpg" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="A tractor in 3D with its operator, engine and drivetrain cut away" />
     <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Solidify — Interactive 3D Tractor & Farm Machinery" />
+    <meta name="twitter:description" content="Cut open a running tractor in 3D, with the engineering calculations worked live." />
+    <meta name="twitter:image" content="https://solidify.studio/media/og.jpg" />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "WebApplication",
+        "name": "Solidify",
+        "url": "https://solidify.studio/",
+        "applicationCategory": "EducationalApplication",
+        "operatingSystem": "Any (web browser)",
+        "description": "Interactive 3D cutaways of tractors and farm machinery with live engineering calculations, guided tours and exam practice for agricultural engineering.",
+        "about": ["Tractors", "Farm machinery", "Agricultural engineering", "Farm power"]
+      }
+    </script>
     <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
-    <title>Solidify — Tractor & Farm Machinery in 3D</title>
+    <title>Solidify — Interactive 3D Tractor &amp; Farm Machinery</title>
   </head>
   <body>
     <div id="root"></div>
+    <noscript>
+      <h1>Solidify: interactive 3D tractor and farm machinery simulator</h1>
+      <p>Cut open a running tractor in 3D and size every system with live engineering calculations. Solidify needs JavaScript to run.</p>
+      <h2>Systems</h2>
+      <p>Engine, power train, PTO and driveline, hydraulics and three-point hitch, steering, tyres, tracks and traction, chassis and stability, implements, machine elements, testing and management, vibration and the operator, and field operations. Coming soon: crop processing, water and irrigation, farm structures and precision farming.</p>
+      <h2>For students and lecturers</h2>
+      <p>Exam-style questions with fresh numbers, examiner-style marking with method marks, guided tours, classes and papers.</p>
+    </noscript>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

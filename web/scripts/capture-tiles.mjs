@@ -15,10 +15,12 @@ import { createServer } from 'vite'
  * writes ../shots/engine--cooling-light.webp and so on.
  */
 
-const WIDTH = 1280
-const HEIGHT = 800
+// SHOT_SIZE=1200x630 captures and saves at that exact size (the link-preview image)
+const [SW, SH] = (process.env.SHOT_SIZE || '').split('x').map(Number)
+const WIDTH = SW || 1280
+const HEIGHT = SH || 800
 // saved smaller than captured: tiles never show wider than ~700 px, so 1024 keeps them sharp on 2x screens
-const SAVE_WIDTH = 1024
+const SAVE_WIDTH = SW || 1024
 const QUALITY = 0.78
 const OUT = path.resolve('public/media')
 
@@ -55,7 +57,7 @@ const THEMES = (process.env.SHOT_THEMES || 'light,dark').split(',')
 const ids = trial ? args : Object.keys(SHOTS).filter((id) => !args.length || args.includes(id))
 const target = (id) => (trial ? id : SHOTS[id])
 const fileFor = (id, theme) => {
-  if (trial) return path.join(OUT_DIR ?? OUT, `${id.replace('/', '--')}-${theme}.webp`)
+  if (trial) return path.join(OUT_DIR ?? OUT, `${id.replace('/', '--').replace(/[^a-z0-9.-]+/gi, '_')}-${theme}.webp`)
   return path.join(OUT, 'modules', `${id}-${theme}.webp`)
 }
 if (OUT_DIR) fs.mkdirSync(OUT_DIR, { recursive: true })

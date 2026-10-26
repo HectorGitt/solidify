@@ -1,12 +1,14 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { useSim } from '@/core/sim'
-import { MODULES, countScenes } from '@/modules/catalog'
+import { MODULES } from '@/modules/catalog'
 import type { ModuleDef, SceneDef } from '@/modules/types'
 import { DEFAULT_CUT_PRESETS, useView } from '@/render/view'
 import { useAcademic, useAudience } from './audience'
 import { AccountMenu } from '@/cloud/ui/AccountMenu'
 import { SUPPORT_EMAIL } from '@/cloud/config'
+import { useReport } from '@/cloud/ui/ReportDialog'
+import { useSales } from '@/cloud/ui/SalesDialog'
 import { AudienceSwitch } from './AudienceSwitch'
 import { Icon } from './icons'
 import { Logo } from './Logo'
@@ -16,6 +18,7 @@ import { ThemeToggle } from './ThemeToggle'
 import { useTheme } from './theme'
 import { ModuleProgress } from '@/study/ui/badges'
 import { StudyLinks } from '@/study/ui/StudyShell'
+import { SiteFooter } from './SiteFooter'
 
 const MEDIA = './media'
 
@@ -26,19 +29,21 @@ const MEDIA = './media'
  */
 type HeroReadout = { label: string; value: string; unit: string; fill?: number }
 const HERO_SCENES: { moduleId: string; sceneId: string; label: string; frame: StageFrame; readouts: HeroReadout[] }[] = [
-  { moduleId: 'vibration', sceneId: 'seat', label: 'Tractor seat', frame: { back: 1.6, shift: 0.55 }, readouts: [{ label: 'Operator vibration', value: '0.666', unit: 'm/s² RMS' }, { label: 'Seat transmissibility', value: '0.549', unit: 'floor to operator' }] },
-  { moduleId: 'traction', sceneId: 'traction-lab', label: 'Traction & forces', frame: { back: 1.4, shift: 0.12 }, readouts: [{ label: 'Drawbar pull', value: '12', unit: 'kN at 14.6 % slip' }, { label: 'Drawbar power', value: '11.4', unit: 'kW of 17.3', fill: 11.4 / 17.3 }] },
-  { moduleId: 'powertrain', sceneId: 'differential', label: 'Differential', frame: { back: 1.8, shift: 0.35 }, readouts: [{ label: 'Pinion', value: '600', unit: 'rpm' }, { label: 'Crown wheel', value: '140', unit: 'rpm' }] },
-  { moduleId: 'engine', sceneId: 'cooling', label: 'Cooling system', frame: { back: 1.4, shift: 0.45 }, readouts: [{ label: 'Heat to coolant', value: '36', unit: 'kW' }] },
+  { moduleId: 'vibration', sceneId: 'seat', label: 'Seat suspension', frame: { back: 1.6, shift: 0.55 }, readouts: [{ label: 'Operator vibration', value: '0.666', unit: 'm/s² RMS' }, { label: 'Seat transmissibility', value: '0.549', unit: 'floor to operator' }] },
+  { moduleId: 'traction', sceneId: 'traction-lab', label: 'Traction & drawbar pull', frame: { back: 1.4, shift: 0.12 }, readouts: [{ label: 'Drawbar pull', value: '12', unit: 'kN at 14.6 % slip' }, { label: 'Drawbar power', value: '11.4', unit: 'kW of 17.3', fill: 11.4 / 17.3 }] },
+  { moduleId: 'powertrain', sceneId: 'differential', label: 'Differential & diff lock', frame: { back: 1.8, shift: 0.35 }, readouts: [{ label: 'Pinion', value: '600', unit: 'rpm' }, { label: 'Crown wheel', value: '140', unit: 'rpm' }] },
+  { moduleId: 'engine', sceneId: 'cooling', label: 'Engine cooling', frame: { back: 1.4, shift: 0.45 }, readouts: [{ label: 'Heat to coolant', value: '36', unit: 'kW' }] },
 ]
 
 const DISCIPLINES: { id: string; label: string; modules: string[] }[] = [
   { id: 'all', label: 'All systems', modules: [] },
   { id: 'power', label: 'Power & drivetrain', modules: ['engine', 'powertrain', 'pto', 'hydraulics', 'elements', 'vibration'] },
   { id: 'field', label: 'Traction & implements', modules: ['traction', 'steering', 'chassis', 'implements', 'testing', 'field'] },
-  { id: 'processing', label: 'Crop processing', modules: ['processing'] },
-  { id: 'water-structures', label: 'Water & structures', modules: ['water', 'structures'] },
 ]
+
+/** Systems still being finished: listed as coming soon on the home page, not shown as tiles. */
+const SOON = new Set(['processing', 'water', 'structures', 'precision'])
+const READY = MODULES.filter((m) => !SOON.has(m.id))
 
 /** Scene shown on each module card / opened by it. */
 const FEATURED: Record<string, string> = {
@@ -62,7 +67,7 @@ const FEATURED: Record<string, string> = {
 
 const COPY = {
   professional: {
-    eyebrow: 'Interactive engineering for farm machinery',
+    eyebrow: 'Interactive 3D tractor & farm machinery simulator',
     title: 'Open up the machine.',
     lead: 'Cut through a running tractor, slow it to 1/200 speed, and size every system with the calculations engineers use: gear forces, pump flows, traction and weight transfer.',
     primary: { label: 'Explore the tractor', to: '/m/powertrain/line-of-drive' },
@@ -74,7 +79,7 @@ const COPY = {
     ],
   },
   academic: {
-    eyebrow: 'For agricultural engineering students and lecturers',
+    eyebrow: '3D farm power & machinery for agricultural engineering',
     title: 'Farm machinery, brought to life.',
     lead: 'Every topic from engines to implements as an interactive cutaway. Practise with fresh numbers each attempt, see the formula with the numbers substituted, and find the slip behind a wrong answer.',
     primary: { label: 'Start with the diesel engine', to: '/m/engine/four-stroke-diesel' },
@@ -200,8 +205,11 @@ function Hero({ copy }: { copy: (typeof COPY)[keyof typeof COPY] }) {
       <div className="pointer-events-none absolute inset-x-0 bottom-0">
         <div className="mx-auto flex max-w-[1360px] flex-wrap items-end justify-between gap-8 px-5 pb-10 sm:px-10 sm:pb-14">
           <div className="max-w-[640px]">
-            <p className="text-[13.5px] font-medium text-accent">{copy.eyebrow}</p>
-            <h1 className="mt-4 text-[48px] font-semibold leading-[0.98] tracking-[-0.045em] text-ink sm:text-[84px]">{copy.title}</h1>
+            {/* the keyword line is part of the h1, so search engines read "3D tractor & farm machinery simulator: Open up the machine." */}
+            <h1>
+              <span className="block text-[13.5px] font-medium tracking-normal text-accent">{copy.eyebrow}</span>
+              <span className="mt-4 block text-[48px] font-semibold leading-[0.98] tracking-[-0.045em] text-ink sm:text-[84px]">{copy.title}</span>
+            </h1>
             <p className="mt-6 max-w-[540px] text-[16px] leading-relaxed text-mute sm:text-[17.5px]">{copy.lead}</p>
             <div className="pointer-events-auto mt-9 flex flex-wrap gap-3">
               <Link to={copy.primary.to} className="inline-flex items-center gap-2 rounded-full bg-accent px-7 py-4 text-[15px] font-semibold text-accent-ink transition-transform hover:brightness-105 active:scale-[0.98]">
@@ -213,7 +221,7 @@ function Hero({ copy }: { copy: (typeof COPY)[keyof typeof COPY] }) {
             </div>
           </div>
 
-          <div className="pointer-events-auto flex max-w-full flex-col gap-2">
+          <div className="pointer-events-auto flex max-w-full flex-col items-start gap-2 sm:items-end">
             <div className="flex flex-wrap items-center gap-1 rounded-full border border-line-2 bg-[var(--color-scrim)] p-1 backdrop-blur-xl" role="group" aria-label="Hero scene">
               {HERO_SCENES.map((h, i) => (
                 <button
@@ -261,7 +269,7 @@ function ModuleTile({ m, academic, big }: { m: ModuleDef; academic: boolean; big
       to={`/m/${m.id}/${featured}`}
       className={`group relative block overflow-hidden rounded-3xl border border-line bg-[var(--color-stage)] ${big ? 'h-[380px] lg:col-span-6' : 'h-[300px] lg:col-span-4'} sm:col-span-1`}
     >
-      <Media name={`modules/${m.id}`} alt="" className="absolute inset-0 h-full w-full object-cover transition-transform duration-700 group-hover:scale-[1.04]" />
+      <Media name={`modules/${m.id}`} alt={`${m.title}: interactive 3D cutaway`} className="absolute inset-0 h-full w-full object-cover transition-transform duration-700 group-hover:scale-[1.04]" />
       <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-[var(--color-stage)] via-[color-mix(in_srgb,var(--color-stage)_80%,transparent)] to-transparent p-6 pt-24">
         <div className="flex items-center gap-2 text-[12px] font-medium text-accent">
           {m.scenes.length} scenes
@@ -326,15 +334,49 @@ function AudienceCard({ who, title, points, active, onChoose }: { who: string; t
   )
 }
 
+const HOME_TITLE = 'Solidify — Interactive 3D Tractor & Farm Machinery'
+
+/** Two ways to reach us: ask for a feature, or talk to us about a school or company plan. */
+function Contact() {
+  const openReport = useReport((s) => s.open)
+  const openSales = useSales((s) => s.show)
+  return (
+    <section id="contact" className="mx-auto grid max-w-[1360px] scroll-mt-20 gap-4 px-5 pt-20 sm:px-10 md:grid-cols-2">
+      <div className="flex flex-col rounded-3xl border border-line bg-panel p-7">
+        <h2 className="text-[22px] font-semibold tracking-[-0.02em]">Missing something?</h2>
+        <p className="mt-2 flex-1 text-[14px] leading-relaxed text-mute">A machine, a calculation, an exam topic or a feature for your class. Requests decide what we build next.</p>
+        <button onClick={() => openReport({ mode: 'feature' })} className="mt-6 self-start rounded-full border border-line-2 px-5 py-2.5 text-[13.5px] font-semibold text-ink transition-colors hover:border-accent/50">
+          Request a feature
+        </button>
+      </div>
+      <div className="flex flex-col rounded-3xl border border-line bg-panel p-7">
+        <h2 className="text-[22px] font-semibold tracking-[-0.02em]">For schools &amp; companies</h2>
+        <p className="mt-2 flex-1 text-[14px] leading-relaxed text-mute">Licences for a department or a team, classes and papers for your students, and Create in 3D for your engineers.</p>
+        <div className="mt-6 flex flex-wrap items-center gap-4">
+          <button onClick={openSales} className="rounded-full bg-accent px-5 py-2.5 text-[13.5px] font-semibold text-accent-ink transition-opacity hover:opacity-90">
+            Talk to us
+          </button>
+          <a href={`mailto:${SUPPORT_EMAIL}`} className="text-[13px] text-mute hover:text-ink">
+            {SUPPORT_EMAIL}
+          </a>
+        </div>
+      </div>
+    </section>
+  )
+}
+
 export function Landing() {
+  useEffect(() => {
+    document.title = HOME_TITLE
+  }, [])
   const academic = useAcademic()
   const setAudience = useAudience((s) => s.setAudience)
   const copy = academic ? COPY.academic : COPY.professional
-  const { total } = countScenes()
+  const total = READY.reduce((n, m) => n + m.scenes.length, 0)
   const [discipline, setDiscipline] = useState('all')
 
   const activeDiscipline = DISCIPLINES.find((d) => d.id === discipline) ?? DISCIPLINES[0]
-  const filteredModules = activeDiscipline.modules.length === 0 ? MODULES : MODULES.filter((m) => activeDiscipline.modules.includes(m.id))
+  const filteredModules = activeDiscipline.modules.length === 0 ? READY : READY.filter((m) => activeDiscipline.modules.includes(m.id))
 
   return (
     <div className="h-full overflow-y-auto bg-bg text-ink selection:bg-accent/25">
@@ -377,7 +419,7 @@ export function Landing() {
       <section id="systems" className="mx-auto max-w-[1360px] scroll-mt-20 px-5 pt-16 sm:px-10">
         <div className="mb-7 flex flex-wrap items-end justify-between gap-4">
           <div>
-            <h2 className="text-[30px] font-semibold tracking-[-0.03em] sm:text-[38px]">Pick a system</h2>
+            <h2 className="text-[30px] font-semibold tracking-[-0.03em] sm:text-[38px]">Every tractor system, in 3D</h2>
             <p className="mt-1.5 text-[15px] text-mute">From the combustion chamber to the soil, each one opens straight into a working cutaway.</p>
           </div>
           <div className="flex flex-wrap gap-1 rounded-full border border-line bg-panel p-1" role="group" aria-label="Filter systems">
@@ -398,11 +440,24 @@ export function Landing() {
             <ModuleTile key={m.id} m={m} academic={academic} big={i < 2} />
           ))}
         </div>
+        {discipline === 'all' ? (
+          <div className="mt-6">
+            <h3 className="mb-3 text-[13px] font-medium text-dim">Coming soon</h3>
+            <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              {MODULES.filter((m) => SOON.has(m.id)).map((m) => (
+                <li key={m.id} className="rounded-2xl border border-dashed border-line-2 px-5 py-4">
+                  <div className="text-[15px] font-semibold tracking-[-0.01em] text-ink/80">{m.title}</div>
+                  <p className="mt-1 line-clamp-2 text-[12.5px] leading-relaxed text-dim">{m.blurb}</p>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
       </section>
 
       <section className="mx-auto grid max-w-[1360px] gap-4 px-5 pt-20 sm:grid-cols-2 sm:px-10 lg:grid-cols-4">
         <Stat value={total} label="interactive 3D scenes" />
-        <Stat value={MODULES.length} label="machine systems" />
+        <Stat value={READY.length} label="machine systems" />
         <Stat value="1,000+" label="verified calculations" />
         <Stat value="0 MB" label="to install: it runs in the browser" />
       </section>
@@ -449,9 +504,11 @@ export function Landing() {
         </div>
       </section>
 
+      <Contact />
+
       <section className="mx-auto max-w-[1360px] px-5 py-20 sm:px-10">
         <div className="relative overflow-hidden rounded-[32px] border border-line bg-[var(--color-stage)]">
-          <Media name="modules/implements" alt="" className="absolute inset-0 h-full w-full object-cover object-right" />
+          <Media name="modules/implements" alt="Tractor and implement in 3D" className="absolute inset-0 h-full w-full object-cover object-right" />
           <div className="relative bg-gradient-to-r from-[var(--color-stage)] via-[color-mix(in_srgb,var(--color-stage)_85%,transparent)] to-transparent p-8 sm:p-14">
             <h2 className="max-w-xl text-[32px] font-semibold leading-tight tracking-[-0.03em] text-ink sm:text-[44px]">Open a machine and see how it works.</h2>
             <p className="mt-3 max-w-xl text-[15.5px] text-mute">No sign-up, nothing to download. Pick any system and start cutting.</p>
@@ -467,26 +524,7 @@ export function Landing() {
         </div>
       </section>
 
-      <footer className="border-t border-line">
-        <div className="mx-auto flex max-w-[1360px] flex-wrap items-center gap-4 px-5 py-8 text-[13px] text-dim sm:px-10">
-          <Logo size={18} />
-          <nav className="ml-auto flex flex-wrap items-center gap-6">
-            <a href="#systems" className="transition-colors hover:text-ink">
-              Systems
-            </a>
-            <a href="#audiences" className="transition-colors hover:text-ink">
-              Modes
-            </a>
-            <Link to="/about" className="transition-colors hover:text-ink">
-              How it works
-            </Link>
-            <a href={`mailto:${SUPPORT_EMAIL}`} className="transition-colors hover:text-ink">
-              {SUPPORT_EMAIL}
-            </a>
-            <StudyLinks always compact />
-          </nav>
-        </div>
-      </footer>
+      <SiteFooter />
     </div>
   )
 }

@@ -5,6 +5,7 @@ import { AccountMenu } from '@/cloud/ui/AccountMenu'
 import { AudienceSwitch } from '@/ui/AudienceSwitch'
 import { ThemeToggle } from '@/ui/ThemeToggle'
 import { Logo } from '@/ui/Logo'
+import { SiteFooter } from '@/ui/SiteFooter'
 import { courseTitle } from '../types'
 
 export const STUDY_LINKS = [
@@ -61,7 +62,7 @@ export function StudyShell({ title, lead, children, right }: { title: string; le
         </div>
         <StudyLinks always compact className="justify-center border-y border-line py-1.5 sm:hidden" />
       </header>
-      <main className="mx-auto max-w-6xl px-4 pb-16 pt-8 sm:px-6">
+      <main className="mx-auto max-w-6xl px-4 pt-8 sm:px-6">
         <div className="mb-7 flex flex-wrap items-end justify-between gap-4">
           <div>
             <h1 className="text-[30px] font-semibold tracking-[-0.03em] sm:text-[38px]">{title}</h1>
@@ -71,6 +72,7 @@ export function StudyShell({ title, lead, children, right }: { title: string; le
         </div>
         {children}
       </main>
+      <SiteFooter />
     </div>
   )
 }

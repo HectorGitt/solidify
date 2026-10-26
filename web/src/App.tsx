@@ -10,6 +10,7 @@ import { startProfile } from './cloud/profile'
 import { startSync } from './cloud/sync'
 import { ReportDialog } from './cloud/ui/ReportDialog'
 import { SignInDialog } from './cloud/ui/SignInDialog'
+import { SalesDialog } from './cloud/ui/SalesDialog'
 
 // study pages (loaded on demand)
 const ExamPage = lazy(() => import('./study/ui/ExamPage'))
@@ -36,6 +37,7 @@ export default function App() {
       <PartSearch />
       <SignInDialog />
       <ReportDialog />
+      <SalesDialog />
       <Routes>
         <Route path="/" element={<Landing />} />
         <Route path="/about" element={<About />} />

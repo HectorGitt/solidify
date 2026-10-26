@@ -11,6 +11,8 @@ type Kind = 'error' | 'bug' | 'idea'
 interface ReportTarget {
   /** the part being reported, if any */
   partId?: string
+  /** 'feature': a feature request (a suggestion, without the problem types) */
+  mode?: 'report' | 'feature'
 }
 
 export const useReport = create<{ target: ReportTarget | null; open: (t: ReportTarget) => void; close: () => void }>((set) => ({
@@ -30,7 +32,9 @@ export function ReportDialog() {
   const target = useReport((s) => s.target)
   const signedIn = useAuth((s) => s.status === 'signed-in')
   const partName = useParts((s) => (target?.partId ? s.parts[target.partId]?.name : undefined))
-  const [kind, setKind] = useState<Kind>('error')
+  const feature = target?.mode === 'feature'
+  const [chosen, setKind] = useState<Kind>('error')
+  const kind: Kind = feature ? 'idea' : chosen
   const [message, setMessage] = useState('')
   const [contact, setContact] = useState('')
   const [state, setState] = useState<'idle' | 'sending' | 'sent'>('idle')
@@ -67,16 +71,17 @@ export function ReportDialog() {
   }
 
   return (
-    <Modal open={!!target} onClose={close} title={partName ? `Report a problem: ${partName}` : 'Report a problem'} width={460}>
+    <Modal open={!!target} onClose={close} title={feature ? 'Request a feature' : partName ? `Report a problem: ${partName}` : 'Report a problem'} width={460}>
       {state === 'sent' ? (
         <div className="space-y-3">
-          <Notice tone="ok">Thanks, your report has been sent. Reports like this are how Solidify gets more accurate.</Notice>
+          <Notice tone="ok">{feature ? 'Thanks, your request has been sent. Requests like this decide what we build next.' : 'Thanks, your report has been sent. Reports like this are how Solidify gets more accurate.'}</Notice>
           <button className={`${primaryBtn} w-full`} onClick={close}>
             Done
           </button>
         </div>
       ) : (
         <form onSubmit={(e) => void submit(e)}>
+          {feature ? null : (
           <div role="radiogroup" aria-label="Kind of problem" className="mb-3 grid gap-1.5">
             {KINDS.map((k) => (
               <button
@@ -92,8 +97,17 @@ export function ReportDialog() {
               </button>
             ))}
           </div>
-          <Field label="What did you notice?">
-            <textarea className={`${inputCls} min-h-[96px] resize-y`} required minLength={3} maxLength={4000} value={message} onChange={(e) => setMessage(e.target.value)} placeholder={kind === 'error' ? 'e.g. The clutch torque shows 15.2 N·m but my working gives 16 N·m' : undefined} />
+          )}
+          <Field label={feature ? 'What would you like Solidify to do?' : 'What did you notice?'}>
+            <textarea
+              className={`${inputCls} min-h-[96px] resize-y`}
+              required
+              minLength={3}
+              maxLength={4000}
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              placeholder={feature ? 'e.g. A scene for the baler knotter, or exporting my working as a PDF' : kind === 'error' ? 'e.g. The clutch torque shows 15.2 N·m but my working gives 16 N·m' : undefined}
+            />
           </Field>
           {!signedIn ? (
             <Field label="Email, if you’d like a reply (optional)">
@@ -109,7 +123,7 @@ export function ReportDialog() {
           </p>
           {error ? <div className="mb-3"><Notice tone="warn">{error}</Notice></div> : null}
           <button type="submit" className={`${primaryBtn} w-full`} disabled={state === 'sending' || message.trim().length < 3}>
-            {state === 'sending' ? 'Sending…' : 'Send report'}
+            {state === 'sending' ? 'Sending…' : feature ? 'Send request' : 'Send report'}
           </button>
         </form>
       )}

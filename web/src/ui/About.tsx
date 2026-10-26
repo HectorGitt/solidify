@@ -5,6 +5,7 @@ import { AudienceSwitch } from './AudienceSwitch'
 import { ThemeToggle } from './ThemeToggle'
 import { Icon } from './icons'
 import { Logo } from './Logo'
+import { SiteFooter } from './SiteFooter'
 
 /** Course codes are internal reference only — keep them out of user-facing text. */
 const clean = (t: string) => t.replace(/\s*\((?:[^)]*\bAEE\s?\d{3}[^)]*)\)/g, '').replace(/\bAEE\s?\d{3}\s*/g, '').trim()
@@ -95,6 +96,7 @@ export function About() {
           Generic colours are used throughout; no manufacturer branding is reproduced. Dimensions are typical of farm machinery where no specific machine is modelled. · solidify.studio
         </p>
       </div>
+      <SiteFooter />
     </div>
   )
 }
