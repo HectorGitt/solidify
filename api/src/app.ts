@@ -593,15 +593,24 @@ export function createApp({ db, verifier, tutor, config }: Deps) {
 
   /* ------------------------------------------------------------------ feedback */
 
-  const feedbackInput = z.object({
-    kind: z.enum(['bug', 'error', 'idea']),
-    message: z.string().trim().min(3).max(4000),
-    route: z.string().max(200).optional(),
-    partId: z.string().max(120).optional(),
-    contact: z.string().trim().max(200).optional(),
-  })
+  const feedbackInput = z
+    .object({
+      /** bug / error / idea: reports and feature requests; sales: a school or company asking about plans */
+      kind: z.enum(['bug', 'error', 'idea', 'sales']),
+      message: z.string().trim().min(3).max(4000),
+      route: z.string().max(200).optional(),
+      partId: z.string().max(120).optional(),
+      contact: z.string().trim().max(200).optional(),
+      name: z.string().trim().max(120).optional(),
+      organisation: z.string().trim().max(160).optional(),
+      seats: z.enum(['1-10', '11-50', '51-200', '200+']).optional(),
+    })
+    .refine((f) => f.kind !== 'sales' || (f.contact && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(f.contact)), {
+      message: 'Add an email address so we can reply.',
+      path: ['contact'],
+    })
 
-  /** Anyone can report a problem; signed-in reports are linked to the account. */
+  /** Anyone can report a problem, ask for a feature or contact sales; signed-in messages are linked to the account. */
   app.post('/v1/feedback', async (c) => {
     const f = await body(c, feedbackInput)
     const u = c.get('user')

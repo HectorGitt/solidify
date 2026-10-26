@@ -250,6 +250,16 @@ describe('shared links and feedback', () => {
     expect(q.feedback).toHaveLength(2)
     expect(q.feedback.map((f: { uid: string | null }) => f.uid).sort()).toEqual(['ada', null].sort())
   })
+
+  it('takes sales enquiries only with an email to reply to', async () => {
+    const enquiry = { kind: 'sales', message: 'Licences for our agric engineering department', name: 'Dr Bello', organisation: 'State Polytechnic', seats: '51-200' }
+    expect((await as(null).send('POST', '/v1/feedback', enquiry)).status).toBe(400)
+    expect((await as(null).send('POST', '/v1/feedback', { ...enquiry, contact: 'not-an-email' })).status).toBe(400)
+    expect((await as(null).send('POST', '/v1/feedback', { ...enquiry, contact: 'bello@poly.edu.ng' })).status).toBe(201)
+    expect((await as(null).send('POST', '/v1/feedback', { ...enquiry, contact: 'bello@poly.edu.ng', seats: 'lots' })).status).toBe(400)
+    const q = await (await as('boss').get('/v1/feedback')).json()
+    expect(q.feedback.find((f: { kind: string }) => f.kind === 'sales')).toMatchObject({ organisation: 'State Polytechnic', seats: '51-200', contact: 'bello@poly.edu.ng' })
+  })
 })
 
 describe('helpers', () => {
