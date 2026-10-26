@@ -44,7 +44,8 @@ Each entry: **Symptom** · **Cause** · **Fix** · **Lesson**.
 - **Symptom:** on the redesigned home page the live scene fills the hero, and scrolling over it zoomed the camera instead of scrolling the page; a one-finger swipe on a phone orbited the model.
 - **Cause:** camera-controls takes the mouse wheel and one-finger touch by default, and sets `touch-action: none` on the canvas.
 - **Fix:** `Stage pageScroll` turns off wheel and one-finger actions (drag and pinch still work), and the hero overrides the canvas to `touch-action: pan-y`.
-- **Lesson:** any canvas embedded in a scrolling page needs its scroll gestures given back to the page.
+- **Follow-up (2026-10-26):** on real phones swipes that started on the model still didn't scroll: the camera controls capture the touch regardless. On touch screens the hero is now look-only (`pointer-coarse:[&_*]:!pointer-events-none`; `!important` because R3F sets `pointer-events` inline on its wrapper), and "Open scene" is the way in.
+- **Lesson:** any canvas embedded in a scrolling page needs its scroll gestures given back to the page; on touch, the reliable way is not to let it receive them at all. Headless swipe tests (`Input.synthesizeScrollGesture`) don't scroll inner containers, so check `touch-action` and `pointer-events` under the finger instead.
 
 ### Blank canvas after the loader went away (2026-10-26)
 - **Symptom:** "Building the model…" disappeared, then the stage sat empty (white in the light theme) for several seconds.
