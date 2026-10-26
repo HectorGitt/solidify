@@ -7,6 +7,7 @@ import { fmt } from '@/ui/controls'
 import { Icon } from '@/ui/icons'
 import { allChallenges } from './registry'
 import type { ChallengeEntry } from './types'
+import { Loader } from '@/ui/Loader'
 
 const LEVEL = ['', 'Easy', 'Medium', 'Hard'] as const
 
@@ -68,7 +69,7 @@ export default function ChallengesPage() {
           ))}
         </ul>
       ) : (
-        <p className="text-[13px] text-mute">Loading…</p>
+        <Loader size={32} className="py-12" />
       )}
     </StudyShell>
   )

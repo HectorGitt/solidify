@@ -1,6 +1,6 @@
 import { CameraControls, ContactShadows, Environment, Grid, Lightformer, Html, Line } from '@react-three/drei'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
-import { Suspense, useCallback, useEffect, useMemo, useRef } from 'react'
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type CameraControlsImpl from 'camera-controls'
 import * as THREE from 'three'
 import { SimClockDriver } from '@/core/sim'
@@ -10,6 +10,8 @@ import { HoverTelemetry } from '@/render/Telemetry'
 import { InsideHider } from '@/render/InsideHider'
 import { useView } from '@/render/view'
 import { useIsLight } from './theme'
+import { Loader } from './Loader'
+import { useGeometryPending } from '@/geometry/build'
 import { flyTo, followOrigin, getCameraControls, isRecording, setCameraControls, trackedPartId } from './camera'
 import { installDevBridge } from './devBridge'
 import { partObjects } from '@/parts/registry'
@@ -349,11 +351,66 @@ function dyOffset(d: number) {
   return d * 0.12
 }
 
+/** Hero framing: `back` scales the camera's distance from its target; `shift` slides the view sideways (× scene extent, + moves the model right). */
+export interface StageFrame {
+  back?: number
+  shift?: number
+}
+
 /**
  * `pageScroll`: the stage sits inside a scrolling page (the home hero), so the mouse wheel and a
  * one-finger swipe scroll the page instead of zooming or orbiting; drag and pinch still move the camera.
+ * `frame` re-frames the scene's camera for that layout.
  */
-export function Stage({ scene, smooth = true, pageScroll = false }: { scene: SceneDef; smooth?: boolean; pageScroll?: boolean }) {
+/**
+ * Covers the canvas with the loader until the geometry the scene asked for has arrived and had a
+ * moment to settle, then fades out. It only shows once per scene: rebuilds after a slider change
+ * update in place without hiding the model.
+ */
+function BuildCover({ label, veil }: { label?: string; veil?: boolean }) {
+  const pending = useGeometryPending((s) => s.count)
+  const [shown, setShown] = useState(true)
+  const [gone, setGone] = useState(false)
+  useEffect(() => {
+    if (!shown || pending > 0) return
+    // scenes request their parts in the first frames after mount, so wait a beat before deciding
+    const t = setTimeout(() => setShown(false), 450)
+    return () => clearTimeout(t)
+  }, [pending, shown])
+  useEffect(() => {
+    if (shown) return
+    const t = setTimeout(() => setGone(true), 400)
+    return () => clearTimeout(t)
+  }, [shown])
+  if (gone) return null
+  return (
+    <div
+      className={`pointer-events-none absolute inset-0 z-10 transition-opacity duration-500 ${veil ? 'bg-[color-mix(in_srgb,var(--color-stage)_55%,transparent)] backdrop-blur-md' : 'bg-[var(--color-stage)]'} ${shown ? 'opacity-100' : 'opacity-0'}`}
+    >
+      <Loader label={label} className={`h-full ${veil ? 'lg:pl-[40%]' : ''}`} />
+    </div>
+  )
+}
+
+export function Stage({
+  scene,
+  smooth = true,
+  pageScroll = false,
+  frame,
+  loadingLabel,
+  veil = false,
+  cover = true,
+}: {
+  scene: SceneDef
+  smooth?: boolean
+  pageScroll?: boolean
+  frame?: StageFrame
+  loadingLabel?: string
+  /** a frosted cover the model shows through as it builds, instead of a solid one (the home hero) */
+  veil?: boolean
+  /** false: no build cover (the capture page photographs the bare canvas) */
+  cover?: boolean
+}) {
   const ref = useRef<CameraControlsImpl>(null)
   const select = useView((s) => s.select)
   const studioMode = useView((s) => s.studioMode)
@@ -373,19 +430,25 @@ export function Stage({ scene, smooth = true, pageScroll = false }: { scene: Sce
         c.mouseButtons.wheel = 0 // ACTION.NONE
         c.touches.one = 0
       }
-      // in the hero the headline covers the left half, so stand back a little further
-      const k = pageScroll ? 1.35 : 1
+      // sideways shift only on wide screens, where the headline covers the left half
+      const wide = window.innerWidth >= 1024
+      const k = frame?.back ?? 1
       const p = position.map((v, i) => target[i] + (v - target[i]) * k) as [number, number, number]
-      if (c) void c.setLookAt(...p, ...target, false)
+      if (c) {
+        void c.setLookAt(...p, ...target, false)
+        if (wide && frame?.shift) void c.setFocalOffset(-scene.extent * frame.shift, 0, 0, false)
+      }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [scene.id, pageScroll],
+    [scene.id, pageScroll, frame?.back, frame?.shift],
   )
 
   const light = useIsLight()
   const bgColor = studioMode === 'blueprint' ? '#06101e' : studioMode === 'workshop' ? '#12100e' : light ? '#e7eae3' : '#07090a'
 
+  // own stacking layer, so the build cover never rises above the page around the stage
   return (
+    <div className="relative isolate h-full w-full">
     <Canvas
       shadows
       dpr={[1, 2]}
@@ -430,5 +493,7 @@ export function Stage({ scene, smooth = true, pageScroll = false }: { scene: Sce
         smoothTime={smooth ? 0.35 : 0}
       />
     </Canvas>
+    {cover ? <BuildCover key={scene.id} label={loadingLabel} veil={veil} /> : null}
+    </div>
   )
 }

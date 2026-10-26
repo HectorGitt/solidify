@@ -13,6 +13,7 @@ import { useAuth } from '../auth'
 import { paperSeed, slipsOf, type Paper, type PaperAttempt } from '../papers'
 import { SignInFirst } from './ClassesPage'
 import { Notice, ghostBtn, primaryBtn } from './Modal'
+import { Loader } from '@/ui/Loader'
 
 type Answers = Record<string, Record<string, string>>
 
@@ -211,7 +212,7 @@ export default function PaperPage() {
     <StudyShell title={paper?.title ?? 'Paper'} right={back}>
       {error ? <div className="mb-4"><Notice tone="warn">{error}</Notice></div> : null}
       {!paper ? (
-        !error ? <p className="text-[13px] text-mute">Loading…</p> : null
+        !error ? <Loader size={32} className="py-12" /> : null
       ) : paper.isTeacher ? (
         <>
           <Notice>Preview with the past-paper numbers. Each student sees the same questions with their own numbers.</Notice>

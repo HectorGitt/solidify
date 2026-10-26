@@ -3,6 +3,7 @@ import { HashRouter, Route, Routes } from 'react-router-dom'
 import { About } from './ui/About'
 import { Landing } from './ui/Landing'
 import { Viewer } from './ui/Viewer'
+import { Loader } from './ui/Loader'
 import { PartSearch } from './ui/PartSearch'
 import { useAuth } from './cloud/auth'
 import { startProfile } from './cloud/profile'
@@ -20,7 +21,9 @@ const ClassesPage = lazy(() => import('./cloud/ui/ClassesPage'))
 const ClassPage = lazy(() => import('./cloud/ui/ClassPage'))
 const CreatePage = lazy(() => import('./cloud/ui/CreatePage'))
 const PaperPage = lazy(() => import('./cloud/ui/PaperPage'))
-const page = (el: ReactNode) => <Suspense fallback={<div className="grid h-full place-items-center text-[13px] text-mute">Loading…</div>}>{el}</Suspense>
+// dev only: bare scenes for scripts/capture-tiles.mjs
+const ShotPage = import.meta.env.DEV ? lazy(() => import('./ui/ShotPage')) : null
+const page = (el: ReactNode) => <Suspense fallback={<Loader className="h-full bg-bg" />}>{el}</Suspense>
 
 export default function App() {
   useEffect(() => {
@@ -45,6 +48,7 @@ export default function App() {
         <Route path="/classes/:classId" element={page(<ClassPage />)} />
         <Route path="/classes/:classId/papers/:paperId" element={page(<PaperPage />)} />
         <Route path="/create" element={page(<CreatePage />)} />
+        {ShotPage ? <Route path="/shot/:moduleId/:sceneId" element={page(<ShotPage />)} /> : null}
         <Route path="/m/:moduleId" element={<Viewer />} />
         <Route path="/m/:moduleId/:sceneId" element={<Viewer />} />
         <Route path="*" element={<Landing />} />

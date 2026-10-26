@@ -1,5 +1,6 @@
 import { unpack, type Packed } from './serialize'
 import { get, set } from 'idb-keyval'
+import { create } from 'zustand'
 
 /**
  * Heavy (CSG) geometry is built off the main thread on a small pool of workers, so the parts of one
@@ -25,6 +26,21 @@ let nextId = 1
 const cache = new Map<string, Promise<unknown>>()
 /** queued (not yet started) task per cache key, so a later normal request can promote it */
 const queuedByKey = new Map<string, Task>()
+
+/**
+ * How many builds a scene is waiting on (normal priority, not yet finished). The stage keeps its
+ * loader up until this reaches zero, so a scene never shows an empty canvas while parts arrive.
+ */
+export const useGeometryPending = create<{ count: number }>(() => ({ count: 0 }))
+const settled = new WeakSet<Promise<unknown>>()
+const waiting = new WeakSet<Promise<unknown>>()
+function track(p: Promise<unknown>) {
+  if (settled.has(p) || waiting.has(p)) return
+  waiting.add(p)
+  useGeometryPending.setState((s) => ({ count: s.count + 1 }))
+  const done = () => useGeometryPending.setState((s) => ({ count: s.count - 1 }))
+  p.then(done, done)
+}
 
 /** Cached geometry is keyed to the build, so a new build never shows outdated models. */
 declare const __BUILD_ID__: string
@@ -90,6 +106,7 @@ export function buildGeometry<T>(builder: string, fallback: () => T, args?: unkn
       q.priority = 'normal'
       pump()
     }
+    if (priority === 'normal') track(hit)
     return hit as Promise<T>
   }
   let p: Promise<T>
@@ -123,5 +140,8 @@ export function buildGeometry<T>(builder: string, fallback: () => T, args?: unkn
     })()
   }
   cache.set(key, p)
+  const mark = () => settled.add(p)
+  p.then(mark, mark)
+  if (priority === 'normal') track(p)
   return p
 }

@@ -10,6 +10,7 @@ import { ClassReport } from './ClassReport'
 import { StudentPapers, TeacherPapers, useClassPapers } from './ClassPapers'
 import { SignInFirst } from './ClassesPage'
 import { Notice, ghostBtn, inputCls, primaryBtn } from './Modal'
+import { Loader } from '@/ui/Loader'
 
 interface ClassInfo {
   id: string
@@ -267,7 +268,7 @@ function TeacherView({ info, assignments, reload }: { info: ClassInfo; assignmen
             ) : null}
           </div>
           {!dash ? (
-            <p className="text-[13px] text-mute">Loading…</p>
+            <Loader size={32} className="py-12" />
           ) : !dash.students.length ? (
             <Notice>No students yet. Share the join code above.</Notice>
           ) : (
@@ -372,7 +373,7 @@ export default function ClassPage() {
       ) : error ? (
         <Notice tone="warn">{error}</Notice>
       ) : !info ? (
-        <p className="text-[13px] text-mute">Loading…</p>
+        <Loader size={32} className="py-12" />
       ) : info.isTeacher ? (
         <TeacherView info={info} assignments={assignments} reload={load} />
       ) : (

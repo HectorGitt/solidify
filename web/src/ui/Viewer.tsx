@@ -9,6 +9,7 @@ import type { SceneDef } from '@/modules/types'
 import { DEFAULT_CUT_PRESETS, useView } from '@/render/view'
 import { useAcademic } from './audience'
 import { AudienceSwitch } from './AudienceSwitch'
+import { Loader } from './Loader'
 import { ThemeToggle } from './ThemeToggle'
 import { Badge } from './controls'
 import { LogoMark } from './Logo'
@@ -350,9 +351,9 @@ export function Viewer() {
         ) : null}
 
         <main className="relative min-w-0 flex-1 bg-bg">
-          {scene ? <Stage key={scene.id} scene={scene} /> : null}
+          {scene ? <Stage key={scene.id} scene={scene} loadingLabel="Building the model" /> : null}
           {!scene && !error ? (
-            <div className="absolute inset-0 grid place-items-center text-[13px] text-mute">{entry?.load ? 'Building the model…' : 'This scene is coming soon.'}</div>
+            entry?.load ? <Loader label="Building the model" className="absolute inset-0" /> : <div className="absolute inset-0 grid place-items-center text-[13px] text-mute">This scene is coming soon.</div>
           ) : null}
           {error ? <div className="absolute inset-0 grid place-items-center text-danger">{error}</div> : null}
           {/* dive-in transition between scenes */}

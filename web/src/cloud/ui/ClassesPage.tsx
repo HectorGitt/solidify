@@ -5,6 +5,7 @@ import { api, ApiError } from '../api'
 import { useAuth } from '../auth'
 import { useProfile, type ClassRef } from '../profile'
 import { Notice, inputCls, primaryBtn } from './Modal'
+import { Loader } from '@/ui/Loader'
 
 export function SignInFirst({ what }: { what: string }) {
   return (
@@ -129,7 +130,7 @@ export default function ClassesPage() {
         <div className="grid gap-4 md:grid-cols-[1fr_340px]">
           <section>
             <h2 className="mb-2 text-[12px] font-semibold uppercase tracking-[0.08em] text-mute">Your classes</h2>
-            {classes ? <ClassList classes={classes} /> : <p className="text-[13px] text-mute">Loading…</p>}
+            {classes ? <ClassList classes={classes} /> : <Loader size={32} className="py-12" />}
           </section>
           <aside className="space-y-4">
             {isTeacher ? <CreateForm /> : null}
