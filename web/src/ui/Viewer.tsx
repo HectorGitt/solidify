@@ -246,19 +246,19 @@ export function Viewer() {
 
   return (
     <div className="flex h-full flex-col">
-      <header className="flex h-12 shrink-0 items-center gap-2 border-b border-line bg-panel px-2">
+      <header className="flex shrink-0 flex-wrap items-center gap-1 border-b border-line bg-panel px-1.5 py-1 sm:h-12 sm:flex-nowrap sm:gap-2 sm:px-2 sm:py-0">
         <Link to="/" className="flex items-center gap-1.5 rounded-md px-2 py-1 text-[13px] font-semibold text-ink hover:bg-panel-3" aria-label="All modules">
           <LogoMark size={20} />
           <span className="hidden sm:inline">Solidify</span>
         </Link>
-        <span className="text-line-2">/</span>
+        <span className="hidden text-line-2 sm:inline">/</span>
         <span className="hidden text-[13px] text-mute md:inline">
           {mod.title}
         </span>
         <span className="hidden text-line-2 md:inline">/</span>
         <select
           aria-label="Scene"
-          className="min-w-0 max-w-[50vw] truncate rounded-md border border-line-2 bg-panel-2 px-2 py-1 text-[13px] text-ink"
+          className="order-last min-w-0 basis-full truncate rounded-md border border-line-2 bg-panel-2 px-2 py-1.5 text-[13px] text-ink sm:order-none sm:max-w-[50vw] sm:basis-auto sm:py-1"
           value={entry?.id}
           onChange={(e) => navigate(`/m/${mod.id}/${e.target.value}`)}
         >
@@ -269,7 +269,7 @@ export function Viewer() {
             </option>
           ))}
         </select>
-        <div className="ml-auto flex items-center gap-1.5">
+        <div className="ml-auto flex shrink-0 items-center gap-0.5 sm:gap-1.5">
           <button
             onClick={() => window.dispatchEvent(new Event('solidify:search'))}
             aria-label="Search parts and scenes"
@@ -282,7 +282,9 @@ export function Viewer() {
           <div className="hidden md:block">
             <AudienceSwitch compact />
           </div>
-          <ThemeToggle />
+          <div className="hidden md:block">
+            <ThemeToggle />
+          </div>
           {scene?.tour?.length ? (
             <button
               onClick={() => (tourActive ? stopTour() : startTour())}

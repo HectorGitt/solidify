@@ -56,7 +56,9 @@ export function StudyShell({ title, lead, children, right }: { title: string; le
           <StudyLinks always className="ml-1 hidden rounded-full border border-line-2 bg-panel/70 p-1 sm:flex" />
           <div className="ml-auto flex items-center gap-2">
             <AudienceSwitch compact />
-            <ThemeToggle />
+            <div className="hidden sm:block">
+              <ThemeToggle />
+            </div>
             <AccountMenu compact />
           </div>
         </div>
@@ -80,14 +82,14 @@ export function StudyShell({ title, lead, children, right }: { title: string; le
 /** Simple pill select used by the study pages. */
 export function Pills<T extends string>({ value, options, onChange, label }: { value: T; options: { value: T; label: ReactNode }[]; onChange: (v: T) => void; label: string }) {
   return (
-    <div role="radiogroup" aria-label={label} className="flex flex-wrap gap-1">
+    <div role="radiogroup" aria-label={label} className="-mx-1 flex gap-1 overflow-x-auto px-1 pb-0.5 [scrollbar-width:none] sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0 sm:pb-0">
       {options.map((o) => (
         <button
           key={o.value}
           role="radio"
           aria-checked={value === o.value}
           onClick={() => onChange(o.value)}
-          className={`rounded-full border px-2.5 py-1 text-[12px] font-medium transition-colors ${
+          className={`shrink-0 whitespace-nowrap rounded-full border px-2.5 py-1 text-[12px] font-medium transition-colors ${
             value === o.value ? 'border-ink bg-ink text-bg' : 'border-line-2 text-mute hover:border-ink/40 hover:text-ink'
           }`}
         >

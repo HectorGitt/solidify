@@ -351,10 +351,14 @@ function dyOffset(d: number) {
   return d * 0.12
 }
 
-/** Hero framing: `back` scales the camera's distance from its target; `shift` slides the view sideways (× scene extent, + moves the model right). */
+/**
+ * Hero framing: `back` scales the camera's distance from its target; `shift` slides the view sideways
+ * on wide screens (× scene extent, + moves the model right); `lift` raises it on narrow ones.
+ */
 export interface StageFrame {
   back?: number
   shift?: number
+  lift?: number
 }
 
 /**
@@ -432,11 +436,14 @@ export function Stage({
       }
       // sideways shift only on wide screens, where the headline covers the left half
       const wide = window.innerWidth >= 1024
-      const k = frame?.back ?? 1
+      // a portrait phone sees far less width, so stand back further still
+      const k = (frame?.back ?? 1) * (frame && !wide ? 1.75 : 1)
       const p = position.map((v, i) => target[i] + (v - target[i]) * k) as [number, number, number]
       if (c) {
         void c.setLookAt(...p, ...target, false)
         if (wide && frame?.shift) void c.setFocalOffset(-scene.extent * frame.shift, 0, 0, false)
+        // narrow: the text sits below, so lift the model into the top half
+        else if (!wide && frame) void c.setFocalOffset(0, scene.extent * (frame.lift ?? 0.3), 0, false)
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps

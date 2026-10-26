@@ -174,7 +174,7 @@ function Hero({ copy }: { copy: (typeof COPY)[keyof typeof COPY] }) {
     `rounded-full px-3 py-1.5 text-[12px] font-medium transition-colors ${on ? 'bg-ink text-bg' : 'text-mute hover:bg-ink/[0.06] hover:text-ink'}`
 
   return (
-    <section className="relative h-[min(92vh,860px)] min-h-[620px] overflow-hidden bg-panel-3">
+    <section className="relative overflow-hidden bg-panel-3 lg:h-[min(92vh,860px)] lg:min-h-[620px]">
       <div className="absolute inset-0 [&_canvas]:!touch-pan-y">
         {/* the current scene stays up while the next one's code loads; then the new scene builds
             under a frosted veil, so switching never blanks the hero */}
@@ -188,7 +188,12 @@ function Hero({ copy }: { copy: (typeof COPY)[keyof typeof COPY] }) {
       </div>
       {/* scrims keep the headline readable in either theme; they never take pointer events, so the scene stays draggable */}
       <div
-        className="pointer-events-none absolute inset-0"
+        className="pointer-events-none absolute inset-0 lg:hidden"
+        style={{ background: 'linear-gradient(0deg, var(--color-bg) 0%, var(--color-bg) 42%, transparent 62%), linear-gradient(180deg, color-mix(in srgb, var(--color-bg) 70%, transparent) 0%, transparent 14%)' }}
+        aria-hidden
+      />
+      <div
+        className="pointer-events-none absolute inset-0 hidden lg:block"
         style={{
           background:
             'linear-gradient(90deg, var(--color-bg) 0%, color-mix(in srgb, var(--color-bg) 70%, transparent) 34%, transparent 62%), linear-gradient(0deg, var(--color-bg) 0%, transparent 26%), linear-gradient(180deg, color-mix(in srgb, var(--color-bg) 70%, transparent) 0%, transparent 18%)',
@@ -202,27 +207,28 @@ function Hero({ copy }: { copy: (typeof COPY)[keyof typeof COPY] }) {
         ))}
       </div>
 
-      <div className="pointer-events-none absolute inset-x-0 bottom-0">
-        <div className="mx-auto flex max-w-[1360px] flex-wrap items-end justify-between gap-8 px-5 pb-10 sm:px-10 sm:pb-14">
+      {/* phones: the text sits below the scene (which fills the top half); large screens: over its left side */}
+      <div className="pointer-events-none relative pt-[54vh] lg:absolute lg:inset-x-0 lg:bottom-0 lg:pt-0">
+        <div className="mx-auto flex max-w-[1360px] flex-wrap items-end justify-between gap-6 px-5 pb-10 sm:px-10 sm:pb-14 lg:gap-8">
           <div className="max-w-[640px]">
             {/* the keyword line is part of the h1, so search engines read "3D tractor & farm machinery simulator: Open up the machine." */}
             <h1>
               <span className="block text-[13.5px] font-medium tracking-normal text-accent">{copy.eyebrow}</span>
               <span className="mt-4 block text-[48px] font-semibold leading-[0.98] tracking-[-0.045em] text-ink sm:text-[84px]">{copy.title}</span>
             </h1>
-            <p className="mt-6 max-w-[540px] text-[16px] leading-relaxed text-mute sm:text-[17.5px]">{copy.lead}</p>
-            <div className="pointer-events-auto mt-9 flex flex-wrap gap-3">
+            <p className="mt-5 max-w-[540px] text-[15px] leading-relaxed text-mute sm:mt-6 sm:text-[17.5px]">{copy.lead}</p>
+            <div className="pointer-events-auto mt-7 flex flex-wrap gap-3 sm:mt-9">
               <Link to={copy.primary.to} className="inline-flex items-center gap-2 rounded-full bg-accent px-7 py-4 text-[15px] font-semibold text-accent-ink transition-transform hover:brightness-105 active:scale-[0.98]">
                 {copy.primary.label} <Icon.chevron width={16} height={16} />
               </Link>
-              <Link to="/promo" className="inline-flex items-center gap-2 rounded-full border border-line-2 bg-[var(--color-scrim)] px-6 py-4 text-[15px] font-medium text-ink backdrop-blur-xl transition-colors hover:border-accent/50">
+              <Link to="/promo" className="hidden items-center gap-2 rounded-full sm:inline-flex border border-line-2 bg-[var(--color-scrim)] px-6 py-4 text-[15px] font-medium text-ink backdrop-blur-xl transition-colors hover:border-accent/50">
                 <Icon.tour width={16} height={16} /> Watch the 30 s tour
               </Link>
             </div>
           </div>
 
           <div className="pointer-events-auto flex max-w-full flex-col items-start gap-2 sm:items-end">
-            <div className="flex flex-wrap items-center gap-1 rounded-full border border-line-2 bg-[var(--color-scrim)] p-1 backdrop-blur-xl" role="group" aria-label="Hero scene">
+            <div className="flex max-w-[calc(100vw-2.5rem)] items-center gap-1 overflow-x-auto rounded-full border border-line-2 bg-[var(--color-scrim)] p-1 backdrop-blur-xl [scrollbar-width:none] sm:flex-wrap" role="group" aria-label="Hero scene">
               {HERO_SCENES.map((h, i) => (
                 <button
                   key={`${h.moduleId}/${h.sceneId}`}
@@ -231,7 +237,7 @@ function Hero({ copy }: { copy: (typeof COPY)[keyof typeof COPY] }) {
                     setLive3D(true)
                   }}
                   aria-pressed={i === heroIdx}
-                  className={`${chip(i === heroIdx)} inline-flex items-center gap-1.5`}
+                  className={`${chip(i === heroIdx)} inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap`}
                 >
                   {i === heroIdx && switching ? <LoaderMark size={12} /> : null}
                   {h.label}
@@ -374,15 +380,17 @@ export function Landing() {
   const copy = academic ? COPY.academic : COPY.professional
   const total = READY.reduce((n, m) => n + m.scenes.length, 0)
   const [discipline, setDiscipline] = useState('all')
+  const [scrolled, setScrolled] = useState(false)
 
   const activeDiscipline = DISCIPLINES.find((d) => d.id === discipline) ?? DISCIPLINES[0]
   const filteredModules = activeDiscipline.modules.length === 0 ? READY : READY.filter((m) => activeDiscipline.modules.includes(m.id))
 
   return (
-    <div className="h-full overflow-y-auto bg-bg text-ink selection:bg-accent/25">
+    <div className="h-full overflow-y-auto bg-bg text-ink selection:bg-accent/25" onScroll={(e) => setScrolled(e.currentTarget.scrollTop > 24)}>
       {/* floating header over the hero */}
-      <header className="pointer-events-none fixed inset-x-0 top-0 z-40">
-        <div className="mx-auto flex max-w-[1360px] items-center gap-4 px-5 py-4 sm:px-10">
+      {/* floats over the hero; once the page scrolls it gets a frosted band so it never sits on content */}
+      <header className={`pointer-events-none fixed inset-x-0 top-0 z-40 transition-colors duration-300 ${scrolled ? 'border-b border-line bg-[var(--color-scrim)] backdrop-blur-xl' : 'border-b border-transparent'}`}>
+        <div className={`mx-auto flex max-w-[1360px] items-center gap-4 px-5 transition-[padding] duration-300 sm:px-10 ${scrolled ? 'py-2.5' : 'py-4'}`}>
           <Link to="/" aria-label="Solidify home" className="pointer-events-auto rounded-full border border-line-2 bg-[var(--color-scrim)] py-2 pl-3 pr-4 backdrop-blur-xl">
             <Logo />
           </Link>
@@ -422,13 +430,13 @@ export function Landing() {
             <h2 className="text-[30px] font-semibold tracking-[-0.03em] sm:text-[38px]">Every tractor system, in 3D</h2>
             <p className="mt-1.5 text-[15px] text-mute">From the combustion chamber to the soil, each one opens straight into a working cutaway.</p>
           </div>
-          <div className="flex flex-wrap gap-1 rounded-full border border-line bg-panel p-1" role="group" aria-label="Filter systems">
+          <div className="flex max-w-full gap-1 overflow-x-auto rounded-full border border-line bg-panel p-1 [scrollbar-width:none]" role="group" aria-label="Filter systems">
             {DISCIPLINES.map((d) => (
               <button
                 key={d.id}
                 onClick={() => setDiscipline(d.id)}
                 aria-pressed={discipline === d.id}
-                className={`rounded-full px-3.5 py-1.5 text-[12.5px] font-medium transition-colors ${discipline === d.id ? 'bg-ink text-bg' : 'text-mute hover:text-ink'}`}
+                className={`shrink-0 whitespace-nowrap rounded-full px-3.5 py-1.5 text-[12.5px] font-medium transition-colors ${discipline === d.id ? 'bg-ink text-bg' : 'text-mute hover:text-ink'}`}
               >
                 {d.label}
               </button>

@@ -53,7 +53,7 @@ export function AccountMenu({ compact = false }: { compact?: boolean }) {
   if (status === 'loading') return <span className="h-7 w-7 animate-pulse rounded-full bg-panel-3" aria-hidden />
   if (status !== 'signed-in' || !user)
     return (
-      <button onClick={() => useAuth.getState().openDialog()} className="rounded-md border border-line-2 bg-panel-2 px-2.5 py-1 text-[12.5px] font-medium text-ink/90 transition-colors hover:border-accent/40 hover:text-accent">
+      <button onClick={() => useAuth.getState().openDialog()} className="shrink-0 whitespace-nowrap rounded-full border border-line-2 bg-panel-2 px-3 py-1 text-[12.5px] font-medium text-ink/90 transition-colors hover:border-accent/40 hover:text-accent">
         Sign in
       </button>
     )

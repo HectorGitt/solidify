@@ -40,7 +40,8 @@ export function Toolbar({ scene }: { scene: SceneDef }) {
 
   return (
     <div className="pointer-events-auto relative max-w-[calc(100vw-1.5rem)]">
-      <div className="flex items-center gap-1 overflow-x-auto rounded-2xl border border-line-2 bg-panel-2/85 px-2.5 py-1.5 shadow-2xl shadow-black/60 backdrop-blur-xl ring-1 ring-ink/[0.04]">
+      {/* phones: two centred rows, so every control is in reach without a hidden sideways scroll */}
+      <div className="flex flex-wrap items-center justify-center gap-1 rounded-2xl border border-line-2 bg-panel-2/85 px-2 py-1.5 sm:flex-nowrap sm:justify-start sm:overflow-x-auto sm:px-2.5 shadow-2xl shadow-black/60 backdrop-blur-xl ring-1 ring-ink/[0.04]">
         <IconButton label={playing ? 'Pause (space)' : 'Play (space)'} onClick={toggle} active={playing}>
           {playing ? <Icon.pause /> : <Icon.play />}
         </IconButton>
@@ -81,7 +82,7 @@ export function Toolbar({ scene }: { scene: SceneDef }) {
           </div>
         ) : null}
         <button
-          className="whitespace-nowrap rounded-lg px-2 py-1 text-[11.5px] font-medium text-mute hover:bg-panel-3 hover:text-ink transition-colors"
+          className="max-w-[9.5rem] truncate whitespace-nowrap rounded-lg px-2 py-1 text-[11.5px] font-medium text-mute hover:bg-panel-3 hover:text-ink transition-colors sm:max-w-none sm:shrink-0"
           onClick={() => {
             const next = !openCut
             setOpenCut(next)
@@ -97,7 +98,7 @@ export function Toolbar({ scene }: { scene: SceneDef }) {
           <input
             aria-label="Explode"
             type="range"
-            className="slider w-20"
+            className="slider w-16 sm:w-20"
             min={0}
             max={1}
             step={0.01}
