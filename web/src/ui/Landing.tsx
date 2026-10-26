@@ -175,7 +175,9 @@ function Hero({ copy }: { copy: (typeof COPY)[keyof typeof COPY] }) {
 
   return (
     <section className="relative overflow-hidden bg-panel-3 lg:h-[min(92vh,860px)] lg:min-h-[620px]">
-      <div className="absolute inset-0 [&_canvas]:!touch-pan-y">
+      {/* touch screens: the hero is look-only so a swipe always scrolls the page (camera controls
+          otherwise capture the touch); "Open scene" is the way in. Mouse users can still drag it. */}
+      <div className="absolute inset-0 [&_canvas]:!touch-pan-y pointer-coarse:[&_*]:!pointer-events-none">
         {/* the current scene stays up while the next one's code loads; then the new scene builds
             under a frosted veil, so switching never blanks the hero */}
         {live3D && scene ? (
