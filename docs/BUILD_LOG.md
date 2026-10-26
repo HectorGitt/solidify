@@ -46,6 +46,25 @@ Each entry: **Symptom** · **Cause** · **Fix** · **Lesson**.
 - **Fix:** `Stage pageScroll` turns off wheel and one-finger actions (drag and pinch still work), and the hero overrides the canvas to `touch-action: pan-y`.
 - **Lesson:** any canvas embedded in a scrolling page needs its scroll gestures given back to the page.
 
+### Blank canvas after the loader went away (2026-10-26)
+- **Symptom:** "Building the model…" disappeared, then the stage sat empty (white in the light theme) for several seconds.
+- **Cause:** the loader only waited for the scene's code; its parts are then generated on worker threads, and nothing tracked them.
+- **Fix:** `useGeometryPending` in `geometry/build.ts` counts the builds a scene is waiting on; the stage's build cover stays up until that reaches zero and settles, then fades out. The tile capture script waits on the same signal instead of a fixed delay.
+- **Lesson:** "loaded" means the thing on screen is ready, not the code behind it.
+
+### The loader covered the hero headline (2026-10-26)
+- **Symptom:** while a hero scene built, the headline and buttons vanished.
+- **Cause:** the cover's `z-10` had no stacking context around it, so it rose above the page's later siblings.
+- **Fix:** the stage renders inside its own `isolate` layer.
+
+### Switching hero scenes looked like a page reload (2026-10-26)
+- **Cause:** the hero dropped the old scene before loading the new one, so the whole hero blanked.
+- **Fix:** the old scene stays up while the next one's code loads; the new one builds under a frosted veil and fades in.
+
+### Tile captures could photograph the previous scene (2026-10-26)
+- **Cause:** moving between `#/shot/…` URLs only changes the hash, so the page never reloads and the last scene's "ready" flag was still set.
+- **Fix:** the script clears the flags before each navigation; the page clears them too.
+
 ### Known, open: React "synchronously unmount a root" warning on scene switch
 - drei `Html` labels unmount while React is rendering. Harmless (no crash); listed in `web/docs/QA.md`.
 

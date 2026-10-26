@@ -19,6 +19,8 @@
   --color-intake: #38bdf8;
   --color-exhaust: #f43f5e;
   --color-scrim: rgba(5, 6, 7, 0.72);
+  /* the 3D studio background (Stage.tsx), behind scene renders */
+  --color-stage: #07090a;
   --font-sans: "Sora", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
 }
@@ -46,6 +48,7 @@
   --color-intake: #0284c7;
   --color-exhaust: #e11d48;
   --color-scrim: rgba(245, 246, 242, 0.8);
+  --color-stage: #e7eae3;
 }
 
 html,
@@ -80,6 +83,33 @@ body {
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+/* logo loader (ui/Loader.tsx): faces land in turn, then the section hatch sweeps */
+.solid-loader .sl-top,
+.solid-loader .sl-left,
+.solid-loader .sl-right {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: sl-face 1.8s cubic-bezier(0.3, 0.7, 0.2, 1) infinite;
+}
+.solid-loader .sl-left {
+  animation-delay: 0.12s;
+}
+.solid-loader .sl-right {
+  animation-delay: 0.24s;
+}
+.solid-loader .sl-hatch {
+  animation: sl-hatch 1.8s linear infinite;
+}
+@keyframes sl-face {
+  0% { opacity: 0; transform: translateY(-3px) scale(0.86); }
+  22%, 78% { opacity: 1; transform: none; }
+  100% { opacity: 0; transform: translateY(2px) scale(0.94); }
+}
+@keyframes sl-hatch {
+  0%, 30% { transform: translateX(-12px); }
+  70%, 100% { transform: translateX(4px); }
 }
 
 /* range inputs */

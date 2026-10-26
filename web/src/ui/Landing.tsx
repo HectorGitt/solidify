@@ -10,19 +10,27 @@ import { SUPPORT_EMAIL } from '@/cloud/config'
 import { AudienceSwitch } from './AudienceSwitch'
 import { Icon } from './icons'
 import { Logo } from './Logo'
-import { Stage } from './Stage'
+import { Loader, LoaderMark } from './Loader'
+import { Stage, type StageFrame } from './Stage'
 import { ThemeToggle } from './ThemeToggle'
+import { useTheme } from './theme'
 import { ModuleProgress } from '@/study/ui/badges'
 import { StudyLinks } from '@/study/ui/StudyShell'
 
 const MEDIA = './media'
 
-const HERO_SCENES = [
-  { moduleId: 'engine', sceneId: 'four-stroke-diesel', label: '4-stroke diesel', readouts: [['Mean effective pressure', '7.2', 'bar', 0.6], ['Thermal efficiency', '48.6', '%', 0.49]] },
-  { moduleId: 'powertrain', sceneId: 'mf-16-speed', label: '16-speed gearbox', readouts: [['Gears', '16F / 12R', '', 1], ['Shift', 'Synchro', '', 0.6]] },
-  { moduleId: 'powertrain', sceneId: 'differential', label: 'Differential', readouts: [['Final drive', 'Crown & pinion', '', 0.5], ['Diff lock', 'Lockable', '', 0.3]] },
-  { moduleId: 'hydraulics', sceneId: 'pumps', label: 'Hydraulic pump', readouts: [['Flow', '42.5', 'L/min', 0.62], ['Pressure', '185', 'bar', 0.74]] },
-] as const
+/**
+ * The live hero scenes: picked to look their best and to load quickly (the first one downloads with
+ * the page; the rest only when chosen). Gauge figures are each scene's own panel readouts at its
+ * default settings; `fill` draws a bar only where the figure is a fraction of a limit.
+ */
+type HeroReadout = { label: string; value: string; unit: string; fill?: number }
+const HERO_SCENES: { moduleId: string; sceneId: string; label: string; frame: StageFrame; readouts: HeroReadout[] }[] = [
+  { moduleId: 'vibration', sceneId: 'seat', label: 'Tractor seat', frame: { back: 1.6, shift: 0.55 }, readouts: [{ label: 'Operator vibration', value: '0.666', unit: 'm/s² RMS' }, { label: 'Seat transmissibility', value: '0.549', unit: 'floor to operator' }] },
+  { moduleId: 'traction', sceneId: 'traction-lab', label: 'Traction & forces', frame: { back: 1.4, shift: 0.12 }, readouts: [{ label: 'Drawbar pull', value: '12', unit: 'kN at 14.6 % slip' }, { label: 'Drawbar power', value: '11.4', unit: 'kW of 17.3', fill: 11.4 / 17.3 }] },
+  { moduleId: 'powertrain', sceneId: 'differential', label: 'Differential', frame: { back: 1.8, shift: 0.35 }, readouts: [{ label: 'Pinion', value: '600', unit: 'rpm' }, { label: 'Crown wheel', value: '140', unit: 'rpm' }] },
+  { moduleId: 'engine', sceneId: 'cooling', label: 'Cooling system', frame: { back: 1.4, shift: 0.45 }, readouts: [{ label: 'Heat to coolant', value: '36', unit: 'kW' }] },
+]
 
 const DISCIPLINES: { id: string; label: string; modules: string[] }[] = [
   { id: 'all', label: 'All systems', modules: [] },
@@ -34,21 +42,22 @@ const DISCIPLINES: { id: string; label: string; modules: string[] }[] = [
 
 /** Scene shown on each module card / opened by it. */
 const FEATURED: Record<string, string> = {
-  engine: 'four-stroke-diesel',
+  engine: 'cooling',
   powertrain: 'differential',
-  pto: 'hookes-joint',
-  hydraulics: 'pumps',
+  pto: 'pto-shaft',
+  hydraulics: 'draft-control',
   steering: 'boxes',
   traction: 'tracks',
-  chassis: 'weight-transfer',
-  implements: 'mouldboard',
-  elements: 'gears',
+  chassis: 'stability',
+  implements: 'combine',
+  elements: 'chains',
   testing: 'dynamometers',
-  vibration: 'isolation',
+  vibration: 'seat',
   field: 'field',
-  processing: 'size-reduction',
+  processing: 'palm-oil',
   water: 'irrigation-methods',
   structures: 'farmstead',
+  precision: 'see-and-spray',
 }
 
 const COPY = {
@@ -78,24 +87,26 @@ const COPY = {
   },
 } as const
 
-/** Image tiles are dark renders in both themes, so their text and accent are fixed light-on-dark. */
-const TILE_ACCENT = '#c6f24e'
-
-/** An image that quietly falls back to a hatched placeholder if it hasn't been generated. */
-function Media({ src, alt, className }: { src: string; alt: string; className?: string }) {
-  const [failed, setFailed] = useState(false)
-  if (failed)
+/**
+ * A scene render for the current theme (`<name>-light.webp` / `<name>-dark.webp`, made by
+ * scripts/capture-tiles.mjs), quietly falling back to a hatched placeholder if it's missing.
+ */
+function Media({ name, alt, className }: { name: string; alt: string; className?: string }) {
+  const theme = useTheme((s) => s.theme)
+  const src = `${MEDIA}/${name}-${theme}.webp`
+  const [failed, setFailed] = useState<string | null>(null)
+  if (failed === src)
     return (
       <div
-        className={`${className ?? ''} bg-[#0c0f10]`}
-        style={{ backgroundImage: 'repeating-linear-gradient(135deg, rgba(198,242,78,0.07) 0 2px, transparent 2px 16px)' }}
+        className={`${className ?? ''} bg-[var(--color-stage)]`}
+        style={{ backgroundImage: 'repeating-linear-gradient(135deg, color-mix(in srgb, var(--color-accent) 10%, transparent) 0 2px, transparent 2px 16px)' }}
         aria-label={alt}
       />
     )
-  return <img src={src} alt={alt} loading="lazy" decoding="async" className={className} onError={() => setFailed(true)} />
+  return <img src={src} alt={alt} loading="lazy" decoding="async" className={className} onError={() => setFailed(src)} />
 }
 
-function Gauge({ label, value, unit, fill }: { label: string; value: string; unit: string; fill: number }) {
+function Gauge({ label, value, unit, fill }: HeroReadout) {
   return (
     <div className="rounded-2xl border border-line-2 bg-[var(--color-scrim)] px-4 py-3.5 backdrop-blur-xl">
       <div className="text-[10.5px] font-medium uppercase tracking-[0.12em] text-dim">{label}</div>
@@ -103,9 +114,11 @@ function Gauge({ label, value, unit, fill }: { label: string; value: string; uni
         <span className="font-mono text-[26px] font-medium tracking-tight text-ink">{value}</span>
         {unit ? <span className="text-[12px] text-mute">{unit}</span> : null}
       </div>
-      <div className="mt-2.5 h-1 rounded-full bg-line-2">
-        <div className="h-1 rounded-full bg-accent transition-[width] duration-700" style={{ width: `${Math.round(fill * 100)}%` }} />
-      </div>
+      {fill !== undefined ? (
+        <div className="mt-2.5 h-1 rounded-full bg-line-2">
+          <div className="h-1 rounded-full bg-accent transition-[width] duration-700" style={{ width: `${Math.round(fill * 100)}%` }} />
+        </div>
+      ) : null}
     </div>
   )
 }
@@ -113,16 +126,18 @@ function Gauge({ label, value, unit, fill }: { label: string; value: string; uni
 /** Full-bleed hero: a live scene behind the headline, with a scene dock and gauges floating over it. */
 function Hero({ copy }: { copy: (typeof COPY)[keyof typeof COPY] }) {
   const [heroIdx, setHeroIdx] = useState(0)
+  // falls back to the still render if a scene fails to load
   const [live3D, setLive3D] = useState(true)
   const [scene, setScene] = useState<SceneDef | null>(null)
   const cutEnabled = useView((s) => s.cut.enabled)
   const explode = useView((s) => s.explode)
   const hero = HERO_SCENES[heroIdx]
+  const shownFrame = HERO_SCENES.find((h) => h.sceneId === scene?.id)?.frame
+  const switching = !!scene && scene.id !== hero.sceneId
 
   useEffect(() => {
     if (!live3D) return
     let alive = true
-    setScene(null)
     const mod = MODULES.find((m) => m.id === hero.moduleId)
     const entry = mod?.scenes.find((s) => s.id === hero.sceneId)
     if (!entry?.load) return
@@ -156,10 +171,14 @@ function Hero({ copy }: { copy: (typeof COPY)[keyof typeof COPY] }) {
   return (
     <section className="relative h-[min(92vh,860px)] min-h-[620px] overflow-hidden bg-panel-3">
       <div className="absolute inset-0 [&_canvas]:!touch-pan-y">
+        {/* the current scene stays up while the next one's code loads; then the new scene builds
+            under a frosted veil, so switching never blanks the hero */}
         {live3D && scene ? (
-          <Stage key={scene.id} scene={scene} pageScroll />
+          <Stage key={scene.id} scene={scene} pageScroll frame={shownFrame} veil />
+        ) : live3D ? (
+          <Loader size={52} className="h-full bg-[var(--color-stage)] lg:pl-[40%]" />
         ) : (
-          <Media src={`${MEDIA}/hero.jpg`} alt="Cutaway tractor showing the engine, gearbox and rear axle in section" className="h-full w-full object-cover" />
+          <div className="h-full bg-[var(--color-stage)]" />
         )}
       </div>
       {/* scrims keep the headline readable in either theme; they never take pointer events, so the scene stays draggable */}
@@ -173,8 +192,8 @@ function Hero({ copy }: { copy: (typeof COPY)[keyof typeof COPY] }) {
       />
 
       <div className="pointer-events-none absolute right-5 top-24 hidden w-[230px] flex-col gap-2.5 lg:flex">
-        {hero.readouts.map(([label, value, unit, fill]) => (
-          <Gauge key={label} label={label} value={value} unit={unit} fill={fill} />
+        {hero.readouts.map((r) => (
+          <Gauge key={r.label} {...r} />
         ))}
       </div>
 
@@ -204,8 +223,9 @@ function Hero({ copy }: { copy: (typeof COPY)[keyof typeof COPY] }) {
                     setLive3D(true)
                   }}
                   aria-pressed={i === heroIdx}
-                  className={chip(i === heroIdx)}
+                  className={`${chip(i === heroIdx)} inline-flex items-center gap-1.5`}
                 >
+                  {i === heroIdx && switching ? <LoaderMark size={12} /> : null}
                   {h.label}
                 </button>
               ))}
@@ -221,9 +241,6 @@ function Hero({ copy }: { copy: (typeof COPY)[keyof typeof COPY] }) {
                   </button>
                 </>
               ) : null}
-              <button onClick={() => setLive3D((v) => !v)} className={chip(false)} title="Switch between the live 3D scene and a still image">
-                {live3D ? 'Live 3D' : 'Still image'}
-              </button>
               <Link to={`/m/${hero.moduleId}/${hero.sceneId}`} className="rounded-full px-3 py-1.5 text-[12px] font-semibold text-accent hover:bg-accent/10">
                 Open scene →
               </Link>
@@ -242,23 +259,23 @@ function ModuleTile({ m, academic, big }: { m: ModuleDef; academic: boolean; big
   return (
     <Link
       to={`/m/${m.id}/${featured}`}
-      className={`group relative block overflow-hidden rounded-3xl bg-[#0c0f10] ${big ? 'h-[380px] lg:col-span-6' : 'h-[300px] lg:col-span-4'} sm:col-span-1`}
+      className={`group relative block overflow-hidden rounded-3xl border border-line bg-[var(--color-stage)] ${big ? 'h-[380px] lg:col-span-6' : 'h-[300px] lg:col-span-4'} sm:col-span-1`}
     >
-      <Media src={`${MEDIA}/modules/${m.id}.jpg`} alt="" className="absolute inset-0 h-full w-full object-cover transition-transform duration-700 group-hover:scale-[1.04]" />
-      <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-[#050607] via-[#050607]/75 to-transparent p-6 pt-20">
-        <div className="flex items-center gap-2 text-[12px] font-medium" style={{ color: TILE_ACCENT }}>
+      <Media name={`modules/${m.id}`} alt="" className="absolute inset-0 h-full w-full object-cover transition-transform duration-700 group-hover:scale-[1.04]" />
+      <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-[var(--color-stage)] via-[color-mix(in_srgb,var(--color-stage)_80%,transparent)] to-transparent p-6 pt-24">
+        <div className="flex items-center gap-2 text-[12px] font-medium text-accent">
           {m.scenes.length} scenes
-          {academic && exam > 0 ? <span className="text-[#fbbf24]">· {exam} often examined</span> : null}
+          {academic && exam > 0 ? <span className="text-warn">· {exam} often examined</span> : null}
         </div>
-        <h3 className={`mt-1.5 font-semibold tracking-[-0.02em] text-[#f5f7f2] ${big ? 'text-[28px]' : 'text-[21px]'}`}>{m.title}</h3>
-        <p className={`mt-1 text-[13.5px] leading-relaxed text-[#b8bdb4] ${big ? 'line-clamp-2 max-w-[480px]' : 'line-clamp-1'}`}>{m.blurb}</p>
+        <h3 className={`mt-1.5 font-semibold tracking-[-0.02em] text-ink ${big ? 'text-[28px]' : 'text-[21px]'}`}>{m.title}</h3>
+        <p className={`mt-1 text-[13.5px] leading-relaxed text-mute ${big ? 'line-clamp-2 max-w-[480px]' : 'line-clamp-1'}`}>{m.blurb}</p>
         {academic ? (
           <div className="mt-3 max-w-[260px]">
             <ModuleProgress moduleId={m.id} />
           </div>
         ) : null}
       </div>
-      <span className="absolute right-5 top-5 grid h-9 w-9 place-items-center rounded-full bg-[#050607]/60 text-[#f5f7f2] opacity-0 backdrop-blur-md transition-opacity group-hover:opacity-100" aria-hidden>
+      <span className="absolute right-5 top-5 grid h-9 w-9 place-items-center rounded-full bg-[var(--color-scrim)] text-ink opacity-0 backdrop-blur-md transition-opacity group-hover:opacity-100" aria-hidden>
         <Icon.chevron width={16} height={16} />
       </span>
     </Link>
@@ -433,16 +450,16 @@ export function Landing() {
       </section>
 
       <section className="mx-auto max-w-[1360px] px-5 py-20 sm:px-10">
-        <div className="relative overflow-hidden rounded-[32px] bg-[#0c0f10]">
-          <Media src={`${MEDIA}/modules/implements.jpg`} alt="" className="absolute inset-0 h-full w-full object-cover opacity-60" />
-          <div className="relative bg-gradient-to-r from-[#050607] via-[#050607]/80 to-transparent p-8 sm:p-14">
-            <h2 className="max-w-xl text-[32px] font-semibold leading-tight tracking-[-0.03em] text-[#f5f7f2] sm:text-[44px]">Open a machine and see how it works.</h2>
-            <p className="mt-3 max-w-xl text-[15.5px] text-[#b8bdb4]">No sign-up, nothing to download. Pick any system and start cutting.</p>
+        <div className="relative overflow-hidden rounded-[32px] border border-line bg-[var(--color-stage)]">
+          <Media name="modules/implements" alt="" className="absolute inset-0 h-full w-full object-cover object-right" />
+          <div className="relative bg-gradient-to-r from-[var(--color-stage)] via-[color-mix(in_srgb,var(--color-stage)_85%,transparent)] to-transparent p-8 sm:p-14">
+            <h2 className="max-w-xl text-[32px] font-semibold leading-tight tracking-[-0.03em] text-ink sm:text-[44px]">Open a machine and see how it works.</h2>
+            <p className="mt-3 max-w-xl text-[15.5px] text-mute">No sign-up, nothing to download. Pick any system and start cutting.</p>
             <div className="mt-8 flex flex-wrap gap-3">
-              <Link to={copy.primary.to} className="inline-flex items-center gap-2 rounded-full px-7 py-4 text-[15px] font-semibold text-[#0b1003]" style={{ background: TILE_ACCENT }}>
+              <Link to={copy.primary.to} className="inline-flex items-center gap-2 rounded-full bg-accent px-7 py-4 text-[15px] font-semibold text-accent-ink">
                 {copy.primary.label} <Icon.chevron width={16} height={16} />
               </Link>
-              <Link to="/m/implements/mouldboard" className="rounded-full border border-white/20 bg-white/10 px-6 py-4 text-[15px] font-medium text-[#f5f7f2] backdrop-blur-xl hover:border-white/40">
+              <Link to="/m/implements/mouldboard" className="rounded-full border border-line-2 bg-[var(--color-scrim)] px-6 py-4 text-[15px] font-medium text-ink backdrop-blur-xl hover:border-accent/50">
                 Watch a plough at work
               </Link>
             </div>
