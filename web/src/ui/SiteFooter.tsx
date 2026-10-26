@@ -104,7 +104,20 @@ export function SiteFooter() {
       <div className="border-t border-line">
         <div className="mx-auto flex max-w-[1360px] flex-wrap items-center justify-between gap-4 px-5 py-5 text-[12.5px] text-dim sm:px-10">
           <span>© {new Date().getFullYear()} Solidify · solidify.studio</span>
-          <ThemeToggle />
+          <div className="flex items-center gap-3">
+            <a
+              href="https://x.com/solidify_studio"
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="Solidify on X"
+              className="grid h-9 w-9 place-items-center rounded-full border border-line-2 text-mute transition-colors hover:text-ink"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+                <path d="M18.24 2.25h3.31l-7.23 8.26 8.5 11.24h-6.65l-5.21-6.82-5.97 6.82H1.68l7.73-8.84L1.25 2.25h6.82l4.71 6.23zm-1.16 17.52h1.83L7.08 4.13H5.12z" />
+              </svg>
+            </a>
+            <ThemeToggle />
+          </div>
         </div>
       </div>
     </footer>
