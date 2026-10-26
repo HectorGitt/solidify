@@ -13,10 +13,10 @@ import { useGeometryPending } from '@/geometry/build'
  */
 export default function ShotPage() {
   const { moduleId, sceneId } = useParams()
-  // ?frame=back,shift photographs the scene as the home hero frames it
+  // ?frame=back,shift[,lift] photographs the scene as the home hero frames it
   const [query] = useSearchParams()
-  const [back, shift] = (query.get('frame') ?? '').split(',').map(Number)
-  const frame = query.get('frame') ? { back, shift } : undefined
+  const [back, shift, lift] = (query.get('frame') ?? '').split(',').map(Number)
+  const frame = query.get('frame') ? { back, shift, lift: Number.isFinite(lift) ? lift : undefined } : undefined
   const [scene, setScene] = useState<SceneDef | null>(null)
 
   useEffect(() => {

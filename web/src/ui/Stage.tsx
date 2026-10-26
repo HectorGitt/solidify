@@ -424,7 +424,14 @@ export function Stage({
     return () => setCameraControls(null)
   }, [])
 
-  const { position, target } = scene.camera
+  // the scene's camera pose, re-framed for the hero: further back (more so on a portrait phone)
+  const pose = useMemo<CameraPose>(() => {
+    const { position, target } = scene.camera
+    if (!frame) return scene.camera
+    const k = (frame.back ?? 1) * (window.innerWidth >= 1024 ? 1 : 1.75)
+    return { ...scene.camera, position: position.map((v, i) => target[i] + (v - target[i]) * k) as [number, number, number] }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scene.id, frame?.back])
   // stable ref callback: set the initial pose once per scene, not on every re-render
   const attach = useCallback(
     (c: CameraControlsImpl | null) => {
@@ -436,18 +443,15 @@ export function Stage({
       }
       // sideways shift only on wide screens, where the headline covers the left half
       const wide = window.innerWidth >= 1024
-      // a portrait phone sees far less width, so stand back further still
-      const k = (frame?.back ?? 1) * (frame && !wide ? 1.75 : 1)
-      const p = position.map((v, i) => target[i] + (v - target[i]) * k) as [number, number, number]
       if (c) {
-        void c.setLookAt(...p, ...target, false)
+        void c.setLookAt(...pose.position, ...pose.target, false)
         if (wide && frame?.shift) void c.setFocalOffset(-scene.extent * frame.shift, 0, 0, false)
         // narrow: the text sits below, so lift the model into the top half
         else if (!wide && frame) void c.setFocalOffset(0, scene.extent * (frame.lift ?? 0.3), 0, false)
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [scene.id, pageScroll, frame?.back, frame?.shift],
+    [scene.id, pageScroll, pose, frame?.shift, frame?.lift],
   )
 
   const light = useIsLight()
@@ -459,7 +463,7 @@ export function Stage({
     <Canvas
       shadows
       dpr={[1, 2]}
-      camera={{ fov: 32, near: scene.extent / 200, far: scene.extent * 60, position }}
+      camera={{ fov: 32, near: scene.extent / 200, far: scene.extent * 60, position: pose.position }}
       gl={{ antialias: true, toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.05 }}
       onPointerMissed={(e) => {
         if (e.type === 'click') {
@@ -468,7 +472,7 @@ export function Stage({
         }
       }}
       onCreated={({ camera, scene: s3, gl }) => {
-        camera.lookAt(...target)
+        camera.lookAt(...pose.target)
         installDevBridge({ scene: s3, camera, gl })
       }}
       aria-label={`3D view: ${scene.title}`}
@@ -489,7 +493,7 @@ export function Stage({
         <scene.Viewport />
       </Suspense>
       <Floor y={scene.floorY ?? 0} extent={scene.extent} />
-      {scene.follow ? <FollowCamera partId={scene.follow} pose={scene.camera} /> : null}
+      {scene.follow ? <FollowCamera partId={scene.follow} pose={pose} /> : null}
       <CutPlaneHelpers size={scene.extent * 1.2} />
       <CameraControls
         ref={attach}

@@ -30,7 +30,7 @@ const MEDIA = './media'
 type HeroReadout = { label: string; value: string; unit: string; fill?: number }
 const HERO_SCENES: { moduleId: string; sceneId: string; label: string; frame: StageFrame; readouts: HeroReadout[] }[] = [
   { moduleId: 'vibration', sceneId: 'seat', label: 'Seat suspension', frame: { back: 1.6, shift: 0.55 }, readouts: [{ label: 'Operator vibration', value: '0.666', unit: 'm/s² RMS' }, { label: 'Seat transmissibility', value: '0.549', unit: 'floor to operator' }] },
-  { moduleId: 'traction', sceneId: 'traction-lab', label: 'Traction & drawbar pull', frame: { back: 1.4, shift: 0.12 }, readouts: [{ label: 'Drawbar pull', value: '12', unit: 'kN at 14.6 % slip' }, { label: 'Drawbar power', value: '11.4', unit: 'kW of 17.3', fill: 11.4 / 17.3 }] },
+  { moduleId: 'traction', sceneId: 'traction-lab', label: 'Traction & drawbar pull', frame: { back: 1.25, shift: 0.2, lift: 0.12 }, readouts: [{ label: 'Drawbar pull', value: '12', unit: 'kN at 14.6 % slip' }, { label: 'Drawbar power', value: '11.4', unit: 'kW of 17.3', fill: 11.4 / 17.3 }] },
   { moduleId: 'powertrain', sceneId: 'differential', label: 'Differential & diff lock', frame: { back: 1.8, shift: 0.35 }, readouts: [{ label: 'Pinion', value: '600', unit: 'rpm' }, { label: 'Crown wheel', value: '140', unit: 'rpm' }] },
   { moduleId: 'engine', sceneId: 'cooling', label: 'Engine cooling', frame: { back: 1.4, shift: 0.45 }, readouts: [{ label: 'Heat to coolant', value: '36', unit: 'kW' }] },
 ]
