@@ -24,8 +24,9 @@ const V = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z)
 /** pump frame origin (the fuel scene's pump coordinates sit on it, unrotated: elements along X, no. 1 forward) */
 const PUMP = V(ENGINE_X, 0.66, -0.21)
 const P = (x: number, y: number, z = 0) => V(x, y, z).add(PUMP)
-const PRIMARY = V(0.86, 0.95, -0.25)
-const SECONDARY = V(0.95, 0.95, -0.25)
+// the filters hang beside the engine, ahead of the dash
+const PRIMARY = V(ENGINE_X - 0.24, 0.95, -0.25)
+const SECONDARY = V(ENGINE_X - 0.15, 0.95, -0.25)
 const BOWL = V(0.55, 0.97, -0.2)
 /** delivery begins 60° into each element's cam rise; time element 1 to start 15° (crank) before cylinder 1's firing TDC */
 const CAM_OFFSET = PI / 3 - (PI - (15 * PI) / 180 / 2)
@@ -73,13 +74,13 @@ function FuelSystem({ g, a, k }: { g: StaticFuelGeometry; a: MutableRefObject<Dr
       lp: [
         // tank → sediment bowl → lift pump
         line(0.0045, V(BOWL.x, 1.01, BOWL.z), V(BOWL.x, 0.99, BOWL.z), V(BOWL.x - 0.03, BOWL.y + 0.018, BOWL.z)),
-        line(0.0045, V(BOWL.x + 0.036, BOWL.y + 0.018, BOWL.z), V(0.7, 0.9, -0.24), V(0.95, 0.72, -0.27), P(LAYOUT.feed.x - 0.014, 0.1)),
+        line(0.0045, V(BOWL.x + 0.036, BOWL.y + 0.018, BOWL.z), V(0.7, 0.9, -0.24), V(ENGINE_X - 0.15, 0.72, -0.27), P(LAYOUT.feed.x - 0.014, 0.1)),
         // lift pump → primary → secondary → pump gallery
-        line(0.0045, P(LAYOUT.feed.x + 0.014, 0.1), P(0.2, 0.2, -0.04), V(1.05, 1.0, -0.27), V(PRIMARY.x + 0.06, PRIMARY.y + 0.06, -0.27), head(PRIMARY, 0.052)),
-        line(0.0045, head(PRIMARY, -0.052), V(0.9, PRIMARY.y + 0.05, -0.29), head(SECONDARY, -0.052)),
-        line(0.0045, head(SECONDARY, 0.052), V(1.02, 0.98, -0.27), P(0.13, 0.15, -0.03), P(0.1, 0.1201)),
+        line(0.0045, P(LAYOUT.feed.x + 0.014, 0.1), P(0.2, 0.2, -0.04), V(ENGINE_X - 0.05, 1.0, -0.27), V(PRIMARY.x + 0.06, PRIMARY.y + 0.06, -0.27), head(PRIMARY, 0.052)),
+        line(0.0045, head(PRIMARY, -0.052), V((PRIMARY.x + SECONDARY.x) / 2, PRIMARY.y + 0.05, -0.29), head(SECONDARY, -0.052)),
+        line(0.0045, head(SECONDARY, 0.052), V(SECONDARY.x + 0.07, 0.98, -0.27), P(0.13, 0.15, -0.03), P(0.1, 0.1201)),
         // overflow and injector leak-off back to the tank
-        line(0.003, SECONDARY.clone().add(V(0.036, 0.046, 0)), V(0.9, 1.1, -0.24), V(0.7, 1.4, -0.15), V(0.65, 1.37, -0.1)),
+        line(0.003, SECONDARY.clone().add(V(0.036, 0.046, 0)), V(SECONDARY.x - 0.05, 1.1, -0.24), V(0.7, 1.4, -0.15), V(0.65, 1.37, -0.1)),
         line(0.003, ...CYL_Z.map((z) => toTractor(injectorTop(z)).add(V(0, 0.02, 0.02))).reverse(), V(0.75, 1.42, -0.12), V(0.68, 1.37, -0.08)),
       ],
     }

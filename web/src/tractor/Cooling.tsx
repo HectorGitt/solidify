@@ -22,8 +22,8 @@ const V = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z)
 const RAD_X = 1.96
 /** water-pump / fan spindle height, and where things sit along it */
 const SPINDLE_Y = 1.06
-/** the volute's back face, just off the head's front face (x 1.3725) */
-const PUMP_X = 1.376
+/** the volute's back face, just off the head's front face */
+const PUMP_X = ENGINE_X + 0.276
 const FAN_X = 1.8
 /** the crankshaft pulley's plane (front of the engine) */
 const BELT_X = ENGINE_X + CYL_Z[0] + 0.112
@@ -65,8 +65,8 @@ function CoolingSystem({ g, a, k }: { g: SystemsGeometry; a: MutableRefObject<Dr
     return {
       belt,
       spindle,
-      top: hose(THERMO.clone().add(V(0.04, 0.038, 0)), V(1.55, THERMO.y + 0.07, 0.08), V(RAD_X - 0.12, 1.33, 0.12), V(RAD_X - 0.045, 1.315, 0.12)),
-      bottom: hose(V(RAD_X - 0.045, 0.99, -0.12), V(1.85, 0.86, -0.05), V(1.6, 0.86, 0.08), V(1.45, 0.98, 0.08), pumpInlet),
+      top: hose(THERMO.clone().add(V(0.04, 0.038, 0)), V((THERMO.x + RAD_X) / 2, THERMO.y + 0.07, 0.08), V(RAD_X - 0.12, 1.33, 0.12), V(RAD_X - 0.045, 1.315, 0.12)),
+      bottom: hose(V(RAD_X - 0.045, 0.99, -0.12), V(RAD_X - 0.08, 0.86, -0.06), V(PUMP_X + 0.07, 0.9, 0.09), pumpInlet),
     }
   }, [])
   const rotor = useRef<THREE.Group>(null)

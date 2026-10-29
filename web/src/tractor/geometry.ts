@@ -3,6 +3,9 @@ import { box, cylinder, extrude, gear, lathe, mat4, merge, pipe, roundedBox, tub
 import { bevelGear, bevelPair, splineShaft, torus } from '@/geometry/parts'
 import { FARMLAND_FRONT, FARMLAND_REAR, wheel } from '@/parts/lib/wheels'
 import { frontAxle, frontSupport, intakeStack, steeringKnuckle } from '@/parts/lib/chassis'
+import { BELL_FRONT_X, ENGINE_X } from './engine'
+/** exhaust stack, over the manifold outlet */
+export const EXHAUST_X = ENGINE_X + 0.35
 import { clutchDisc, clutchDiscThickness } from '@/parts/lib/driveline'
 import { LINKAGE, TRACTOR } from './dims'
 
@@ -198,11 +201,11 @@ function detailGeometry() {
   const stripe = merge(...[1, -1].map((sz) => xform(box(1.18, 0.028, 0.006), mat4.t(1.36, 1.3, sz * (hw + 0.003)))))
   // exhaust: manifold pipe, muffler, tailpipe (tip at y 2.06, where the smoke leaves)
   const exPipe = merge(
-    pipe(new THREE.CatmullRomCurve3([new THREE.Vector3(1.45, 1.16, 0.16), new THREE.Vector3(1.45, 1.4, 0.2), new THREE.Vector3(1.45, 1.53, 0.2)]), 0.034, 0.026, 24, 14),
-    xform(cylinder(0.03, 0.24, 18), mat4.t(1.45, 1.94, 0.2)),
+    pipe(new THREE.CatmullRomCurve3([new THREE.Vector3(EXHAUST_X, 1.16, 0.16), new THREE.Vector3(EXHAUST_X, 1.4, 0.2), new THREE.Vector3(EXHAUST_X, 1.53, 0.2)]), 0.034, 0.026, 24, 14),
+    xform(cylinder(0.03, 0.24, 18), mat4.t(EXHAUST_X, 1.94, 0.2)),
   )
   const muffler = lathe([[0.028, 1.5], [0.034, 1.5], [0.066, 1.53], [0.066, 1.8], [0.034, 1.84], [0.028, 1.84]], 28)
-  muffler.translate(1.45, 0, 0.2)
+  muffler.translate(EXHAUST_X, 0, 0.2)
   // instrument pod and gauges (facing the driver, towards -X)
   const pod = roundedBox(0.1, 0.13, 0.38, 0.03)
   pod.translate(0.37, 1.335, 0)
@@ -310,25 +313,25 @@ export function buildTractorGeometry() {
   const frontRim = wheel(FARMLAND_FRONT).rim
 
   // ------------------------------------------------------------ engine (housings)
-  // sized to the real four-cylinder (EngineDetail): crank centre at x = 1.1, 0.6 m long
-  const block = shellBox(0.6, 0.5, 0.42, 0.03, 0.03, 1.1, 0.8) // x 0.80–1.40, y 0.55–1.05
-  const sump = shellBox(0.56, 0.12, 0.36, 0.02, 0.008, 1.1, 0.49)
+  // sized to the real four-cylinder (EngineDetail): centred on the crank at ENGINE_X, 0.6 m long
+  const block = shellBox(0.6, 0.5, 0.42, 0.03, 0.03, ENGINE_X, 0.8) // y 0.55–1.05
+  const sump = shellBox(0.56, 0.12, 0.36, 0.02, 0.008, ENGINE_X, 0.49)
   const head = roundedBox(0.58, 0.12, 0.38, 0.02)
-  head.translate(1.1, 1.11, 0)
+  head.translate(ENGINE_X, 1.11, 0)
   const timingCover = roundedBox(0.08, 0.5, 0.4, 0.03)
-  timingCover.translate(1.44, 0.78, 0)
+  timingCover.translate(ENGINE_X + 0.34, 0.78, 0)
   const bonnet = bonnetShell()
   const radiator = box(0.07, 0.36, 0.5)
   radiator.translate(1.96, 1.16, 0)
   // cast front support under the radiator, carrying the axle pivot (parts library)
   // its neck runs back under the crank pulley and bolts to the front of the sump: the engine is the frame
-  const fs = frontSupport({ l: 0.3, h: 0.17, w: 0.34, neck: { l: 1.77 - 1.385, h: 0.105, dy: 0.5025 - 0.535 } })
+  const fs = frontSupport({ l: 0.3, h: 0.17, w: 0.34, neck: { l: 1.77 - (ENGINE_X + 0.285), h: 0.105, dy: 0.5025 - 0.535 } })
   const atSupport = mat4.t(1.92, 0.535, 0)
   const bolster = xform(fs.body, atSupport)
   const bolsterSteel = xform(merge(fs.bolts, fs.eye), atSupport)
   // air-intake stack up through the bonnet (pre-cleaner on top)
   const st = intakeStack({ r: 0.065, length: 0.4 })
-  const atStack = mat4.t(1.2, 1.42, -0.18)
+  const atStack = mat4.t(ENGINE_X + 0.1, 1.42, -0.18)
   const airCleaner = xform(merge(st.pipe, st.collar), atStack)
   const airCleanerBands = xform(st.bands, atStack)
   const preCleaner = lathe(
@@ -340,11 +343,12 @@ export function buildTractorGeometry() {
     ],
     28,
   )
-  preCleaner.translate(1.2, 0, -0.18)
+  preCleaner.translate(ENGINE_X + 0.1, 0, -0.18)
 
   // ------------------------------------------------------------ transmission housings
-  const clutchHousing = xAxis(lathe([[0.16, -0.15], [0.27, -0.15], [0.27, 0.15], [0.25, 0.15], [0.25, -0.13], [0.16, -0.13]], 48))
-  clutchHousing.translate(0.67, DRIVE_Y, 0) // x 0.52–0.82
+  const bellHalf = (BELL_FRONT_X - 0.52) / 2
+  const clutchHousing = xAxis(lathe([[0.16, -bellHalf], [0.27, -bellHalf], [0.27, bellHalf], [0.25, bellHalf], [0.25, -bellHalf + 0.02], [0.16, -bellHalf + 0.02]], 48))
+  clutchHousing.translate(0.52 + bellHalf, DRIVE_Y, 0) // x 0.52 → the engine's rear face
   const gearbox = shellBox(0.32, 0.46, 0.46, 0.03, 0.022, 0.36, 0.56) // x 0.20–0.52, y 0.33–0.79
   const centre = shellBox(0.4, 0.47, 0.56, 0.04, 0.025, 0, 0.555) // x −0.20–0.20, y 0.32–0.79 (the hydraulic pump sits low inside)
   // the lift cover is a hollow casting on the centre housing and gearbox: the control valve, the ram on
@@ -466,7 +470,8 @@ export function buildTractorGeometry() {
   const clutchLinings = onX(cd.linings)
   const clutchCore = onX(merge(cd.core, cd.hub))
   const m = GEARBOX.module
-  const inputShaft = xform(xAxis(cylinder(0.022, 0.5, 20)), mat4.t(0.25, 0, 0)) // local x 0 → 0.5
+  const inputLen = ENGINE_X - 0.37 - 0.25 + 0.02
+  const inputShaft = xform(xAxis(cylinder(0.022, inputLen, 20)), mat4.t(inputLen / 2, 0, 0)) // local x 0 → the clutch plate
   const gearAt = (teeth: number, width: number) => {
     const g = gear({ teeth, module: m, width, bore: 0.012 })
     g.rotateY(PI / 2)

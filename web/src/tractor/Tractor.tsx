@@ -9,7 +9,7 @@ import { Suspense } from 'react'
 import { MODEL_EXHAUST, ModelTractor } from './ModelTractor'
 import { Part, PartMesh } from '@/render/Part'
 import { LINKAGE, TRACTOR } from './dims'
-import { AXLE_Y, CROWN, DRIVE_Y, FRONT_Y, FRONT_Z, GEARBOX, KINGPIN_Z, PTO_STUB_X, PTO_Y, REAR_Z, tractorGeometry } from './geometry'
+import { AXLE_Y, CROWN, DRIVE_Y, EXHAUST_X, FRONT_Y, FRONT_Z, GEARBOX, KINGPIN_Z, PTO_STUB_X, PTO_Y, REAR_Z, tractorGeometry } from './geometry'
 import { phiForHitchHeight, solveLinkage, type LinkagePose } from './linkage'
 import { insideReady, useInside } from '@/ui/inside'
 import { Engine } from '@/machines/Engine'
@@ -149,7 +149,7 @@ export interface TractorProps {
 const AXIS_X = new THREE.Vector3(1, 0, 0)
 const NO_EFFECTS: EffectsInput = {}
 /** top of the exhaust stack and the ground just behind each rear tyre */
-const EXHAUST_TIP: [number, number, number] = [1.45, 2.06, 0.2]
+const EXHAUST_TIP: [number, number, number] = [EXHAUST_X, 2.06, 0.2]
 const DUST_AT: [number, number, number][] = [
   [-0.45, 0.06, TRACTOR.rear.track / 2],
   [-0.45, 0.06, -TRACTOR.rear.track / 2],

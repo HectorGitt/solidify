@@ -7,6 +7,7 @@ import type { PartInfo } from '@/parts/registry'
 import type { Citation } from '@/content/citations'
 import { Part, PartMesh } from '@/render/Part'
 import { AXLE_Y, DRIVE_Y, GEARBOX, type TractorGeometry } from './geometry'
+import { CLUTCH_X } from './engine'
 
 /**
  * The working parts of the clutch, gearbox and differential, shown when you look inside each one
@@ -67,7 +68,7 @@ export function ClutchPlate({ a, k, G, info, explode }: Core) {
   useSimFrame(() => g.current?.rotation.set(a.current.disc, 0, 0))
   return (
     <Part id={k('clutch-disc')} name="Clutch plate" role="moving" material="friction" info={info} explode={explode}>
-      <group position={[0.73, DRIVE_Y, 0]} ref={g}>
+      <group position={[CLUTCH_X, DRIVE_Y, 0]} ref={g}>
         <PartMesh geometry={G.clutchDisc} />
         <PartMesh geometry={G.clutchCore} material="steel" />
       </group>
@@ -140,8 +141,8 @@ export function CrownWheel({ a, k, G, info, cites, explode, open, stub }: Core &
 
 /* ------------------------------ clutch ------------------------------ */
 
-const DIA_X = 0.685
-const RELEASE_X = 0.6
+const DIA_X = CLUTCH_X - 0.045
+const RELEASE_X = CLUTCH_X - 0.13
 
 export function ClutchInternals({ a, k }: { a: Angles; k: (s: string) => string }) {
   const G = useMemo(() => {
@@ -181,9 +182,9 @@ export function ClutchInternals({ a, k }: { a: Angles; k: (s: string) => string 
         <group ref={spin}>
           <Part id={k('pressure-plate')} name="Pressure plate and cover" role="moving" material="castIron" info={INFO.pressure} explode={[-0.15, 0, 0]}>
             <group ref={plate}>
-              <PartMesh geometry={G.plate} position={[0.708, 0, 0]} />
+              <PartMesh geometry={G.plate} position={[CLUTCH_X - 0.022, 0, 0]} />
             </group>
-            <PartMesh geometry={G.cover} position={[0.72, 0, 0]} material="steelDark" />
+            <PartMesh geometry={G.cover} position={[CLUTCH_X - 0.01, 0, 0]} material="steelDark" />
           </Part>
           <Part id={k('diaphragm')} name="Diaphragm spring" role="moving" material="steel" info={INFO.diaphragm} explode={[-0.28, 0, 0]}>
             <group ref={dia} position={[DIA_X, 0, 0]}>
