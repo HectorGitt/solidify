@@ -1,0 +1,340 @@
+// The promo's score, synthesised to the cut list (133⅓ BPM, D aeolian): node scripts/promo/score.mjs <out.wav>
+// Deterministic: same samples every run. Loudness is normalised afterwards with ffmpeg loudnorm.
+import fs from 'node:fs'
+
+const SR = 48000
+const BEAT = 0.45
+const BAR = 4 * BEAT
+const DUR = 48.6
+const N = Math.ceil((DUR + 0.2) * SR)
+const PI2 = Math.PI * 2
+
+/* ------------------------------------------------------------------ buses */
+const bus = () => ({ L: new Float32Array(N), R: new Float32Array(N) })
+const B = { drums: bus(), bass: bus(), music: bus(), fx: bus(), verb: bus() }
+const add = (b, i, l, r = l) => { if (i >= 0 && i < N) { b.L[i] += l; b.R[i] += r } }
+let seed = 0x2f6e2b1
+const rnd = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 0xffffffff) * 2 - 1
+const mtof = (m) => 440 * Math.pow(2, (m - 69) / 12)
+const S = (t) => Math.round(t * SR)
+
+/* ------------------------------------------------------------------ filters */
+function svf() { // Chamberlin state-variable filter
+  let lo = 0, bp = 0
+  return (x, fc, q = 0.7) => {
+    const f = 2 * Math.sin(Math.PI * Math.min(fc, SR / 6) / SR)
+    lo += f * bp
+    const hi = x - lo - (1 / q) * bp
+    bp += f * hi
+    return { lo, bp, hi }
+  }
+}
+
+/* ------------------------------------------------------------------ instruments */
+function kick(t, g = 1) {
+  const i0 = S(t)
+  let ph = 0
+  for (let k = 0; k < S(0.5); k++) {
+    const x = k / SR
+    const f = 45 + 110 * Math.exp(-x / 0.03)
+    ph += (PI2 * f) / SR
+    const a = Math.exp(-x / 0.22) * (x < 0.002 ? x / 0.002 : 1)
+    const click = k < 96 ? rnd() * 0.25 * (1 - k / 96) : 0
+    const v = Math.tanh(1.6 * Math.sin(ph) * a) * 0.9 + click
+    add(B.drums, i0 + k, v * g)
+  }
+  duck.push(t)
+}
+function clap(t, g = 1) {
+  const i0 = S(t), f = svf(), body = svf()
+  for (let k = 0; k < S(0.35); k++) {
+    const x = k / SR
+    const bursts = [0, 0.011, 0.022].reduce((s, o) => s + (x >= o ? Math.exp(-(x - o) / 0.006) : 0), 0)
+    const env = 0.55 * bursts + Math.exp(-x / 0.09)
+    const n = f(rnd(), 1700, 1.2).bp * env
+    const b = Math.sin(PI2 * 185 * x) * Math.exp(-x / 0.05) * 0.35
+    add(B.drums, i0 + k, (n * 1.5 + b) * g * 0.6, (n * 1.4 + b) * g * 0.6)
+    if (k % 2 === 0) add(B.verb, i0 + k, n * g * 0.12)
+  }
+}
+function hat(t, g = 1, open = false) {
+  const i0 = S(t), f = svf()
+  const d = open ? 0.18 : 0.035
+  for (let k = 0; k < S(d * 6); k++) {
+    const x = k / SR
+    const v = f(rnd(), 9000, 0.8).hi * Math.exp(-x / d)
+    add(B.drums, i0 + k, v * g * 0.22 * 0.9, v * g * 0.22)
+  }
+}
+function tick(t, g = 1) { // a mechanical tick: short bright click with a little metal ring
+  const i0 = S(t)
+  for (let k = 0; k < S(0.08); k++) {
+    const x = k / SR
+    const v = (rnd() * Math.exp(-x / 0.002) + Math.sin(PI2 * 3100 * x) * Math.exp(-x / 0.015) * 0.5) * g * 0.18
+    add(B.fx, i0 + k, v * 0.8, v)
+    add(B.verb, i0 + k, v * 0.3)
+  }
+}
+function boom(t, g = 1) { // sub drop + crash
+  const i0 = S(t), f = svf()
+  let ph = 0
+  for (let k = 0; k < S(2.6); k++) {
+    const x = k / SR
+    ph += (PI2 * (32 + 45 * Math.exp(-x / 0.12))) / SR
+    const sub = Math.sin(ph) * Math.exp(-x / 0.9) * 0.9
+    const cr = f(rnd(), 6500 * Math.exp(-x / 0.8) + 900, 0.6).hi * Math.exp(-x / 0.7) * 0.32
+    add(B.fx, i0 + k, (Math.tanh(sub * 1.4) + cr) * g, (Math.tanh(sub * 1.4) + cr * 0.9) * g)
+    add(B.verb, i0 + k, cr * 0.5 * g)
+  }
+  duck.push(t)
+}
+function riser(t0, t1, g = 1) { // filtered noise and a sine sweep up into a hit
+  const f = svf()
+  let ph = 0
+  for (let i = S(t0); i < S(t1); i++) {
+    const u = (i - S(t0)) / (S(t1) - S(t0))
+    const n = f(rnd(), 300 + 7000 * u * u, 2.2).bp * u * u * 0.6
+    ph += (PI2 * (200 + 1400 * u * u)) / SR
+    const s = Math.sin(ph) * u * u * 0.08
+    add(B.fx, i, (n + s) * g, (n * 0.9 + s) * g)
+    add(B.verb, i, n * 0.4 * g)
+  }
+}
+function whoosh(t, g = 1, d = 0.35) {
+  const f = svf()
+  for (let k = 0; k < S(d); k++) {
+    const u = k / S(d)
+    const n = f(rnd(), 5000 * (1 - u) + 400, 1.4).bp * Math.sin(Math.PI * u) * 0.5
+    add(B.fx, S(t) + k, n * g * (1 - u * 0.5), n * g * (0.5 + u * 0.5))
+  }
+}
+function chime(t, m, g = 1) { // bell: inharmonic sine partials
+  const f0 = mtof(m)
+  const parts = [[1, 1, 2.2], [2.01, 0.45, 1.3], [3.03, 0.22, 0.8], [4.2, 0.12, 0.5]]
+  for (let k = 0; k < S(3.2); k++) {
+    const x = k / SR
+    let v = 0
+    for (const [r, a, d] of parts) v += Math.sin(PI2 * f0 * r * x) * a * Math.exp(-x / d)
+    v *= (x < 0.003 ? x / 0.003 : 1) * 0.09 * g
+    add(B.music, S(t) + k, v * 0.85, v)
+    add(B.verb, S(t) + k, v * 0.6)
+  }
+}
+/** detuned saw pad on the chord, slow attack, lowpassed */
+function pad(t, dur, notes, g = 1, { cut = 1400, att = 0.35, rel = 0.8 } = {}) {
+  const voices = notes.flatMap((m) => [-0.09, 0, 0.08].map((d) => ({ f: mtof(m + d), ph: rnd() * 0.5 + 0.5 })))
+  const fl = svf(), fr = svf()
+  for (let k = 0; k < S(dur + rel); k++) {
+    const x = k / SR
+    const env = Math.min(1, x / att) * (x > dur ? Math.exp(-(x - dur) / (rel / 3)) : 1)
+    let l = 0, r = 0
+    voices.forEach((v, j) => { v.ph = (v.ph + v.f / SR) % 1; const s = 2 * v.ph - 1; if (j % 2) l += s; else r += s })
+    const c = cut * (0.7 + 0.3 * Math.sin(PI2 * 0.15 * (t + x)))
+    l = fl(l, c, 0.8).lo; r = fr(r, c, 0.8).lo
+    const gg = (env * g * 0.05) / Math.sqrt(notes.length)
+    add(B.music, S(t) + k, l * gg, r * gg)
+    if (k % 2 === 0) add(B.verb, S(t) + k, (l + r) * gg * 0.35)
+  }
+}
+function bass(t, dur, m, g = 1) { // saw + sub, filter envelope
+  const f = mtof(m), fl = svf()
+  let ph = 0
+  for (let k = 0; k < S(dur + 0.04); k++) {
+    const x = k / SR
+    ph = (ph + f / SR) % 1
+    const env = Math.min(1, x / 0.004) * Math.exp(-x / 0.25) * (x > dur ? Math.exp(-(x - dur) / 0.01) : 1)
+    const saw = fl(2 * ph - 1, 180 + 1300 * Math.exp(-x / 0.06), 1.1).lo
+    const sub = Math.sin(PI2 * ph) * 0.8
+    const v = Math.tanh((saw * 0.7 + sub) * 1.3) * env * 0.32 * g
+    add(B.bass, S(t) + k, v)
+  }
+}
+function pluck(t, m, g = 1, pan = 0) {
+  const f = mtof(m), fl = svf()
+  let ph = 0, ph2 = 0.3
+  for (let k = 0; k < S(0.45); k++) {
+    const x = k / SR
+    ph = (ph + f / SR) % 1; ph2 = (ph2 + (f * 1.004) / SR) % 1
+    const s = (ph < 0.5 ? 1 : -1) * 0.5 + (2 * ph2 - 1) * 0.5
+    const v = fl(s, 600 + 4200 * Math.exp(-x / 0.05), 1.2).lo * Math.exp(-x / 0.16) * 0.07 * g
+    add(B.music, S(t) + k, v * (1 - pan), v * (1 + pan))
+    add(B.verb, S(t) + k, v * 0.5)
+  }
+}
+
+/* ------------------------------------------------------------------ score */
+const duck = []
+// D aeolian: Dm9 – Bbmaj7 – Fadd9 – Cadd9, one chord a bar
+const PROG = [
+  { root: 38, pad: [50, 53, 57, 60, 64], arp: [62, 65, 69, 72, 76, 72, 69, 65] },
+  { root: 34, pad: [46, 50, 53, 57, 62], arp: [58, 62, 65, 69, 74, 69, 65, 62] },
+  { root: 41, pad: [53, 57, 60, 64, 67], arp: [65, 69, 72, 76, 79, 76, 72, 69] },
+  { root: 36, pad: [48, 52, 55, 62, 64], arp: [60, 64, 67, 72, 74, 72, 67, 64] },
+]
+const chord = (bar) => PROG[((bar % 4) + 4) % 4]
+const bt = (bar, beat = 0) => bar * BAR + beat * BEAT
+
+// intro (bars 0–1): drone, swelling pad, the machine ticking, riser into the wipe
+pad(0, 3.6, [26, 38, 45], 1.4, { cut: 500, att: 2.2, rel: 0.4 })
+pad(0.6, 3.0, PROG[0].pad, 0.9, { cut: 900, att: 2.4, rel: 0.6 })
+for (let k = 0; k < 16; k++) if (k >= 2) tick(k * BEAT / 2, 0.4 + 0.6 * (k / 16))
+riser(1.8, 3.6, 0.9)
+boom(3.6, 1.1)
+
+const groove = { kick: [], clap: [], hat: [] }
+function bars(b0, b1, f) { for (let b = b0; b <= b1; b++) f(b) }
+
+// tractor + gearbox (bars 2–7)
+bars(2, 7, (b) => {
+  const c = chord(b - 2)
+  pad(bt(b), BAR, c.pad, 1, { cut: 1100 + (b - 2) * 160 })
+  for (let e = 0; e < 8; e++) bass(bt(b, e / 2), BEAT / 2 - 0.03, c.root + (e === 7 ? 12 : 0), e % 2 ? 0.75 : 1)
+  kick(bt(b, 0)); kick(bt(b, 2)); if (b >= 4) kick(bt(b, 3.5), 0.6)
+  if (b >= 3) { clap(bt(b, 1)); clap(bt(b, 3)) }
+  for (let e = 0; e < 8; e++) hat(bt(b, e / 2), e % 2 ? 1 : 0.55)
+  if (b >= 5) for (let s = 0; s < 16; s++) pluck(bt(b, s / 4), c.arp[s % 8], 0.9 + 0.2 * (s % 4 === 0), s % 2 ? 0.4 : -0.4)
+})
+
+// slow motion (bars 8–10): the groove tape-stops as the footage slows, then the machine ticks slower and slower
+const STOP = 14.4 + 0.22 * (340 / 60), STOP_END = 14.4 + 0.7 * (340 / 60)
+{
+  // bar 8 played into a side buffer, then resampled with a falling rate (tape stop)
+  const keep = {}
+  for (const k of ['drums', 'bass', 'music']) keep[k] = { L: B[k].L.slice(), R: B[k].R.slice() }
+  bars(8, 8, (b) => {
+    const c = chord(b - 2)
+    pad(bt(b), BAR, c.pad, 1, { cut: 1900 })
+    for (let e = 0; e < 8; e++) bass(bt(b, e / 2), BEAT / 2 - 0.03, c.root, e % 2 ? 0.75 : 1)
+    kick(bt(b, 0)); kick(bt(b, 2)); clap(bt(b, 1)); clap(bt(b, 3))
+    for (let e = 0; e < 8; e++) hat(bt(b, e / 2), e % 2 ? 1 : 0.55)
+    for (let s = 0; s < 16; s++) pluck(bt(b, s / 4), c.arp[s % 8], 1, s % 2 ? 0.4 : -0.4)
+  })
+  const i0 = S(STOP), len = S(1.1)
+  for (const k of ['drums', 'bass', 'music']) {
+    const src = { L: B[k].L.slice(), R: B[k].R.slice() }
+    let pos = i0
+    for (let j = 0; j < S(BAR * 2); j++) {
+      const i = i0 + j
+      if (i >= N) break
+      if (j < len) {
+        const u = j / len
+        const a = Math.floor(pos), fr = pos - a
+        B[k].L[i] = keep[k].L[i] + (src.L[a] * (1 - fr) + src.L[a + 1] * fr - keep[k].L[a] * (1 - fr) - keep[k].L[a + 1] * fr) * (1 - u * u)
+        B[k].R[i] = keep[k].R[i] + (src.R[a] * (1 - fr) + src.R[a + 1] * fr - keep[k].R[a] * (1 - fr) - keep[k].R[a + 1] * fr) * (1 - u * u)
+        pos += Math.pow(1 - u, 1.6)
+      } else { B[k].L[i] = keep[k].L[i]; B[k].R[i] = keep[k].R[i] }
+    }
+  }
+  // remove the duck triggers past the stop
+  for (let i = duck.length - 1; i >= 0; i--) if (duck[i] > STOP && duck[i] < bt(11)) duck.splice(i, 1)
+}
+pad(STOP, bt(11) - STOP - 0.2, [38, 50, 57, 64, 69], 1.2, { cut: 700, att: 0.8, rel: 0.6 })
+{ // ticks spaced by the playback speed: one tick per sixteenth of "machine time"
+  let tau = 0
+  for (let t = STOP; t < bt(10, 2); t += 1 / 400) {
+    const k = Math.min(1, Math.max(0, (t - STOP) / (STOP_END - STOP)))
+    const e = k < 0.5 ? 4 * k ** 3 : 1 - Math.pow(-2 * k + 2, 3) / 2
+    const speed = Math.max(0.035, Math.exp(Math.log(1 / 200) * e) * 1)
+    const before = Math.floor(tau / (BEAT / 4))
+    tau += speed / 400
+    if (Math.floor(tau / (BEAT / 4)) > before) tick(t, 0.7)
+  }
+}
+for (let s = 0; s < 16; s++) clap(bt(10, s / 4), 0.15 + 0.6 * (s / 16) ** 2)
+riser(bt(10), bt(11), 1)
+boom(bt(11), 1.1)
+
+// explode + traction (bars 11–16): full groove
+bars(11, 16, (b) => {
+  const c = chord(b - 11)
+  pad(bt(b), BAR, c.pad, 1, { cut: 1700 })
+  for (let e = 0; e < 8; e++) bass(bt(b, e / 2), BEAT / 2 - 0.03, c.root + (b >= 14 && e === 6 ? 7 : 0) + (e === 7 ? 12 : 0), e % 2 ? 0.75 : 1)
+  kick(bt(b, 0)); kick(bt(b, 2)); kick(bt(b, 3.5), 0.6)
+  clap(bt(b, 1)); clap(bt(b, 3))
+  for (let s = 0; s < 16; s++) hat(bt(b, s / 4), s % 4 === 2 ? 1 : 0.4, s % 8 === 6)
+  for (let s = 0; s < 16; s++) pluck(bt(b, s / 4), c.arp[s % 8] + (b % 2 ? 12 : 0) * (s % 4 === 3 ? 1 : 0), 1, s % 2 ? 0.45 : -0.45)
+})
+
+// montage (bars 17–19): four on the floor, a hit on every cut, a fill into the grid
+bars(17, 19, (b) => {
+  const c = chord(b - 17)
+  pad(bt(b), BAR, c.pad, 1.1, { cut: 2200 })
+  for (let e = 0; e < 8; e++) bass(bt(b, e / 2), BEAT / 2 - 0.03, c.root + (e % 2 ? 12 : 0), 1)
+  for (let q = 0; q < 4; q++) { kick(bt(b, q)); whoosh(bt(b, q) - 0.12, 0.35, 0.14); hat(bt(b, q + 0.5), 1, true) }
+  clap(bt(b, 1)); clap(bt(b, 3))
+  for (let s = 0; s < 16; s++) pluck(bt(b, s / 4), c.arp[(s * 3) % 8] + 12, 0.8, s % 2 ? 0.5 : -0.5)
+  if (b === 19) for (let s = 8; s < 16; s++) clap(bt(b, s / 4), 0.3 + 0.07 * s)
+})
+riser(bt(19, 2), bt(20), 0.7)
+boom(bt(20), 1.2)
+
+// grid (bars 20–21): big chord, lighter beat
+bars(20, 21, (b) => {
+  const c = chord(b - 20)
+  pad(bt(b), BAR, c.pad.concat([c.pad[0] + 12]), 1.2, { cut: 2000 })
+  for (let e = 0; e < 4; e++) bass(bt(b, e), BEAT - 0.05, c.root, 0.9)
+  kick(bt(b, 0)); kick(bt(b, 2))
+  for (let e = 0; e < 8; e++) hat(bt(b, e / 2), e % 2 ? 0.8 : 0.4)
+})
+
+// modes (bars 22–23): pad, hats, a whoosh on the switch
+bars(22, 23, (b) => {
+  const c = chord(b - 20)
+  pad(bt(b), BAR, c.pad, 1, { cut: 1300 })
+  for (let e = 0; e < 8; e++) hat(bt(b, e / 2), e % 2 ? 0.9 : 0.35)
+  for (let s = 0; s < 8; s++) pluck(bt(b, s / 2), c.arp[s], 0.7, s % 2 ? 0.3 : -0.3)
+})
+kick(bt(22, 0), 0.8)
+whoosh(bt(23) - 0.28, 0.9, 0.42)
+kick(bt(23, 0), 0.9)
+riser(bt(23, 2), bt(24), 0.6)
+
+// end card (bars 24–26): the last hit, Dm9 ringing out, a chime as the logo builds
+boom(bt(24), 1.25)
+kick(bt(24), 1)
+pad(bt(24), 3.2, [38, 50, 53, 57, 60, 64, 69], 1.5, { cut: 1800, att: 0.02, rel: 2.0 })
+bass(bt(24), 1.6, 38, 1)
+;[74, 81, 86, 88].forEach((m, i) => chime(bt(24) + 0.18 + i * 0.11, m, 0.9))
+
+/* ------------------------------------------------------------------ mix */
+const out = { L: new Float32Array(N), R: new Float32Array(N) }
+// sidechain duck for bass and music on every kick and boom
+const duckEnv = new Float32Array(N).fill(1)
+for (const t of duck) for (let k = 0; k < S(0.3); k++) { const i = S(t) + k; if (i < N) duckEnv[i] = Math.min(duckEnv[i], 1 - 0.55 * Math.exp(-(k / SR) / 0.09)) }
+// reverb: 4-line feedback delay network on the verb bus
+{
+  const D = [1553, 2111, 2659, 3217].map((d) => ({ buf: new Float32Array(d), i: 0, lp: 0 }))
+  for (let i = 0; i < N; i++) {
+    const x = (B.verb.L[i] + B.verb.R[i]) * 0.5
+    const o = D.map((d) => d.buf[d.i])
+    const h = [o[0] + o[1] + o[2] + o[3], o[0] - o[1] + o[2] - o[3], o[0] + o[1] - o[2] - o[3], o[0] - o[1] - o[2] + o[3]].map((v) => v * 0.5)
+    D.forEach((d, j) => { d.lp += 0.35 * (h[j] * 0.86 - d.lp); d.buf[d.i] = x + d.lp; d.i = (d.i + 1) % d.buf.length })
+    out.L[i] += (o[0] + o[2]) * 0.45
+    out.R[i] += (o[1] + o[3]) * 0.45
+  }
+}
+for (let i = 0; i < N; i++) {
+  const d = duckEnv[i]
+  out.L[i] += B.drums.L[i] * 0.9 + B.bass.L[i] * d + B.music.L[i] * (0.4 + 0.6 * d) + B.fx.L[i] * 0.8
+  out.R[i] += B.drums.R[i] * 0.9 + B.bass.R[i] * d + B.music.R[i] * (0.4 + 0.6 * d) + B.fx.R[i] * 0.8
+}
+// fade in from silence, fade the tail out at the end
+for (let i = 0; i < N; i++) {
+  const t = i / SR
+  const g = Math.min(1, t / 0.05) * (t > DUR - 2.4 ? Math.max(0, (DUR - t) / 2.4) ** 1.5 : 1)
+  out.L[i] = Math.tanh(out.L[i] * 0.9 * g)
+  out.R[i] = Math.tanh(out.R[i] * 0.9 * g)
+}
+
+/* ------------------------------------------------------------------ wav */
+const file = process.argv[2] || 'score-raw.wav'
+const buf = Buffer.alloc(44 + N * 4)
+buf.write('RIFF', 0); buf.writeUInt32LE(36 + N * 4, 4); buf.write('WAVE', 8); buf.write('fmt ', 12)
+buf.writeUInt32LE(16, 16); buf.writeUInt16LE(1, 20); buf.writeUInt16LE(2, 22); buf.writeUInt32LE(SR, 24); buf.writeUInt32LE(SR * 4, 28); buf.writeUInt16LE(4, 32); buf.writeUInt16LE(16, 34)
+buf.write('data', 36); buf.writeUInt32LE(N * 4, 40)
+for (let i = 0; i < N; i++) {
+  buf.writeInt16LE(Math.round(Math.max(-1, Math.min(1, out.L[i])) * 32000), 44 + i * 4)
+  buf.writeInt16LE(Math.round(Math.max(-1, Math.min(1, out.R[i])) * 32000), 46 + i * 4)
+}
+fs.writeFileSync(file, buf)
+console.log('wrote', file, (N / SR).toFixed(2), 's')

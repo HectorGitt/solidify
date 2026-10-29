@@ -1,0 +1,595 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>Solidify promo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=block" rel="stylesheet" />
+<style>
+  :root {
+    --bg: #f5f6f2; --panel: #ffffff; --ink: #0e120c; --dim: #626c5e; --line: rgba(14, 18, 12, 0.1); --line2: rgba(14, 18, 12, 0.18);
+    --accent: #4d7c0f; --lime: #c6f24e; --night: #050607; --nightInk: #f5f7f2; --nightDim: #7a8277;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 1920px; height: 1080px; overflow: hidden; background: var(--bg); }
+  body { font-family: 'Sora', sans-serif; color: var(--ink); -webkit-font-smoothing: antialiased; }
+  #stage { position: absolute; inset: 0; overflow: hidden; }
+  .layer { position: absolute; inset: 0; will-change: transform, opacity; }
+  .plate { position: absolute; inset: 0; overflow: hidden; }
+  .plate img { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; transform-origin: 50% 50%; }
+  .mono { font-family: 'JetBrains Mono', monospace; }
+  .eyebrow { font-size: 23px; font-weight: 500; color: var(--accent); letter-spacing: 0; }
+  .h1 { font-size: 112px; line-height: 0.98; font-weight: 600; letter-spacing: -0.045em; }
+  .h2 { font-size: 84px; line-height: 1.0; font-weight: 600; letter-spacing: -0.04em; }
+  .sub { font-size: 30px; line-height: 1.38; color: var(--dim); font-weight: 400; letter-spacing: -0.005em; }
+  .w { display: inline-block; overflow: hidden; vertical-align: top; padding-bottom: 0.12em; margin-bottom: -0.12em; }
+  .w > span { display: inline-block; will-change: transform; }
+  .scrim { position: absolute; inset: 0; pointer-events: none; }
+  .card { position: absolute; background: rgba(255, 255, 255, 0.86); border: 1px solid var(--line); border-radius: 22px; padding: 26px 30px; backdrop-filter: blur(18px); box-shadow: 0 30px 60px -30px rgba(14, 18, 12, 0.25); }
+  .card .k { font-family: 'JetBrains Mono', monospace; font-size: 17px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--dim); }
+  .card .v { font-family: 'JetBrains Mono', monospace; font-size: 64px; font-weight: 500; letter-spacing: -0.02em; margin-top: 10px; }
+  .card .u { font-size: 21px; color: var(--dim); margin-left: 10px; font-family: 'Sora', sans-serif; letter-spacing: 0; }
+  .bar { height: 8px; border-radius: 8px; background: var(--line); margin-top: 18px; overflow: hidden; }
+  .bar i { display: block; height: 100%; background: var(--accent); border-radius: 8px; }
+  .pill { position: absolute; display: flex; align-items: center; gap: 12px; padding: 14px 22px; border-radius: 999px; background: rgba(255, 255, 255, 0.9); border: 1px solid var(--line); font-size: 21px; font-weight: 500; box-shadow: 0 16px 40px -20px rgba(14, 18, 12, 0.3); white-space: nowrap; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--accent); }
+  .tile { position: absolute; border-radius: 22px; overflow: hidden; border: 1px solid var(--line); background: var(--panel); box-shadow: 0 20px 50px -30px rgba(14, 18, 12, 0.35); }
+  .tile img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  svg { overflow: visible; }
+</style>
+</head>
+<body>
+<div id="stage"></div>
+<script>
+/* ------------------------------------------------------------------ timeline (seconds) */
+const FPS = 60
+// 133⅓ BPM: a beat is 0.45 s, a bar 1.8 s; every cut lands on a bar line, the montage cuts on every beat
+const BEAT = 0.45
+const T = {
+  cold: [0, 3.6],
+  tractor: [3.6, 9.0],
+  gearbox: [9.0, 14.4],
+  slowmo: [14.4, 19.8],
+  explode: [19.8, 25.2],
+  traction: [25.2, 30.6],
+  montage: [30.6, 36.0],
+  grid: [36.0, 39.6],
+  modes: [39.6, 43.2],
+  end: [43.2, 48.6],
+}
+const DURATION = T.end[1]
+window.PROMO = { T, DURATION, FPS, BEAT }
+
+const Q = new URLSearchParams(location.search)
+const SHOTS = Q.get('shots') || '../shots/'
+const MONTAGE = [
+  ['m00', 'Implements', 'Combine harvester'],
+  ['m01', 'Power train', 'Torque converter'],
+  ['m02', 'Implements', 'Boom sprayer & nozzles'],
+  ['m03', 'Hydraulics', 'Gear & vane pumps'],
+  ['m04', 'Steering', 'Steering boxes'],
+  ['m05', 'Power train', 'Differential & diff lock'],
+  ['m06', 'Engine', 'Diesel fuel system'],
+  ['m07', 'Traction', 'Crawler undercarriage'],
+  ['m08', 'Power train', 'Planetary gear set'],
+  ['m09', 'Implements', 'Mower & baler'],
+  ['m10', 'Hydraulics', 'Three-point linkage'],
+  ['m11', 'Implements', 'Mouldboard plough'],
+]
+const SHOT_FRAMES = { cold: 230, tractor: 340, gearbox: 340, slowmo: 340, explode: 340, traction: 390, end: 360 }
+for (const [k] of MONTAGE) SHOT_FRAMES[k] = 52
+
+/* ------------------------------------------------------------------ maths */
+const clamp01 = (x) => Math.max(0, Math.min(1, x))
+const lerp = (a, b, t) => a + (b - a) * t
+const seg = (t, a, b) => clamp01((t - a) / (b - a))
+const E = {
+  out: (x) => (x >= 1 ? 1 : 1 - Math.pow(2, -10 * x)), // expo out
+  io: (x) => (x < 0.5 ? 16 * x ** 5 : 1 - Math.pow(-2 * x + 2, 5) / 2), // quint in-out
+  sine: (x) => -(Math.cos(Math.PI * x) - 1) / 2,
+  back: (x) => { const c1 = 1.5, c3 = c1 + 1; return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2) },
+  in: (x) => x * x * x,
+}
+/** 0→1 in over [a, a+d], held, 1→0 out over [b-d2, b] */
+const inout = (t, a, b, d = 0.5, d2 = 0.35, ei = E.out, eo = E.in) => Math.min(ei(seg(t, a, a + d)), 1 - eo(seg(t, b - d2, b)))
+
+/* ------------------------------------------------------------------ dom helpers */
+const stage = document.getElementById('stage')
+function el(tag, cls, parent = stage, html) {
+  const e = document.createElement(tag)
+  if (cls) e.className = cls
+  if (html !== undefined) e.innerHTML = html
+  parent.appendChild(e)
+  return e
+}
+function css(e, s) { for (const k in s) e.style[k] = s[k] }
+/** text split into masked words; returns the word inners */
+function words(parent, text) {
+  const out = []
+  text.split(/(\s+|\n)/).forEach((w) => {
+    if (w === '\n') { parent.appendChild(document.createElement('br')); return }
+    if (/^\s+$/.test(w)) { parent.appendChild(document.createTextNode(' ')); return }
+    if (!w) return
+    const o = el('span', 'w', parent)
+    out.push(el('span', '', o, w))
+  })
+  return out
+}
+/** words rise in through their masks, staggered, and fall away on exit */
+function animWords(ws, t, a, b, { stagger = 0.045, d = 0.75, out = 0.32 } = {}) {
+  ws.forEach((w, i) => {
+    const p = E.out(seg(t, a + i * stagger, a + i * stagger + d))
+    const q = E.in(seg(t, b - out, b))
+    css(w, { transform: `translate3d(0, ${(1 - p) * 110 - q * 60}%, 0) rotate(${(1 - p) * 4}deg)`, opacity: String(1 - q) })
+  })
+}
+
+/* ------------------------------------------------------------------ plates */
+const pending = []
+function plate(name, opts = {}) {
+  const box = el('div', 'plate')
+  const img = el('img', '', box)
+  img.decoding = 'sync'
+  let last = ''
+  return {
+    box,
+    img,
+    /** show clip frame i (clamped), with a transform; hidden when vis is false */
+    show(i, vis, transform = '', filter = '') {
+      box.style.visibility = vis ? 'visible' : 'hidden'
+      if (!vis) return
+      const n = SHOT_FRAMES[name]
+      const f = Math.max(0, Math.min(n - 1, Math.floor(i)))
+      const src = `${SHOTS}${name}/${String(f).padStart(4, '0')}.jpg`
+      if (src !== last) { last = src; img.src = src; pending.push(img.decode().catch(() => {})) }
+      img.style.transform = transform
+      img.style.filter = filter
+    },
+  }
+}
+const frameAt = (t, [a]) => (t - a) * FPS
+
+/* ------------------------------------------------------------------ logo */
+const LOGO = (size, id) => `
+<svg width="${size}" height="${size}" viewBox="0 0 24 24">
+  <defs><clipPath id="${id}r"><path d="M12 12 L20.66 7 L20.66 17 L12 22 Z"/></clipPath></defs>
+  <path class="f1" d="M12 2 L20.66 7 L12 12 L3.34 7 Z" fill="#f4f4f5"/>
+  <path class="f2" d="M3.34 7 L12 12 L12 22 L3.34 17 Z" fill="#3f3f46"/>
+  <path class="f3" d="M12 12 L20.66 7 L20.66 17 L12 22 Z" fill="var(--accent)"/>
+  <g class="hatch" clip-path="url(#${id}r)" stroke="#09090b" stroke-width="1.1" opacity="0.65">
+    ${[-6, -2, 2, 6, 10, 14].map((o) => `<line x1="${8 + o}" y1="24" x2="${24 + o}" y2="4" pathLength="1" stroke-dasharray="1" />`).join('')}
+  </g>
+  <path class="edge" pathLength="1" stroke-dasharray="1" d="M12 2 L20.66 7 L20.66 17 L12 22 L3.34 17 L3.34 7 Z M12 12 L12 22 M12 12 L3.34 7 M12 12 L20.66 7" fill="none" stroke="#09090b" stroke-width="0.9" stroke-linejoin="round"/>
+</svg>`
+function buildLogo(svgRoot, t, a) {
+  const faces = ['.f1', '.f2', '.f3'].map((s) => svgRoot.querySelector(s))
+  faces.forEach((f, i) => {
+    const p = E.back(seg(t, a + 0.1 + i * 0.09, a + 0.55 + i * 0.09))
+    f.style.transformOrigin = '12px 12px'
+    f.style.transform = `scale(${Math.max(0.001, p)})`
+    f.style.opacity = String(clamp01(p * 2))
+  })
+  svgRoot.querySelectorAll('.hatch line').forEach((l, i) => l.setAttribute('stroke-dashoffset', String(1 - E.out(seg(t, a + 0.45 + i * 0.04, a + 0.85 + i * 0.04)))))
+  svgRoot.querySelector('.edge').setAttribute('stroke-dashoffset', String(1 - E.io(seg(t, a, a + 0.9))))
+}
+
+/* ================================================================== scenes */
+const S = {}
+
+/* --- cold open (dark) --- */
+S.cold = (() => {
+  const L = el('div', 'layer')
+  css(L, { background: 'var(--night)', zIndex: '5' })
+  const p = plate('cold')
+  L.appendChild(p.box)
+  const vig = el('div', 'scrim', L)
+  css(vig, { background: 'radial-gradient(ellipse 70% 70% at 50% 40%, transparent 40%, rgba(5,6,7,0.85) 100%), linear-gradient(0deg, rgba(5,6,7,0.95) 0%, rgba(5,6,7,0.8) 26%, rgba(5,6,7,0) 52%)' })
+  const txt = el('div', '', L)
+  css(txt, { position: 'absolute', left: '0', right: '0', bottom: '150px', textAlign: 'center', color: 'var(--nightInk)' })
+  const l1 = el('div', 'h2', txt)
+  css(l1, { fontSize: '68px', fontWeight: '500' })
+  const w1 = words(l1, 'Every machine that feeds the world')
+  const l2 = el('div', 'h2', txt)
+  css(l2, { fontSize: '68px', fontWeight: '500', color: 'var(--lime)', marginTop: '8px' })
+  const w2 = words(l2, 'has a story inside.')
+  return (t) => {
+    const [a, b] = T.cold
+    const vis = t < b + 0.7
+    L.style.visibility = vis ? 'visible' : 'hidden'
+    if (!vis) return
+    const fade = E.sine(seg(t, 0, 0.9))
+    p.show(frameAt(t, T.cold), true, `scale(${lerp(1.06, 1.0, E.sine(seg(t, a, b + 0.5)))})`, `brightness(${lerp(0.2, 1, fade)})`)
+    animWords(w1, t, 0.45, b + 0.2, { stagger: 0.06 })
+    animWords(w2, t, 1.55, b + 0.2, { stagger: 0.08 })
+  }
+})()
+
+/* --- wipe from night to day along a hatched section line --- */
+S.wipe = (() => {
+  const L = el('div', 'layer')
+  css(L, { zIndex: '6' })
+  const bar = el('div', '', L)
+  css(bar, { position: 'absolute', top: '-10%', height: '120%', width: '140px', background: 'var(--lime)', transformOrigin: '50% 50%' })
+  const hatch = el('div', '', bar)
+  css(hatch, { position: 'absolute', inset: '0', backgroundImage: 'repeating-linear-gradient(135deg, rgba(5,6,7,0.55) 0 3px, transparent 3px 22px)' })
+  return (t) => {
+    const a = T.tractor[0]
+    const u = E.io(seg(t, a, a + 0.62))
+    const vis = u > 0 && u < 1
+    L.style.visibility = vis ? 'visible' : 'hidden'
+    if (!vis) return
+    // the bar sweeps right to left; the night plate is clipped to its left
+    const x = lerp(2080, -220, u)
+    css(bar, { left: `${x}px`, transform: 'skewX(-8deg)' })
+    S.cold.clip = x + 70
+  }
+})()
+
+/* --- shared: a light shot with the subject pushed right and copy on the left --- */
+function lightShot(name, { eyebrow, title, sub, shift = 300, zoom = [1.0, 1.05], titleClass = 'h2', titleTop = 330, width = 820 }) {
+  const L = el('div', 'layer')
+  const p = plate(name)
+  L.appendChild(p.box)
+  const scrim = el('div', 'scrim', L)
+  css(scrim, { background: 'linear-gradient(90deg, rgba(245,246,242,1) 0%, rgba(245,246,242,0.97) 30%, rgba(245,246,242,0.7) 46%, rgba(245,246,242,0) 62%)' })
+  const copy = el('div', '', L)
+  css(copy, { position: 'absolute', left: '150px', top: `${titleTop}px`, width: `${width}px` })
+  const eb = el('div', 'eyebrow mono', copy)
+  css(eb, { fontSize: '22px', letterSpacing: '0.14em', textTransform: 'uppercase', marginBottom: '30px' })
+  const ebw = words(eb, eyebrow)
+  const h = el('div', titleClass, copy)
+  const hw = words(h, title)
+  let sw = []
+  if (sub) {
+    const s = el('div', 'sub', copy)
+    css(s, { marginTop: '34px', maxWidth: '640px' })
+    sw = words(s, sub)
+  }
+  return {
+    L,
+    p,
+    draw(t, [a, b], { inAt = 0.35, punch = true } = {}) {
+      const vis = t >= a - 0.01 && t < b + 0.01
+      L.style.visibility = vis ? 'visible' : 'hidden'
+      if (!vis) return false
+      const u = seg(t, a, b)
+      const pk = punch ? 1 + 0.035 * (1 - E.out(seg(t, a, a + 0.7))) : 1
+      const z = lerp(zoom[0], zoom[1], E.sine(u)) * pk
+      p.show(frameAt(t, [a]), true, `translate3d(${shift}px, 0, 0) scale(${z})`)
+      animWords(ebw, t, a + inAt, b, { stagger: 0.03 })
+      animWords(hw, t, a + inAt + 0.12, b, { stagger: 0.07 })
+      animWords(sw, t, a + inAt + 0.45, b, { stagger: 0.018, d: 0.6 })
+      return true
+    },
+  }
+}
+
+/* --- the tractor title --- */
+S.tractor = (() => {
+  const shot = lightShot('tractor', { eyebrow: 'Solidify', title: 'Open up\nthe machine.', sub: 'Cut through a running tractor and watch every system work.', titleClass: 'h1', titleTop: 300, shift: 330, zoom: [1.02, 1.08] })
+  return (t) => shot.draw(t, T.tractor, { inAt: 0.55, punch: false })
+})()
+
+/* --- gearbox with tracked callouts --- */
+S.gearbox = (() => {
+  const shot = lightShot('gearbox', { eyebrow: '01 — True cutaways', title: 'Slice any\nassembly.\nWhile it runs.', sub: 'Cut faces are hatched by material, like an engineering drawing.', shift: 420, zoom: [1.0, 1.04], titleTop: 250 })
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
+  css(svg, { position: 'absolute', left: '0', top: '0', width: '1920px', height: '1080px' })
+  shot.L.appendChild(svg)
+  const CALL = [
+    ['synchros', 'Synchro hubs', [150, -150]],
+    ['ss-carrier', 'Epicyclic splitter', [-60, -190]],
+    ['layshaft', 'Layshaft', [170, 120]],
+    ['crown', 'Crown wheel & pinion', [190, 150]],
+  ]
+  const items = CALL.map(([id, label]) => {
+    const g = document.createElementNS('http://www.w3.org/2000/svg', 'g')
+    svg.appendChild(g)
+    const line = document.createElementNS('http://www.w3.org/2000/svg', 'path')
+    line.setAttribute('fill', 'none'); line.setAttribute('stroke', 'var(--ink)'); line.setAttribute('stroke-width', '2'); line.setAttribute('pathLength', '1'); line.setAttribute('stroke-dasharray', '1')
+    const ring = document.createElementNS('http://www.w3.org/2000/svg', 'circle')
+    ring.setAttribute('fill', 'none'); ring.setAttribute('stroke', 'var(--accent)'); ring.setAttribute('stroke-width', '3')
+    const dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle')
+    dot.setAttribute('fill', 'var(--accent)'); dot.setAttribute('r', '6')
+    g.append(line, ring, dot)
+    const pill = el('div', 'pill', shot.L)
+    el('span', 'dot', pill)
+    el('span', '', pill, label)
+    return { id, g, line, ring, dot, pill }
+  })
+  let track = null
+  fetch(`${SHOTS}gearbox/track.json`).then((r) => r.json()).then((j) => (track = j)).catch(() => {})
+  window.PROMO_READY = Promise.all([document.fonts.ready, fetch(`${SHOTS}gearbox/track.json`).then((r) => r.json()).then((j) => (track = j)).catch(() => {})])
+  const SHIFT = 420
+  return (t) => {
+    const [a, b] = T.gearbox
+    if (!shot.draw(t, T.gearbox)) return
+    const fi = Math.max(0, Math.min(SHOT_FRAMES.gearbox - 1, Math.floor(frameAt(t, [a]))))
+    const z = lerp(1.0, 1.04, E.sine(seg(t, a, b))) * (1 + 0.035 * (1 - E.out(seg(t, a, a + 0.7))))
+    // where a plate pixel lands on screen: the plate is shifted then scaled about the centre
+    const map = ([x, y]) => [960 + (x + SHIFT - 960) * z, 540 + (y - 540) * z]
+    items.forEach((it, i) => {
+      const at = a + 1.25 + i * 0.32
+      const p = inout(t, at, b, 0.7, 0.3)
+      const pt = track && track[fi] && track[fi][it.id]
+      if (!pt || p <= 0) { it.g.style.opacity = '0'; it.pill.style.opacity = '0'; return }
+      const [x, y] = map(pt)
+      const [dx, dy] = CALL[i][2]
+      const lx = x + dx, ly = y + dy
+      const draw = E.out(seg(t, at, at + 0.55))
+      it.g.style.opacity = String(p)
+      it.line.setAttribute('d', `M ${x} ${y} L ${x + dx * 0.55} ${ly} L ${lx} ${ly}`)
+      it.line.setAttribute('stroke-dashoffset', String(1 - draw))
+      it.ring.setAttribute('cx', x); it.ring.setAttribute('cy', y); it.ring.setAttribute('r', String(10 + 8 * E.out(seg(t, at, at + 0.4))))
+      it.ring.setAttribute('opacity', String(1 - 0.6 * seg(t, at + 0.3, at + 0.9)))
+      it.dot.setAttribute('cx', x); it.dot.setAttribute('cy', y)
+      const pe = E.back(seg(t, at + 0.3, at + 0.75))
+      const w = it.pill.offsetWidth
+      css(it.pill, { left: `${dx > 0 ? lx + 8 : lx - w - 8}px`, top: `${ly - 26}px`, opacity: String(clamp01(pe) * p), transform: `scale(${0.85 + 0.15 * pe})`, transformOrigin: dx > 0 ? '0% 50%' : '100% 50%' })
+    })
+  }
+})()
+
+/* --- slow motion with a speed readout --- */
+S.slowmo = (() => {
+  const shot = lightShot('slowmo', { eyebrow: '02 — X-ray & slow motion', title: 'See through it.\nSlow it to 1/200.', sub: 'Watch every piston, valve and gear, a frame at a time.', shift: 300, zoom: [1.0, 1.03] })
+  const chip = el('div', 'card', shot.L)
+  css(chip, { right: '120px', top: '120px', width: '360px' })
+  el('div', 'k', chip, 'Playback speed')
+  const v = el('div', 'v', chip)
+  const bar = el('div', 'bar', chip)
+  const fill = el('i', '', bar)
+  const tick = el('div', 'mono', chip)
+  css(tick, { display: 'flex', justifyContent: 'space-between', fontSize: '15px', color: 'var(--dim)', marginTop: '10px' })
+  tick.innerHTML = '<span>1/200</span><span>1/10</span><span>1×</span>'
+  // the x-ray switch: a scan line sweeps the frame as the housings turn to glass
+  const scan = el('div', 'scrim', shot.L)
+  css(scan, { width: '3840px', left: '-1920px', mixBlendMode: 'screen', background: 'linear-gradient(90deg, rgba(198,242,78,0) 40%, rgba(198,242,78,0.5) 49.2%, rgba(255,255,255,0.95) 50%, rgba(198,242,78,0.5) 50.8%, rgba(198,242,78,0) 60%)' })
+  return (t) => {
+    const [a, b] = T.slowmo
+    if (!shot.draw(t, T.slowmo)) return
+    // the same ramp the footage was shot with: real speed → 1/200 between 30 % and 75 % of the clip; x-ray on at 18 %
+    const n = SHOT_FRAMES.slowmo
+    const u = clamp01(frameAt(t, [a]) / (n - 1))
+    const ease = (x) => (x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2)
+    const k = ease(seg(u, 0.3, 0.75))
+    const sx = seg(u, 0.13, 0.23)
+    css(scan, { opacity: String(sx > 0 && sx < 1 ? 1 : 0), transform: `translate3d(${lerp(-1920, 1920, E.sine(sx))}px, 0, 0)` })
+    const speed = Math.exp(lerp(0, Math.log(1 / 200), k))
+    v.innerHTML = speed > 0.95 ? '1<span class="u">× real speed</span>' : `1/${Math.round(1 / speed)}<span class="u">× real</span>`
+    fill.style.width = `${100 * (1 - k)}%`
+    const p = inout(t, a + 0.7, b, 0.6, 0.3)
+    css(chip, { opacity: String(p), transform: `translate3d(0, ${(1 - E.out(seg(t, a + 0.7, a + 1.3))) * 30}px, 0)` })
+  }
+})()
+
+/* --- explode --- */
+S.explode = (() => {
+  const shot = lightShot('explode', { eyebrow: '03 — Explode', title: 'Take it apart.\nPut it back.', sub: 'Every part named. Click one to see what it does.', shift: 300, zoom: [1.02, 1.0] })
+  return (t) => shot.draw(t, T.explode)
+})()
+
+/* --- traction with live readouts --- */
+S.traction = (() => {
+  const shot = lightShot('traction', { eyebrow: '04 — Live calculations', title: 'Size it with\nthe maths\nengineers use.', sub: 'Gear forces, pump flows, traction and weight transfer, with the working shown.', shift: 280, zoom: [1.0, 1.05], titleTop: 170 })
+  const c1 = el('div', 'card', shot.L)
+  css(c1, { left: '150px', top: '700px', width: '400px' })
+  el('div', 'k', c1, 'Drawbar pull')
+  const v1 = el('div', 'v', c1)
+  const c2 = el('div', 'card', shot.L)
+  css(c2, { left: '580px', top: '700px', width: '400px' })
+  el('div', 'k', c2, 'Drawbar power')
+  const v2 = el('div', 'v', c2)
+  const bar = el('div', 'bar', c2)
+  const fill = el('i', '', bar)
+  const chk = el('div', 'pill', shot.L)
+  css(chk, { right: '110px', bottom: '90px', fontSize: '19px' })
+  chk.innerHTML = '<span class="dot"></span><span>Over a thousand automated checks keep the physics honest</span>'
+  return (t) => {
+    const [a, b] = T.traction
+    if (!shot.draw(t, T.traction)) return
+    const p1 = inout(t, a + 0.9, b, 0.6, 0.3)
+    const p2 = inout(t, a + 1.15, b, 0.6, 0.3)
+    const n1 = E.out(seg(t, a + 0.9, a + 2.3))
+    const n2 = E.out(seg(t, a + 1.15, a + 2.6))
+    v1.innerHTML = `${(12 * n1).toFixed(1)}<span class="u">kN at ${(14.6 * n1).toFixed(1)} % slip</span>`
+    v2.innerHTML = `${(11.4 * n2).toFixed(1)}<span class="u">kW of 17.3</span>`
+    fill.style.width = `${(100 * 11.4 * n2) / 17.3}%`
+    css(c1, { opacity: String(p1), transform: `translate3d(0, ${(1 - E.out(seg(t, a + 0.9, a + 1.5))) * 40}px, 0)` })
+    css(c2, { opacity: String(p2), transform: `translate3d(0, ${(1 - E.out(seg(t, a + 1.15, a + 1.75))) * 40}px, 0)` })
+    const p3 = inout(t, a + 2.4, b, 0.6, 0.3)
+    css(chk, { opacity: String(p3), transform: `translate3d(0, ${(1 - E.out(seg(t, a + 2.4, a + 3))) * 20}px, 0)` })
+  }
+})()
+
+/* --- montage: quick cuts, each tagged --- */
+S.montage = (() => {
+  const L = el('div', 'layer')
+  const plates = MONTAGE.map(([k]) => { const p = plate(k); L.appendChild(p.box); return p })
+  const tag = el('div', 'pill', L)
+  css(tag, { left: '150px', bottom: '110px', fontSize: '22px' })
+  const tagSys = el('span', 'mono', tag)
+  css(tagSys, { fontSize: '16px', letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--accent)' })
+  const tagName = el('span', '', tag)
+  const flash = el('div', 'scrim', L)
+  css(flash, { background: '#fff' })
+  const head = el('div', '', L)
+  css(head, { position: 'absolute', left: '150px', top: '110px' })
+  const eb = el('div', 'eyebrow mono', head)
+  css(eb, { fontSize: '19px', letterSpacing: '0.14em', textTransform: 'uppercase' })
+  const ebw = words(eb, '05 — The whole machine')
+  const D = (T.montage[1] - T.montage[0]) / MONTAGE.length
+  return (t) => {
+    const [a, b] = T.montage
+    const vis = t >= a && t < b
+    L.style.visibility = vis ? 'visible' : 'hidden'
+    if (!vis) return
+    const i = Math.min(MONTAGE.length - 1, Math.floor((t - a) / D))
+    const t0 = a + i * D
+    plates.forEach((p, j) => p.show(j === i ? (t - t0) * FPS : 0, j === i, `scale(${1 + 0.05 * (1 - E.out(seg(t, t0, t0 + 0.35)))})`))
+    tagSys.textContent = MONTAGE[i][1]
+    tagName.textContent = MONTAGE[i][2]
+    flash.style.opacity = String(0.35 * (1 - E.out(seg(t, t0, t0 + 0.18))))
+    animWords(ebw, t, a + 0.1, b + 1, { stagger: 0.03 })
+  }
+})()
+
+/* --- grid: the montage settles into tiles, with the count --- */
+S.grid = (() => {
+  const L = el('div', 'layer')
+  css(L, { background: 'var(--bg)' })
+  const COLS = 4, W = 380, H = 214, GX = 26, GY = 26
+  const x0 = (1920 - (COLS * W + (COLS - 1) * GX)) / 2, y0 = 150
+  const tiles = MONTAGE.map(([k], i) => {
+    const d = el('div', 'tile', L)
+    const img = el('img', '', d)
+    img.src = `${SHOTS}${k}/${String(SHOT_FRAMES[k] - 1).padStart(4, '0')}.jpg`
+    pending.push(img.decode().catch(() => {}))
+    return { d, img, x: x0 + (i % COLS) * (W + GX), y: y0 + Math.floor(i / COLS) * (H + GY) }
+  })
+  const scr = el('div', 'scrim', L)
+  css(scr, { background: 'radial-gradient(ellipse 50% 45% at 50% 52%, rgba(245,246,242,0.97) 30%, rgba(245,246,242,0.65) 70%, rgba(245,246,242,0) 100%)' })
+  const txt = el('div', '', L)
+  css(txt, { position: 'absolute', left: '0', right: '0', top: '395px', textAlign: 'center' })
+  const big = el('div', 'h1', txt)
+  css(big, { fontSize: '128px' })
+  const n1 = el('span', '', big)
+  const n2 = el('span', '', big)
+  css(n2, { color: 'var(--accent)' })
+  const s = el('div', 'sub', txt)
+  css(s, { marginTop: '22px', fontSize: '32px', color: 'var(--ink)' })
+  const sw = words(s, 'From the combustion chamber to the soil.')
+  return (t) => {
+    const [a, b] = T.grid
+    const vis = t >= a && t < b + 0.5
+    L.style.visibility = vis ? 'visible' : 'hidden'
+    if (!vis) return
+    tiles.forEach((tl, i) => {
+      pending.push(tl.img.decode().catch(() => {}))
+      const o = ((i * 7) % 12) * 0.035
+      const p = E.out(seg(t, a + o, a + o + 0.8))
+      const q = E.in(seg(t, b - 0.1, b + 0.45))
+      css(tl.d, { left: `${tl.x}px`, top: `${tl.y}px`, width: `${W}px`, height: `${H}px`, opacity: String(p * (1 - q)), transform: `translate3d(0, ${(1 - p) * 80 - q * 40}px, 0) scale(${0.9 + 0.1 * p})` })
+    })
+    const pb = E.out(seg(t, a + 0.35, a + 1.0))
+    const q = E.in(seg(t, b - 0.1, b + 0.4))
+    scr.style.opacity = String(pb)
+    const k = E.out(seg(t, a + 0.35, a + 1.4))
+    n1.textContent = `${Math.round(12 * k)} systems. `
+    n2.textContent = `${Math.round(60 * k)}+ scenes.`
+    css(big, { opacity: String(pb * (1 - q)), transform: `translate3d(0, ${(1 - pb) * 40}px, 0)` })
+    animWords(sw, t, a + 0.8, b + 0.3, { stagger: 0.04 })
+  }
+})()
+
+/* --- two modes: Professional / Academic --- */
+S.modes = (() => {
+  const L = el('div', 'layer')
+  css(L, { background: 'var(--bg)' })
+  const p = plate('end')
+  L.appendChild(p.box)
+  const veil = el('div', 'scrim', L)
+  css(veil, { background: 'rgba(245,246,242,0.72)' })
+  const tog = el('div', '', L)
+  css(tog, { position: 'absolute', left: '50%', top: '300px', width: '560px', height: '84px', marginLeft: '-280px', borderRadius: '999px', background: 'rgba(255,255,255,0.9)', border: '1px solid var(--line2)', boxShadow: '0 20px 50px -28px rgba(14,18,12,0.35)' })
+  const knob = el('div', '', tog)
+  css(knob, { position: 'absolute', top: '7px', height: '68px', width: '272px', borderRadius: '999px', background: 'var(--ink)' })
+  const lA = el('div', '', tog, 'Professional')
+  const lB = el('div', '', tog, 'Academic')
+  for (const [lbl, x] of [[lA, 0], [lB, 280]]) css(lbl, { position: 'absolute', top: '0', left: `${x}px`, width: '280px', height: '84px', lineHeight: '84px', textAlign: 'center', fontSize: '26px', fontWeight: '600' })
+  const hA = el('div', 'h2', L)
+  const hB = el('div', 'h2', L)
+  const sA = el('div', 'sub', L)
+  const sB = el('div', 'sub', L)
+  for (const h of [hA, hB]) css(h, { position: 'absolute', left: '0', right: '0', top: '450px', textAlign: 'center', fontSize: '96px' })
+  for (const s of [sA, sB]) css(s, { position: 'absolute', left: '0', right: '0', top: '580px', textAlign: 'center', fontSize: '32px' })
+  const wA = words(hA, 'Open up the machine.')
+  const wB = words(hB, 'Farm machinery, brought to life.')
+  const vA = words(sA, 'For engineers: live calculations, verified physics.')
+  const vB = words(sB, 'For students: worked examples, marked like an examiner.')
+  return (t) => {
+    const [a, b] = T.modes
+    const vis = t >= a && t < b
+    L.style.visibility = vis ? 'visible' : 'hidden'
+    if (!vis) return
+    p.show(frameAt(t, [a - 1]) * 0.6, true, 'scale(1.06)', 'blur(14px) saturate(0.9)')
+    const sw = a + 1.8 - 0.22
+    const k = E.io(seg(t, sw, sw + 0.45))
+    const pin = E.out(seg(t, a, a + 0.6))
+    css(tog, { opacity: String(pin * (1 - E.in(seg(t, b - 0.3, b)))), transform: `translate3d(0, ${(1 - pin) * 30}px, 0)` })
+    css(knob, { left: `${7 + k * 274}px` })
+    lA.style.color = k < 0.5 ? '#fff' : 'var(--ink)'
+    lB.style.color = k < 0.5 ? 'var(--ink)' : '#fff'
+    animWords(wA, t, a + 0.15, sw + 0.1, { stagger: 0.05 })
+    animWords(vA, t, a + 0.35, sw + 0.1, { stagger: 0.025 })
+    animWords(wB, t, sw + 0.15, b, { stagger: 0.05 })
+    animWords(vB, t, sw + 0.35, b, { stagger: 0.025 })
+  }
+})()
+
+/* --- end card --- */
+S.end = (() => {
+  const L = el('div', 'layer')
+  css(L, { background: 'var(--bg)' })
+  const p = plate('end')
+  L.appendChild(p.box)
+  const scrim = el('div', 'scrim', L)
+  css(scrim, { background: 'linear-gradient(90deg, rgba(245,246,242,1) 0%, rgba(245,246,242,0.97) 30%, rgba(245,246,242,0.5) 50%, rgba(245,246,242,0) 64%)' })
+  const box = el('div', '', L)
+  css(box, { position: 'absolute', left: '150px', top: '270px' })
+  const row = el('div', '', box)
+  css(row, { display: 'flex', alignItems: 'center', gap: '26px' })
+  const mark = el('div', '', row, LOGO(112, 'end'))
+  const name = el('div', '', row)
+  css(name, { fontSize: '96px', fontWeight: '600', letterSpacing: '-0.045em' })
+  const nw = words(name, 'Solidify')
+  const tag = el('div', 'h2', box)
+  css(tag, { marginTop: '46px', fontSize: '64px', fontWeight: '500', color: 'var(--ink)' })
+  const tw = words(tag, 'Open up the machine.')
+  const url = el('div', 'pill', box)
+  css(url, { position: 'relative', marginTop: '48px', display: 'inline-flex', background: 'var(--accent)', color: '#fff', border: 'none', fontSize: '30px', padding: '22px 36px', fontWeight: '600' })
+  url.textContent = 'solidify.studio'
+  const small = el('div', 'sub', box)
+  css(small, { marginTop: '34px', fontSize: '26px' })
+  const smw = words(small, 'Nothing to install. Runs in your browser.')
+  return (t) => {
+    const [a, b] = T.end
+    const vis = t >= a
+    L.style.visibility = vis ? 'visible' : 'hidden'
+    if (!vis) return
+    p.show(frameAt(t, [a]), true, `translate3d(360px, 0, 0) scale(${lerp(1.04, 1.0, E.sine(seg(t, a, b)))})`)
+    buildLogo(mark.querySelector('svg'), t, a + 0.15)
+    animWords(nw, t, a + 0.45, b + 5)
+    animWords(tw, t, a + 0.8, b + 5, { stagger: 0.06 })
+    const pu = E.back(seg(t, a + 1.25, a + 1.85))
+    css(url, { opacity: String(clamp01(pu)), transform: `scale(${0.8 + 0.2 * pu})`, transformOrigin: '0% 50%' })
+    animWords(smw, t, a + 1.6, b + 5, { stagger: 0.03 })
+    // the last half second fades to the page colour
+    L.style.opacity = String(1 - E.in(seg(t, b - 0.45, b)))
+  }
+})()
+
+/* ------------------------------------------------------------------ render */
+window.render = async (t) => {
+  pending.length = 0
+  S.cold.clip = undefined
+  S.wipe(t)
+  S.tractor(t)
+  S.gearbox(t)
+  S.slowmo(t)
+  S.explode(t)
+  S.traction(t)
+  S.montage(t)
+  S.grid(t)
+  S.modes(t)
+  S.end(t)
+  S.cold(t)
+  // during the wipe the night layer shows only left of the bar
+  const night = stage.children[0]
+  night.style.clipPath = S.cold.clip !== undefined ? `inset(0 ${1920 - S.cold.clip}px 0 0)` : t > T.tractor[0] + 0.4 ? 'inset(0 100% 0 0)' : 'none'
+  await Promise.all(pending)
+}
+</script>
+</body>
+</html>
