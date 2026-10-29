@@ -24,7 +24,9 @@ const SHOTS = {
   cold: { theme: 'dark', route: 'engine/multi-cylinder', n: 230, rig: { az: [-30, -8], el: [-4, 4], dist: [0.62, 0.46], aim: [[0, 0.1, 0], [0, 0.14, 0]] } },
   // the whole tractor, the section plane sweeping in from the near side
   tractor: {
-    route: 'chassis/tractor-types', hide: ['platform'], before: stopTurntable, n: 340, rig: { az: [-26, 4], el: [3, 0], dist: [0.98, 0.8], aim: [[0, 0, 0], [0, -0.1, 0]] },
+    route: 'chassis/tractor-types', hide: ['platform'], before: stopTurntable, n: 340,
+    // side-on to the section, front to the right, pushing in from the whole tractor to the engine
+    rig: { az: [-50, -38], el: [-5, -1], dist: [0.9, 0.62], aim: [[0, -0.2, 0], [0.4, -0.25, 0]] },
     // the section opens in the first 1.7 s, so the engine is exposed for most of the title
     each: (s, u) => s.view(`v.setPlane(0, { pos: ${lerp(1.7, 0, ease.io(seg(u, 0, 0.3)))} })`),
   },
@@ -71,7 +73,7 @@ for (const [theme, shots] of Object.entries(byTheme)) {
     try {
       await s.open(shot.route)
       // the tractor's engine detail arrives well after the scene reports ready
-      await s.page.waitForTimeout(15000)
+      await s.page.waitForTimeout(shot.route === 'chassis/tractor-types' ? 35000 : 15000)
       if (shot.before) await shot.before(s)
       if (shot.hide) await s.view(`for (const id of ${JSON.stringify(shot.hide)}) if (!v.hidden.includes(id)) v.toggleHidden(id)`)
       await s.page.waitForTimeout(500)
