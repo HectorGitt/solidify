@@ -1,4 +1,5 @@
 import type { ComponentType } from 'react'
+import type { BuildDef } from '@/render/build'
 import type { Citation } from '@/content/citations'
 import type { CutPreset } from '@/render/view'
 
@@ -82,6 +83,8 @@ export interface SceneDef {
   compare?: CompareDef
   /** async work before the scene mounts (e.g. building CSG geometry in the worker) */
   prepare?: () => Promise<unknown>
+  /** build mode: the parts in assembly order, each with what it needs in first */
+  build?: BuildDef
 }
 
 /** shared live values passed between scenes on drill-down */

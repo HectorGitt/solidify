@@ -152,6 +152,14 @@ export const Icon = {
       <circle cx="18" cy="18" r="2" />
     </svg>
   ),
+  build: (p: SVGProps<SVGSVGElement>) => (
+    <svg {...base(p)}>
+      <rect x="3" y="13" width="8" height="8" rx="1" />
+      <rect x="13" y="13" width="8" height="8" rx="1" />
+      <path d="M8 9.5 12 3l4 6.5z" />
+      <path d="M12 9.5V13" strokeDasharray="1.5 1.5" />
+    </svg>
+  ),
   wrench: (p: SVGProps<SVGSVGElement>) => (
     <svg {...base(p)}>
       <path d="M14.7 6.3a4 4 0 0 0 5 5L21 13l-8 8-3-3 8-8-1.3-1.3a4 4 0 0 0-5-5L14 5z" />

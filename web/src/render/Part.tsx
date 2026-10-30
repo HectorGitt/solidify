@@ -6,6 +6,7 @@ import { faultsFor } from '@/content/faults'
 import { nextOrder, partObjects, useParts, type PartInfo, type PartRole } from '@/parts/registry'
 import { getMaterial, type Highlight, type MaterialKey, type Variant } from './materials'
 import { isKept, useView } from './view'
+import { buildOffsets, buildSnappy } from './build'
 
 interface PartCtx {
   id: string | null
@@ -94,9 +95,27 @@ export function Part({ id, name, material, role, info, cites, beyondNotes, explo
    * axis instead of orbiting the shaft, while the offsets still follow the machine as it drives.
    */
   const offset = useRef<[number, number, number] | null>(null)
+  const built = useRef(false)
   useFrame((_, dt) => {
     const g = inner.current
-    if (!g || explode === false) return
+    if (!g) return
+    // build mode: a loose part sits where the build controller puts it (a world offset from home)
+    const b = buildOffsets.get(id)
+    if (b || built.current) {
+      built.current = !!b
+      if (b) _w.copy(b)
+      else _w.set(0, 0, 0)
+      if (outer.current) {
+        outer.current.getWorldQuaternion(_q).invert()
+        outer.current.getWorldScale(_s)
+        _w.applyQuaternion(_q).divide(_s)
+      }
+      const k = b && buildSnappy.has(id) ? 1 : 1 - Math.exp(-dt * 9)
+      g.position.lerp(_w, k)
+      if (!b && g.position.lengthSq() > 1e-10) built.current = true
+      return
+    }
+    if (explode === false) return
     const frame = parent.id ? partObjects.get(ctx.path[0]) : undefined
     // an explicit offset is authored in the part's own frame at rest: capture it once, on the
     // first frame, before any animation has turned anything
@@ -139,6 +158,7 @@ const _ps = new THREE.Vector3()
 const _q = new THREE.Quaternion()
 const _s = new THREE.Vector3()
 const _v = new THREE.Vector3()
+const _w = new THREE.Vector3()
 
 /**
  * Default exploded-view offset: away from the parent assembly's centre, a quarter of its size

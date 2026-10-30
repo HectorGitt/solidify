@@ -1,4 +1,5 @@
 import { CameraControls, ContactShadows, Environment, Grid, Lightformer, Html, Line } from '@react-three/drei'
+import { BuildController } from '@/render/BuildController'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type CameraControlsImpl from 'camera-controls'
@@ -487,6 +488,7 @@ export function Stage({
       <CameraTracker controlsRef={ref} />
       <CutController hatchScale={scene.hatchScale ?? scene.extent / 220} />
       <CaliperTool extent={scene.extent} />
+      {scene.build ? <BuildController floorY={scene.floorY ?? 0} /> : null}
       <Lights extent={scene.extent} follow={!!scene.follow} />
       {import.meta.env.DEV ? <DevSceneHandle /> : null}
       <Suspense fallback={null}>

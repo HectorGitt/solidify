@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useBuild } from '@/render/build'
 import { TIME_SCALES, formatTimeScale, useSim } from '@/core/sim'
 import type { SceneDef } from '@/modules/types'
 import { useView } from '@/render/view'
@@ -33,6 +34,7 @@ export function Toolbar({ scene }: { scene: SceneDef }) {
   const labels = useView((s) => s.labels)
   const setLabels = useView((s) => s.setLabels)
   const [openCut, setOpenCut] = useState(false)
+  const buildOn = useBuild((s) => !!s.def)
 
   const primaryPlane = cut.planes[0]
   const cutRange = scene.extent * 0.6
@@ -119,6 +121,11 @@ export function Toolbar({ scene }: { scene: SceneDef }) {
         <IconButton label="Measurement Calipers" onClick={() => useView.getState().setCaliperMode(!useView.getState().caliperMode)} active={useView((s) => s.caliperMode)}>
           <Icon.ruler />
         </IconButton>
+        {scene.build ? (
+          <IconButton label="Build it: put it together from its parts" onClick={() => (buildOn ? useBuild.getState().stop() : useBuild.getState().start(scene.build!))} active={buildOn}>
+            <Icon.build />
+          </IconButton>
+        ) : null}
         <IconButton label="Reset camera" onClick={() => flyTo(scene.camera)}>
           <Icon.camera />
         </IconButton>

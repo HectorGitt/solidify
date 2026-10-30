@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react'
+import { BuildHud } from './BuildHud'
+import { useBuild } from '@/render/build'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { ChallengeHud } from '@/challenges/ChallengeHud'
 import { challengesFor } from '@/challenges/registry'
@@ -99,6 +101,8 @@ export function Viewer() {
 
   useEffect(() => {
     let alive = true
+    // a build in progress belongs to the scene it started in
+    useBuild.getState().stop()
     setScene(null)
     setError(null)
     setPower(false)
@@ -381,6 +385,7 @@ export function Viewer() {
                 <ChallengeHud />
               </div>
               <InsidePill />
+              <BuildHud />
               <WholePanel />
               {notice ? (
                 <div className="pointer-events-auto absolute left-1/2 top-3 z-20 -translate-x-1/2 rounded-full border border-accent/40 bg-panel/95 px-3 py-1 text-[12px] text-ink shadow-xl">
