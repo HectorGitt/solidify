@@ -13,10 +13,14 @@ const MONTAGE = ['implements/combine', 'powertrain/torque-converter', 'implement
 /** the tractor-types turntable spins the tractor away from the section plane: stop it and square it up */
 async function stopTurntable(s) {
   await s.js(`const m = await import('/src/modules/chassis/tractor-types/model.ts'); m.useTypes.getState().set({ spin: false })`)
-  await s.dev(`const done = new Set(); scene.traverse((o) => {
-    if (!o.isMesh || !o.userData || !o.userData.partId || o.userData.partId === 'platform') return
-    for (let p = o.parent; p && p !== scene; p = p.parent) if (!done.has(p) && p.isGroup && Math.abs(p.rotation.y) > 1e-4 && p.rotation.x === 0 && p.rotation.z === 0) { done.add(p); p.rotation.y = 0 }
-  }); return done.size`)
+  // only the turntable: of the y-turned groups, the one holding the most of the tractor (the engine,
+  // radiator and fan are y-turned too, and must keep their turns)
+  const r = await s.dev(`const count = (g) => { let n = 0; g.traverse((o) => { if (o.isMesh) n++ }); return n }
+    let best = null, most = 0
+    scene.traverse((o) => { if (o.isGroup && Math.abs(o.rotation.y) > 1e-4 && o.rotation.x === 0 && o.rotation.z === 0) { const n = count(o); if (n > most) { most = n; best = o } } })
+    if (best) best.rotation.y = 0
+    return most`)
+  console.log('  turntable reset (meshes under it):', r)
 }
 
 const SHOTS = {
