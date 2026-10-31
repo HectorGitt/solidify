@@ -223,8 +223,8 @@ function Hero({ copy }: { copy: (typeof COPY)[keyof typeof COPY] }) {
               <Link to={copy.primary.to} className="inline-flex items-center gap-2 rounded-full bg-accent px-7 py-4 text-[15px] font-semibold text-accent-ink transition-transform hover:brightness-105 active:scale-[0.98]">
                 {copy.primary.label} <Icon.chevron width={16} height={16} />
               </Link>
-              <Link to="/promo" className="hidden items-center gap-2 rounded-full sm:inline-flex border border-line-2 bg-[var(--color-scrim)] px-6 py-4 text-[15px] font-medium text-ink backdrop-blur-xl transition-colors hover:border-accent/50">
-                <Icon.tour width={16} height={16} /> Watch the 30 s tour
+              <Link to="/promo" className="inline-flex items-center gap-2 rounded-full border border-line-2 bg-[var(--color-scrim)] px-6 py-4 text-[15px] font-medium text-ink backdrop-blur-xl transition-colors hover:border-accent/50">
+                <Icon.tour width={16} height={16} /> Watch the 1-minute tour
               </Link>
             </div>
           </div>
