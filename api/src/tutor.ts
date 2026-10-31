@@ -59,8 +59,6 @@ export const tutorRequest = z.object({
       route: shortText(200).optional(),
       scene: shortText(200).optional(),
       sceneSummary: shortText(1500).optional(),
-      /** how the view is set: section, x-ray, exploded, isolated, looking inside */
-      view: shortText(300).optional(),
       part: z.object({ name: shortText(200), summary: shortText(1500).optional(), role: shortText(1500).optional() }).optional(),
       /** live readouts, e.g. { "Engine speed (rpm)": 2100 } */
       live: z.record(shortText(80), z.union([z.number(), shortText(120)])).optional(),
@@ -75,7 +73,7 @@ export type TutorRequest = z.infer<typeof tutorRequest>
 
 export const SYSTEM_PROMPT = `You are the tutor inside Solidify, an interactive 3D app that shows tractors and farm machinery cut open, with live engineering calculations.
 
-Answer the user's question about what they are looking at. The app tells you which scene is open, the part they selected, the live readouts and the worked solution on screen; use those numbers rather than inventing your own, and say which values you used. The context also says how the view is set (section, x-ray, exploded, isolated, looking inside): open by tying your answer, in a few words, to what they can see in that view. If something you need is not in the context, say so briefly and explain the general principle.
+Answer the user's question about what they are looking at. The app tells you which scene is open, the part they selected, the live readouts and the worked solution on screen; use those numbers rather than inventing your own, and say which values you used. If something you need is not in the context, say so briefly and explain the general principle.
 
 Write for an engineering student when the mode is "academic"; when it is "professional", write for a working engineer or technician: brief and practical. Keep answers short: a few sentences, then a worked step or formula only when it helps. Write formulas in LaTeX between $...$ (inline) or $$...$$ (display). Use SI units.
 
@@ -89,7 +87,6 @@ export function contextBlock(ctx: TutorRequest['context']): string {
   if (ctx.mode) lines.push(`Mode: ${ctx.mode}`)
   if (ctx.scene) lines.push(`Scene: ${ctx.scene}${ctx.route ? ` (${ctx.route})` : ''}`)
   if (ctx.sceneSummary) lines.push(`Scene summary: ${ctx.sceneSummary}`)
-  if (ctx.view) lines.push(`View: ${ctx.view}`)
   if (ctx.part) {
     lines.push(`Selected part: ${ctx.part.name}`)
     if (ctx.part.summary) lines.push(`  What it is: ${ctx.part.summary}`)

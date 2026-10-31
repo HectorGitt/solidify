@@ -5,7 +5,7 @@ import { Icon } from '@/ui/icons'
 import { RichText } from '@/ui/RichText'
 import { ApiError, stream } from '../api'
 import { useAuth } from '../auth'
-import { collectReadouts, collectWorking, describeView, selectedPart } from '../onScreen'
+import { collectReadouts, collectWorking, selectedPart } from '../onScreen'
 import { primaryBtn } from './Modal'
 
 interface Msg {
@@ -73,7 +73,6 @@ export function TutorPanel({ scene, route }: { scene?: { title: string; summary?
             route,
             scene: scene?.title,
             sceneSummary: scene?.summary?.slice(0, 1500),
-            view: describeView(),
             part,
             live: collectReadouts(),
             working: collectWorking(),

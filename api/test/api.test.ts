@@ -151,11 +151,6 @@ describe('tutor', () => {
     expect(turns.map((t) => t.role)).toEqual(['user', 'model', 'user'])
     expect(contextBlock({})).toContain('No scene is open')
   })
-
-  it('tells the model how the view is set', () => {
-    const { context } = tutorRequest.parse({ question: 'Why?', context: { view: 'Engine isolated; section cut on' } })
-    expect(contextBlock(context)).toContain('View: Engine isolated; section cut on')
-  })
 })
 
 describe('classes', () => {

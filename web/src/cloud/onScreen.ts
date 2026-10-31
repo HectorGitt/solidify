@@ -1,11 +1,9 @@
-import { formatTimeScale, useSim } from '@/core/sim'
 import { useParts } from '@/parts/registry'
 import { useView } from '@/render/view'
-import { useInside } from '@/ui/inside'
 
 /**
  * What the user is looking at, for the tutor: live readouts and worked-solution steps currently
- * rendered (tagged with data-readout / data-working-step), the selected part, and how the view is set.
+ * rendered (tagged with data-readout / data-working-step), and the selected part.
  */
 export function collectReadouts(root: ParentNode = document, max = 40): Record<string, string> {
   const out: Record<string, string> = {}
@@ -33,19 +31,4 @@ export function selectedPart(): { name: string; summary?: string; role?: string 
   if (!p) return undefined
   const clip = (s?: string) => (s ? s.slice(0, 1500) : undefined)
   return { name: p.name.slice(0, 200), summary: clip(p.info?.summary), role: clip(p.info?.role) }
-}
-
-/** How the 3D view is set right now, in words. */
-export function describeView(): string {
-  const v = useView.getState()
-  const parts = useParts.getState().parts
-  const inside = useInside.getState()
-  const bits: string[] = []
-  if (inside.id) bits.push(inside.mode === 'whole' ? 'looking inside the whole machine, every system shown' : `looking inside the ${inside.name}, with the rest of the machine set aside and its casing see-through`)
-  else if (v.isolatedId) bits.push(`${parts[v.isolatedId]?.name ?? 'one part'} isolated`)
-  if (v.cut.enabled) bits.push('section cut on')
-  if (v.xray && !inside.id) bits.push('x-ray on')
-  if (v.explode > 0.01) bits.push(`exploded ${Math.round(v.explode * 100)} %`)
-  bits.push(`playing at ${formatTimeScale(useSim.getState().timeScale)} speed`)
-  return bits.join('; ')
 }
