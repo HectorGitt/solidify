@@ -21,6 +21,12 @@ await page.goto(pathToFileURL(path.resolve('scripts/promo/comp.html')).href + '?
 await page.waitForFunction(() => window.PROMO_READY)
 await page.evaluate(() => window.PROMO_READY)
 const { DURATION, FPS } = await page.evaluate(() => window.PROMO)
+// --clicks <file>: write the UI click times (film seconds) for the score, and stop
+if (process.argv.includes('--clicks')) {
+  fs.writeFileSync(arg('--clicks'), JSON.stringify(await page.evaluate(() => window.PROMO.clicks())))
+  await browser.close()
+  process.exit(0)
+}
 const from = Math.round(Number(arg('--from', 0)) * FPS)
 const to = Math.round(Number(arg('--to', DURATION)) * FPS)
 const t0 = Date.now()

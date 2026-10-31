@@ -5,7 +5,7 @@ import fs from 'node:fs'
 const SR = 48000
 const BEAT = 0.45
 const BAR = 4 * BEAT
-const DUR = 48.6
+const DUR = 61.2
 const N = Math.ceil((DUR + 0.2) * SR)
 const PI2 = Math.PI * 2
 
@@ -255,46 +255,77 @@ bars(11, 16, (b) => {
   for (let s = 0; s < 16; s++) pluck(bt(b, s / 4), c.arp[s % 8] + (b % 2 ? 12 : 0) * (s % 4 === 3 ? 1 : 0), 1, s % 2 ? 0.45 : -0.45)
 })
 
-// montage (bars 17–19): four on the floor, a hit on every cut, a fill into the grid
-bars(17, 19, (b) => {
+// the app, recorded (bars 17–24): a lighter groove under the screens, a soft click under every click
+function uiClick(t, g = 1) {
+  const i0 = S(t), f = svf()
+  for (let k = 0; k < S(0.06); k++) {
+    const x = k / SR
+    const v = (f(rnd(), 4200, 1.6).bp * Math.exp(-x / 0.006) + Math.sin(PI2 * 1900 * x) * Math.exp(-x / 0.01) * 0.25) * 0.22 * g
+    add(B.fx, i0 + k, v, v * 0.9)
+  }
+}
+bars(17, 24, (b) => {
   const c = chord(b - 17)
+  pad(bt(b), BAR, c.pad, 0.9, { cut: 1200 })
+  for (let e = 0; e < 4; e++) bass(bt(b, e), BEAT - 0.06, c.root, 0.75)
+  kick(bt(b, 0), 0.85); kick(bt(b, 2), 0.75)
+  clap(bt(b, 1), 0.55); clap(bt(b, 3), 0.55)
+  for (let e = 0; e < 8; e++) hat(bt(b, e / 2), e % 2 ? 0.75 : 0.3)
+  for (let s = 0; s < 8; s++) pluck(bt(b, s / 2), c.arp[(s * 5) % 8], 0.55, s % 2 ? 0.35 : -0.35)
+  // a lift into each new screen
+  if (b % 2 === 0) whoosh(bt(b + 1) - 0.3, 0.45, 0.32)
+})
+{
+  let clicks = []
+  // the click times come from the comp (render.mjs --clicks writes them)
+  try { if (process.env.CLICKS) clicks = JSON.parse(fs.readFileSync(process.env.CLICKS, 'utf8')) } catch {}
+  // taps in quick succession (the build time-lapse) would rattle: keep them at least 0.12 s apart
+  let lastClick = -1
+  for (const t of clicks) if (t - lastClick >= 0.12) { uiClick(t); lastClick = t }
+}
+riser(bt(24, 2), bt(25), 0.7)
+boom(bt(25), 1.0)
+
+// montage (bars 25–26): four on the floor, a hit on every cut, a fill into the grid
+bars(25, 26, (b) => {
+  const c = chord(b - 25)
   pad(bt(b), BAR, c.pad, 1.1, { cut: 2200 })
   for (let e = 0; e < 8; e++) bass(bt(b, e / 2), BEAT / 2 - 0.03, c.root + (e % 2 ? 12 : 0), 1)
   for (let q = 0; q < 4; q++) { kick(bt(b, q)); whoosh(bt(b, q) - 0.12, 0.35, 0.14); hat(bt(b, q + 0.5), 1, true) }
   clap(bt(b, 1)); clap(bt(b, 3))
   for (let s = 0; s < 16; s++) pluck(bt(b, s / 4), c.arp[(s * 3) % 8] + 12, 0.8, s % 2 ? 0.5 : -0.5)
-  if (b === 19) for (let s = 8; s < 16; s++) clap(bt(b, s / 4), 0.3 + 0.07 * s)
+  if (b === 26) for (let s = 8; s < 16; s++) clap(bt(b, s / 4), 0.3 + 0.07 * s)
 })
-riser(bt(19, 2), bt(20), 0.7)
-boom(bt(20), 1.2)
+riser(bt(26, 2), bt(27), 0.7)
+boom(bt(27), 1.2)
 
-// grid (bars 20–21): big chord, lighter beat
-bars(20, 21, (b) => {
-  const c = chord(b - 20)
+// grid (bars 27–28): big chord, lighter beat
+bars(27, 28, (b) => {
+  const c = chord(b - 27)
   pad(bt(b), BAR, c.pad.concat([c.pad[0] + 12]), 1.2, { cut: 2000 })
   for (let e = 0; e < 4; e++) bass(bt(b, e), BEAT - 0.05, c.root, 0.9)
   kick(bt(b, 0)); kick(bt(b, 2))
   for (let e = 0; e < 8; e++) hat(bt(b, e / 2), e % 2 ? 0.8 : 0.4)
 })
 
-// modes (bars 22–23): pad, hats, a whoosh on the switch
-bars(22, 23, (b) => {
-  const c = chord(b - 20)
+// modes (bars 29–30): pad, hats, a whoosh on the switch
+bars(29, 30, (b) => {
+  const c = chord(b - 27)
   pad(bt(b), BAR, c.pad, 1, { cut: 1300 })
   for (let e = 0; e < 8; e++) hat(bt(b, e / 2), e % 2 ? 0.9 : 0.35)
   for (let s = 0; s < 8; s++) pluck(bt(b, s / 2), c.arp[s], 0.7, s % 2 ? 0.3 : -0.3)
 })
-kick(bt(22, 0), 0.8)
-whoosh(bt(23) - 0.28, 0.9, 0.42)
-kick(bt(23, 0), 0.9)
-riser(bt(23, 2), bt(24), 0.6)
+kick(bt(29, 0), 0.8)
+whoosh(bt(30) - 0.28, 0.9, 0.42)
+kick(bt(30, 0), 0.9)
+riser(bt(30, 2), bt(31), 0.6)
 
-// end card (bars 24–26): the last hit, Dm9 ringing out, a chime as the logo builds
-boom(bt(24), 1.25)
-kick(bt(24), 1)
-pad(bt(24), 3.2, [38, 50, 53, 57, 60, 64, 69], 1.5, { cut: 1800, att: 0.02, rel: 2.0 })
-bass(bt(24), 1.6, 38, 1)
-;[74, 81, 86, 88].forEach((m, i) => chime(bt(24) + 0.18 + i * 0.11, m, 0.9))
+// end card (bars 31–33): the last hit, Dm9 ringing out, a chime as the logo builds
+boom(bt(31), 1.25)
+kick(bt(31), 1)
+pad(bt(31), 3.2, [38, 50, 53, 57, 60, 64, 69], 1.5, { cut: 1800, att: 0.02, rel: 2.0 })
+bass(bt(31), 1.6, 38, 1)
+;[74, 81, 86, 88].forEach((m, i) => chime(bt(31) + 0.18 + i * 0.11, m, 0.9))
 
 /* ------------------------------------------------------------------ mix */
 const out = { L: new Float32Array(N), R: new Float32Array(N) }

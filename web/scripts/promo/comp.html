@@ -53,10 +53,15 @@ const T = {
   slowmo: [14.4, 19.8],
   explode: [19.8, 25.2],
   traction: [25.2, 30.6],
-  montage: [30.6, 36.0],
-  grid: [36.0, 39.6],
-  modes: [39.6, 43.2],
-  end: [43.2, 48.6],
+  // the app itself, recorded: two bars each
+  settings: [30.6, 34.2],
+  ask: [34.2, 37.8],
+  practise: [37.8, 41.4],
+  build: [41.4, 45.0],
+  montage: [45.0, 48.6],
+  grid: [48.6, 52.2],
+  modes: [52.2, 55.8],
+  end: [55.8, 61.2],
 }
 const DURATION = T.end[1]
 window.PROMO = { T, DURATION, FPS, BEAT }
@@ -403,10 +408,194 @@ S.traction = (() => {
   }
 })()
 
+/* ================================================================== the app, recorded */
+/*
+ * Each clip (record-ui.mjs) is a screencast of the real app with the pointer's path logged. It plays
+ * retimed: keys map section time s → clip time c, pinned to the clicks, so the slow parts (a heavy
+ * slider drag, typing, the answer streaming) pass quickly and the clicks land where they should.
+ * The view pans and zooms (crops: [s, centre x, centre y, width] in the app's 1920 × 1080 CSS pixels),
+ * a clean cursor is drawn from the log, and a caption card names the feature.
+ */
+const UI_DIR = SHOTS + '../ui/'
+const uiLoads = []
+const CLICKS = []
+function uiShot(name, span, { eyebrow, title, sub, keys, crops, first = false }) {
+  const L = el('div', 'layer')
+  css(L, { background: 'var(--bg)' })
+  const win = el('div', '', L)
+  css(win, { position: 'absolute', inset: '0', overflow: 'hidden', transformOrigin: '50% 50%' })
+  const img = el('img', '', win)
+  css(img, { position: 'absolute', left: '0', top: '0', width: '1920px', height: '1080px', transformOrigin: '0 0' })
+  img.decoding = 'sync'
+  const ripple = el('div', '', L)
+  css(ripple, { position: 'absolute', borderRadius: '50%', border: '3px solid var(--accent)', pointerEvents: 'none', opacity: '0' })
+  const cur = el('div', '', L, '<svg width="34" height="40" viewBox="0 0 17 20"><path d="M1.5 1.5 L1.5 16 L5.2 12.6 L7.9 18.5 L10.4 17.4 L7.8 11.6 L12.8 11.4 Z" fill="#fff" stroke="#0e120c" stroke-width="1.4" stroke-linejoin="round"/></svg>')
+  css(cur, { position: 'absolute', left: '0', top: '0', filter: 'drop-shadow(0 3px 6px rgba(0,0,0,0.35))', transformOrigin: '3px 3px' })
+  const card = el('div', 'card', L)
+  css(card, { left: '64px', bottom: '64px', maxWidth: '640px', padding: '26px 32px 28px' })
+  const eb = el('div', 'eyebrow mono', card)
+  css(eb, { fontSize: '18px', letterSpacing: '0.14em', textTransform: 'uppercase', marginBottom: '12px' })
+  const ebw = words(eb, eyebrow)
+  const h = el('div', 'h2', card)
+  css(h, { fontSize: '50px' })
+  const hw = words(h, title)
+  const sb = el('div', 'sub', card)
+  css(sb, { marginTop: '12px', fontSize: '22px' })
+  const sw = words(sb, sub)
+  let clip = null
+  let K = null
+  let last = ''
+  uiLoads.push(
+    fetch(UI_DIR + name + '/clip.json')
+      .then((r) => r.json())
+      .then((j) => {
+        clip = j
+        const rel = (e) => e.t - j.t0
+        const ev = (k, n = 0) => {
+          const l = j.events.filter((e) => e.k === k)
+          return rel(l[Math.min(n, l.length - 1)])
+        }
+        K = keys(ev)
+        // the clicks, in film time, for the score
+        for (const e of j.events.filter((e) => e.k === 'down')) {
+          const c = rel(e)
+          for (let i = 0; i < K.length - 1; i++)
+            if (c >= K[i][1] && c <= K[i + 1][1]) {
+              CLICKS.push(span[0] + lerp(K[i][0], K[i + 1][0], (c - K[i][1]) / (K[i + 1][1] - K[i][1] || 1)))
+              break
+            }
+        }
+      })
+      .catch(() => {}),
+  )
+  const clipAt = (u) => {
+    if (u <= K[0][0]) return K[0][1]
+    for (let i = 0; i < K.length - 1; i++) if (u <= K[i + 1][0]) return lerp(K[i][1], K[i + 1][1], (u - K[i][0]) / (K[i + 1][0] - K[i][0]))
+    return K[K.length - 1][1]
+  }
+  const cropAt = (u) => {
+    let c = crops[0]
+    if (u >= crops[crops.length - 1][0]) c = crops[crops.length - 1]
+    else
+      for (let i = 0; i < crops.length - 1; i++)
+        if (u >= crops[i][0] && u < crops[i + 1][0]) {
+          const k = E.io(seg(u, crops[i][0], crops[i + 1][0]))
+          c = [u, lerp(crops[i][1], crops[i + 1][1], k), lerp(crops[i][2], crops[i + 1][2], k), lerp(crops[i][3], crops[i + 1][3], k)]
+          break
+        }
+    const w = c[3]
+    const hh = (w * 9) / 16
+    const cx = Math.max(w / 2, Math.min(1920 - w / 2, c[1]))
+    const cy = Math.max(hh / 2, Math.min(1080 - hh / 2, c[2]))
+    return { k: 1920 / w, cx, cy }
+  }
+  return (t) => {
+    const [a, b] = span
+    const vis = t >= a && t < b
+    L.style.visibility = vis ? 'visible' : 'hidden'
+    if (!vis || !clip) return
+    const u = t - a
+    const abs = clip.t0 + clipAt(u)
+    // the frame showing at that moment
+    const fr = clip.frames
+    let lo = 0
+    let hi = fr.length - 1
+    while (lo < hi) {
+      const m = (lo + hi + 1) >> 1
+      if (fr[m].t <= abs) lo = m
+      else hi = m - 1
+    }
+    const src = UI_DIR + name + '/' + fr[lo].file
+    if (src !== last) {
+      last = src
+      img.src = src
+      pending.push(img.decode().catch(() => {}))
+    }
+    const { k, cx, cy } = cropAt(u)
+    const tx = 960 - cx * k
+    const ty = 540 - cy * k
+    img.style.transform = `translate3d(${tx}px, ${ty}px, 0) scale(${k})`
+    // the first app section opens out of a window; the rest cut on the bar with a small punch
+    const ws = first ? lerp(0.86, 1, E.out(seg(u, 0, 0.6))) : 1 + 0.03 * (1 - E.out(seg(u, 0, 0.5)))
+    if (first) {
+      const p = E.out(seg(u, 0, 0.6))
+      css(win, { transform: `scale(${ws})`, borderRadius: `${lerp(28, 0, p)}px`, boxShadow: `0 40px 90px -40px rgba(14,18,12,${0.5 * (1 - p)})` })
+    } else css(win, { transform: `scale(${ws})` })
+    // the pointer, from the log
+    const evs = clip.events
+    let i = 0
+    while (i < evs.length - 1 && evs[i + 1].t <= abs) i++
+    const e0 = evs[i]
+    const e1 = evs[Math.min(i + 1, evs.length - 1)]
+    const q = e1.t > e0.t ? clamp01((abs - e0.t) / (e1.t - e0.t)) : 0
+    const mx = lerp(e0.x, e1.x, q)
+    const my = lerp(e0.y, e1.y, q)
+    const sx = 960 + (tx + mx * k - 960) * ws
+    const sy = 540 + (ty + my * k - 540) * ws
+    let pressed = false
+    for (let j = i; j >= 0; j--) {
+      if (evs[j].k === 'up') break
+      if (evs[j].k === 'down') { pressed = true; break }
+    }
+    css(cur, { transform: `translate3d(${sx - 3}px, ${sy - 3}px, 0) scale(${pressed ? 0.88 : 1})`, opacity: String(u > 0.15 ? 1 : 0) })
+    // a ring opens where each click lands
+    let rp = 0
+    for (let j = i; j >= 0; j--)
+      if (evs[j].k === 'down') {
+        const dt = abs - evs[j].t
+        if (dt < 0.5) rp = dt / 0.5
+        break
+      }
+    if (rp > 0) {
+      const r = 10 + 40 * E.out(rp)
+      css(ripple, { left: `${sx - r}px`, top: `${sy - r}px`, width: `${2 * r}px`, height: `${2 * r}px`, opacity: String(1 - rp) })
+    } else ripple.style.opacity = '0'
+    // the caption
+    const pc = inout(t, a + 0.25, b, 0.5, 0.25)
+    css(card, { opacity: String(pc), transform: `translate3d(0, ${(1 - E.out(seg(t, a + 0.25, a + 0.75))) * 24}px, 0)` })
+    animWords(ebw, t, a + 0.3, b, { stagger: 0.03 })
+    animWords(hw, t, a + 0.4, b, { stagger: 0.06 })
+    animWords(sw, t, a + 0.65, b, { stagger: 0.015, d: 0.5 })
+  }
+}
+
+S.settings = uiShot('ui-settings', T.settings, {
+  first: true,
+  eyebrow: '05 — Live settings',
+  title: 'Change anything.',
+  sub: 'Every slider drives the physics: the cycle, the diagrams and the readouts follow.',
+  keys: (ev) => [[0, ev('down', 0) - 0.9], [0.55, ev('down', 0)], [1.6, ev('up', 0)], [2.1, ev('down', 1)], [3.05, ev('up', 1)], [3.6, ev('up', 1) + 0.6]],
+  // the sliders and, below them, the P–V diagram they reshape
+  crops: [[0, 960, 540, 1920], [0.55, 1470, 760, 1120], [3.6, 1480, 790, 1060]],
+})
+S.ask = uiShot('ui-ask', T.ask, {
+  eyebrow: '06 — Ask about any part',
+  title: 'Ask, and it explains.',
+  sub: 'A tutor that sees the part you picked and the numbers on screen.',
+  keys: (ev) => [[0, ev('down', 0) - 0.6], [0.4, ev('down', 0) + 0.1], [0.85, ev('down', 1) + 0.1], [1.1, ev('down', 2) + 0.1], [1.75, ev('send')], [2.55, ev('end') - 0.7], [3.6, ev('end')]],
+  crops: [[0, 760, 470, 1600], [0.9, 900, 420, 1500], [1.6, 1540, 420, 900], [3.6, 1540, 440, 860]],
+})
+S.practise = uiShot('ui-practise', T.practise, {
+  eyebrow: '07 — Practise',
+  title: 'Worked solutions.',
+  sub: 'Fresh numbers each try, the formula with the numbers in, marked like an examiner.',
+  keys: (ev) => [[0, ev('down', 0) - 0.5], [0.35, ev('down', 0) + 0.1], [1.45, ev('down', 4) + 0.2], [2.05, ev('down', 5) + 0.2], [3.6, ev('end')]],
+  crops: [[0, 1200, 520, 1500], [0.45, 1480, 560, 900], [2.1, 1480, 640, 900], [3.6, 1480, 700, 900]],
+})
+S.build = uiShot('ui-build', T.build, {
+  eyebrow: '08 — Build it',
+  title: 'Build it yourself.',
+  sub: 'Put the engine together part by part. Wrong order? It tells you why.',
+  keys: (ev) => [[0, ev('down', 0) - 0.4], [0.3, ev('down', 0) + 0.1], [0.8, ev('down', 0) + 2.6], [1.9, ev('fast')], [2.8, ev('built') + 0.5], [3.6, ev('end') - 0.2]],
+  // the tray, then in close on the finished engine as it starts
+  crops: [[0, 960, 540, 1920], [0.8, 820, 520, 1440], [2.65, 700, 600, 1380], [3.35, 560, 640, 860], [3.6, 560, 640, 840]],
+})
+
 /* --- montage: quick cuts, each tagged --- */
 S.montage = (() => {
   const L = el('div', 'layer')
-  const plates = MONTAGE.map(([k]) => { const p = plate(k); L.appendChild(p.box); return p })
+  const CUTS = [0, 1, 2, 3, 5, 7, 9, 11].map((i) => MONTAGE[i])
+  const plates = CUTS.map(([k]) => { const p = plate(k); L.appendChild(p.box); return p })
   const tag = el('div', 'pill', L)
   css(tag, { left: '150px', bottom: '110px', fontSize: '22px' })
   const tagSys = el('span', 'mono', tag)
@@ -418,18 +607,18 @@ S.montage = (() => {
   css(head, { position: 'absolute', left: '150px', top: '110px' })
   const eb = el('div', 'eyebrow mono', head)
   css(eb, { fontSize: '19px', letterSpacing: '0.14em', textTransform: 'uppercase' })
-  const ebw = words(eb, '05 — The whole machine')
-  const D = (T.montage[1] - T.montage[0]) / MONTAGE.length
+  const ebw = words(eb, '09 — The whole machine')
+  const D = (T.montage[1] - T.montage[0]) / CUTS.length
   return (t) => {
     const [a, b] = T.montage
     const vis = t >= a && t < b
     L.style.visibility = vis ? 'visible' : 'hidden'
     if (!vis) return
-    const i = Math.min(MONTAGE.length - 1, Math.floor((t - a) / D))
+    const i = Math.min(CUTS.length - 1, Math.floor((t - a) / D))
     const t0 = a + i * D
     plates.forEach((p, j) => p.show(j === i ? (t - t0) * FPS : 0, j === i, `scale(${1 + 0.05 * (1 - E.out(seg(t, t0, t0 + 0.35)))})`))
-    tagSys.textContent = MONTAGE[i][1]
-    tagName.textContent = MONTAGE[i][2]
+    tagSys.textContent = CUTS[i][1]
+    tagName.textContent = CUTS[i][2]
     flash.style.opacity = String(0.35 * (1 - E.out(seg(t, t0, t0 + 0.18))))
     animWords(ebw, t, a + 0.1, b + 1, { stagger: 0.03 })
   }
@@ -571,6 +760,10 @@ S.end = (() => {
 })()
 
 /* ------------------------------------------------------------------ render */
+// everything the comp loads before the first frame
+window.PROMO_READY = Promise.all([window.PROMO_READY, ...uiLoads])
+window.PROMO.clicks = () => CLICKS.slice().sort((x, y) => x - y)
+
 window.render = async (t) => {
   pending.length = 0
   S.cold.clip = undefined
@@ -580,6 +773,10 @@ window.render = async (t) => {
   S.slowmo(t)
   S.explode(t)
   S.traction(t)
+  S.settings(t)
+  S.ask(t)
+  S.practise(t)
+  S.build(t)
   S.montage(t)
   S.grid(t)
   S.modes(t)
