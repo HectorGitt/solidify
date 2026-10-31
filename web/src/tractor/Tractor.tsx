@@ -490,14 +490,14 @@ export function Tractor({ pose, id = 'tractor', paint = 'paintRed', linkage = tr
               <PartMesh geometry={G.trumpets} />
             </Part>
             {GT ? (
-              <Part id={k('tracks')} name="Tracks" role="moving" material="steelDark" info={INFO.tracks} cites={[SRC.tt510('tracks')]} explode={false}>
+              <Part id={k('tracks')} name="Tracks" role="moving" material="steelDark" info={INFO.tracks} cites={[SRC.tt510('tracks')]} explode={false} xray>
                 <PartMesh geometry={GT.frames} material={paint} />
                 <PartMesh geometry={GT.equaliser} material="forged" />
                 {GT.finals ? <PartMesh geometry={GT.finals} material="castIron" /> : null}
                 <CrawlerTracks layout={GT.layout} geometry={GT.parts} z={GT.z} travel={() => run.current} />
               </Part>
             ) : (
-            <Part id={k('rear-wheels')} name="Rear wheels" role="moving" material="rubber" info={INFO.rearWheels} cites={[SRC.mech502('eq 2.1–2.2'), SRC.tt510('tyre types')]} explode={false} xray={whole || undefined}>
+            <Part id={k('rear-wheels')} name="Rear wheels" role="moving" material="rubber" info={INFO.rearWheels} cites={[SRC.mech502('eq 2.1–2.2'), SRC.tt510('tyre types')]} explode={false} xray>
               {([1, -1] as const).map((s) => (
                 <Part key={s} id={k(s > 0 ? 'rear-wheel-r' : 'rear-wheel-l')} name={s > 0 ? 'Rear wheel (right)' : 'Rear wheel (left)'} explode={[0, 0, s * 0.6]}>
                   <group position={[0, AXLE_Y, s * REAR_Z]}>
@@ -521,7 +521,7 @@ export function Tractor({ pose, id = 'tractor', paint = 'paintRed', linkage = tr
                       <PartMesh geometry={GA.frontAxle} />
                       <PartMesh geometry={GA.rails} material={paint} />
                       {([1, -1] as const).map((s) => (
-                        <Part key={s} id={k(s > 0 ? 'front-wheel-r' : 'front-wheel-l')} name={s > 0 ? 'Front wheel (right)' : 'Front wheel (left)'} role="moving" material="rubber" info={INFO.rearWheels} explode={[0, 0, s * 0.6]} xray={whole || undefined}>
+                        <Part key={s} id={k(s > 0 ? 'front-wheel-r' : 'front-wheel-l')} name={s > 0 ? 'Front wheel (right)' : 'Front wheel (left)'} role="moving" material="rubber" info={INFO.rearWheels} explode={[0, 0, s * 0.6]} xray>
                           <group position={[ART_AXLE_X, AXLE_Y, s * REAR_Z]}>
                             <group ref={s > 0 ? frontL : frontR}>
                               <group rotation={[0, s > 0 ? 0 : Math.PI, 0]}>
@@ -578,7 +578,7 @@ export function Tractor({ pose, id = 'tractor', paint = 'paintRed', linkage = tr
                       <PartMesh geometry={G4 ? G4.swivel : G.knuckle} />
                       {G4 ? null : <PartMesh geometry={G.knuckleSteel} material="steel" />}
                     </group>
-                    <Part id={k(s > 0 ? 'front-wheel-r' : 'front-wheel-l')} name={s > 0 ? 'Front wheel (right)' : 'Front wheel (left)'} explode={[0, 0, s * 0.45]} role="moving" material="rubber" info={four ? INFO.frontWheels4 : INFO.frontWheels} xray={whole || undefined}>
+                    <Part id={k(s > 0 ? 'front-wheel-r' : 'front-wheel-l')} name={s > 0 ? 'Front wheel (right)' : 'Front wheel (left)'} explode={[0, 0, s * 0.45]} role="moving" material="rubber" info={four ? INFO.frontWheels4 : INFO.frontWheels} xray>
                       <group position={[0, 0, s * (FRONT_Z - kingZ)]}>
                         <group ref={s > 0 ? frontL : frontR}>
                           <group rotation={[0, s > 0 ? 0 : Math.PI, 0]}>
