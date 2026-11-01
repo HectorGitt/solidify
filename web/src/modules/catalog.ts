@@ -279,6 +279,10 @@ export const MODULES: ModuleDef[] = [
     blurb: 'Test pieces and rigs that load, bend and break: stress, strain, beams, torsion and buckling you can see and measure.',
     scenes: [
       { id: 'beam', title: 'Beam bending rig', summary: 'Supports, loads and sections: shear force, bending moment, stress through the depth and deflection.', exam: true },
+      { id: 'tensile', title: 'Tensile testing machine', summary: 'Pull a specimen to failure while the stress–strain curve draws itself; ductile against brittle.', exam: true },
+      { id: 'axial', title: 'Thermal stress & composite bars', summary: 'Rails that close their gaps as they warm, and a rod and tube sharing one pull.', exam: true },
+      { id: 'torsion', title: 'Torsion rig', summary: 'Twist a solid or hollow shaft and read the angle and the shear stress.', exam: true },
+      { id: 'buckling', title: 'Column buckling rig', summary: 'End conditions, slenderness, and where buckling gives way to crushing.', exam: true },
     ],
   },
 ]
