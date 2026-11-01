@@ -5521,6 +5521,24 @@
   "Pivot pins",
   "Protractor"
  ],
+ "mechanisms/slider-crank": [
+  "Connecting rod",
+  "Crank disc",
+  "Crank-pin",
+  "Guide and scale"
+ ],
+ "mechanisms/geneva": [
+  "Bearings",
+  "Driver and locking disc",
+  "Driving pin",
+  "Geneva wheel"
+ ],
+ "mechanisms/oldham": [
+  "Bearing stands",
+  "Central disc",
+  "Driven shaft",
+  "Driving shaft"
+ ],
  "materials/beam": [
   "Beam",
   "Built-in end",

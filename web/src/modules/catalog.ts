@@ -258,6 +258,9 @@ export const MODULES: ModuleDef[] = [
     blurb: 'The bench experiments of a mechanics of machines lab: linkages, cams, balancing, governors and flywheels you can reconfigure and measure.',
     scenes: [
       { id: 'four-bar', title: 'Four-bar linkage rig', summary: 'Change the links, fix a different one: Grashof’s law, transmission angle, mechanical advantage and coupler curves.', exam: true },
+      { id: 'slider-crank', title: 'Slider-crank & scotch yoke', summary: 'Displacement every 15° against a true sine; rod length and an offset line of stroke.', exam: true },
+      { id: 'geneva', title: 'Geneva wheel', summary: 'Steady rotation in, stop-start motion out: steps, dwell, output speed and acceleration.' },
+      { id: 'oldham', title: 'Oldham coupling', summary: 'Parallel shafts out of line: tongues, grooves and the disc centre’s circle.' },
     ],
   },
   {
