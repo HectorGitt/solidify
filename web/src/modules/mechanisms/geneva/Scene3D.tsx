@@ -3,10 +3,11 @@ import * as THREE from 'three'
 import { useSimFrame } from '@/core/sim'
 import { cylinder, extrude, mat4, merge, xform } from '@/geometry'
 import { genevaAngle, genevaHalfEngagement, genevaStep } from '@/physics/linkages'
+import { instrument, useAutoRun, useRunDriver } from '@/lab/run'
 import { PartLabel } from '@/render/Label'
 import { Part, PartMesh } from '@/render/Part'
 import { BenchPlate, flatBar, polarShape } from '../_shared/rig'
-import { CENTRES, live, pinRadius, useGeneva } from './model'
+import { CENTRES, GENEVA_PROC, genevaRun, live, pinRadius, useGeneva } from './model'
 
 export const FLOOR = -0.42
 const axial = mat4.rx(Math.PI / 2)
@@ -98,9 +99,22 @@ export function Geneva3D() {
   )
 
   const phase = useRef(0)
+  useAutoRun(genevaRun, JSON.stringify([slots, stop]))
+  useRunDriver(
+    genevaRun,
+    GENEVA_PROC,
+    (f) => {
+      phase.current = f * Math.PI
+    },
+    (step, f) => {
+      const n = useGeneva.getState().slots
+      const out = (genevaAngle(n, f * Math.PI) * 180) / Math.PI
+      genevaRun.getState().log([f * 180, out > 0.01 ? instrument(out, 0.004, step) : 0])
+    },
+  )
   useSimFrame((dt) => {
     const st = useGeneva.getState()
-    phase.current += (st.rpm * 2 * Math.PI * dt) / 60
+    if (genevaRun.getState().status !== 'running') phase.current += (st.rpm * 2 * Math.PI * dt) / 60
     // with a stop, the pin comes up against the closed slot after n − 1 steps, and everything stops
     if (st.stop) phase.current = Math.min(phase.current, (st.slots - 1) * 2 * Math.PI - 0.05)
     const t = phase.current

@@ -1,4 +1,5 @@
 import { useMemo, useRef } from 'react'
+import { TestBench, createRun, instrument, useAutoRun, useRunDriver } from '@/lab/run'
 import * as THREE from 'three'
 import { create } from 'zustand'
 import { useSimFrame } from '@/core/sim'
@@ -33,6 +34,16 @@ export const DEFAULTS = { amp: 300, mean: 0, Su: 600, Se: 250, Sy: 400, line: 'g
 export const useFatigue = create<Params>((set) => ({ ...DEFAULTS, set: (p) => set(p), reset: () => set(DEFAULTS) }))
 const set = (p: Partial<Params>) => useFatigue.getState().set(p)
 const live = { theta: 0, turns: 0 }
+const fatigueRun = createRun()
+const PROCEDURE = { steps: 8, moveSeconds: 1.1, dwellSeconds: 0.45 }
+/** one new specimen for each stress level, from near the ultimate down to just under the endurance limit */
+const levelStress = (p: Params, step: number) => {
+  const top = 0.88 * p.Su
+  const bottom = 0.92 * p.Se
+  return top + ((bottom - top) * (step - 1)) / (PROCEDURE.steps - 1)
+}
+/** fatigue lives scatter widely, even between identical specimens: readings use a factor of up to 1.5 */
+const lifeReading = (N: number, step: number) => N * 1.5 ** (instrument(1, 1, step + 7) - 1)
 
 /** the amplitude that would have the same life with no mean stress */
 const equivalentAmp = (p: Params) => {
@@ -43,6 +54,20 @@ const equivalentAmp = (p: Params) => {
 export function Fatigue3D() {
   const shaft = useRef<THREE.Group>(null)
   const dot = useRef<THREE.Mesh>(null)
+  const load = useRef<THREE.Group>(null)
+  const whole = useFatigue()
+  useAutoRun(fatigueRun, JSON.stringify([whole.Su, whole.Se, whole.Sy]))
+  useRunDriver(
+    fatigueRun,
+    PROCEDURE,
+    () => {},
+    (step) => {
+      const st = useFatigue.getState()
+      const S = levelStress(st, step)
+      const N = basquinLife(S, st.Su, st.Se)
+      fatigueRun.getState().log([S, N === Infinity ? Infinity : lifeReading(N, step)])
+    },
+  )
   const R = 0.05
   const geo = useMemo(
     () => ({
@@ -60,9 +85,14 @@ export function Fatigue3D() {
   )
   useSimFrame((dt) => {
     const s = useFatigue.getState()
-    const w = (s.rpm * 2 * Math.PI) / 60
+    const run = fatigueRun.getState()
+    // the specimen for this level has gone once the move is complete: the weight drops, and it stops
+    const stress = run.status === 'running' ? levelStress(s, run.step + 1) : 0
+    const broken = run.status === 'running' && run.progress >= 0.999 && stress > s.Se
+    load.current?.position.set(0, broken ? -0.05 : 0, 0)
+    const w = broken ? 0 : ((run.status === 'running' ? 90 : s.rpm) * 2 * Math.PI) / 60
     live.theta += w * dt
-    live.turns += (s.rpm / 60) * dt
+    live.turns += (w / (2 * Math.PI)) * dt
     shaft.current?.rotation.set(live.theta, 0, 0)
     if (dot.current) {
       // a point on the waist's surface, going from tension at the bottom to compression at the top
@@ -88,12 +118,27 @@ export function Fatigue3D() {
       <mesh ref={dot} geometry={geo.dot}>
         <meshBasicMaterial color="#d0452c" toneMapped={false} />
       </mesh>
+      <group ref={load}>
       <Part id="load" name="Dead weight" role="static" material="castIron" info={{ summary: 'Hangs from bearings on the bar.', role: 'A steady load that bends the bar in the same direction, however it turns. The stress is set by the amount of weight.' }} cut={false}>
         <PartMesh geometry={geo.hanger} material="steel" />
         <PartMesh geometry={geo.weights} />
       </Part>
+      </group>
       <PartLabel partId="specimen" at={[0.28, 0.1, 0.05]} />
     </group>
+  )
+}
+
+/** The bench test: a new specimen at each stress, each run until it breaks. */
+function FatigueTest() {
+  const rows = fatigueRun((s) => s.rows)
+  const p = useFatigue()
+  const broken = rows.filter((r) => r[1] !== Infinity)
+  return (
+    <TestBench run={fatigueRun} steps={PROCEDURE.steps} title="The test: a specimen at each stress" head={['Stress (MPa)', 'Cycles to failure']} format={(r) => [fmt(r[0], 3), r[1] === Infinity ? 'no failure' : fmt(r[1], 3)]}>
+      {broken.length > 1 ? <Chart data={[broken.map((r) => Math.log10(r[1])), broken.map((r) => r[0]), broken.map(() => p.Se)]} series={[{ label: 'Readings', color: '#e8794f', width: 2 }, { label: 'Endurance limit', color: '#6fb3e0', width: 1.5 }]} xLabel="log₁₀ cycles to failure" yLabel="Stress (MPa)" height={125} /> : null}
+      <Note>Months of running are compressed here: each specimen takes about a second. Lives scatter, as they do on the bench. A specimen below the endurance limit is taken off unbroken.</Note>
+    </TestBench>
   )
 }
 
@@ -115,6 +160,7 @@ export function FatiguePanel() {
   const lifeText = life === Infinity ? 'infinite' : eq >= 0.9 * p.Su ? 'under 10³' : fmt(life, 3)
   return (
     <div>
+      <FatigueTest />
       <Section title="Live">
         <div className="grid grid-cols-3 gap-1.5">
           <Readout label="Life" value={lifeText} unit={life === Infinity ? '' : 'cycles'} tone={life === Infinity ? 'accent' : 'warn'} />
@@ -124,7 +170,7 @@ export function FatiguePanel() {
           <Readout label="Largest stress" value={fmt(p.mean + p.amp, 3)} unit="MPa" />
           <Readout label="Turns here" value={fmt(turns, 3)} />
         </div>
-        <Note>A real test runs at thousands of rpm for days. The dot on the waist goes red in tension and blue in compression, once each turn.</Note>
+        <Note>A real test runs at thousands of rpm for days. The dot on the waist goes red in tension and blue in compression, once each turn. These figures are for the swing and mean you set below.</Note>
       </Section>
       <Section title="The test">
         <Slider label="Stress swing, amplitude" value={p.amp} min={0} max={Math.round(p.Su)} step={5} unit="MPa" onChange={(amp) => set({ amp })} />

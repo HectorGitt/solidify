@@ -1,4 +1,5 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { TestBench, createRun, instrument, useAutoRun, useRunDriver } from '@/lab/run'
 import * as THREE from 'three'
 import { create } from 'zustand'
 import { useSimFrame } from '@/core/sim'
@@ -7,7 +8,7 @@ import { creepStrain, larsonMiller, larsonMillerLife } from '@/physics/strength'
 import { PartLabel } from '@/render/Label'
 import { Part, PartMesh } from '@/render/Part'
 import { Chart } from '@/ui/Chart'
-import { Readout, Section, Slider, Toggle, fmt } from '@/ui/controls'
+import { Readout, Section, Slider, fmt } from '@/ui/controls'
 import { useLive } from '@/ui/live'
 import { Working, n } from '@/ui/Working'
 import { Note, PresetGrid, type Preset } from '../../elements/_shared/PanelBits'
@@ -26,10 +27,12 @@ interface Params {
   reset: () => void
 }
 
-export const DEFAULTS = { sigma: 120, T: 550, running: true, duration: 24 }
+export const DEFAULTS = { sigma: 180, T: 550, running: true, duration: 24 }
 export const useCreep = create<Params>((set) => ({ ...DEFAULTS, set: (p) => set(p), reset: () => set(DEFAULTS) }))
 const set = (p: Partial<Params>) => useCreep.getState().set(p)
 const live = { u: 0, broke: false }
+const creepRun = createRun()
+const PROCEDURE = { steps: 16, moveSeconds: 0.85, dwellSeconds: 0.15 }
 
 /**
  * A representative low-alloy steel: its life from a Larson–Miller line, P = T(20 + log t), with P falling as
@@ -50,12 +53,37 @@ const strainAt = (m: ReturnType<typeof creepModel>, t: number) => creepStrain(m.
 export function Creep3D() {
   const p = useCreep()
   const m = useMemo(() => creepModel(p.sigma, p.T), [p.sigma, p.T])
-  const u = useRef(0)
+  useAutoRun(creepRun, JSON.stringify([p.sigma, p.T]))
+  useRunDriver(
+    creepRun,
+    PROCEDURE,
+    (f) => {
+      live.u = f
+    },
+    (step, f) => {
+      const st = useCreep.getState()
+      const q = creepModel(st.sigma, st.T)
+      creepRun.getState().log([f * q.tR, instrument(strainAt(q, f * q.tR) * 100, 0.008, step)])
+      if (f >= 1) {
+        live.broke = true
+        creepRun.getState().fail(`Ruptured after ${q.tR < 100 ? q.tR.toFixed(1) : q.tR.toFixed(0)} hours, at ${st.sigma} MPa and ${st.T} °C.`)
+      }
+    },
+  )
+  useEffect(
+    () =>
+      creepRun.subscribe((r, prev) => {
+        if ((r.status === 'idle' && prev.status !== 'idle') || (r.status === 'running' && prev.status !== 'running' && r.rows.length === 0)) {
+          live.u = 0
+          live.broke = false
+        }
+      }),
+    [],
+  )
   const weights = useRef<THREE.Group>(null)
   const lever = useRef<THREE.Group>(null)
   const piece = useRef<THREE.Mesh>(null)
   const glow = useRef<THREE.MeshBasicMaterial>(null)
-  const last = useRef(`${p.sigma}/${p.T}`)
   const geo = useMemo(
     () => ({
       col: merge(...[-0.48, 0.48].map((x) => xform(cylinder(0.03, 1.6, 22), mat4.t(x, 0, 0)))),
@@ -73,18 +101,9 @@ export function Creep3D() {
   )
   const stack = useMemo(() => merge(...Array.from({ length: Math.max(1, Math.round(p.sigma / 40)) }, (_, i) => geo.disc(i))), [p.sigma, geo])
 
-  useSimFrame((dt) => {
+  useSimFrame(() => {
     const s = useCreep.getState()
-    const key = `${s.sigma}/${s.T}`
-    if (key !== last.current) {
-      last.current = key
-      u.current = 0
-      live.broke = false
-    }
-    if (s.running && !live.broke) u.current = Math.min(1, u.current + dt / s.duration)
-    if (u.current >= 1) live.broke = true
-    live.u = u.current
-    const e = strainAt(m, u.current * m.tR)
+    const e = strainAt(m, live.u * m.tR)
     const len = 0.36 * (1 + Math.min(1.5, e * 2.2))
     const top = 0.32
     if (piece.current) {
@@ -133,8 +152,34 @@ export function Creep3D() {
 const PRESETS: Preset[] = [
   { id: 'std', label: 'Steady service', note: 'A moderate stress and temperature: long primary and secondary stages.', apply: () => set({ ...DEFAULTS }) },
   { id: 'hot', label: '50 °C hotter', note: 'The stress is the same, but life falls many times: temperature is the strongest control on creep.', apply: () => set({ ...DEFAULTS, T: 600 }) },
-  { id: 'load', label: 'More stress', note: 'The tertiary stage arrives far sooner, as the necking specimen carries a rising true stress.', apply: () => set({ ...DEFAULTS, sigma: 200 }) },
+  { id: 'load', label: 'More stress', note: 'The tertiary stage arrives far sooner, as the necking specimen carries a rising true stress.', apply: () => set({ ...DEFAULTS, sigma: 240 }) },
 ]
+
+/** The bench test: the dial is read at intervals through the test, until the specimen breaks. */
+function CreepTest() {
+  const rows = creepRun((s) => s.rows)
+  const status = creepRun((s) => s.status)
+  const ts = rows.map((r) => r[0])
+  const es = rows.map((r) => r[1])
+  // the steady rate, from the readings in the middle of the test
+  const mid = rows.filter((_, i) => i >= 3 && i <= 10)
+  const rate = mid.length > 1 ? (mid[mid.length - 1][1] - mid[0][1]) / (mid[mid.length - 1][0] - mid[0][0]) : 0
+  return (
+    <TestBench run={creepRun} steps={PROCEDURE.steps} title="The test: read the strain" head={['Time (h)', 'Strain (%)']} format={(r) => [fmt(r[0], 3), fmt(r[1], 3)]}>
+      {rows.length > 1 ? (
+        <>
+          <Chart data={[ts, es]} series={[{ label: 'Strain', color: '#e8794f', width: 2 }]} xLabel="Time (hours)" yLabel="Strain (%)" height={125} />
+          {status === 'failed' ? (
+            <div className="mt-1 grid grid-cols-2 gap-1.5">
+              <Readout label="Steady rate found" value={fmt(rate, 3)} unit="%/h" tone="accent" />
+              <Readout label="Rupture life" value={fmt(ts[ts.length - 1], 3)} unit="h" tone="warn" />
+            </div>
+          ) : null}
+        </>
+      ) : null}
+    </TestBench>
+  )
+}
 
 export function CreepPanel() {
   const p = useCreep()
@@ -154,6 +199,7 @@ export function CreepPanel() {
   }, [p.sigma])
   return (
     <div>
+      <CreepTest />
       <Section title="Live">
         <div className="grid grid-cols-3 gap-1.5">
           <Readout label="Time" value={fmt(t, 3)} unit="h" />
@@ -168,7 +214,6 @@ export function CreepPanel() {
       <Section title="The test">
         <Slider label="Stress" value={p.sigma} min={20} max={320} step={5} unit="MPa" onChange={(sigma) => set({ sigma })} />
         <Slider label="Temperature" value={p.T} min={400} max={700} step={5} unit="°C" onChange={(T) => set({ T })} />
-        <Toggle label="Running" checked={p.running} onChange={(running) => set({ running })} />
       </Section>
       <Section title="Set-ups">
         <PresetGrid presets={PRESETS} active={preset} onPick={setPreset} />

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef } from 'react'
+import { TestBench, createRun, instrument, slopeThroughOrigin, useAutoRun, useRunDriver } from '@/lab/run'
 import * as THREE from 'three'
 import { create } from 'zustand'
 import { useSimFrame } from '@/core/sim'
@@ -7,7 +8,7 @@ import { TEST_MATERIALS, circleArea, percentElongation, percentReduction, stress
 import { PartLabel } from '@/render/Label'
 import { Part, PartMesh } from '@/render/Part'
 import { Chart } from '@/ui/Chart'
-import { Readout, Section, Slider, Toggle, fmt } from '@/ui/controls'
+import { Readout, Section, Slider, fmt } from '@/ui/controls'
 import { useLive } from '@/ui/live'
 import { Working, n } from '@/ui/Working'
 import { Note } from '../../elements/_shared/PanelBits'
@@ -21,18 +22,18 @@ interface Params {
   /** gauge length and diameter, mm */
   L0: number
   d: number
-  /** strain per second as run */
-  run: boolean
-  /** seconds for a whole test */
-  duration: number
   set: (p: Partial<Params>) => void
   reset: () => void
 }
 
-export const DEFAULTS = { material: 'mild', L0: 50, d: 12, run: true, duration: 16 }
+export const DEFAULTS = { material: 'mild', L0: 50, d: 12 }
 export const useTensile = create<Params>((set) => ({ ...DEFAULTS, set: (p) => set(p), reset: () => set(DEFAULTS) }))
 const set = (p: Partial<Params>) => useTensile.getState().set(p)
 const live = { u: 0, broken: false }
+const tensileRun = createRun()
+const PROCEDURE = { steps: 28, moveSeconds: 0.42, dwellSeconds: 0.1 }
+/** how far the two halves spring apart at the break */
+const SNAP = 0.05
 const matOf = (id: string) => TEST_MATERIALS.find((m) => m.id === id) ?? TEST_MATERIALS[0]
 
 /** the test runs through a stretched strain scale, so the small elastic part still takes a visible time */
@@ -60,13 +61,18 @@ function specimen(radius: number, stretch: number, neck: number, broken: boolean
     const dip = neck * Math.exp(-q * q)
     let r = uniform * (1 - dip * 0.55)
     if (Math.abs(y) > halfGauge) r = uniform + (R - uniform) * Math.min(1, (Math.abs(y) - halfGauge) / 0.04)
-    if (broken && Math.abs(y) < 0.004) r = 0.0005
     profile.push([r, y])
   }
   profile.push([R, halfGauge + 0.07])
   profile.push([R, halfGauge + 0.07 + grip])
   profile.push([0, halfGauge + 0.07 + grip])
-  return lathe(profile.map(([r, y]) => [Math.max(0.0004, r), y] as [number, number]), 40)
+  const round = (pts: [number, number][]) => lathe(pts.map(([r, y]) => [Math.max(0.0004, r), y] as [number, number]), 40)
+  if (!broken) return round(profile)
+  // two pieces, the upper one lifted with the crosshead
+  const waist = Math.min(...profile.filter(([, y]) => Math.abs(y) < L / 2).map(([r]) => r))
+  const lower = profile.filter(([, y]) => y < -0.002)
+  const upper = profile.filter(([, y]) => y > 0.002)
+  return merge(round([...lower, [waist, 0], [0, 0]]), xform(round([[0, 0], [waist, 0], ...upper]), mat4.t(0, SNAP, 0)))
 }
 
 export function Tensile3D() {
@@ -74,7 +80,6 @@ export function Tensile3D() {
   const m = matOf(p.material)
   const crosshead = useRef<THREE.Group>(null)
   const piece = useRef<THREE.Mesh>(null)
-  const u = useRef(0)
   const lastBuilt = useRef(-1)
   const radius = 0.018 + (p.d - 6) * 0.0012
 
@@ -92,29 +97,46 @@ export function Tensile3D() {
     }
   }, [])
   const startGeo = useMemo(() => specimen(radius, 0, 0, false), [radius])
-  useEffect(() => {
-    const on = () => {
-      u.current = 0
-      lastBuilt.current = -1
-    }
-    window.addEventListener('tensile-restart', on)
-    return () => window.removeEventListener('tensile-restart', on)
-  }, [])
-
-  useSimFrame((dt) => {
+  useAutoRun(tensileRun, JSON.stringify([p.material, p.d, p.L0]))
+  useRunDriver(
+    tensileRun,
+    PROCEDURE,
+    (f) => {
+      live.u = f
+    },
+    (step, f) => {
+      const st = useTensile.getState()
+      const mt = matOf(st.material)
+      const e = Math.min(strainAt(mt, f), mt.eF * 0.99999)
+      const area = circleArea(st.d / 1000)
+      const force = (stressAt(mt, e) * area) / 1000
+      tensileRun.getState().log([instrument(force, 0.003, step), e * st.L0, e * 100, instrument(stressAt(mt, e) / 1e6, 0.003, step)])
+      if (f >= 1) {
+        live.broken = true
+        lastBuilt.current = -1
+        tensileRun.getState().finish(mt.ductile ? 'Broken, after necking: a ductile, cup-and-cone fracture.' : 'Broken, with no warning and hardly any stretch: a brittle fracture.')
+      }
+    },
+  )
+  useEffect(
+    () =>
+      tensileRun.subscribe((r, prev) => {
+        if ((r.status === 'idle' && prev.status !== 'idle') || (r.status === 'running' && prev.status !== 'running' && r.rows.length === 0)) {
+          live.u = 0
+          live.broken = false
+          lastBuilt.current = -1
+        }
+      }),
+    [],
+  )
+  useSimFrame(() => {
     const s = useTensile.getState()
     const mt = matOf(s.material)
-    if (s.run && !live.broken) u.current = Math.min(1, u.current + dt / s.duration)
-    if (u.current >= 1) {
-      if (!live.broken) lastBuilt.current = -1
-      live.broken = true
-    }
-    live.u = u.current
-    const e = strainAt(mt, u.current)
+    const e = strainAt(mt, live.u)
     // the whole strain is drawn to scale at the plastic end; the elastic part is too small to see true
     const visual = Math.max(e, 0.0005) * (mt.eF > 0.05 ? 1.1 : 12)
     const neck = mt.ductile ? Math.max(0, (e - mt.eU) / (mt.eF - mt.eU)) : 0
-    const key = Math.round(u.current * 240)
+    const key = Math.round(live.u * 240)
     if (piece.current && key !== lastBuilt.current) {
       lastBuilt.current = key
       piece.current.geometry.dispose()
@@ -122,7 +144,7 @@ export function Tensile3D() {
     }
     const gauge = GAUGE_DRAWN * (1 + visual)
     const bottom = -0.42 + 0.01
-    crosshead.current?.position.set(0, bottom + 0.34 + gauge + 0.09, 0)
+    crosshead.current?.position.set(0, bottom + 0.34 + gauge + 0.09 + (live.broken ? SNAP : 0), 0)
     if (piece.current) piece.current.position.y = bottom + 0.17 + gauge / 2
   })
   const lowerY = -0.42
@@ -163,29 +185,34 @@ export function TensilePanel() {
   const s = stressAt(m, e)
   const A = circleArea(p.d / 1000)
   const broke = u >= 1
-  const curve = useMemo(() => {
-    const xs: number[] = []
-    const ys: number[] = []
-    const N = 400
-    const eY = m.yield / m.E
-    for (let i = 0; i <= N; i++) {
-      // well spaced over the elastic part too
-      const q = i / N
-      const x = q < 0.15 ? (q / 0.15) * eY : eY + ((q - 0.15) / 0.85) * (m.eF - eY)
-      xs.push(x * 100)
-      ys.push(stressAt(m, Math.min(x, m.eF * 0.99999)) / 1e6)
-    }
-    return { xs, ys }
-  }, [m])
+  const rows = tensileRun((q) => q.rows)
+  const status = tensileRun((q) => q.status)
+  const strains = rows.map((r) => r[2])
+  const stresses = rows.map((r) => r[3])
+  // Young's modulus from the straight part: the readings up to the yield strain
+  const eY = (m.yield / m.E) * 100
+  const straight = rows.filter((r) => r[2] <= eY * 0.98)
+  const foundE = slopeThroughOrigin(straight.map((r) => r[2] / 100), straight.map((r) => r[3])) / 1000
+  const elastic = rows.filter((r) => r[2] <= eY * 1.6)
   const Af = m.ductile ? A * 0.45 : A * 0.99
   const Lf = p.L0 * (1 + m.eF)
-  const restart = () => {
-    live.u = 0
-    live.broken = false
-    window.dispatchEvent(new Event('tensile-restart'))
-  }
   return (
     <div>
+      <TestBench run={tensileRun} steps={PROCEDURE.steps} title="The test: pull it to failure" head={['Force (kN)', 'Ext. (mm)', 'Strain (%)', 'Stress (MPa)']} format={(r) => [fmt(r[0], 3), fmt(r[1], 3), fmt(r[2], 3), fmt(r[3], 3)]}>
+        {rows.length > 1 ? (
+          <>
+            <Chart data={[strains, stresses]} series={[{ label: 'Stress', color: '#e8794f', width: 2 }]} xLabel="Strain (%)" yLabel="Stress (MPa)" height={135} />
+            {elastic.length > 2 ? <Chart data={[elastic.map((r) => r[2]), elastic.map((r) => r[3])]} series={[{ label: 'Straight part', color: '#6fb3e0', width: 2 }]} xLabel="Strain (%), close up" yLabel="Stress (MPa)" height={105} /> : null}
+            {status === 'done' ? (
+              <div className="mt-1 grid grid-cols-3 gap-1.5">
+                <Readout label="E from the test" value={fmt(foundE, 3)} unit="GPa" tone="accent" />
+                <Readout label="Ultimate found" value={fmt(Math.max(...stresses), 3)} unit="MPa" tone="warn" />
+                <Readout label="Elongation found" value={fmt(strains[strains.length - 1], 3)} unit="%" tone="info" />
+              </div>
+            ) : null}
+          </>
+        ) : null}
+      </TestBench>
       <Section title="Live">
         <div className="grid grid-cols-3 gap-1.5">
           <Readout label="Force" value={fmt((s * A) / 1000, 4)} unit="kN" tone="warn" />
@@ -201,26 +228,18 @@ export function TensilePanel() {
           {TEST_MATERIALS.map((x) => (
             <button
               key={x.id}
-              onClick={() => {
-                set({ material: x.id })
-                restart()
-              }}
+              onClick={() => set({ material: x.id })}
               className={`rounded-md border px-2 py-1 text-left text-[11.5px] ${x.id === p.material ? 'border-accent bg-accent/10 text-ink' : 'border-line-2 text-ink/85 hover:border-accent/50'}`}
             >
               {x.name}
             </button>
           ))}
         </div>
-        <button onClick={restart} className="mt-2 w-full rounded-md bg-accent px-2 py-1 text-[12.5px] font-medium text-accent-ink">
-          Start again with a new specimen
-        </button>
-        <Toggle label="Machine running" checked={p.run} onChange={(run) => set({ run })} />
         <Slider label="Specimen diameter" value={p.d} min={6} max={20} step={1} unit="mm" onChange={(d) => set({ d })} />
         <Slider label="Gauge length" value={p.L0} min={25} max={200} step={5} unit="mm" onChange={(L0) => set({ L0 })} />
         <Note>The extension is drawn exaggerated, more so for brittle materials. The curves are typical shapes for each material, not one specific test.</Note>
       </Section>
-      <Section title="Stress against strain">
-        <Chart data={[curve.xs, curve.ys]} series={[{ label: 'σ', color: '#e8794f', width: 2 }]} xLabel="Strain (%)" yLabel="Stress (MPa)" marker={() => { const q = strainAt(m, live.u); return [q * 100, stressAt(m, Math.min(q, m.eF * 0.99999)) / 1e6] }} height={190} />
+      <Section title="Typical figures for this material">
         <div className="mt-1 grid grid-cols-3 gap-1.5">
           <Readout label="Yield" value={fmt(m.yield / 1e6, 3)} unit="MPa" />
           <Readout label="Ultimate" value={fmt(m.uts / 1e6, 3)} unit="MPa" tone="warn" />

@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { createRun } from '@/lab/run'
 import { pendulumPeriod, suspensionPeriod } from '@/physics/machinedynamics'
 
 export type Mode = 'pendulum' | 'bifilar' | 'trifilar'
@@ -29,7 +30,7 @@ export const useInertia = create<InertiaParams>((set) => ({
   reset: () => set(DEFAULTS),
 }))
 
-export const live = { t: 0 }
+export const live = { t: 0, watch: 0, swings: 0 }
 
 export type InertiaInputs = Omit<InertiaParams, 'set' | 'reset'>
 
@@ -49,3 +50,8 @@ export function truePeriod(p: InertiaInputs) {
 /** five stopwatch timings of 20 swings, with a human's small scatter (fixed, so the table is repeatable) */
 export const REACTION = [0.0031, -0.0018, 0.0012, -0.0026, 0.0009]
 export const timings = (T: number) => REACTION.map((e) => T * (1 + e))
+
+/** the bench test: 20 swings timed, five times. Each timing is compressed into a couple of seconds on screen */
+export const inertiaRun = createRun()
+export const INERTIA_PROC = { steps: 5, moveSeconds: 2.2, dwellSeconds: 0.4 }
+export const conditionsOf = (p: InertiaInputs) => JSON.stringify([p.mode, p.mBar, p.length, p.h, p.L, p.r, p.mPlatform, p.mBlock, p.rBlock, p.block])

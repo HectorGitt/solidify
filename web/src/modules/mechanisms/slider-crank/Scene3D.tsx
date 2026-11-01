@@ -2,11 +2,12 @@ import { useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { useSimFrame } from '@/core/sim'
 import { box, cylinder, mat4, merge, tube, xform } from '@/geometry'
-import { sliderPosition } from '@/physics/linkages'
+import { instrument, useAutoRun, useRunDriver } from '@/lab/run'
+import { deadCentres, sliderDisplacement, sliderPosition, yokeDisplacement } from '@/physics/linkages'
 import { PartLabel } from '@/render/Label'
 import { Part, PartMesh } from '@/render/Part'
 import { BenchPlate, flatBar } from '../_shared/rig'
-import { MM, live, useSlider } from './model'
+import { MM, SLIDER_PROC, live, sliderRun, useSlider } from './model'
 
 export const FLOOR = -0.32
 const axial = mat4.rx(Math.PI / 2)
@@ -64,9 +65,29 @@ export function Slider3D() {
   }, [r, l, e, xMid, xOut, yoke])
 
   const phase = useRef(0.5)
+  useAutoRun(sliderRun, JSON.stringify([mode, rmm, n, emm]))
+  /** from the outer dead centre, as the procedure starts */
+  const startAngle = () => {
+    const st = useSlider.getState()
+    return st.mode === 'yoke' ? 0 : deadCentres({ r: st.r, l: st.n * st.r, e: st.e }).tdc
+  }
+  useRunDriver(
+    sliderRun,
+    SLIDER_PROC,
+    (f) => {
+      phase.current = startAngle() + f * 2 * Math.PI
+    },
+    (step, f) => {
+      const st = useSlider.getState()
+      const a = f * 2 * Math.PI
+      const x = st.mode === 'yoke' ? yokeDisplacement(st.r, a) : sliderDisplacement({ r: st.r, l: st.n * st.r, e: st.e }, a + startAngle())
+      // a linear scale read to about half a millimetre
+      sliderRun.getState().log([f * 360, Math.max(0, instrument(x, 0.006, step)), st.r * (1 - Math.cos(a))])
+    },
+  )
   useSimFrame((dt) => {
     const st = useSlider.getState()
-    phase.current += (st.rpm * 2 * Math.PI * dt) / 60
+    if (sliderRun.getState().status !== 'running') phase.current += (st.rpm * 2 * Math.PI * dt) / 60
     const t = phase.current
     live.theta = t
     refs.crank.current?.rotation.set(0, 0, t)

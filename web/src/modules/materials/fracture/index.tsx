@@ -34,7 +34,7 @@ const scene: SceneDef = {
     {
       title: 'The stress intensity factor',
       body: '**K = Yσ√(πa)** rolls stress and crack size into one number. Y is 1 for a through crack in a wide plate, and 1.12 at an edge. The plate breaks when K reaches the material’s **fracture toughness, K_Ic**.',
-      params: { a: 16 },
+      params: { a: 16, aNow: 16 },
       cites: [M10('Eqns 1–3')],
       check: {
         question: 'A crack’s length is doubled. By how much does the stress the plate can carry fall?',
@@ -46,7 +46,7 @@ const scene: SceneDef = {
     {
       title: 'Yield or fracture?',
       body: 'Small cracks don’t matter: the plate yields first. Above the crossing on the chart the crack takes over, and failure is brittle. Compare tough steel with glass, where a surface scratch is enough.',
-      params: { sigma: 30, KIc: 0.8, a: 0.2, Y: 3000 },
+      params: { sigma: 30, KIc: 0.8, a: 0.2, aNow: 0.2, Y: 3000 },
       cites: [M10('Griffith; material selection')],
     },
   ],

@@ -1,10 +1,12 @@
 import { useMemo, useState } from 'react'
+import { TestBench, slopeThroughOrigin } from '@/lab/run'
+import { Chart } from '@/ui/Chart'
 import { ballsToBalance } from '@/physics/machinedynamics'
 import { Readout, Section, Segmented, Slider, fmt } from '@/ui/controls'
 import { Working, n } from '@/ui/Working'
 import { Note, PresetGrid, Table, type Preset } from '../../elements/_shared/PanelBits'
 import { ExamList } from '../_shared/rig'
-import { DEFAULTS, analyse, deg, useBalance, type Correction } from './model'
+import { BALANCE_PROC, DEFAULTS, analyse, balanceRun, deg, useBalance, type Correction } from './model'
 
 const set = (p: Parameters<ReturnType<typeof useBalance.getState>['set']>[0]) => useBalance.getState().set(p)
 
@@ -74,6 +76,32 @@ function Polygon() {
   )
 }
 
+/** The bench test: bring the shaft up to speed in steps, reading the shaking. */
+function BalanceTest() {
+  const p = useBalance()
+  const rows = balanceRun((s) => s.rows)
+  const status = balanceRun((s) => s.status)
+  const a = useMemo(() => analyse(p), [p])
+  const w2 = rows.map((r) => ((r[0] * 2 * Math.PI) / 60) ** 2)
+  const found = slopeThroughOrigin(w2, rows.map((r) => r[1]))
+  return (
+    <TestBench run={balanceRun} steps={BALANCE_PROC.steps} title="The test: bring it up to speed" head={['Speed (rpm)', 'Bearing force (N)', 'Couple (N·m)']} format={(r) => [fmt(r[0], 3), fmt(r[1], 3), fmt(r[2], 3)]}>
+      {rows.length > 1 ? (
+        <>
+          <Chart data={[rows.map((r) => r[0]), rows.map((r) => r[1]), rows.map((r) => r[2])]} series={[{ label: 'Force', color: '#e8794f', width: 2 }, { label: 'Couple', color: '#6fb3e0', width: 1.5 }]} xLabel="Speed (rpm)" yLabel="N, N·m" height={120} />
+          {status === 'done' ? (
+            <div className="mt-1 grid grid-cols-2 gap-1.5">
+              <Readout label="m r from the test" value={fmt(found, 3)} unit="kg·m" tone="accent" />
+              <Readout label="m r on the rig" value={fmt(a.leftMr, 3)} unit="kg·m" />
+            </div>
+          ) : null}
+          {status === 'done' ? <Note>Force grows with the square of the speed: twice the speed, four times the force.</Note> : null}
+        </>
+      ) : null}
+    </TestBench>
+  )
+}
+
 export function BalancingPanel() {
   const p = useBalance()
   const [preset, setPreset] = useState<string | null>('ex1')
@@ -89,6 +117,7 @@ export function BalancingPanel() {
   )
   return (
     <div>
+      <BalanceTest />
       <Section title="Live">
         <div className="grid grid-cols-3 gap-1.5">
           <Readout label="Left: m r" value={fmt(a.leftMr, 3)} unit="kg·m" tone="warn" />

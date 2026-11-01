@@ -1,12 +1,13 @@
 import { useMemo, useState } from 'react'
+import { TestBench } from '@/lab/run'
 import { genevaAccelerationRatio, genevaAngle, genevaHalfEngagement, genevaLambda, genevaMovingFraction, genevaOutput, genevaStep, genevaVelocityRatio } from '@/physics/linkages'
 import { Chart } from '@/ui/Chart'
 import { Readout, Section, Slider, Toggle, fmt } from '@/ui/controls'
 import { useLive } from '@/ui/live'
 import { Working, n as num } from '@/ui/Working'
-import { Note, PresetGrid, Table, type Preset } from '../../elements/_shared/PanelBits'
+import { Note, PresetGrid, type Preset } from '../../elements/_shared/PanelBits'
 import { ExamList } from '../_shared/rig'
-import { deg, live, rad, useGeneva } from './model'
+import { GENEVA_PROC, deg, genevaRun, live, rad, useGeneva } from './model'
 
 const set = (p: Parameters<ReturnType<typeof useGeneva.getState>['set']>[0]) => useGeneva.getState().set(p)
 
@@ -61,13 +62,20 @@ function Charts() {
   )
 }
 
+/** The bench test: set the input every 15°, and read the output as the wheel steps. */
 function Readings() {
-  const n = useGeneva((s) => s.slots)
-  const rows = Array.from({ length: 13 }, (_, i) => i * 15).map((a) => [`${a}°`, `${fmt(deg(genevaAngle(n, rad(a))), 3)}°`])
+  const rows = genevaRun((s) => s.rows)
+  const status = genevaRun((s) => s.status)
+  const out = rows.map((r) => r[1])
   return (
-    <Section title="Experiment: input every 15°">
-      <Table head={['Input', 'Output']} rows={rows} />
-    </Section>
+    <TestBench run={genevaRun} steps={GENEVA_PROC.steps} title="The test: input every 15°" head={['Input (°)', 'Output (°)']} format={(r) => [fmt(r[0], 3), fmt(r[1], 3)]}>
+      {rows.length > 1 ? (
+        <>
+          <Chart data={[rows.map((r) => r[0]), out]} series={[{ label: 'Output', color: '#6fb3e0', width: 2 }]} xLabel="Input angle (°)" yLabel="Output angle (°)" height={120} />
+          {status === 'done' ? <Note>The output rose by {fmt(Math.max(...out), 3)}° in this half turn, one full step, and then stood still: stop-start motion from a steady input.</Note> : null}
+        </>
+      ) : null}
+    </TestBench>
   )
 }
 
@@ -80,6 +88,7 @@ export function GenevaPanel() {
   const half = deg(genevaHalfEngagement(n))
   return (
     <div>
+      <Readings />
       <Live />
       <Section title="The unit">
         <Slider label="Number of slots" value={n} min={3} max={12} step={1} onChange={(slots) => set({ slots })} />
@@ -91,7 +100,6 @@ export function GenevaPanel() {
         <PresetGrid presets={PRESETS} active={preset} onPick={setPreset} />
       </Section>
       <Charts />
-      <Readings />
       <Section title="Working">
         <Working
           steps={[

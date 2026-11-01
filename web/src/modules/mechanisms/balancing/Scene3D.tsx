@@ -2,9 +2,10 @@ import { useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { useSimFrame } from '@/core/sim'
 import { box, cylinder, mat4, merge, tube, xform } from '@/geometry'
+import { instrument, useAutoRun, useRunDriver } from '@/lab/run'
 import { PartLabel } from '@/render/Label'
 import { Part, PartMesh } from '@/render/Part'
-import { SHAFT, analyse, live, useBalance } from './model'
+import { BALANCE_PROC, SHAFT, analyse, balanceRun, live, useBalance } from './model'
 
 export const FLOOR = -0.42
 const MM = 0.0016
@@ -28,6 +29,21 @@ export function Balancing3D() {
   const shaft = useRef<THREE.Group>(null)
   const plate = useRef<THREE.Group>(null)
   const phase = useRef(0)
+  useAutoRun(balanceRun, JSON.stringify([p.rows, p.correction, p.rpm, p.rb]))
+  useRunDriver(
+    balanceRun,
+    BALANCE_PROC,
+    (f) => {
+      live.f = f
+    },
+    (step, f) => {
+      const st = useBalance.getState()
+      const q = analyse(st)
+      const rpm = st.rpm * f
+      const w = (rpm * 2 * Math.PI) / 60
+      balanceRun.getState().log([rpm, instrument(q.leftMr * w * w, 0.02, step), instrument(q.couple * w * w, 0.02, step + 30)])
+    },
+  )
 
   const geo = useMemo(
     () => ({
@@ -53,7 +69,9 @@ export function Balancing3D() {
 
   useSimFrame((dt) => {
     const st = useBalance.getState()
-    const w = (st.rpm * 2 * Math.PI) / 60
+    // once a test has been run the shaft stays at speed; before it, at rest
+    if (balanceRun.getState().status === 'idle') live.f = 0
+    const w = ((st.rpm * live.f * 2 * Math.PI) / 60)
     phase.current += w * dt
     const t = phase.current
     live.theta = t

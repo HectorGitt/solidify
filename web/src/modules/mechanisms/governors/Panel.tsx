@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react'
+import { TestBench } from '@/lab/run'
 import { hartnell, porter, porterAlphaAfterLift, radToRpm, rpmToRad, sensitivity } from '@/physics/machinedynamics'
 import { Chart } from '@/ui/Chart'
 import { Readout, Section, Segmented, Slider, fmt } from '@/ui/controls'
 import { Working, n } from '@/ui/Working'
 import { Note, PresetGrid, type Preset } from '../../elements/_shared/PanelBits'
 import { ExamList } from '../_shared/rig'
-import { DEFAULTS, controllingCurve, deg, equilibrium, rad, speedRange, useGov, type Kind } from './model'
+import { DEFAULTS, GOV_PROC, controllingCurve, deg, equilibrium, govRun, rad, speedRange, useGov, type Kind } from './model'
 
 const set = (p: Parameters<ReturnType<typeof useGov.getState>['set']>[0]) => useGov.getState().set(p)
 
@@ -54,6 +55,29 @@ function GovWorking() {
   )
 }
 
+/** The bench test: raise the speed in steps, reading the sleeve at each. */
+function GovernorTest() {
+  const rows = govRun((s) => s.rows)
+  const status = govRun((s) => s.status)
+  const speeds = rows.map((r) => r[0])
+  return (
+    <TestBench run={govRun} steps={GOV_PROC.steps} title="The test: raise the speed" head={['Speed (rpm)', 'Sleeve lift (mm)', 'Ball radius (mm)']} format={(r) => [fmt(r[0], 4), fmt(r[1], 3), fmt(r[2], 4)]}>
+      {rows.length > 1 ? (
+        <>
+          <Chart data={[speeds, rows.map((r) => r[1])]} series={[{ label: 'Lift', color: '#e8794f', width: 2 }]} xLabel="Speed (rpm)" yLabel="Sleeve lift (mm)" height={120} />
+          {status === 'done' ? (
+            <div className="mt-1 grid grid-cols-3 gap-1.5">
+              <Readout label="Sleeve moved" value={fmt(Math.max(...rows.map((r) => r[1])), 3)} unit="mm" tone="accent" />
+              <Readout label="Up to" value={fmt(Math.max(...speeds), 4)} unit="rpm" />
+              <Readout label="Sensitivity" value={fmt(sensitivity(Math.min(...speeds), Math.max(...speeds)), 3)} tone="info" />
+            </div>
+          ) : null}
+        </>
+      ) : null}
+    </TestBench>
+  )
+}
+
 export function GovernorPanel() {
   const p = useGov()
   const [preset, setPreset] = useState<string | null>('porter')
@@ -62,6 +86,7 @@ export function GovernorPanel() {
   const curve = useMemo(() => controllingCurve(p), [p])
   return (
     <div>
+      <GovernorTest />
       <Section title="Live">
         <div className="grid grid-cols-3 gap-1.5">
           <Readout label="Ball radius" value={fmt(s.r, 4)} unit="mm" />

@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from 'react'
+import { TestBench, createRun, instrument, useAutoRun, useRunDriver } from '@/lab/run'
 import * as THREE from 'three'
 import { create } from 'zustand'
 import { useSimFrame } from '@/core/sim'
@@ -34,6 +35,22 @@ interface Params {
 export const DEFAULTS = { ends: 'pinned-pinned' as ColumnEnds, L: 2.5, D: 50, d: 30, hollow: false, E: 200, sigmaP: 210, loadPct: 60 }
 export const useColumn = create<Params>((set) => ({ ...DEFAULTS, set: (p) => set(p), reset: () => set(DEFAULTS) }))
 const set = (p: Partial<Params>) => useColumn.getState().set(p)
+
+const columnRun = createRun()
+const PROCEDURE = { steps: 12, moveSeconds: 0.5, dwellSeconds: 0.25 }
+/** every real column starts slightly out of straight: about one part in a thousand */
+const crookedness = (L: number) => L / 1000
+/** the bow under load: the initial crookedness, amplified as the load nears the critical load */
+export const bowAt = (L: number, ratio: number) => (crookedness(L) * ratio) / (1 - ratio)
+/** Southwell: plot δ against δ/P, and the slope is the critical load, without ever breaking the column */
+export function southwell(P: number[], d: number[]) {
+  const x = d.map((v, i) => v / P[i])
+  const mx = x.reduce((a, b) => a + b, 0) / x.length
+  const my = d.reduce((a, b) => a + b, 0) / d.length
+  const top = x.reduce((s, v, i) => s + (v - mx) * (d[i] - my), 0)
+  const bot = x.reduce((s, v) => s + (v - mx) ** 2, 0)
+  return bot > 0 ? top / bot : 0
+}
 
 const analyse = (p: Params) => {
   const D = p.D / 1000
@@ -89,6 +106,24 @@ function columnGeometry(ends: ColumnEnds, radius: number, bow: number, N = 48) {
 export function Column3D() {
   const p = useColumn()
   const a = useMemo(() => analyse(p), [p])
+  useAutoRun(columnRun, JSON.stringify([p.ends, p.L, p.D, p.d, p.hollow, p.E, p.sigmaP]))
+  useRunDriver(
+    columnRun,
+    PROCEDURE,
+    (f) => {
+      if (Math.abs(f * 100 - useColumn.getState().loadPct) >= 1 || f === 1) useColumn.getState().set({ loadPct: f * 100 })
+    },
+    (step, f) => {
+      const st = useColumn.getState()
+      const q = analyse(st)
+      const load = f * q.Pcr
+      if (f < 1) {
+        columnRun.getState().log([load / 1000, instrument(bowAt(st.L, f) * 1000, 0.01, step)])
+        return
+      }
+      columnRun.getState().fail(q.valid ? `It buckled at ${(load / 1000).toFixed(1)} kN: the bow ran away, far below the ${(q.Pc / 1000).toFixed(0)} kN that would crush it.` : `Too short to buckle: it reached the material’s limit and crushed at ${(load / 1000).toFixed(1)} kN.`)
+    },
+  )
   const ratio = (p.loadPct / 100) * 1
   const load = ratio * a.Pcr
   // the bow grows as the load nears the critical load: amplification 1/(1 − P/Pcr), and it buckles beyond
@@ -151,6 +186,33 @@ const PRESETS: Preset[] = [
   { id: 'free', label: 'Flagpole: fixed and free', note: 'The weakest arrangement: effective length twice the real one, so a quarter of the pinned load.', apply: () => set({ ...DEFAULTS, ends: 'fixed-free' }) },
 ]
 
+/** The bench test: load it in steps, reading the sideways bow at mid-height. */
+function ColumnTest() {
+  const p = useColumn()
+  const a = analyse(p)
+  const rows = columnRun((s) => s.rows)
+  const status = columnRun((s) => s.status)
+  const loads = rows.map((r) => r[0])
+  const bows = rows.map((r) => r[1])
+  const fit = southwell(loads, bows)
+  return (
+    <TestBench run={columnRun} steps={PROCEDURE.steps} title="The test: load it until it fails" head={['Load (kN)', 'Bow (mm)']} format={(r) => [fmt(r[0], 4), fmt(r[1], 3)]}>
+      {rows.length > 1 ? (
+        <>
+          <Chart data={[[0, ...bows], [0, ...loads]]} series={[{ label: 'Load', color: '#e8794f', width: 2 }]} xLabel="Bow at mid-height (mm)" yLabel="Load (kN)" height={125} />
+          {status === 'failed' && a.valid && fit > 0 ? (
+            <div className="mt-1 grid grid-cols-2 gap-1.5">
+              <Readout label="Load from Southwell" value={fmt(fit, 4)} unit="kN" tone="accent" />
+              <Readout label="Euler’s load" value={fmt(a.Pe / 1000, 4)} unit="kN" />
+            </div>
+          ) : null}
+          <Note>The bow barely shows at first, then runs away near the limit. Plotting bow against bow ÷ load gives the critical load as a slope, which is how it is found without breaking anything.</Note>
+        </>
+      ) : null}
+    </TestBench>
+  )
+}
+
 export function ColumnPanel() {
   const p = useColumn()
   const [preset, setPreset] = useState<string | null>(null)
@@ -163,6 +225,7 @@ export function ColumnPanel() {
   }, [p.E, p.ends, a.I, a.Pc])
   return (
     <div>
+      <ColumnTest />
       <Section title="Live">
         <div className="grid grid-cols-3 gap-1.5">
           <Readout label="Load" value={fmt(P / 1000, 4)} unit="kN" />
@@ -172,10 +235,8 @@ export function ColumnPanel() {
           <Readout label="Euler valid from" value={fmt(a.limit, 3)} />
           <Readout label="Fails by" value={a.valid ? 'buckling' : 'crushing'} tone={a.valid ? 'warn' : 'info'} />
         </div>
-        {p.loadPct >= 100 ? <Note tone="warn">At or beyond the critical load: the column has failed.</Note> : null}
       </Section>
       <Section title="The column">
-        <Slider label="Load, % of the failure load" value={p.loadPct} min={0} max={105} step={1} unit="%" onChange={(loadPct) => set({ loadPct })} />
         <Segmented<ColumnEnds>
           value={p.ends}
           onChange={(ends) => set({ ends })}

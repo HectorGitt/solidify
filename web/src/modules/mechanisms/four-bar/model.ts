@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { createRun } from '@/lab/run'
 import { classify, crankRange, solve, transmissionLimits, type FourBar, type LinkageKind, type Pose } from '@/physics/fourbar'
 
 export const rad = (d: number) => (d * Math.PI) / 180
@@ -81,3 +82,12 @@ export function limitsDeg(l: FourBar) {
 }
 
 export { solve }
+
+/** the bench test: the crank is turned through its range in 15° steps, and the output read at each */
+export const fourBarRun = createRun()
+export const FOUR_BAR_PROC = { steps: 24, moveSeconds: 0.22, dwellSeconds: 0.08 }
+/** the crank's angle at a fraction of the test: right round if it can, else across its working range */
+export function sweepAngle(l: FourBar, f: number) {
+  const r = crankRange(l)
+  return r ? r.lo + (r.hi - r.lo) * f : f * 2 * Math.PI
+}

@@ -2,10 +2,11 @@ import { useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { useSimFrame } from '@/core/sim'
 import { box, cylinder, mat4, merge, tube, xform } from '@/geometry'
+import { useAutoRun, useRunDriver } from '@/lab/run'
 import { PartLabel } from '@/render/Label'
 import { Part, PartMesh } from '@/render/Part'
 import { placeBetween, unitRod } from '../_shared/strut'
-import { live, truePeriod, useInertia } from './model'
+import { INERTIA_PROC, REACTION, conditionsOf, inertiaRun, live, truePeriod, useInertia } from './model'
 
 export const FLOOR = -1.02
 const TOP = 0.86
@@ -38,6 +39,24 @@ export function Inertia3D() {
   const rod = useMemo(() => unitRod(0.0028), [])
 
   const platY = TOP - p.L
+  useAutoRun(inertiaRun, conditionsOf(p))
+  useRunDriver(
+    inertiaRun,
+    INERTIA_PROC,
+    (f) => {
+      // the stopwatch runs on through each set of 20
+      const within = (f * INERTIA_PROC.steps) % 1
+      const T = truePeriod(useInertia.getState())
+      live.watch = within * 20 * T
+      live.swings = Math.floor(within * 20)
+    },
+    (step) => {
+      const T = truePeriod(useInertia.getState()) * (1 + REACTION[(step - 1) % REACTION.length])
+      live.watch = 20 * T
+      live.swings = 20
+      inertiaRun.getState().log([step, 20 * T, T])
+    },
+  )
 
   useSimFrame((_dt, t) => {
     const st = useInertia.getState()

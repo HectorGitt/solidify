@@ -1,7 +1,7 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { TestBench, createRun, instrument, useAutoRun, useRunDriver } from '@/lab/run'
 import * as THREE from 'three'
 import { create } from 'zustand'
-import { useSimFrame } from '@/core/sim'
 import { box, cylinder, mat4, merge, tube, xform } from '@/geometry'
 import { circleArea, compositeBar, railGapAt, railStressAt, railsTouchAt, tubeArea } from '@/physics/strength'
 import { PartLabel } from '@/render/Label'
@@ -33,25 +33,32 @@ interface Params {
   EOut: number
   P: number
   L: number
+  /** how far the test has got: moved by the test */
+  f: number
   set: (p: Partial<Params>) => void
   reset: () => void
 }
 
-export const DEFAULTS = { mode: 'rails' as Mode, T: 15, T0: 15, gap: 3.2, railL: 18, alpha: 11.7, Er: 207, dIn: 50, dOut: 75, EIn: 200, EOut: 97, P: 300, L: 254 }
+export const DEFAULTS = { mode: 'rails' as Mode, T: 45, T0: 15, gap: 3.2, railL: 18, alpha: 11.7, Er: 207, dIn: 50, dOut: 75, EIn: 200, EOut: 97, P: 300, L: 254, f: 0 }
 export const useAxial = create<Params>((set) => ({ ...DEFAULTS, set: (p) => set(p), reset: () => set(DEFAULTS) }))
 const set = (p: Partial<Params>) => useAxial.getState().set(p)
 
+const axialRun = createRun()
+const PROCEDURE = { steps: 10, moveSeconds: 0.55, dwellSeconds: 0.25 }
+/** the temperature the test has reached, from the laying temperature to the one set */
+const tempNow = (p: Params, f = p.f) => p.T0 + (p.T - p.T0) * f
 const rail = (p: Params) => ({ alpha: p.alpha * 1e-6, L: p.railL, gap: p.gap / 1000, T0: p.T0, E: p.Er * 1e9 })
 
 function Rails() {
   const p = useAxial()
   const r = rail(p)
-  const stress = railStressAt(r, p.T)
-  const gap = railGapAt(r, p.T)
+  const T = tempNow(p)
+  const stress = railStressAt(r, T)
+  const gap = railGapAt(r, T)
   const DRAWN = 0.62
   // the gap is drawn far larger than life, and its ends meet exactly when the real ones do
   const gapDrawn = (gap / Math.max(r.gap * 3, 1e-6)) * 0.22
-  const heat = Math.max(0, Math.min(1, (p.T + 10) / 60))
+  const heat = Math.max(0, Math.min(1, (T + 10) / 60))
   const colour = useMemo(() => (heat < 0.5 ? new THREE.Color('#2f6fd0').lerp(new THREE.Color('#9aa3ab'), heat * 2) : new THREE.Color('#9aa3ab').lerp(new THREE.Color('#d0452c'), heat * 2 - 1)), [heat])
   const buckle = stress / 1e6
   const profile = useMemo(() => {
@@ -109,7 +116,7 @@ function CompositeBar() {
   const h = p.L * 0.0028
   const bottom = -h / 2 - 0.025
   // the plates move apart, far more than life, as the load comes on
-  const c = compositeBar({ A1: circleArea(p.dIn / 1000), E1: p.EIn * 1e9, A2: tubeArea(p.dOut / 1000, p.dIn / 1000), E2: p.EOut * 1e9 }, p.P * 1000, p.L / 1000)
+  const c = compositeBar({ A1: circleArea(p.dIn / 1000), E1: p.EIn * 1e9, A2: tubeArea(p.dOut / 1000, p.dIn / 1000), E2: p.EOut * 1e9 }, p.P * p.f * 1000, p.L / 1000)
   const lift = Math.min(0.03, c.delta * 60)
   const offset = useRef(0)
   offset.current = lift
@@ -131,8 +138,8 @@ function CompositeBar() {
           <PartMesh geometry={g.plate} />
         </Part>
       </group>
-      <ForceArrow color="#d0631c" spec={() => ({ origin: new THREE.Vector3(0, h / 2 + 0.05 + offset.current, 0), dir: new THREE.Vector3(0, 1, 0), length: 0.1 + Math.min(0.2, p.P * 0.0006), label: `${p.P} kN`, visible: true })} radius={0.012} />
-      <ForceArrow color="#d0631c" spec={() => ({ origin: new THREE.Vector3(0, bottom - 0.025, 0), dir: new THREE.Vector3(0, -1, 0), length: 0.1 + Math.min(0.2, p.P * 0.0006), visible: true })} radius={0.012} />
+      <ForceArrow color="#d0631c" spec={() => ({ origin: new THREE.Vector3(0, h / 2 + 0.05 + offset.current, 0), dir: new THREE.Vector3(0, 1, 0), length: 0.03 + Math.min(0.2, p.P * p.f * 0.0006), label: `${(p.P * p.f).toFixed(0)} kN`, visible: true })} radius={0.012} />
+      <ForceArrow color="#d0631c" spec={() => ({ origin: new THREE.Vector3(0, bottom - 0.025, 0), dir: new THREE.Vector3(0, -1, 0), length: 0.03 + Math.min(0.2, p.P * p.f * 0.0006), visible: true })} radius={0.012} />
       <PartLabel partId="tube" at={[(p.dOut / 2) * k + 0.05, 0.05, 0.05]} />
     </group>
   )
@@ -140,7 +147,33 @@ function CompositeBar() {
 
 export function Axial3D() {
   const mode = useAxial((s) => s.mode)
-  useSimFrame(() => {})
+  const p = useAxial()
+  useAutoRun(axialRun, JSON.stringify([p.mode, p.T, p.T0, p.gap, p.railL, p.alpha, p.Er, p.dIn, p.dOut, p.EIn, p.EOut, p.P, p.L]))
+  useRunDriver(
+    axialRun,
+    PROCEDURE,
+    (f) => {
+      if (Math.abs(f - useAxial.getState().f) >= 0.01 || f === 1) useAxial.getState().set({ f })
+    },
+    (step, f) => {
+      const st = useAxial.getState()
+      if (st.mode === 'rails') {
+        const r = rail(st)
+        const T = tempNow(st, f)
+        axialRun.getState().log([T, instrument(railGapAt(r, T) * 1000, 0.01, step), instrument(railStressAt(r, T) / 1e6, 0.015, step + 30)])
+      } else {
+        const c = compositeBar({ A1: circleArea(st.dIn / 1000), E1: st.EIn * 1e9, A2: tubeArea(st.dOut / 1000, st.dIn / 1000), E2: st.EOut * 1e9 }, st.P * f * 1000, st.L / 1000)
+        axialRun.getState().log([st.P * f, instrument(c.s1 / 1e6, 0.012, step), instrument(c.s2 / 1e6, 0.012, step + 30), instrument(c.delta * 1000, 0.01, step + 60)])
+      }
+    },
+  )
+  useEffect(
+    () =>
+      axialRun.subscribe((r, prev) => {
+        if ((r.status === 'idle' && prev.status !== 'idle') || (r.status === 'running' && prev.status !== 'running' && r.rows.length === 0)) useAxial.getState().set({ f: 0 })
+      }),
+    [],
+  )
   return mode === 'rails' ? <Rails /> : <CompositeBar />
 }
 
@@ -150,6 +183,30 @@ const PRESETS: Preset[] = [
   { id: 'pole', label: 'Flag pole', note: 'A 5 m aluminium pole, 20 °C to −5 °C, with α = 23×10⁻⁶ /°C, shortens by 2.875 mm. Nothing holds it, so there is no stress at all.', apply: () => set({ ...DEFAULTS, railL: 5, alpha: 23, T0: 20, T: -5, Er: 70, gap: 50 }) },
   { id: 'composite', label: 'Steel rod in brass tube', note: 'Ø50 steel in a 50/75 brass tube, 254 mm long, 300 kN: 95.1 MPa in the steel, 46.1 MPa in the brass, and 0.121 mm of stretch.', apply: () => set({ ...DEFAULTS, mode: 'composite' }) },
 ]
+
+/** The bench test: warm the rails, or pull the bar, in steps. */
+function AxialTest() {
+  const mode = useAxial((s) => s.mode)
+  const rows = axialRun((s) => s.rows)
+  const rails = mode === 'rails'
+  return (
+    <TestBench
+      run={axialRun}
+      steps={PROCEDURE.steps}
+      title={rails ? 'The test: warm the rails' : 'The test: pull the bar'}
+      head={rails ? ['Temp (°C)', 'Gap (mm)', 'Stress (MPa)'] : ['Pull (kN)', 'Rod (MPa)', 'Tube (MPa)', 'Stretch (mm)']}
+      format={(r) => (rails ? [fmt(r[0], 3), fmt(r[1], 3), fmt(r[2], 3)] : [fmt(r[0], 3), fmt(r[1], 3), fmt(r[2], 3), fmt(r[3], 3)])}
+    >
+      {rows.length > 1 && rows[0].length === (rails ? 3 : 4) ? (
+        rails ? (
+          <Chart data={[rows.map((r) => r[0]), rows.map((r) => r[1]), rows.map((r) => r[2])]} series={[{ label: 'Gap (mm)', color: '#6fb3e0', width: 2 }, { label: 'Stress (MPa)', color: '#e8794f', width: 2 }]} xLabel="Temperature (°C)" yLabel="mm, MPa" height={120} />
+        ) : (
+          <Chart data={[rows.map((r) => r[0]), rows.map((r) => r[1]), rows.map((r) => r[2])]} series={[{ label: 'Rod', color: '#e8794f', width: 2 }, { label: 'Tube', color: '#6fb3e0', width: 2 }]} xLabel="Pull (kN)" yLabel="Stress (MPa)" height={120} />
+        )
+      ) : null}
+    </TestBench>
+  )
+}
 
 export function AxialPanel() {
   const p = useAxial()
@@ -164,12 +221,14 @@ export function AxialPanel() {
   const touch = railsTouchAt(r)
   return (
     <div>
+      <AxialTest />
       {p.mode === 'rails' ? (
         <Section title="Live">
           <div className="grid grid-cols-3 gap-1.5">
-            <Readout label="Gap" value={fmt(railGapAt(r, p.T) * 1000, 3)} unit="mm" tone="accent" />
+            <Readout label="Temperature" value={fmt(tempNow(p), 3)} unit="°C" />
+            <Readout label="Gap" value={fmt(railGapAt(r, tempNow(p)) * 1000, 3)} unit="mm" tone="accent" />
             <Readout label="Touch at" value={fmt(touch, 3)} unit="°C" />
-            <Readout label="Stress" value={fmt(railStressAt(r, p.T) / 1e6, 3)} unit="MPa" tone="warn" />
+            <Readout label="Stress" value={fmt(railStressAt(r, tempNow(p)) / 1e6, 3)} unit="MPa" tone="warn" />
           </div>
         </Section>
       ) : (
@@ -195,7 +254,7 @@ export function AxialPanel() {
         />
         {p.mode === 'rails' ? (
           <>
-            <Slider label="Temperature now" value={p.T} min={-30} max={60} step={1} unit="°C" onChange={(T) => set({ T })} />
+            <Slider label="Warm to" value={p.T} min={-30} max={60} step={1} unit="°C" onChange={(T) => set({ T })} />
             <Slider label="Laid at" value={p.T0} min={-10} max={40} step={1} unit="°C" onChange={(T0) => set({ T0 })} />
             <Slider label="Gap when laid" value={p.gap} min={0} max={50} step={0.1} unit="mm" onChange={(gap) => set({ gap })} />
             <Slider label="Length of each rail" value={p.railL} min={1} max={30} step={1} unit="m" onChange={(railL) => set({ railL })} />
@@ -205,7 +264,7 @@ export function AxialPanel() {
           </>
         ) : (
           <>
-            <Slider label="Pull P" value={p.P} min={10} max={1000} step={10} unit="kN" onChange={(P) => set({ P })} />
+            <Slider label="Full pull P" value={p.P} min={10} max={1000} step={10} unit="kN" onChange={(P) => set({ P })} />
             <Slider label="Length" value={p.L} min={100} max={400} step={2} unit="mm" onChange={(L) => set({ L })} />
             <Slider label="Rod diameter" value={p.dIn} min={20} max={80} step={1} unit="mm" onChange={(dIn) => set({ dIn, dOut: Math.max(p.dOut, dIn + 5) })} />
             <Slider label="Tube outer diameter" value={p.dOut} min={p.dIn + 5} max={120} step={1} unit="mm" onChange={(dOut) => set({ dOut })} />
@@ -219,8 +278,8 @@ export function AxialPanel() {
       </Section>
       {p.mode === 'rails' ? (
         <Section title="Against temperature">
-          <Chart data={[curve.T, curve.g]} series={[{ label: 'Gap', color: '#6fb3e0', width: 2 }]} xLabel="Temperature (°C)" yLabel="Gap (mm)" marker={() => [p.T, railGapAt(r, p.T) * 1000]} height={125} />
-          <Chart data={[curve.T, curve.s]} series={[{ label: 'Stress', color: '#e8794f', width: 2 }]} xLabel="Temperature (°C)" yLabel="Compressive stress (MPa)" marker={() => [p.T, railStressAt(r, p.T) / 1e6]} height={125} />
+          <Chart data={[curve.T, curve.g]} series={[{ label: 'Gap', color: '#6fb3e0', width: 2 }]} xLabel="Temperature (°C)" yLabel="Gap (mm)" marker={() => [tempNow(p), railGapAt(r, tempNow(p)) * 1000]} height={125} />
+          <Chart data={[curve.T, curve.s]} series={[{ label: 'Stress', color: '#e8794f', width: 2 }]} xLabel="Temperature (°C)" yLabel="Compressive stress (MPa)" marker={() => [tempNow(p), railStressAt(r, tempNow(p)) / 1e6]} height={125} />
           <Note>Until the gap closes there is no stress at all. Stress only comes when the growth is stopped.</Note>
         </Section>
       ) : null}

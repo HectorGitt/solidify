@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { TestBench, createRun, instrument, useAutoRun, useRunDriver } from '@/lab/run'
 import * as THREE from 'three'
 import { create } from 'zustand'
 import { box, extrude, mat4, merge, xform } from '@/geometry'
@@ -25,15 +26,19 @@ interface Params {
   a: number
   KIc: number
   Y: number
+  /** the crack as it has grown so far, mm: moved by the test */
+  aNow: number
   set: (p: Partial<Params>) => void
   reset: () => void
 }
 
-export const DEFAULTS = { kind: 'centre' as CrackKind, sigma: 200, a: 10, KIc: 50, Y: 500 }
+export const DEFAULTS = { kind: 'centre' as CrackKind, sigma: 200, a: 10, KIc: 50, Y: 500, aNow: 10 }
 export const useFracture = create<Params>((set) => ({ ...DEFAULTS, set: (p) => set(p), reset: () => set(DEFAULTS) }))
 const set = (p: Partial<Params>) => useFracture.getState().set(p)
 
 /** as in the notes: 1 for a through crack in a wide plate, 1.12 at an edge */
+const fractureRun = createRun()
+const PROCEDURE = { steps: 12, moveSeconds: 0.5, dwellSeconds: 0.15 }
 const factor = (k: CrackKind) => (k === 'centre' ? 1 : 1.12)
 
 /** the plate, with a sharp crack cut out of it: its length drawn in proportion, up to half the plate */
@@ -68,8 +73,34 @@ function plateShape(kind: CrackKind, aDrawn: number) {
 
 export function Fracture3D() {
   const p = useFracture()
-  const aDrawn = Math.max(0.01, Math.min(W * 0.45, (p.a / 100) * W * 0.9))
-  const K = stressIntensity(factor(p.kind), p.sigma * 1e6, p.a / 1000) / 1e6
+  const aDrawn = Math.max(0.01, Math.min(W * 0.45, (p.aNow / 100) * W * 0.9))
+  const K = stressIntensity(factor(p.kind), p.sigma * 1e6, p.aNow / 1000) / 1e6
+  /** the crack is grown from its start until it reaches the size this plate can't carry, plus a little */
+  const grown = (st: Params, f: number) => st.a + (Math.max(st.a, criticalCrack(factor(st.kind), st.KIc * 1e6, st.sigma * 1e6) * 1000 * 1.001) - st.a) * f
+  useAutoRun(fractureRun, JSON.stringify([p.kind, p.sigma, p.a, p.KIc, p.Y]))
+  useRunDriver(
+    fractureRun,
+    PROCEDURE,
+    (f) => {
+      const st = useFracture.getState()
+      const aNow = grown(st, f)
+      if (Math.abs(aNow - st.aNow) >= Math.max(0.02, st.a * 0.01) || f === 1) st.set({ aNow })
+    },
+    (step, f) => {
+      const st = useFracture.getState()
+      const a = grown(st, f)
+      const k = stressIntensity(factor(st.kind), st.sigma * 1e6, a / 1000) / 1e6
+      fractureRun.getState().log([a, instrument(k, 0.005, step)])
+      if (k >= st.KIc) fractureRun.getState().fail(`K reached the ${st.KIc} MPa√m toughness with the crack at ${a.toFixed(2)} mm: the plate has fractured.`)
+    },
+  )
+  useEffect(
+    () =>
+      fractureRun.subscribe((r, prev) => {
+        if ((r.status === 'idle' && prev.status !== 'idle') || (r.status === 'running' && prev.status !== 'running' && r.rows.length === 0)) useFracture.getState().set({ aNow: useFracture.getState().a })
+      }),
+    [],
+  )
   const broken = K >= p.KIc
   const geo = useMemo(
     () => ({
@@ -114,25 +145,37 @@ export function Fracture3D() {
 const PRESETS: Preset[] = [
   { id: 'steel', label: 'Tough steel', note: 'K_Ic of 150 MPa√m: at 400 MPa it tolerates a crack of about 45 mm, well beyond what inspection would miss.', apply: () => set({ ...DEFAULTS, sigma: 400, KIc: 150, Y: 800 }) },
   { id: 'alu', label: 'Aerospace aluminium', note: 'K_Ic of about 25 MPa√m: much less tolerant, so cracks are hunted down in service.', apply: () => set({ ...DEFAULTS, sigma: 200, KIc: 25, Y: 450 }) },
-  { id: 'glass', label: 'Glass', note: 'K_Ic below 1 MPa√m: a scratch is enough to start a break, which is why a glazier scores it first.', apply: () => set({ ...DEFAULTS, sigma: 30, KIc: 0.8, a: 0.2, Y: 3000 }) },
+  { id: 'glass', label: 'Glass', note: 'K_Ic below 1 MPa√m: a scratch is enough to start a break, which is why a glazier scores it first.', apply: () => set({ ...DEFAULTS, sigma: 30, KIc: 0.8, a: 0.2, aNow: 0.2, Y: 3000 }) },
   { id: 'edge', label: 'Edge crack', note: 'The same crack at an edge has 12 % more K, with Y = 1.12: an edge has less material to hold it closed.', apply: () => set({ ...DEFAULTS, kind: 'edge' }) },
 ]
+
+/** The bench test: hold the stress, and let the crack grow until the plate goes. */
+function FractureTest() {
+  const p = useFracture()
+  const rows = fractureRun((s) => s.rows)
+  return (
+    <TestBench run={fractureRun} steps={PROCEDURE.steps} title="The test: grow the crack" head={['Crack a (mm)', 'K (MPa√m)']} format={(r) => [fmt(r[0], 3), fmt(r[1], 3)]}>
+      {rows.length > 1 ? <Chart data={[rows.map((r) => r[0]), rows.map((r) => r[1]), rows.map(() => p.KIc)]} series={[{ label: 'K', color: '#e8794f', width: 2 }, { label: 'Toughness', color: '#6fb3e0', width: 1.5 }]} xLabel="Crack size a (mm)" yLabel="K (MPa√m)" height={120} /> : null}
+    </TestBench>
+  )
+}
 
 export function FracturePanel() {
   const p = useFracture()
   const [preset, setPreset] = useState<string | null>(null)
   const Y = factor(p.kind)
-  const K = stressIntensity(Y, p.sigma * 1e6, p.a / 1000) / 1e6
-  const sc = criticalStress(Y, p.KIc * 1e6, p.a / 1000) / 1e6
+  const K = stressIntensity(Y, p.sigma * 1e6, p.aNow / 1000) / 1e6
+  const sc = criticalStress(Y, p.KIc * 1e6, p.aNow / 1000) / 1e6
   const ac = criticalCrack(Y, p.KIc * 1e6, p.sigma * 1e6) * 1000
   const failsBy = K >= p.KIc ? 'broken' : p.sigma >= p.Y ? 'yielding' : 'holding'
   const curve = useMemo(() => {
     const a = Array.from({ length: 120 }, (_, i) => 0.2 + (i / 119) * 79.8)
     return { a, s: a.map((x) => Math.min(p.Y * 1.3, criticalStress(Y, p.KIc * 1e6, x / 1000) / 1e6)), y: a.map(() => p.Y) }
   }, [Y, p.KIc, p.Y])
-  const life = p.a < ac ? parisLife(1e-11, 3, Y, p.sigma * 1e6, p.a / 1000, ac / 1000) : 0
+  const life = p.aNow < ac ? parisLife(1e-11, 3, Y, p.sigma * 1e6, p.aNow / 1000, ac / 1000) : 0
   return (
     <div>
+      <FractureTest />
       <Section title="Live">
         <div className="grid grid-cols-3 gap-1.5">
           <Readout label="K now" value={fmt(K, 3)} unit="MPa√m" tone={K >= p.KIc ? 'warn' : 'accent'} />
@@ -147,7 +190,7 @@ export function FracturePanel() {
       <Section title="The plate">
         <Segmented<CrackKind> value={p.kind} onChange={(kind) => set({ kind })} options={[{ value: 'centre', label: 'Centre crack' }, { value: 'edge', label: 'Edge crack' }]} />
         <Slider label="Stress" value={p.sigma} min={1} max={1000} step={1} unit="MPa" onChange={(sigma) => set({ sigma })} />
-        <Slider label="Crack size a" value={p.a} min={0.1} max={100} step={0.1} unit="mm" onChange={(a) => set({ a })} />
+        <Slider label="Starting crack a" value={p.a} min={0.1} max={100} step={0.1} unit="mm" onChange={(a) => set({ a, aNow: a })} />
         <Slider label="Toughness K_Ic" value={p.KIc} min={0.5} max={200} step={0.5} unit="MPa√m" onChange={(KIc) => set({ KIc })} />
         <Slider label="Yield stress" value={p.Y} min={50} max={3000} step={10} unit="MPa" onChange={(v) => set({ Y: v })} />
         <Note>The crack’s length is drawn in proportion, within limits. The plate reddens as K nears K_Ic.</Note>
@@ -156,7 +199,7 @@ export function FracturePanel() {
         <PresetGrid presets={PRESETS} active={preset} onPick={setPreset} />
       </Section>
       <Section title="Strength against crack size">
-        <Chart data={[curve.a, curve.s, curve.y]} series={[{ label: 'Fracture', color: '#e8794f', width: 2 }, { label: 'Yield', color: '#6fb3e0', width: 1.5 }]} xLabel="Crack size a (mm)" yLabel="Stress (MPa)" marker={() => [Math.min(p.a, 80), p.sigma]} height={150} />
+        <Chart data={[curve.a, curve.s, curve.y]} series={[{ label: 'Fracture', color: '#e8794f', width: 2 }, { label: 'Yield', color: '#6fb3e0', width: 1.5 }]} xLabel="Crack size a (mm)" yLabel="Stress (MPa)" marker={() => [Math.min(p.aNow, 80), p.sigma]} height={150} />
         <Note>Below the crossing, the plate yields first and behaves as if it had no crack. Above it, the crack decides: a brittle failure below the yield stress.</Note>
       </Section>
       <Section title="Working">

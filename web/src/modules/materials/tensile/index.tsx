@@ -30,7 +30,7 @@ const scene: SceneDef = {
       select: 'specimen',
       explode: 0,
       playing: true,
-      params: { material: 'mild', run: true },
+      params: { material: 'mild' },
       cites: [NOTE('direct stresses')],
     },
     {

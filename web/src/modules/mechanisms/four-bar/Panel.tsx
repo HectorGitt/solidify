@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react'
+import { TestBench } from '@/lab/run'
 import { classify, crankRange, rockerSwing, sweep } from '@/physics/fourbar'
 import { Chart } from '@/ui/Chart'
 import { Badge, Readout, Section, Segmented, Slider, Toggle, fmt } from '@/ui/controls'
 import { useLive } from '@/ui/live'
 import { Working, n, type WorkingStep } from '@/ui/Working'
 import { Note, PresetGrid, Table, type Preset } from '../../elements/_shared/PanelBits'
-import { CRANK_HOLES, KIND_LABEL, KIND_NOTE, arrange, crankHole, deg, fixedChoice, lengths, limitsDeg, live, useFourBar, type FixedChoice } from './model'
+import { CRANK_HOLES, FOUR_BAR_PROC, KIND_LABEL, KIND_NOTE, arrange, crankHole, deg, fixedChoice, fourBarRun, lengths, limitsDeg, live, useFourBar, type FixedChoice } from './model'
 
 const set = (p: Parameters<ReturnType<typeof useFourBar.getState>['set']>[0]) => useFourBar.getState().set(p)
 
@@ -42,6 +43,31 @@ export const PRESETS: Preset[] = [
     apply: () => set({ frame: 8, crank: 6, coupler: 8, rocker: 6 }),
   },
 ]
+
+/** The bench test: turn the crank in steps, read the output lever and the transmission angle. */
+function FourBarTest() {
+  const rows = fourBarRun((s) => s.rows)
+  const status = fourBarRun((s) => s.status)
+  const crank = rows.map((r) => r[0])
+  const out = rows.map((r) => r[1])
+  const gamma = rows.map((r) => r[2])
+  return (
+    <TestBench run={fourBarRun} steps={FOUR_BAR_PROC.steps} title="The test: turn the crank" head={['Crank (°)', 'Output (°)', 'Transmission (°)']} format={(r) => [fmt(r[0], 3), fmt(r[1], 3), fmt(r[2], 3)]}>
+      {rows.length > 1 ? (
+        <>
+          <Chart data={[crank, out]} series={[{ label: 'Output', color: '#6fb3e0', width: 2 }]} xLabel="Crank angle (°)" yLabel="Output lever (°)" height={120} />
+          {status === 'done' ? (
+            <div className="mt-1 grid grid-cols-3 gap-1.5">
+              <Readout label="Output swing" value={fmt(Math.max(...out) - Math.min(...out), 3)} unit="°" tone="accent" />
+              <Readout label="Smallest γ" value={fmt(Math.min(...gamma), 3)} unit="°" tone="warn" />
+              <Readout label="Largest γ" value={fmt(Math.max(...gamma), 3)} unit="°" />
+            </div>
+          ) : null}
+        </>
+      ) : null}
+    </TestBench>
+  )
+}
 
 function LivePanel() {
   const s = useFourBar()
@@ -191,6 +217,7 @@ export function FourBarPanel() {
   const [preset, setPreset] = useState<string | null>(null)
   return (
     <div>
+      <FourBarTest />
       <LivePanel />
       <Links />
       <Section title="Set-ups">

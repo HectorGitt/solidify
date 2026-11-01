@@ -1,12 +1,13 @@
 import { useMemo, useState } from 'react'
+import { TestBench } from '@/lab/run'
 import { deadCentres, quickReturnRatio, sliderAcceleration, sliderDisplacement, sliderVelocity, stroke, yokeAcceleration, yokeDisplacement, yokeVelocity } from '@/physics/linkages'
 import { Chart } from '@/ui/Chart'
 import { Readout, Section, Segmented, Slider, fmt } from '@/ui/controls'
 import { useLive } from '@/ui/live'
 import { Working, n as num, type WorkingStep } from '@/ui/Working'
-import { Note, PresetGrid, Table, type Preset } from '../../elements/_shared/PanelBits'
+import { Note, PresetGrid, type Preset } from '../../elements/_shared/PanelBits'
 import { ExamList } from '../_shared/rig'
-import { DEFAULTS, deg, live, rad, useSlider, type Mode } from './model'
+import { DEFAULTS, SLIDER_PROC, deg, live, rad, sliderRun, useSlider, type Mode } from './model'
 
 const set = (p: Parameters<ReturnType<typeof useSlider.getState>['set']>[0]) => useSlider.getState().set(p)
 
@@ -70,15 +71,26 @@ function Charts() {
   )
 }
 
-/** the experiment's table: readings every 15° */
+/** The bench test: readings every 15°, plotted against a true sine as they come in. */
 function Readings() {
-  const p = useSlider()
-  const f = motion(p, (p.rpm * 2 * Math.PI) / 60)
-  const rows = Array.from({ length: 25 }, (_, i) => i * 15).map((a) => [`${a}°`, fmt(f.x(rad(a)), 3), fmt(p.r * (1 - Math.cos(rad(a))), 3), fmt(f.x(rad(a)) - p.r * (1 - Math.cos(rad(a))), 2)])
+  const rows = sliderRun((s) => s.rows)
+  const status = sliderRun((s) => s.status)
+  const a = rows.map((r) => r[0])
+  const worst = rows.reduce((m, r) => Math.max(m, Math.abs(r[1] - r[2])), 0)
   return (
-    <Section title="Experiment: readings every 15°">
-      <Table head={['θ', 'x (mm)', 'Pure sine', 'Departure']} rows={rows} />
-    </Section>
+    <TestBench run={sliderRun} steps={SLIDER_PROC.steps} title="The test: read the scale every 15°" head={['θ (°)', 'x (mm)', 'Pure sine', 'Departure']} format={(r) => [fmt(r[0], 3), fmt(r[1], 3), fmt(r[2], 3), fmt(r[1] - r[2], 2)]}>
+      {rows.length > 1 ? (
+        <>
+          <Chart data={[a, rows.map((r) => r[1]), rows.map((r) => r[2])]} series={[{ label: 'Readings', color: '#e8794f', width: 2 }, { label: 'Pure sine', color: '#6fb3e0', width: 1 }]} xLabel="Crank angle (°)" yLabel="x (mm)" height={125} />
+          {status === 'done' ? (
+            <div className="mt-1 grid grid-cols-2 gap-1.5">
+              <Readout label="Stroke read" value={fmt(Math.max(...rows.map((r) => r[1])), 3)} unit="mm" tone="accent" />
+              <Readout label="Largest departure" value={fmt(worst, 3)} unit="mm" tone="info" />
+            </div>
+          ) : null}
+        </>
+      ) : null}
+    </TestBench>
   )
 }
 
@@ -111,6 +123,7 @@ export function SliderPanel() {
   const [preset, setPreset] = useState<string | null>(null)
   return (
     <div>
+      <Readings />
       <Live />
       <Section title="The mechanism">
         <Segmented<Mode>
@@ -134,7 +147,6 @@ export function SliderPanel() {
         <PresetGrid presets={PRESETS} active={preset} onPick={setPreset} />
       </Section>
       <Charts />
-      <Readings />
       <SliderWorking />
       <Section title="Exam points">
         <ExamList>

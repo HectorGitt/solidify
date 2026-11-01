@@ -3,10 +3,11 @@ import { useLayoutEffect, useMemo, useRef, type ReactNode } from 'react'
 import * as THREE from 'three'
 import { useSimFrame } from '@/core/sim'
 import { box, cylinder, extrude, mat4, merge, roundedBox, tube, xform } from '@/geometry'
+import { instrument, useAutoRun, useRunDriver } from '@/lab/run'
 import { classify, sweep } from '@/physics/fourbar'
 import { PartLabel } from '@/render/Label'
 import { Part, PartMesh } from '@/render/Part'
-import { CM, crankAt, lengths, live, rad, solve, useFourBar } from './model'
+import { CM, FOUR_BAR_PROC, crankAt, deg, fourBarRun, lengths, live, rad, solve, sweepAngle, useFourBar } from './model'
 
 const WIDTH = 0.028
 const THICK = 0.007
@@ -110,6 +111,22 @@ export function FourBar3D() {
     mid: useRef<THREE.Mesh>(null),
   }
   const phase = useRef(0.6)
+  const testAngle = useRef(0)
+  useAutoRun(fourBarRun, JSON.stringify([frame, crank, coupler, rocker, branch]))
+  useRunDriver(
+    fourBarRun,
+    FOUR_BAR_PROC,
+    (f) => {
+      testAngle.current = sweepAngle(lengths(useFourBar.getState()), f)
+    },
+    (step, f) => {
+      const st = useFourBar.getState()
+      const cur = lengths(st)
+      const t = sweepAngle(cur, f)
+      const q = solve(cur, t, st.branch)
+      if (q) fourBarRun.getState().log([deg(t), instrument(deg(q.theta4), 0.002, step), instrument(deg(q.gamma), 0.003, step + 50)])
+    },
+  )
 
   const geo = useMemo(
     () => ({
@@ -137,7 +154,8 @@ export function FourBar3D() {
     const st = useFourBar.getState()
     const cur = lengths(st)
     phase.current += (st.rpm * 2 * Math.PI * dt) / 60
-    const theta = crankAt(cur, phase.current)
+    // during a test the crank is set by hand, a step at a time; otherwise it runs
+    const theta = fourBarRun.getState().status === 'running' ? testAngle.current : crankAt(cur, phase.current)
     const p = solve(cur, theta, st.branch)
     live.theta = theta
     live.pose = p

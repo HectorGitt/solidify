@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { createRun } from '@/lab/run'
 import { coupleMrz, dynamicBalance, resultantMr, staticBalance, type RotatingMass } from '@/physics/machinedynamics'
 
 export const rad = (d: number) => (d * Math.PI) / 180
@@ -80,4 +81,8 @@ export function analyse(p: { rows: MassRow[]; correction: Correction; rb: number
   return { ms, single, two, added, leftMr: left.mag, leftAngle: left.angle, couple, zMid }
 }
 
-export const live = { theta: 0 }
+export const live = { theta: 0, f: 0 }
+
+/** the bench test: the shaft is brought up to speed in steps, and the shaking read at each */
+export const balanceRun = createRun()
+export const BALANCE_PROC = { steps: 8, moveSeconds: 0.6, dwellSeconds: 0.3 }

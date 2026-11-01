@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { createRun } from '@/lab/run'
 import { porter, radToRpm, rpmToRad } from '@/physics/machinedynamics'
 
 export const rad = (d: number) => (d * Math.PI) / 180
@@ -36,7 +37,11 @@ export const useGov = create<GovParams>((set) => ({
   reset: () => set(DEFAULTS),
 }))
 
-export const live = { theta: 0 }
+export const live = { theta: 0, rpm: 0 }
+
+/** the bench test: the speed is raised in steps across the governor's range, and the sleeve read at each */
+export const govRun = createRun()
+export const GOV_PROC = { steps: 10, moveSeconds: 0.04, dwellSeconds: 0.02 }
 
 export type GovInputs = Omit<GovParams, 'set' | 'reset'>
 

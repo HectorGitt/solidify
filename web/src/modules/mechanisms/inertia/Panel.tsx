@@ -1,44 +1,48 @@
 import { useMemo } from 'react'
+import { TestBench } from '@/lab/run'
+import { useLive } from '@/ui/live'
 import { pendulumInertia, pendulumPeriod, suspensionInertia } from '@/physics/machinedynamics'
 import { Chart } from '@/ui/Chart'
 import { Readout, Section, Segmented, Slider, Toggle, fmt } from '@/ui/controls'
 import { Working, n } from '@/ui/Working'
-import { Note, Table } from '../../elements/_shared/PanelBits'
+import { Note } from '../../elements/_shared/PanelBits'
 import { ExamList } from '../_shared/rig'
-import { blockI, platformI, timings, truePeriod, useInertia, type Mode } from './model'
+import { INERTIA_PROC, blockI, inertiaRun, live, platformI, truePeriod, useInertia, type Mode } from './model'
 
 const set = (p: Parameters<ReturnType<typeof useInertia.getState>['set']>[0]) => useInertia.getState().set(p)
 
 function Experiment() {
   const p = useInertia()
-  const T = truePeriod(p)
-  const runs = timings(T)
-  const mean = runs.reduce((a, b) => a + b, 0) / runs.length
-  const devs = runs.map((t) => Math.abs(t - mean))
-  const sd = Math.sqrt(runs.reduce((s, t) => s + (t - mean) ** 2, 0) / (runs.length - 1))
+  const rows = inertiaRun((s) => s.rows)
+  const status = inertiaRun((s) => s.status)
+  const watch = useLive(() => live.watch, 15)
+  const swings = useLive(() => live.swings, 15)
+  const runs = rows.map((r) => r[2])
+  const mean = runs.length ? runs.reduce((a, b) => a + b, 0) / runs.length : 0
+  const sd = runs.length > 1 ? Math.sqrt(runs.reduce((s, t) => s + (t - mean) ** 2, 0) / (runs.length - 1)) : 0
   const pendulum = p.mode === 'pendulum'
   const total = p.mPlatform + (p.block ? p.mBlock : 0)
-  const measured = pendulum ? pendulumInertia(p.mBar, p.h, mean) : suspensionInertia(total, p.r, p.L, mean)
+  const measured = mean > 0 ? (pendulum ? pendulumInertia(p.mBar, p.h, mean) : suspensionInertia(total, p.r, p.L, mean)) : 0
   const actual = pendulum ? p.mBar * (p.length ** 2 / 12 + p.h ** 2) : platformI(p) + (p.block ? blockI(p) : 0)
   return (
-    <>
-      <Section title="Live">
-        <div className="grid grid-cols-3 gap-1.5">
-          <Readout label="Period" value={fmt(T, 4)} unit="s" tone="accent" />
-          <Readout label="20 swings" value={fmt(20 * T, 4)} unit="s" />
-          <Readout label="Inertia measured" value={fmt(measured, 4)} unit="kg·m²" tone="warn" />
-        </div>
-      </Section>
-      <Section title="Experiment: time 20 swings, five times">
-        <Table
-          head={['Run', '20 T (s)', 'T (s)', '|T − T̄|']}
-          rows={runs.map((t, i) => [String(i + 1), fmt(20 * t, 4), fmt(t, 4), fmt(devs[i], 2)])}
-        />
-        <Note>
-          Mean T̄ = {fmt(mean, 4)} s, standard deviation {fmt(sd, 2)} s. Geometry alone gives I = {fmt(actual, 4)} kg·m².
-        </Note>
-      </Section>
-    </>
+    <TestBench run={inertiaRun} steps={INERTIA_PROC.steps} title="The test: time 20 swings, five times" head={['Run', '20 T (s)', 'T (s)', '|T − T̄|']} format={(r) => [String(r[0]), fmt(r[1], 4), fmt(r[2], 4), fmt(Math.abs(r[2] - mean), 2)]}>
+      <div className="mt-2 grid grid-cols-3 gap-1.5">
+        <Readout label="Stopwatch" value={fmt(watch, 4)} unit="s" tone="warn" />
+        <Readout label="Swings" value={String(swings)} unit="of 20" />
+        <Readout label="Mean period" value={mean ? fmt(mean, 4) : '–'} unit="s" tone="accent" />
+      </div>
+      {status === 'done' ? (
+        <>
+          <div className="mt-1.5 grid grid-cols-3 gap-1.5">
+            <Readout label="Inertia found" value={fmt(measured, 4)} unit="kg·m²" tone="accent" />
+            <Readout label="From geometry" value={fmt(actual, 4)} unit="kg·m²" />
+            <Readout label="Std deviation" value={fmt(sd, 2)} unit="s" />
+          </div>
+          {pendulum ? null : <Note>This is the platform and whatever is on it. Run it with and without the block, and the difference is the block’s inertia.</Note>}
+        </>
+      ) : null}
+      <Note>Each set of 20 is sped up on the stopwatch, so the five runs take seconds. The swing itself is at true speed.</Note>
+    </TestBench>
   )
 }
 

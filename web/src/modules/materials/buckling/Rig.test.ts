@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { modeShape } from './Rig'
+import { bowAt, modeShape, southwell } from './Rig'
 
 describe('buckled shapes meet their end conditions', () => {
   const h = 1e-4
@@ -24,5 +24,17 @@ describe('buckled shapes meet their end conditions', () => {
   it('fixed and free: fixed at the base, free to move at the top', () => {
     expect(modeShape('fixed-free', 0)).toBeCloseTo(0, 9)
     expect(modeShape('fixed-free', 1)).toBeCloseTo(1, 9)
+  })
+})
+
+describe('the bench readings', () => {
+  it('Southwell gets the critical load back from readings well below it', () => {
+    const Pcr = 400
+    const loads = [0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8].map((r) => r * Pcr)
+    const bows = loads.map((P) => bowAt(2.5, P / Pcr) * 1000)
+    expect(southwell(loads, bows)).toBeCloseTo(Pcr, 3)
+  })
+  it('the bow grows without limit as the load nears the critical load', () => {
+    expect(bowAt(2, 0.9)).toBeGreaterThan(5 * bowAt(2, 0.5))
   })
 })

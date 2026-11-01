@@ -2,10 +2,11 @@ import { useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { useSimFrame } from '@/core/sim'
 import { box, cylinder, helixSpring, mat4, merge, tube, xform } from '@/geometry'
+import { instrument, useAutoRun, useRunDriver } from '@/lab/run'
 import { PartLabel } from '@/render/Label'
 import { Part, PartMesh } from '@/render/Part'
 import { placeBetween, unitRod } from '../_shared/strut'
-import { equilibrium, live, useGov } from './model'
+import { GOV_PROC, equilibrium, govRun, live, speedRange, useGov } from './model'
 
 export const FLOOR = -0.52
 const SCALE = 0.0022
@@ -51,6 +52,23 @@ export function Governor3D() {
     l: { upper: useRef<THREE.Group>(null), lower: useRef<THREE.Group>(null), ball: useRef<THREE.Group>(null) },
   }
   const phase = useRef(0)
+  const whole = useGov()
+  useAutoRun(govRun, JSON.stringify([whole.kind, whole.m, whole.M, whole.arm, whole.offset, whole.a, whole.b, whole.r0, whole.n0, whole.k]))
+  useRunDriver(
+    govRun,
+    GOV_PROC,
+    (f) => {
+      const r = speedRange(useGov.getState())
+      live.rpm = r.lo + (r.hi - r.lo) * f
+    },
+    (step, f) => {
+      const st = useGov.getState()
+      const r = speedRange(st)
+      const rpm = r.lo + (r.hi - r.lo) * f
+      const q = equilibrium(st, rpm)
+      govRun.getState().log([rpm, Math.max(0, instrument(q.lift, 0.008, step)), q.r])
+    },
+  )
   const geo = useMemo(
     () => ({
       spindle: xform(cylinder(0.014, TOP - FLOOR + 0.04, 28), mat4.t(0, (TOP + FLOOR) / 2, 0)),
@@ -67,10 +85,12 @@ export function Governor3D() {
 
   useSimFrame((dt) => {
     const p = useGov.getState()
-    phase.current += ((p.rpm * 2 * Math.PI) / 60) * dt
+    // during a test the speed is set by the procedure; otherwise by the slider
+    const rpm = govRun.getState().status === 'running' ? live.rpm : p.rpm
+    phase.current += ((rpm * 2 * Math.PI) / 60) * dt
     live.theta = phase.current
     spin.current?.rotation.set(0, phase.current, 0)
-    const s = equilibrium(p)
+    const s = equilibrium(p, rpm)
     const armLen = p.arm * SCALE
     for (const [side, q] of [[1, refs.r], [-1, refs.l]] as [1 | -1, typeof refs.r][]) {
       if (p.kind === 'hartnell') {
