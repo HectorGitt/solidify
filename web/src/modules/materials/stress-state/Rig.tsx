@@ -1,11 +1,13 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { create } from 'zustand'
 import { useSimFrame } from '@/core/sim'
 import { box } from '@/geometry'
+import { TestBench, createRun, instrument, useAutoRun, useRunDriver } from '@/lab/run'
 import { principal, principalStrains, rosette, rotateStress, stressFromStrain, trescaEquivalent, vonMisesEquivalent, type Plane } from '@/physics/strength'
 import { PartLabel } from '@/render/Label'
 import { Part, PartMesh } from '@/render/Part'
+import { Chart } from '@/ui/Chart'
 import { Readout, Section, Segmented, Slider, fmt } from '@/ui/controls'
 import { Working, n } from '@/ui/Working'
 import { Note, PresetGrid, type Preset } from '../../elements/_shared/PanelBits'
@@ -35,13 +37,18 @@ interface Params {
   delta: boolean
   E: number
   nu: number
+  /** the share of the full load on the element: moved by the test */
+  f: number
   set: (p: Partial<Params>) => void
   reset: () => void
 }
 
-export const DEFAULTS = { mode: 'stress' as Mode, sx: 80, sy: -40, txy: 25, theta: 0, yieldS: 250, ea: 500, eb: 250, ec: -200, delta: false, E: 200, nu: 0.3 }
+export const DEFAULTS = { f: 0, mode: 'stress' as Mode, sx: 80, sy: -40, txy: 25, theta: 0, yieldS: 250, ea: 500, eb: 250, ec: -200, delta: false, E: 200, nu: 0.3 }
 export const useStressState = create<Params>((set) => ({ ...DEFAULTS, set: (p) => set(p), reset: () => set(DEFAULTS) }))
 const set = (p: Partial<Params>) => useStressState.getState().set(p)
+
+const stressRun = createRun()
+const PROCEDURE = { steps: 10, moveSeconds: 0.5, dwellSeconds: 0.25 }
 
 /** the plane stress on the rig, in MPa: set directly, or from the gauges */
 function planeOf(p: Params): Plane {
@@ -51,12 +58,39 @@ function planeOf(p: Params): Plane {
   return stressFromStrain(r.ex, r.ey, r.gxy, p.E * 1e3, p.nu)
 }
 
+/** the stress with a share of the full load applied */
+function loaded(p: Params, f = p.f): Plane {
+  const q = planeOf(p)
+  return { sx: q.sx * f, sy: q.sy * f, txy: q.txy * f }
+}
+
 export function Stress3D() {
   const p = useStressState()
+  useAutoRun(stressRun, JSON.stringify([p.mode, p.sx, p.sy, p.txy, p.yieldS, p.ea, p.eb, p.ec, p.delta, p.E, p.nu]))
+  useRunDriver(
+    stressRun,
+    PROCEDURE,
+    (f) => {
+      if (Math.abs(f - useStressState.getState().f) >= 0.01 || f === 1) useStressState.getState().set({ f })
+    },
+    (step, f) => {
+      const s = useStressState.getState()
+      const q = principal(loaded(s, f))
+      stressRun.getState().log([f * 100, instrument(q.s1, 0.005, step), instrument(q.s2, 0.005, step + 30), instrument(q.tauMax, 0.005, step + 60)])
+      if (trescaEquivalent(q.s1, q.s2, 0) >= s.yieldS) stressRun.getState().fail(`The element reached its ${s.yieldS} MPa yield stress at ${(f * 100).toFixed(0)} % of the load, with a largest shear of ${q.tauMax.toFixed(0)} MPa.`)
+    },
+  )
+  useEffect(
+    () =>
+      stressRun.subscribe((r, prev) => {
+        if ((r.status === 'idle' && prev.status !== 'idle') || (r.status === 'running' && prev.status !== 'running' && r.rows.length === 0)) useStressState.getState().set({ f: 0 })
+      }),
+    [],
+  )
   const el = useRef<THREE.Group>(null)
   const geo = useMemo(() => ({ cube: box(SIZE, SIZE, 0.05), base: box(0.5, 0.03, 0.4), post: box(0.04, -FLOOR - SIZE / 2, 0.04), gauge: box(0.09, 0.016, 0.006) }), [])
-  const plane = planeOf(p)
-  const q0 = principal(plane)
+  const plane = loaded(p)
+  const q0 = principal(planeOf(p))
   const peak = Math.max(1, q0.tauMax + Math.abs(q0.centre))
   useSimFrame(() => {
     el.current?.rotation.set(0, 0, rad(p.theta))
@@ -181,10 +215,20 @@ const PRESETS: Preset[] = [
   { id: 'gauges', label: 'A rectangular rosette', note: 'Three readings at 0°, 45° and 90°. The shear strain comes from γ = 2ε_b − ε_a − ε_c.', apply: () => set({ ...DEFAULTS, mode: 'rosette' }) },
 ]
 
+/** The bench test: load the element in steps, working out the principal stresses at each. */
+function StressTest() {
+  const rows = stressRun((s) => s.rows)
+  return (
+    <TestBench run={stressRun} steps={PROCEDURE.steps} title="The test: load it in steps" head={['Load (%)', 'σ₁ (MPa)', 'σ₂ (MPa)', 'τmax (MPa)']} format={(r) => [fmt(r[0], 3), fmt(r[1], 3), fmt(r[2], 3), fmt(r[3], 3)]}>
+      {rows.length > 1 ? <Chart data={[rows.map((r) => r[0]), rows.map((r) => r[1]), rows.map((r) => r[2])]} series={[{ label: 'σ₁', color: '#e8794f', width: 2 }, { label: 'σ₂', color: '#6fb3e0', width: 2 }]} xLabel="Share of the load (%)" yLabel="Stress (MPa)" height={110} /> : null}
+    </TestBench>
+  )
+}
+
 export function StressPanel() {
   const p = useStressState()
   const [preset, setPreset] = useState<string | null>('general')
-  const plane = planeOf(p)
+  const plane = loaded(p)
   const q = principal(plane)
   const rot = rotateStress(plane, rad(p.theta))
   const angles: [number, number, number] = p.delta ? [0, rad(60), rad(120)] : [0, rad(45), rad(90)]
@@ -195,6 +239,7 @@ export function StressPanel() {
   const safe = tresca < p.yieldS
   return (
     <div>
+      <StressTest />
       <Section title="Live">
         <div className="grid grid-cols-3 gap-1.5">
           <Readout label="On this face" value={fmt(rot.sn, 3)} unit="MPa" tone="warn" />

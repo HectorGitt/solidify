@@ -1,12 +1,34 @@
+import { TestBench } from '@/lab/run'
 import { oldhamMaxSliding } from '@/physics/linkages'
 import { Readout, Section, Slider, Toggle, fmt } from '@/ui/controls'
 import { useLive } from '@/ui/live'
 import { Working, n as num } from '@/ui/Working'
 import { Note } from '../../elements/_shared/PanelBits'
 import { ExamList } from '../_shared/rig'
-import { deg, live, useOldham } from './model'
+import { OLDHAM_PROC, deg, live, oldhamRun, useOldham } from './model'
 
 const set = (p: Parameters<ReturnType<typeof useOldham.getState>['set']>[0]) => useOldham.getState().set(p)
+
+/** The bench test: turn the input by hand, reading the output and where the disc's centre has got to. */
+function OldhamTest() {
+  const rows = oldhamRun((s) => s.rows)
+  const status = oldhamRun((s) => s.status)
+  const ratio = rows.reduce((a, r) => a + r[1], 0) / Math.max(1e-9, rows.reduce((a, r) => a + r[0], 0))
+  const offset = rows.reduce((a, r) => a + Math.hypot(r[2], r[3]), 0) / Math.max(1, rows.length)
+  return (
+    <TestBench run={oldhamRun} steps={OLDHAM_PROC.steps} title="The test: turn it through a revolution" head={['In (°)', 'Out (°)', 'To shaft A (mm)', 'To shaft B (mm)']} format={(r) => [fmt(r[0], 3), fmt(r[1], 3), fmt(r[2], 3), fmt(r[3], 3)]}>
+      {status === 'done' ? (
+        <>
+          <div className="mt-2 grid grid-cols-2 gap-1.5">
+            <Readout label="Speed ratio found" value={fmt(ratio, 3)} tone="accent" />
+            <Readout label="Offset found" value={fmt(offset, 3)} unit="mm" tone="info" />
+          </div>
+          <Note>Those two distances are always at right angles, with the offset as the hypotenuse. So the centre stays on a circle whose diameter is the offset.</Note>
+        </>
+      ) : null}
+    </TestBench>
+  )
+}
 
 export function OldhamPanel() {
   const p = useOldham()
@@ -17,6 +39,7 @@ export function OldhamPanel() {
   const peak = oldhamMaxSliding(p.d, w)
   return (
     <div>
+      <OldhamTest />
       <Section title="Live">
         <div className="grid grid-cols-3 gap-1.5">
           <Readout label="Shaft angle" value={fmt(((deg(theta) % 360) + 360) % 360, 3)} unit="°" />

@@ -1,8 +1,9 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { create } from 'zustand'
 import { useSimFrame } from '@/core/sim'
 import { box, cylinder, mat4, merge, tube, xform } from '@/geometry'
+import { TestBench, createRun, instrument, useAutoRun, useRunDriver } from '@/lab/run'
 import { cylinderBalance, equivalentMasses, reciprocatingForce, rodEnds, rpmToRad } from '@/physics/machinedynamics'
 import { PartLabel } from '@/render/Label'
 import { Part, PartMesh } from '@/render/Part'
@@ -33,14 +34,22 @@ interface Params {
   rpm: number
   /** share of the reciprocating mass balanced at the crank */
   c: number
+  /** how far the engine has been brought up to speed: moved by the test */
+  f: number
   set: (p: Partial<Params>) => void
   reset: () => void
 }
 
-export const DEFAULTS = { layout: 'one' as Layout, m: 2, r: 50, n: 4, rpm: 1500, c: 0 }
+export const DEFAULTS = { layout: 'one' as Layout, m: 2, r: 50, n: 4, rpm: 1500, c: 0, f: 0 }
 export const useRecip = create<Params>((set) => ({ ...DEFAULTS, set: (p) => set(p), reset: () => set(DEFAULTS) }))
 const set = (p: Partial<Params>) => useRecip.getState().set(p)
 const live = { theta: 0 }
+
+const recipRun = createRun()
+/** sim seconds: the scene runs at 1/50 of real speed */
+const PROCEDURE = { steps: 8, moveSeconds: 0.02, dwellSeconds: 0.01 }
+const START = 0.2
+const rpmAt = (rpm: number, f: number) => rpm * (START + (1 - START) * f)
 
 /** vertical and sideways shaking force at crank angle θ */
 function shaking(p: { layout: Layout; m: number; r: number; n: number; rpm: number; c: number }, theta: number) {
@@ -60,8 +69,41 @@ function shaking(p: { layout: Layout; m: number; r: number; n: number; rpm: numb
   return { along, primary, secondary, side }
 }
 
+/** the largest shaking force through a turn, along the stroke and sideways */
+function peaks(p: Parameters<typeof shaking>[0]) {
+  let along = 0
+  let side = 0
+  for (let i = 0; i < 72; i++) {
+    const f = shaking(p, (i / 72) * 2 * Math.PI)
+    along = Math.max(along, Math.abs(f.along))
+    side = Math.max(side, Math.abs(f.side))
+  }
+  return { along, side }
+}
+
 export function Recip3D() {
   const p = useRecip()
+  useAutoRun(recipRun, JSON.stringify([p.layout, p.m, p.r, p.n, p.rpm, p.c]))
+  useRunDriver(
+    recipRun,
+    PROCEDURE,
+    (f) => {
+      if (Math.abs(f - useRecip.getState().f) >= 0.01 || f === 1) useRecip.getState().set({ f })
+    },
+    (step, f) => {
+      const s = useRecip.getState()
+      const rpm = rpmAt(s.rpm, f)
+      const q = peaks({ ...s, rpm })
+      recipRun.getState().log([rpm, instrument(q.along / 1000, 0.008, step), instrument(q.side / 1000, 0.008, step + 30)])
+    },
+  )
+  useEffect(
+    () =>
+      recipRun.subscribe((r, prev) => {
+        if ((r.status === 'idle' && prev.status !== 'idle') || (r.status === 'running' && prev.status !== 'running' && r.rows.length === 0)) useRecip.getState().set({ f: 0 })
+      }),
+    [],
+  )
   const cranks = LAYOUTS[p.layout].cranks
   const N = cranks.length
   const pitch = 0.17
@@ -100,7 +142,8 @@ export function Recip3D() {
 
   useSimFrame((dt) => {
     const s = useRecip.getState()
-    phase.current += (s.rpm * 2 * Math.PI * dt) / 60
+    const rpm = rpmAt(s.rpm, s.f)
+    phase.current += (rpm * 2 * Math.PI * dt) / 60
     const t = phase.current
     live.theta = t
     crank.current?.rotation.set(0, 0, -t)
@@ -112,7 +155,7 @@ export function Recip3D() {
       placeBetween(rods.current[i], [bx, by, zAt(i)], [0, py, zAt(i)])
       pistons.current[i]?.position.set(0, py + 0.02, zAt(i))
     })
-    const f = shaking(s, t)
+    const f = shaking({ ...s, rpm }, t)
     const full = Math.max(1, s.m * (s.r / 1000) * rpmToRad(s.rpm) ** 2)
     if (block.current) {
       block.current.position.y = (0.012 * f.along) / (full * 1.3)
@@ -157,6 +200,30 @@ export function Recip3D() {
   )
 }
 
+/** The bench test: bring the engine up to speed in steps, reading the force on the bed. */
+function RecipTest() {
+  const rows = recipRun((s) => s.rows)
+  const status = recipRun((s) => s.status)
+  const first = rows[0]
+  const last = rows[rows.length - 1]
+  return (
+    <TestBench run={recipRun} steps={PROCEDURE.steps} title="The test: bring it up to speed" head={['Speed (rpm)', 'Along (kN)', 'Sideways (kN)']} format={(r) => [fmt(r[0], 4), fmt(r[1], 3), fmt(r[2], 3)]}>
+      {rows.length > 1 ? (
+        <>
+          <Chart data={[rows.map((r) => r[0]), rows.map((r) => r[1]), rows.map((r) => r[2])]} series={[{ label: 'Along', color: '#e8794f', width: 2 }, { label: 'Sideways', color: '#9bd17a', width: 2 }]} xLabel="Speed (rpm)" yLabel="Peak force (kN)" height={110} />
+          {status === 'done' && first && last ? (
+            <div className="mt-1 grid grid-cols-3 gap-1.5">
+              <Readout label="Force at speed" value={fmt(last[1], 3)} unit="kN" tone="accent" />
+              <Readout label="Force grew" value={first[1] > 1e-6 ? fmt(last[1] / first[1], 3) : '0'} unit="times" tone="info" />
+              <Readout label="Speed² grew" value={fmt((last[0] / first[0]) ** 2, 3)} unit="times" />
+            </div>
+          ) : null}
+        </>
+      ) : null}
+    </TestBench>
+  )
+}
+
 export function RecipPanel() {
   const p = useRecip()
   const [ex] = useState({ m: 16, I: 320000, a: 200 })
@@ -174,6 +241,7 @@ export function RecipPanel() {
   const rod = rodEnds(ex.m, 350, ex.a)
   return (
     <div>
+      <RecipTest />
       <Section title="Live">
         <div className="grid grid-cols-3 gap-1.5">
           <Readout label="Primary now" value={fmt(now.primary / 1000, 3)} unit="kN" tone="info" />

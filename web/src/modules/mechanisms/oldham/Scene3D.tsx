@@ -2,10 +2,11 @@ import { useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { useSimFrame } from '@/core/sim'
 import { box, cylinder, extrude, mat4, merge, xform } from '@/geometry'
+import { instrument, useAutoRun, useRunDriver } from '@/lab/run'
 import { PartLabel } from '@/render/Label'
 import { Part, PartMesh } from '@/render/Part'
 import { Trace } from '../_shared/rig'
-import { MM, live, useOldham } from './model'
+import { MM, OLDHAM_PROC, deg, live, oldhamRun, useOldham } from './model'
 
 export const FLOOR = -0.24
 const axial = mat4.rx(Math.PI / 2)
@@ -68,10 +69,26 @@ export function Oldham3D() {
     return pts
   }, [d])
 
+  useAutoRun(oldhamRun, String(dmm))
+  useRunDriver(
+    oldhamRun,
+    OLDHAM_PROC,
+    (f) => {
+      live.test = f * 2 * Math.PI
+    },
+    (step, f) => {
+      const a = f * 2 * Math.PI
+      // the disc's centre: its distances to the two shafts, at right angles to one another
+      const tidy = (v: number) => Math.round(v * 1000) / 1000
+      oldhamRun.getState().log([deg(a), instrument(deg(a), 0.002, step), tidy(instrument(dmm * Math.abs(Math.cos(a)), 0.005, step + 30)), tidy(instrument(dmm * Math.abs(Math.sin(a)), 0.005, step + 60))])
+    },
+  )
   const phase = useRef(0.4)
   useSimFrame((dt) => {
     const st = useOldham.getState()
-    phase.current += (st.rpm * 2 * Math.PI * dt) / 60
+    // during the test the shaft is turned by hand, a step at a time; otherwise it runs
+    if (['running', 'paused'].includes(oldhamRun.getState().status)) phase.current = live.test
+    else phase.current += (st.rpm * 2 * Math.PI * dt) / 60
     const t = phase.current
     live.theta = t
     refs.a.current?.rotation.set(0, 0, t)

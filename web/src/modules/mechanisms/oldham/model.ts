@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { createRun } from '@/lab/run'
 
 export const deg = (r: number) => (r * 180) / Math.PI
 
@@ -19,7 +20,10 @@ export const useOldham = create<OldhamParams>((set) => ({
   reset: () => set(DEFAULTS),
 }))
 
-export const live = { theta: 0 }
+export const live = { theta: 0, test: 0 }
+
+export const oldhamRun = createRun()
+export const OLDHAM_PROC = { steps: 12, moveSeconds: 0.4, dwellSeconds: 0.2 }
 
 /** drawn at twice bench size */
 export const MM = 0.002

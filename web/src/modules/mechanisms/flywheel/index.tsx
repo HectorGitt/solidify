@@ -15,7 +15,7 @@ const scene: SceneDef = {
   extent: 1.6,
   floorY: FLOOR,
   hatchScale: 0.01,
-  timeScale: 1 / 5,
+  timeScale: 1 / 4,
   cutPresets: [{ id: 'mid', label: 'Through the cylinder', planes: [{ normal: [0, 0, 1], pos: 0.27 }] }],
   cites: [NOTE('fluctuation of speed and energy')],
   reset: () => useFly.getState().reset(),

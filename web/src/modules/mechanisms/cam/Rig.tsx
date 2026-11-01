@@ -3,6 +3,7 @@ import * as THREE from 'three'
 import { create } from 'zustand'
 import { useSimFrame } from '@/core/sim'
 import { box, cylinder, extrude, mat4, merge, tube, xform } from '@/geometry'
+import { TestBench, createRun, instrument, useAutoRun, useRunDriver } from '@/lab/run'
 import { camLift, motionLaw, type CamMotion, type CamSegment } from '@/physics/machinedynamics'
 import { PartLabel } from '@/render/Label'
 import { Part, PartMesh } from '@/render/Part'
@@ -42,7 +43,10 @@ interface Params {
 export const DEFAULTS = { base: 38, lift: 32, shaft: 24, roller: 10, riseEnd: 120, dwellEnd: 180, rise: 'uniform' as CamMotion, fall: 'shm' as CamMotion, follower: 'knife' as Follower, rpm: 30 }
 export const useCam = create<Params>((set) => ({ ...DEFAULTS, set: (p) => set(p), reset: () => set(DEFAULTS) }))
 const set = (p: Partial<Params>) => useCam.getState().set(p)
-const live = { theta: 0 }
+const live = { theta: 0, test: 0 }
+
+const camRun = createRun()
+const PROCEDURE = { steps: 12, moveSeconds: 0.45, dwellSeconds: 0.25 }
 
 export type CamInputs = Omit<Params, 'set' | 'reset'>
 
@@ -115,9 +119,24 @@ export function Cam3D() {
     [p.base, p.lift, p.shaft, p.roller, p.riseEnd, p.dwellEnd, p.rise, p.fall, p.follower],
   )
 
+  useAutoRun(camRun, JSON.stringify([p.base, p.lift, p.roller, p.riseEnd, p.dwellEnd, p.rise, p.fall, p.follower]))
+  useRunDriver(
+    camRun,
+    PROCEDURE,
+    (f) => {
+      live.test = f * 2 * Math.PI
+    },
+    (step, f) => {
+      camRun.getState().log([f * 360, instrument(camLift(segmentsOf(useCam.getState()), f * 2 * Math.PI), 0.003, step)])
+    },
+  )
+
   useSimFrame((dt) => {
     const s = useCam.getState()
-    phase.current += (s.rpm * 2 * Math.PI * dt) / 60
+    // during the test the cam is turned by hand, a step at a time; otherwise it runs
+    const testing = ['running', 'paused'].includes(camRun.getState().status)
+    if (testing) phase.current = live.test
+    else phase.current += (s.rpm * 2 * Math.PI * dt) / 60
     const t = phase.current
     live.theta = t
     // clockwise, so the point at local angle π/2 + θ comes under the follower
@@ -179,6 +198,29 @@ const PRESETS: Preset[] = [
   { id: 'roller', label: 'Roller follower', note: 'The same motion with a 10 mm roller: the working surface sits a roller’s radius inside the pitch curve.', apply: () => set({ ...DEFAULTS, follower: 'roller', rise: 'shm', fall: 'shm' }) },
 ]
 
+/** The bench test: turn the cam by hand, reading the follower on a dial gauge every 30°. */
+function CamTest() {
+  const rows = camRun((s) => s.rows)
+  const status = camRun((s) => s.status)
+  const lifts = rows.map((r) => r[1])
+  const rate = rows.slice(1).map((r, i) => Math.abs(r[1] - rows[i][1]) / 30)
+  return (
+    <TestBench run={camRun} steps={PROCEDURE.steps} title="The test: dial gauge every 30°" head={['Cam (°)', 'Lift (mm)']} format={(r) => [fmt(r[0], 3), fmt(r[1], 3)]}>
+      {rows.length > 1 ? (
+        <>
+          <Chart data={[rows.map((r) => r[0]), lifts]} series={[{ label: 'Lift', color: '#6fb3e0', width: 2 }]} xLabel="Cam angle (°)" yLabel="Lift (mm)" height={110} />
+          {status === 'done' ? (
+            <div className="mt-1 grid grid-cols-2 gap-1.5">
+              <Readout label="Lift found" value={fmt(Math.max(...lifts), 3)} unit="mm" tone="accent" />
+              <Readout label="Steepest" value={fmt(Math.max(...rate), 3)} unit="mm/°" tone="info" />
+            </div>
+          ) : null}
+        </>
+      ) : null}
+    </TestBench>
+  )
+}
+
 export function CamPanel() {
   const p = useCam()
   const [preset, setPreset] = useState<string | null>('pq')
@@ -203,6 +245,7 @@ export function CamPanel() {
   const rows = Array.from({ length: 13 }, (_, i) => i * 30).map((d) => [`${d}°`, fmt(camLift(segs, rad(d === 360 ? 359.999 : d)), 3), fmt(p.base + (p.follower === 'roller' ? p.roller : 0) + camLift(segs, rad(d === 360 ? 359.999 : d)), 3)])
   return (
     <div>
+      <CamTest />
       <Section title="Live">
         <div className="grid grid-cols-3 gap-1.5">
           <Readout label="Cam angle" value={fmt(t, 3)} unit="°" />

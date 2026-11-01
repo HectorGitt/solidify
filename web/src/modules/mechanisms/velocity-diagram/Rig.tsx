@@ -2,10 +2,12 @@ import { useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { create } from 'zustand'
 import { useSimFrame } from '@/core/sim'
+import { TestBench, createRun, instrument, useAutoRun, useRunDriver } from '@/lab/run'
 import { fourBarDiagrams, instantaneousCentre, sliderCrankDiagrams, type LinkState } from '@/physics/machinedynamics'
 import { crankRange, solve, type FourBar } from '@/physics/fourbar'
 import { box, cylinder, mat4, merge, xform } from '@/geometry'
 import { Part, PartMesh } from '@/render/Part'
+import { Chart } from '@/ui/Chart'
 import { Readout, Section, Segmented, Slider, Toggle, fmt } from '@/ui/controls'
 import { useLive } from '@/ui/live'
 import { Working, n } from '@/ui/Working'
@@ -49,12 +51,44 @@ function compute(s: Params, theta: number) {
   return { pose, d: fourBarDiagrams(pose.B, pose.C, [s.frame, 0], s.w) }
 }
 
+const diagramRun = createRun()
+const PROCEDURE = { steps: 12, moveSeconds: 0.4, dwellSeconds: 0.2 }
+const testAngle = { value: 0 }
+
+/** the crank angles the test can reach: a full turn, or as far as the linkage will go */
+function sweep(s: Params): [number, number] {
+  const r = s.mech === 'slider' ? null : crankRange(s)
+  const lo = r && Number.isFinite(r.lo) ? r.lo : 0
+  const hi = r && Number.isFinite(r.hi) ? r.hi : lo + 2 * Math.PI
+  const span = Math.min(hi - lo, 2 * Math.PI)
+  // stop just short of a toggle position, where the speeds run away
+  return span < 2 * Math.PI - 1e-6 ? [lo + span * 0.02, lo + span * 0.98] : [lo, lo + span]
+}
+const angleAt = (s: Params, f: number) => {
+  const [a, b] = sweep(s)
+  return a + (b - a) * f
+}
+
 const v3 = (p: [number, number], k = SCALE) => new THREE.Vector3(p[0] * k + X0, p[1] * k, 0.05)
 
 export function Diagram3D() {
   const p = useDiagram()
   const refs = { crank: useRef<THREE.Group>(null), coupler: useRef<THREE.Group>(null), rocker: useRef<THREE.Group>(null), ic: useRef<THREE.Mesh>(null), slider: useRef<THREE.Group>(null) }
   const theta = useRef(live.theta)
+  useAutoRun(diagramRun, JSON.stringify([p.mech, p.frame, p.crank, p.coupler, p.rocker, p.w]))
+  useRunDriver(
+    diagramRun,
+    PROCEDURE,
+    (f) => {
+      testAngle.value = angleAt(useDiagram.getState(), f)
+    },
+    (step, f) => {
+      const s = useDiagram.getState()
+      const a = angleAt(s, f)
+      const c = compute(s, a)
+      if (c) diagramRun.getState().log([(a * 180) / Math.PI, instrument(Math.hypot(c.d.vC[0], c.d.vC[1]), 0.004, step), instrument(c.d.w3, 0.004, step + 30)])
+    },
+  )
   const geo = useMemo(
     () => ({
       crank: flatBar(p.crank * SCALE, 0.026, 0.007),
@@ -72,7 +106,8 @@ export function Diagram3D() {
   useSimFrame((dt) => {
     const s = useDiagram.getState()
     const range = s.mech === 'slider' ? null : crankRange(s)
-    if (s.run) theta.current += s.w * dt
+    if (['running', 'paused'].includes(diagramRun.getState().status)) theta.current = testAngle.value
+    else if (s.run) theta.current += s.w * dt
     else theta.current = (s.angle * Math.PI) / 180
     if (range && (theta.current < range.lo || theta.current > range.hi)) theta.current = (range.lo + range.hi) / 2
     const c = compute(s, theta.current)
@@ -186,6 +221,28 @@ function Polygon({ title, paths }: { title: string; paths: { from: [number, numb
   )
 }
 
+/** The bench test: step the crank round, reading the output's speed at each position. */
+function DiagramTest() {
+  const rows = diagramRun((s) => s.rows)
+  const status = diagramRun((s) => s.status)
+  const speeds = rows.map((r) => r[1])
+  return (
+    <TestBench run={diagramRun} steps={PROCEDURE.steps} title="The test: step the crank round" head={['Crank (°)', 'Output point (m/s)', 'Coupler (rad/s)']} format={(r) => [fmt(r[0], 3), fmt(r[1], 3), fmt(r[2], 3)]}>
+      {rows.length > 1 ? (
+        <>
+          <Chart data={[rows.map((r) => r[0]), speeds]} series={[{ label: 'Output point', color: '#2f6fd0', width: 2 }]} xLabel="Crank angle (°)" yLabel="Speed (m/s)" height={110} />
+          {status === 'done' ? (
+            <div className="mt-1 grid grid-cols-2 gap-1.5">
+              <Readout label="Fastest" value={fmt(Math.max(...speeds), 3)} unit="m/s" tone="accent" />
+              <Readout label="Slowest" value={fmt(Math.min(...speeds), 3)} unit="m/s" tone="info" />
+            </div>
+          ) : null}
+        </>
+      ) : null}
+    </TestBench>
+  )
+}
+
 export function DiagramPanel() {
   const p = useDiagram()
   const state = useLive(() => live.state, 12)
@@ -196,6 +253,7 @@ export function DiagramPanel() {
   const speed = (v: [number, number]) => Math.hypot(v[0], v[1])
   return (
     <div>
+      <DiagramTest />
       <Section title="Live">
         <div className="grid grid-cols-3 gap-1.5">
           <Readout label="Crank pin" value={fmt(speed(state.vB), 3)} unit="m/s" tone="warn" />

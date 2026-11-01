@@ -3,6 +3,7 @@ import * as THREE from 'three'
 import { create } from 'zustand'
 import { useSimFrame } from '@/core/sim'
 import { box, cylinder, mat4, merge, tube, xform } from '@/geometry'
+import { TestBench, createRun, instrument, useAutoRun, useRunDriver } from '@/lab/run'
 import { energyFluctuation, flywheelInertia, radToRpm, requiredInertia, rpmToRad, speedFluctuation, turningStats, type TurningKind } from '@/physics/machinedynamics'
 import { PartLabel } from '@/render/Label'
 import { Part, PartMesh } from '@/render/Part'
@@ -37,6 +38,10 @@ const set = (p: Partial<FlyParams>) => useFly.getState().set(p)
 
 const live = { theta: 0, w: 0 }
 
+const flyRun = createRun()
+/** sim seconds: the scene runs at a quarter of real speed */
+const PROCEDURE = { steps: 16, moveSeconds: 0.06, dwellSeconds: 0.03 }
+
 function speedOf(st: ReturnType<typeof turningStats>, I: number, w: number, theta: number) {
   const i = ((theta % st.period) + st.period) % st.period
   const f = (i / st.period) * (st.E.length - 1)
@@ -48,6 +53,18 @@ function speedOf(st: ReturnType<typeof turningStats>, I: number, w: number, thet
 export function Flywheel3D() {
   const p = useFly()
   const st = useMemo(() => turningStats(p.kind, p.Tp), [p.kind, p.Tp])
+  useAutoRun(flyRun, JSON.stringify([p.kind, p.Tp, p.rpm, p.m, p.k]))
+  useRunDriver(
+    flyRun,
+    PROCEDURE,
+    () => {},
+    (step, f) => {
+      const s = useFly.getState()
+      const c = turningStats(s.kind, s.Tp)
+      const angle = f * c.period
+      flyRun.getState().log([deg(angle), instrument(radToRpm(speedOf(c, flywheelInertia(s.m, s.k), rpmToRad(s.rpm), angle)), 0.0002, step)])
+    },
+  )
   const wheel = useRef<THREE.Group>(null)
   const rod = useRef<THREE.Group>(null)
   const piston = useRef<THREE.Group>(null)
@@ -126,6 +143,31 @@ const PRESETS: Preset[] = [
   { id: 'press', label: 'Punch press', note: 'The motor runs steadily; the load arrives in one short stroke. The wheel supplies almost all of that energy, and the motor restores it between strokes.', apply: () => set({ ...DEFAULTS, kind: 'press', Tp: 2000, rpm: 120, m: 400, k: 0.32 }) },
 ]
 
+/** The bench test: a tachometer read at intervals through one working cycle. */
+function FlywheelTest() {
+  const rows = flyRun((s) => s.rows)
+  const status = flyRun((s) => s.status)
+  const speeds = rows.map((r) => r[1])
+  const hi = Math.max(...speeds)
+  const lo = Math.min(...speeds)
+  return (
+    <TestBench run={flyRun} steps={PROCEDURE.steps} title="The test: tachometer through a cycle" head={['Crank (°)', 'Speed (rpm)']} format={(r) => [fmt(r[0], 3), fmt(r[1], 5)]}>
+      {rows.length > 1 ? (
+        <>
+          <Chart data={[rows.map((r) => r[0]), speeds]} series={[{ label: 'Speed', color: '#e8794f', width: 2 }]} xLabel="Crank angle (°)" yLabel="Speed (rpm)" height={110} />
+          {status === 'done' ? (
+            <div className="mt-1 grid grid-cols-3 gap-1.5">
+              <Readout label="Fastest" value={fmt(hi, 5)} unit="rpm" />
+              <Readout label="Slowest" value={fmt(lo, 5)} unit="rpm" />
+              <Readout label="Cs from the test" value={fmt(((hi - lo) / ((hi + lo) / 2)) * 100, 3)} unit="%" tone="accent" />
+            </div>
+          ) : null}
+        </>
+      ) : null}
+    </TestBench>
+  )
+}
+
 export function FlywheelPanel() {
   const p = useFly()
   const [preset, setPreset] = useState<string | null>('single')
@@ -138,6 +180,7 @@ export function FlywheelPanel() {
   const degs = useMemo(() => st.angle.map(deg), [st])
   return (
     <div>
+      <FlywheelTest />
       <Section title="Live">
         <div className="grid grid-cols-3 gap-1.5">
           <Readout label="Speed now" value={fmt(nowRpm, 4)} unit="rpm" tone="accent" />

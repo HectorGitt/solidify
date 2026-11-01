@@ -3,6 +3,7 @@ import * as THREE from 'three'
 import { create } from 'zustand'
 import { useSimFrame } from '@/core/sim'
 import { box, cylinder } from '@/geometry'
+import { TestBench, createRun, instrument, useAutoRun, useRunDriver } from '@/lab/run'
 import { PartLabel } from '@/render/Label'
 import { Part, PartMesh } from '@/render/Part'
 import { Readout, Section, Segmented, Slider, fmt } from '@/ui/controls'
@@ -41,6 +42,11 @@ const set = (p: Partial<Params>) => useInv.getState().set(p)
 
 type P2 = [number, number]
 
+const invRun = createRun()
+const PROCEDURE = { steps: 12, moveSeconds: 0.4, dwellSeconds: 0.2 }
+const testPhase = { value: 0 }
+const tidy = (v: number) => Math.round(v * 1000) / 1000
+
 /** All four links in the frame of whichever is held still. */
 function pose(fixed: Exclude<Fixed, 'trammel'>, n: number, t: number) {
   const l = n * R
@@ -75,6 +81,26 @@ export function Inversions3D() {
   const trammel = p.fixed === 'trammel'
   const refs = { guide: useRef<THREE.Group>(null), crank: useRef<THREE.Group>(null), rod: useRef<THREE.Group>(null), slider: useRef<THREE.Group>(null), slider2: useRef<THREE.Group>(null), pen: useRef<THREE.Mesh>(null), pivot: useRef<THREE.Group>(null) }
   const phase = useRef(0.5)
+  useAutoRun(invRun, JSON.stringify([p.fixed, p.n, p.a, p.b]))
+  useRunDriver(
+    invRun,
+    PROCEDURE,
+    (f) => {
+      testPhase.value = f * 2 * Math.PI
+    },
+    (step, f) => {
+      const s = useInv.getState()
+      const t = f * 2 * Math.PI
+      if (s.fixed === 'trammel') {
+        invRun.getState().log([f * 360, tidy(instrument(s.a * Math.cos(t) * 1000, 0.003, step)), tidy(instrument(s.b * Math.sin(t) * 1000, 0.003, step + 30))])
+        return
+      }
+      // measured between the links themselves, so it doesn't matter which one is held
+      const l = s.n * R
+      const along = R * Math.cos(t) + Math.sqrt(l * l - (R * Math.sin(t)) ** 2)
+      invRun.getState().log([f * 360, instrument(along * 1000, 0.002, step), tidy((Math.asin((R * Math.sin(t)) / l) * 180) / Math.PI)])
+    },
+  )
   const geo = useMemo(
     () => ({
       guide: unitRod(0.018, 12),
@@ -102,7 +128,8 @@ export function Inversions3D() {
 
   useSimFrame((dt) => {
     const s = useInv.getState()
-    phase.current += (s.rpm * 2 * Math.PI * dt) / 60
+    if (['running', 'paused'].includes(invRun.getState().status)) phase.current = testPhase.value
+    else phase.current += (s.rpm * 2 * Math.PI * dt) / 60
     const t = phase.current
     const z = (q: P2, h = 0.03): [number, number, number] => [q[0], q[1], h]
     if (s.fixed === 'trammel') {
@@ -195,11 +222,40 @@ export function Inversions3D() {
   )
 }
 
+/** The bench test: one turn by hand, measuring between the links rather than against the bench. */
+function InversionTest() {
+  const trammel = useInv((s) => s.fixed === 'trammel')
+  const rows = invRun((s) => s.rows)
+  const status = invRun((s) => s.status)
+  const span = (i: number) => Math.max(...rows.map((r) => r[i])) - Math.min(...rows.map((r) => r[i]))
+  return (
+    <TestBench run={invRun} steps={PROCEDURE.steps} title="The test: one turn by hand" head={trammel ? ['Turn (°)', 'Pen x (mm)', 'Pen y (mm)'] : ['Turn (°)', 'Slider along cylinder (mm)', 'Rod to stroke (°)']} format={(r) => [fmt(r[0], 3), fmt(r[1], 3), fmt(r[2], 3)]}>
+      {status === 'done' ? (
+        trammel ? (
+          <div className="mt-2 grid grid-cols-2 gap-1.5">
+            <Readout label="Ellipse, long axis" value={fmt(span(1), 3)} unit="mm" tone="accent" />
+            <Readout label="Ellipse, short axis" value={fmt(span(2), 3)} unit="mm" tone="info" />
+          </div>
+        ) : (
+          <>
+            <div className="mt-2 grid grid-cols-2 gap-1.5">
+              <Readout label="Stroke found" value={fmt(span(1), 3)} unit="mm" tone="accent" />
+              <Readout label="Rod swing" value={fmt(span(2), 3)} unit="°" tone="info" />
+            </div>
+            <Note>Hold a different link and these readings don’t change. Inversion alters what stands still, not how the links move relative to one another.</Note>
+          </>
+        )
+      ) : null}
+    </TestBench>
+  )
+}
+
 export function InversionsPanel() {
   const p = useInv()
   const info = INFO[p.fixed]
   return (
     <div>
+      <InversionTest />
       <Section title="Live">
         <div className="rounded-lg border border-line-2 bg-panel-2 p-2.5">
           <div className="text-[13px] font-semibold text-ink">{info.machine}</div>
