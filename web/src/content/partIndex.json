@@ -5647,5 +5647,36 @@
   "Dead weights",
   "Furnace",
   "Specimen"
+ ],
+ "thermal/heat-exchanger": [
+  "Cold stream",
+  "Hot stream",
+  "Inner tube",
+  "Outer shell",
+  "Stands and cold header",
+  "Travelling thermocouple"
+ ],
+ "thermal/refrigeration": [
+  "Bedplate",
+  "Cold room",
+  "Compressor",
+  "Condenser",
+  "Evaporator",
+  "Expansion valve",
+  "Pressure gauges",
+  "Receiver",
+  "Refrigerant lines"
+ ],
+ "thermal/steam-plant": [
+  "Boiler drum and risers",
+  "Condenser",
+  "Feed pump",
+  "Foundation",
+  "Furnace",
+  "Generator",
+  "Rotor and shaft",
+  "Steam and water lines",
+  "Superheater",
+  "Turbine casing"
  ]
 }

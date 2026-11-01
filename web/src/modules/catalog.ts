@@ -290,6 +290,18 @@ export const MODULES: ModuleDef[] = [
       { id: 'creep', title: 'Creep testing rig', summary: 'Primary, secondary and tertiary creep, and trading heat for time with Larson–Miller.', exam: true },
     ],
   },
+  {
+    id: 'thermal',
+    code: 'M19',
+    title: 'Thermal plant lab',
+    courses: [],
+    blurb: 'Thermodynamics you can bolt together: exchangers, a refrigeration plant and a steam plant, each with gauges to read.',
+    scenes: [
+      { id: 'heat-exchanger', title: 'Double-pipe heat exchanger', summary: 'Parallel against counter flow, temperatures read along the pipe, and the log-mean difference.', exam: true },
+      { id: 'refrigeration', title: 'Vapour-compression refrigeration plant', summary: 'Pull a cold room down and watch the gauges, the frost and the COP as the evaporator gets colder.', exam: true },
+      { id: 'steam-plant', title: 'Rankine steam plant', summary: 'Boiler, turbine, condenser and feed pump: raise the pressure and read the work, the dryness and the efficiency.', exam: true },
+    ],
+  },
 ]
 
 for (const m of MODULES) {
