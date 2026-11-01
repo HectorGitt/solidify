@@ -42,6 +42,10 @@ const SHOTS = {
   water: 'water/irrigation-methods',
   structures: 'structures/farmstead',
   precision: 'precision/see-and-spray',
+  mechanisms: 'mechanisms/four-bar',
+  materials: 'materials/tensile',
+  thermal: 'thermal/steam-plant',
+  drawing: 'drawing/interpenetration',
 }
 
 const BROWSERS = [
@@ -62,9 +66,9 @@ const fileFor = (id, theme) => {
 }
 if (OUT_DIR) fs.mkdirSync(OUT_DIR, { recursive: true })
 
-const server = await createServer({ server: { port: 4179, strictPort: false, hmr: false, watch: null } })
+const server = await createServer({ server: { port: 5319, strictPort: false, hmr: false, watch: null } })
 await server.listen()
-const base = (server.resolvedUrls?.local[0] || 'http://localhost:4179/').replace(/\/$/, '')
+const base = (server.resolvedUrls?.local[0] || 'http://localhost:5319/').replace(/\/$/, '')
 
 const browser = await chromium.launch({
   executablePath: BROWSERS.find((p) => fs.existsSync(p)),

@@ -39,6 +39,7 @@ const DISCIPLINES: { id: string; label: string; modules: string[] }[] = [
   { id: 'all', label: 'All systems', modules: [] },
   { id: 'power', label: 'Power & drivetrain', modules: ['engine', 'powertrain', 'pto', 'hydraulics', 'elements', 'vibration'] },
   { id: 'field', label: 'Traction & implements', modules: ['traction', 'steering', 'chassis', 'implements', 'testing', 'field'] },
+  { id: 'labs', label: 'Engineering labs', modules: ['mechanisms', 'materials', 'thermal', 'drawing'] },
 ]
 
 /** Systems still being finished: listed as coming soon on the home page, not shown as tiles. */
@@ -63,31 +64,35 @@ const FEATURED: Record<string, string> = {
   water: 'irrigation-methods',
   structures: 'farmstead',
   precision: 'see-and-spray',
+  mechanisms: 'four-bar',
+  materials: 'tensile',
+  thermal: 'steam-plant',
+  drawing: 'interpenetration',
 }
 
 const COPY = {
   professional: {
-    eyebrow: 'Interactive 3D tractor & farm machinery simulator',
+    eyebrow: 'Interactive 3D machinery simulator and engineering lab',
     title: 'Open up the machine.',
-    lead: 'Cut through a running tractor, slow it to 1/200 speed, and size every system with the calculations engineers use: gear forces, pump flows, traction and weight transfer.',
+    lead: 'Cut through a running tractor, pull a specimen until it snaps, or bring a steam plant up to pressure. Set the conditions, watch the test run, and read the results as they come in.',
     primary: { label: 'Explore the tractor', to: '/m/powertrain/line-of-drive' },
     features: [
       { icon: 'cut', title: 'True cutaways', text: 'Slice any assembly at any angle. Cut faces are hatched by material like an engineering drawing; moving parts stay whole so you can watch them work.' },
       { icon: 'sliders', title: 'Live calculations', text: 'Every slider drives the physics: belt tensions, clutch capacity, hydrostatic flow, slip and tractive efficiency, with the working shown.' },
       { icon: 'target', title: 'Verified physics', text: 'Over a thousand automated checks pin the calculations to reference answers, and mechanisms follow exact kinematics.' },
-      { icon: 'tractor', title: 'Runs anywhere', text: 'Nothing to install. Downloads stay small enough for site laptops, workshop PCs and phones in the field.' },
+      { icon: 'tour', title: 'Live lab tests', text: 'Machines, materials and thermal rigs that run when you set them: gauges move, specimens break, and the readings log themselves as a real test would.' },
     ],
   },
   academic: {
-    eyebrow: '3D farm power & machinery for agricultural engineering',
-    title: 'Farm machinery, brought to life.',
-    lead: 'Every topic from engines to implements as an interactive cutaway. Practise with fresh numbers each attempt, see the formula with the numbers substituted, and find the slip behind a wrong answer.',
+    eyebrow: '3D machinery and laboratories for engineering students',
+    title: 'Engineering, brought to life.',
+    lead: 'Engines, mechanisms, strength of materials, thermal plant and technical drawing, as models you can run. Do the lab test on screen, then practise with fresh numbers and see the slip behind a wrong answer.',
     primary: { label: 'Start with the diesel engine', to: '/m/engine/four-stroke-diesel' },
     features: [
       { icon: 'cut', title: 'Interactive diagrams', text: 'Every textbook figure becomes a model you can turn, slice, explode and run in slow motion, down to 1/200 of real speed.' },
       { icon: 'book', title: 'Worked examples', text: 'Load exam-style data into any scene and follow the working: the formula, the numbers substituted, then the answer.' },
       { icon: 'target', title: 'Marked like an examiner', text: 'Method marks carry an early slip forward, and each wrong answer names the likely mistake.' },
-      { icon: 'tour', title: 'Guided tours', text: 'Each scene has a short guided tour with checkpoints, for revision or for teaching from the projector.' },
+      { icon: 'tour', title: 'A lab that runs itself', text: 'Set the conditions and the experiment runs, logging a table of readings to work up. Each rig also has a guided tour with checkpoints.' },
     ],
   },
 } as const
@@ -213,7 +218,7 @@ function Hero({ copy }: { copy: (typeof COPY)[keyof typeof COPY] }) {
       <div className="pointer-events-none relative pt-[54vh] lg:absolute lg:inset-x-0 lg:bottom-0 lg:pt-0">
         <div className="mx-auto flex max-w-[1360px] flex-wrap items-end justify-between gap-6 px-5 pb-10 sm:px-10 sm:pb-14 lg:gap-8">
           <div className="max-w-[640px]">
-            {/* the keyword line is part of the h1, so search engines read "3D tractor & farm machinery simulator: Open up the machine." */}
+            {/* the keyword line is part of the h1, so search engines read the keywords before the title */}
             <h1>
               <span className="block text-[13.5px] font-medium tracking-normal text-accent">{copy.eyebrow}</span>
               <span className="mt-4 block text-[48px] font-semibold leading-[0.98] tracking-[-0.045em] text-ink sm:text-[84px]">{copy.title}</span>
@@ -429,8 +434,8 @@ export function Landing() {
       <section id="systems" className="mx-auto max-w-[1360px] scroll-mt-20 px-5 pt-16 sm:px-10">
         <div className="mb-7 flex flex-wrap items-end justify-between gap-4">
           <div>
-            <h2 className="text-[30px] font-semibold tracking-[-0.03em] sm:text-[38px]">Every tractor system, in 3D</h2>
-            <p className="mt-1.5 text-[15px] text-mute">From the combustion chamber to the soil, each one opens straight into a working cutaway.</p>
+            <h2 className="text-[30px] font-semibold tracking-[-0.03em] sm:text-[38px]">Every system and rig, in 3D</h2>
+            <p className="mt-1.5 text-[15px] text-mute">From the combustion chamber to the test bench, each one opens straight into something working.</p>
           </div>
           <div className="flex max-w-full gap-1 overflow-x-auto rounded-full border border-line bg-panel p-1 [scrollbar-width:none]" role="group" aria-label="Filter systems">
             {DISCIPLINES.map((d) => (
