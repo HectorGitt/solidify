@@ -2,11 +2,11 @@ import { useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { create } from 'zustand'
 import { useSimFrame } from '@/core/sim'
-import { fourBarDiagrams, instantaneousCentre, type LinkState } from '@/physics/machinedynamics'
+import { fourBarDiagrams, instantaneousCentre, sliderCrankDiagrams, type LinkState } from '@/physics/machinedynamics'
 import { crankRange, solve, type FourBar } from '@/physics/fourbar'
 import { box, cylinder, mat4, merge, xform } from '@/geometry'
 import { Part, PartMesh } from '@/render/Part'
-import { Readout, Section, Slider, Toggle, fmt } from '@/ui/controls'
+import { Readout, Section, Segmented, Slider, Toggle, fmt } from '@/ui/controls'
 import { useLive } from '@/ui/live'
 import { Working, n } from '@/ui/Working'
 import { Note } from '../../elements/_shared/PanelBits'
@@ -18,7 +18,10 @@ export const FLOOR = -0.36
 const SCALE = 2
 const X0 = -0.16
 
+type Mech = 'four-bar' | 'slider'
+
 interface Params extends FourBar {
+  mech: Mech
   /** crank speed, rad/s */
   w: number
   /** crank angle when paused, deg */
@@ -29,13 +32,18 @@ interface Params extends FourBar {
 }
 
 /** lengths in m */
-export const DEFAULTS = { frame: 0.16, crank: 0.05, coupler: 0.18, rocker: 0.14, w: 2, angle: 60, run: false }
+export const DEFAULTS = { mech: 'four-bar' as Mech, frame: 0.16, crank: 0.05, coupler: 0.18, rocker: 0.14, w: 2, angle: 60, run: false }
 export const useDiagram = create<Params>((set) => ({ ...DEFAULTS, set: (p) => set(p), reset: () => set(DEFAULTS) }))
 const set = (p: Partial<Params>) => useDiagram.getState().set(p)
 
 const live: { theta: number; state: LinkState | null; B: [number, number]; C: [number, number] } = { theta: (60 * Math.PI) / 180, state: null, B: [0, 0], C: [0, 0] }
 
 function compute(s: Params, theta: number) {
+  if (s.mech === 'slider') {
+    const d = sliderCrankDiagrams(s.crank, s.coupler, theta, s.w)
+    const th3 = Math.atan2(d.C[1] - d.B[1], d.C[0] - d.B[0])
+    return { pose: { B: d.B, C: d.C, theta2: theta, theta3: th3, theta4: 0 }, d }
+  }
   const pose = solve(s, theta)
   if (!pose) return null
   return { pose, d: fourBarDiagrams(pose.B, pose.C, [s.frame, 0], s.w) }
@@ -45,7 +53,7 @@ const v3 = (p: [number, number], k = SCALE) => new THREE.Vector3(p[0] * k + X0, 
 
 export function Diagram3D() {
   const p = useDiagram()
-  const refs = { crank: useRef<THREE.Group>(null), coupler: useRef<THREE.Group>(null), rocker: useRef<THREE.Group>(null), ic: useRef<THREE.Mesh>(null) }
+  const refs = { crank: useRef<THREE.Group>(null), coupler: useRef<THREE.Group>(null), rocker: useRef<THREE.Group>(null), ic: useRef<THREE.Mesh>(null), slider: useRef<THREE.Group>(null) }
   const theta = useRef(live.theta)
   const geo = useMemo(
     () => ({
@@ -55,14 +63,15 @@ export function Diagram3D() {
       frame: flatBar(p.frame * SCALE, 0.026, 0.007),
       pins: merge(xform(cylinder(0.006, 0.05, 16), mat4.c(mat4.t(0, 0, 0.02), mat4.rx(Math.PI / 2)))),
       ball: new THREE.SphereGeometry(0.009, 18, 12),
-      mark: xform(box(0.004, 0.03, 0.004), mat4.t(0, 0, 0)),
+      block: box(0.11, 0.07, 0.03),
+      guide: merge(xform(box(0.9, 0.012, 0.024), mat4.t(0.3, 0.043, 0.02)), xform(box(0.9, 0.012, 0.024), mat4.t(0.3, -0.043, 0.02))),
     }),
     [p.crank, p.coupler, p.rocker, p.frame],
   )
 
   useSimFrame((dt) => {
     const s = useDiagram.getState()
-    const range = crankRange(s)
+    const range = s.mech === 'slider' ? null : crankRange(s)
     if (s.run) theta.current += s.w * dt
     else theta.current = (s.angle * Math.PI) / 180
     if (range && (theta.current < range.lo || theta.current > range.hi)) theta.current = (range.lo + range.hi) / 2
@@ -76,7 +85,9 @@ export function Diagram3D() {
     refs.coupler.current?.position.set(c.pose.B[0] * SCALE + X0, c.pose.B[1] * SCALE, 0.03)
     refs.coupler.current?.rotation.set(0, 0, c.pose.theta3)
     refs.rocker.current?.rotation.set(0, 0, c.pose.theta4)
-    const I = instantaneousCentre(c.pose.B, c.pose.C, [s.frame, 0])
+    // the slider's centre lies straight up from it, on the perpendicular to the stroke
+    const I = s.mech === 'slider' ? (Math.abs(Math.cos(c.pose.theta2)) > 1e-3 ? ([c.pose.C[0], c.pose.C[0] * Math.tan(c.pose.theta2)] as [number, number]) : null) : instantaneousCentre(c.pose.B, c.pose.C, [s.frame, 0])
+    if (refs.slider.current) refs.slider.current.position.set(c.pose.C[0] * SCALE + X0, 0, 0.03)
     if (refs.ic.current) {
       refs.ic.current.visible = !!I && Math.hypot(I[0], I[1]) < 0.6
       if (I) refs.ic.current.position.set(I[0] * SCALE + X0, I[1] * SCALE, 0.05)
@@ -95,7 +106,21 @@ export function Diagram3D() {
   return (
     <group>
       <BenchPlate width={1.15} height={0.86} floor={FLOOR} />
-      <group position={[X0, 0, 0.012]}>
+      {p.mech === 'slider' ? (
+        <>
+          <group position={[X0, 0, 0]}>
+            <Part id="guide" name="Guide" role="static" material="steelDark" info={{ summary: 'Holds the slider on its line of stroke.', role: 'It fixes the direction of the slider’s velocity and acceleration: that is the second line on each diagram.' }} cut={false}>
+              <PartMesh geometry={geo.guide} />
+            </Part>
+          </group>
+          <group ref={refs.slider}>
+            <Part id="slider" name="Slider" role="moving" material="paintBlue" info={{ summary: 'Runs along the guide.', role: 'Its velocity is along the stroke, so the velocity diagram closes on a horizontal line.' }} cut={false}>
+              <PartMesh geometry={geo.block} />
+            </Part>
+          </group>
+        </>
+      ) : null}
+      <group position={[X0, 0, 0.012]} visible={p.mech === 'four-bar'}>
         <Part id="frame" name="Frame" role="static" material="paintGrey" info={{ summary: 'The fixed link, A to D.', role: 'Points on it have no velocity: they are one single point o in the velocity diagram.' }} cut={false}>
           <PartMesh geometry={geo.frame} />
           <PartMesh geometry={geo.pins} material="chrome" />
@@ -114,7 +139,7 @@ export function Diagram3D() {
           <PartMesh geometry={geo.coupler} />
         </Part>
       </group>
-      <group position={[X0 + p.frame * SCALE, 0, 0.022]} ref={refs.rocker}>
+      <group position={[X0 + p.frame * SCALE, 0, 0.022]} ref={refs.rocker} visible={p.mech === 'four-bar'}>
         <Part id="rocker" name="Output lever" role="moving" material="paintBlue" info={{ summary: 'Turns about D.', role: 'C’s velocity is at right angles to DC. Crossing this line with the other locates C in the polygon.' }}>
           <PartMesh geometry={geo.rocker} />
         </Part>
@@ -174,11 +199,11 @@ export function DiagramPanel() {
       <Section title="Live">
         <div className="grid grid-cols-3 gap-1.5">
           <Readout label="Crank pin" value={fmt(speed(state.vB), 3)} unit="m/s" tone="warn" />
-          <Readout label="Pin C" value={fmt(speed(state.vC), 3)} unit="m/s" tone="info" />
+          <Readout label={p.mech === 'slider' ? 'Slider' : 'Pin C'} value={fmt(speed(state.vC), 3)} unit="m/s" tone="info" />
           <Readout label="C relative to B" value={fmt(speed(state.vCB), 3)} unit="m/s" />
           <Readout label="Coupler speed" value={fmt(state.w3, 3)} unit="rad/s" />
-          <Readout label="Output speed" value={fmt(state.w4, 3)} unit="rad/s" tone="accent" />
-          <Readout label="Output accel." value={fmt(state.a4, 3)} unit="rad/s²" />
+          {p.mech === 'slider' ? <Readout label="Slider accel." value={fmt(state.aC[0], 3)} unit="m/s²" tone="accent" /> : <Readout label="Output speed" value={fmt(state.w4, 3)} unit="rad/s" tone="accent" />}
+          {p.mech === 'slider' ? <Readout label="Rod accel." value={fmt(state.a3, 3)} unit="rad/s²" /> : <Readout label="Output accel." value={fmt(state.a4, 3)} unit="rad/s²" />}
         </div>
       </Section>
       <Section title="The diagrams, live">
@@ -205,13 +230,14 @@ export function DiagramPanel() {
         <Note>The polygons are the vector equations drawn out: both routes to C meet at the same point, so they always close. Dashed lines are the centripetal parts, known from the speeds; solid are the tangential parts, at right angles to their links.</Note>
       </Section>
       <Section title="The mechanism">
+        <Segmented<Mech> value={p.mech} onChange={(mech) => set({ mech, crank: mech === 'slider' ? 0.05 : p.crank, coupler: mech === 'slider' ? 0.2 : p.coupler })} options={[{ value: 'four-bar', label: 'Four-bar' }, { value: 'slider', label: 'Slider-crank' }]} />
         <Toggle label="Run the crank" checked={p.run} onChange={(run) => set({ run })} />
         {p.run ? null : <Slider label="Crank angle" value={p.angle} min={0} max={360} step={1} unit="°" onChange={(angle) => set({ angle })} />}
         <Slider label="Crank speed ω₂" value={p.w} min={0.5} max={40} step={0.5} unit="rad/s" onChange={(w) => set({ w })} />
-        <Slider label="Frame" value={p.frame * 1000} min={80} max={200} step={5} unit="mm" onChange={(v) => set({ frame: v / 1000 })} />
+        {p.mech === 'slider' ? null : <Slider label="Frame" value={p.frame * 1000} min={80} max={200} step={5} unit="mm" onChange={(v) => set({ frame: v / 1000 })} />}
         <Slider label="Crank" value={p.crank * 1000} min={25} max={90} step={5} unit="mm" onChange={(v) => set({ crank: v / 1000 })} />
-        <Slider label="Coupler" value={p.coupler * 1000} min={80} max={220} step={5} unit="mm" onChange={(v) => set({ coupler: v / 1000 })} />
-        <Slider label="Output lever" value={p.rocker * 1000} min={60} max={200} step={5} unit="mm" onChange={(v) => set({ rocker: v / 1000 })} />
+        <Slider label={p.mech === 'slider' ? 'Connecting rod' : 'Coupler'} value={p.coupler * 1000} min={80} max={220} step={5} unit="mm" onChange={(v) => set({ coupler: v / 1000 })} />
+        {p.mech === 'slider' ? null : <Slider label="Output lever" value={p.rocker * 1000} min={60} max={200} step={5} unit="mm" onChange={(v) => set({ rocker: v / 1000 })} />}
         <Note>The purple dot is the coupler’s instantaneous centre, where the crank and output lever lines cross. It is off the plate when they are nearly parallel.</Note>
       </Section>
       <Section title="Working">

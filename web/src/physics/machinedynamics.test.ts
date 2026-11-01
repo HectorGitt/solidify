@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { solve } from './fourbar'
-import { cylinderBalance, turningMoment, turningPeriod, turningStats, CLASSIC_CAM, ballsToBalance, camLift, coupleMrz, dynamicBalance, energyFluctuation, equivalentMasses, flywheelInertia, fourBarDiagrams, hartnell, instantaneousCentre, motionLaw, pendulumInertia, pendulumPeriod, porter, porterAlphaAfterLift, radToRpm, reciprocatingForce, requiredInertia, resultantMr, rodEnds, rpmToRad, sensitivity, speedFluctuation, staticBalance, suspensionInertia, suspensionPeriod, wattHeight, wattSpeed } from './machinedynamics'
+import { sliderCrankDiagrams, cylinderBalance, turningMoment, turningPeriod, turningStats, CLASSIC_CAM, ballsToBalance, camLift, coupleMrz, dynamicBalance, energyFluctuation, equivalentMasses, flywheelInertia, fourBarDiagrams, hartnell, instantaneousCentre, motionLaw, pendulumInertia, pendulumPeriod, porter, porterAlphaAfterLift, radToRpm, reciprocatingForce, requiredInertia, resultantMr, rodEnds, rpmToRad, sensitivity, speedFluctuation, staticBalance, suspensionInertia, suspensionPeriod, wattHeight, wattSpeed } from './machinedynamics'
 
 const rad = (d: number) => (d * Math.PI) / 180
 const deg = (r: number) => (r * 180) / Math.PI
@@ -223,5 +223,27 @@ describe('multi-cylinder balance', () => {
     const b = cylinderBalance([0, t, 2 * t, 2 * t, t, 0])
     expect(b.primary).toBeCloseTo(0, 9)
     expect(b.secondary).toBeCloseTo(0, 9)
+  })
+})
+
+describe('the slider-crank’s diagrams', () => {
+  const x = (t: number) => 0.05 * Math.cos(t) + Math.sqrt(0.2 ** 2 - (0.05 * Math.sin(t)) ** 2)
+  it('agree with differentiating the slider’s position', () => {
+    const h = 1e-5
+    const w = 10
+    for (const t of [0.4, 1.3, 2.6, 4, 5.4]) {
+      const d = sliderCrankDiagrams(0.05, 0.2, t, w)
+      expect(d.vC[0]).toBeCloseTo((w * (x(t + h) - x(t - h))) / (2 * h), 4)
+      expect(d.aC[0]).toBeCloseTo((w * w * (x(t + h) - 2 * x(t) + x(t - h))) / (h * h), 1)
+    }
+  })
+  it('the slider stops at the dead centres, and the polygon closes', () => {
+    expect(sliderCrankDiagrams(0.05, 0.2, 0, 10).vC[0]).toBeCloseTo(0, 9)
+    expect(sliderCrankDiagrams(0.05, 0.2, Math.PI, 10).vC[0]).toBeCloseTo(0, 9)
+    const d = sliderCrankDiagrams(0.05, 0.2, 1, 10)
+    expect(d.vB[1] + d.vCB[1]).toBeCloseTo(0, 9)
+  })
+  it('at the outer dead centre the acceleration is ω²r(1 + 1/n)', () => {
+    expect(Math.abs(sliderCrankDiagrams(0.05, 0.2, 0, 10).aC[0])).toBeCloseTo(100 * 0.05 * 1.25, 6)
   })
 })

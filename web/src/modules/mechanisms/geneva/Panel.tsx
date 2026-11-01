@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { genevaAccelerationRatio, genevaAngle, genevaHalfEngagement, genevaLambda, genevaMovingFraction, genevaOutput, genevaStep, genevaVelocityRatio } from '@/physics/linkages'
 import { Chart } from '@/ui/Chart'
-import { Readout, Section, Slider, fmt } from '@/ui/controls'
+import { Readout, Section, Slider, Toggle, fmt } from '@/ui/controls'
 import { useLive } from '@/ui/live'
 import { Working, n as num } from '@/ui/Working'
 import { Note, PresetGrid, Table, type Preset } from '../../elements/_shared/PanelBits'
@@ -74,6 +74,7 @@ function Readings() {
 export function GenevaPanel() {
   const n = useGeneva((s) => s.slots)
   const rpm = useGeneva((s) => s.rpm)
+  const stop = useGeneva((s) => s.stop)
   const [preset, setPreset] = useState<string | null>('six')
   const k = genevaLambda(n)
   const half = deg(genevaHalfEngagement(n))
@@ -83,6 +84,8 @@ export function GenevaPanel() {
       <Section title="The unit">
         <Slider label="Number of slots" value={n} min={3} max={12} step={1} onChange={(slots) => set({ slots })} />
         <Slider label="Input speed" value={rpm} min={2} max={60} step={1} unit="rpm" onChange={(v) => set({ rpm: v })} />
+        <Toggle label="Geneva stop: close one slot" checked={stop} onChange={(v) => set({ stop: v })} />
+        {stop ? <Note>The pin meets the closed slot after {n - 1} steps, and the driver can turn no further. In a watch, this is what prevents overwinding.</Note> : null}
       </Section>
       <Section title="Set-ups">
         <PresetGrid presets={PRESETS} active={preset} onPick={setPreset} />

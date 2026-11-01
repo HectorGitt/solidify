@@ -65,6 +65,13 @@ const scene: SceneDef = {
         explain: 'The moving share is **(n − 2)/2n**: 25 % with 4 slots, 33 % with 6 and 37.5 % with 8. It tends towards a half.',
       },
     },
+    {
+      title: 'The Geneva stop',
+      body: 'Leave one slot closed and the pin can only make a limited number of turns before it strikes the closed slot, and all motion ceases. This **Geneva stop** is used in watches and similar devices, to prevent overwinding.',
+      params: { slots: 6, stop: true, rpm: 40 },
+      select: 'pin',
+      cites: [LAB('Lab 7 theory')],
+    },
   ],
 }
 

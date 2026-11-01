@@ -7,11 +7,13 @@ export const deg = (r: number) => (r * 180) / Math.PI
 export interface GenevaParams {
   slots: number
   rpm: number
+  /** one slot closed, so the driver can only go so far: a Geneva stop */
+  stop: boolean
   set: (p: Partial<GenevaParams>) => void
   reset: () => void
 }
 
-export const DEFAULTS = { slots: 6, rpm: 15 }
+export const DEFAULTS = { slots: 6, rpm: 15, stop: false }
 
 export const useGeneva = create<GenevaParams>((set) => ({
   ...DEFAULTS,

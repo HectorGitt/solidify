@@ -1,10 +1,11 @@
 import { useMemo, useState } from 'react'
+import { TestBench, slopeThroughOrigin } from '@/lab/run'
 import { bendingStress, moment, reactions, shear, shearStress } from '@/physics/beam'
 import { Chart } from '@/ui/Chart'
 import { Readout, Section, Segmented, Slider, Toggle, fmt } from '@/ui/controls'
 import { Working, n, type WorkingStep } from '@/ui/Working'
 import { Note, PresetGrid, type Preset } from '../../elements/_shared/PanelBits'
-import { DEFAULTS, analyse, useBeam, type SectionKind, type SupportKind } from './model'
+import { DEFAULTS, PROCEDURE, analyse, beamRun, fullLoadStress, useBeam, type SectionKind, type SupportKind } from './model'
 
 const set = (p: Parameters<ReturnType<typeof useBeam.getState>['set']>[0]) => useBeam.getState().set(p)
 
@@ -35,6 +36,36 @@ export const PRESETS: Preset[] = [
   },
 ]
 
+/** The bench test: the load goes on in steps, the gauges are read, and the graph builds. */
+function BeamTest() {
+  const p = useBeam()
+  const rows = beamRun((s) => s.rows)
+  const status = beamRun((s) => s.status)
+  const full = useMemo(() => analyse(p, 1), [p.support, p.L, p.P1, p.x1, p.P2, p.x2, p.w, p.section, p.bf, p.tf, p.hw, p.tw, p.E])
+  const totalLoad = p.P1 + p.P2 + p.w * p.L
+  const loads = rows.map((r) => r[1])
+  const dials = rows.map((r) => r[2])
+  const fitted = slopeThroughOrigin(loads, dials)
+  const theory = totalLoad > 0 ? (Math.abs(full.peak.ymax) * 1e3) / totalLoad : 0
+  const measuredE = fitted > 0 ? (p.E * theory) / fitted : 0
+  return (
+    <TestBench run={beamRun} steps={PROCEDURE.steps} head={['Step', 'Load (kN)', 'Dial (mm)', 'Stress (MPa)']} format={(r) => [String(r[0]), fmt(r[1], 3), fmt(r[2], 3), fmt(r[3], 3)]}>
+      {rows.length > 1 ? (
+        <>
+          <Chart data={[[0, ...loads], [0, ...dials], [0, ...loads.map((l) => l * theory)]]} series={[{ label: 'Readings', color: '#e8794f', width: 2 }, { label: 'Theory', color: '#6fb3e0', width: 1 }]} xLabel="Load (kN)" yLabel="Deflection (mm)" height={130} />
+          {status === 'done' ? (
+            <div className="mt-1 grid grid-cols-3 gap-1.5">
+              <Readout label="Slope" value={fmt(fitted, 3)} unit="mm/kN" />
+              <Readout label="E from the test" value={fmt(measuredE, 3)} unit="GPa" tone="accent" />
+              <Readout label="Against the set E" value={fmt(((measuredE - p.E) / p.E) * 100, 2)} unit="%" tone="info" />
+            </div>
+          ) : null}
+        </>
+      ) : null}
+    </TestBench>
+  )
+}
+
 function Live() {
   const p = useBeam()
   const a = useMemo(() => analyse(p), [p])
@@ -54,7 +85,7 @@ function Live() {
         <Readout label="Second moment" value={fmt(a.props.I * 1e12, 4)} unit="mm⁴" />
         <Readout label="Neutral axis" value={fmt(a.props.ybar * 1e3, 4)} unit="mm up" />
       </div>
-      <Note>The beam’s bend is drawn exaggerated to a visible size. Red is tension, blue compression.</Note>
+      <Note>These read the load on the beam right now. The beam’s bend is drawn exaggerated to a visible size. Red is tension, blue compression.</Note>
     </Section>
   )
 }
@@ -103,6 +134,8 @@ function SectionControls() {
       <Slider label={rectangular ? 'Depth d' : 'Web depth'} value={p.hw} min={20} max={500} step={5} unit="mm" onChange={(hw) => set({ hw })} />
       {rectangular ? null : <Slider label="Web thickness" value={p.tw} min={4} max={40} step={1} unit="mm" onChange={(tw) => set({ tw })} />}
       <Slider label="Young’s modulus E" value={p.E} min={5} max={220} step={5} unit="GPa" onChange={(E) => set({ E })} />
+      <Slider label="Yield stress" value={p.yieldS} min={20} max={600} step={5} unit="MPa" onChange={(yieldS) => set({ yieldS })} />
+      <Note>At full load the far fibre would reach {fmt(fullLoadStress(p), 3)} MPa{fullLoadStress(p) >= p.yieldS ? ', past yield: the test will stop before that.' : '.'}</Note>
     </Section>
   )
 }
@@ -181,6 +214,7 @@ export function BeamPanel() {
   const [preset, setPreset] = useState<string | null>('third')
   return (
     <div>
+      <BeamTest />
       <Live />
       <Loads />
       <SectionControls />

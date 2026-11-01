@@ -5578,7 +5578,9 @@
   "Coupler",
   "Crank",
   "Frame",
-  "Output lever"
+  "Guide",
+  "Output lever",
+  "Slider"
  ],
  "mechanisms/inversions": [
   "Crossed guides",
@@ -5589,6 +5591,7 @@
  "materials/beam": [
   "Beam",
   "Built-in end",
+  "Dial gauge",
   "Supports",
   "Test frame"
  ],

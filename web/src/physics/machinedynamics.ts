@@ -306,3 +306,27 @@ export function cylinderBalance(cranks: number[]) {
   const mag = (k: number) => Math.hypot(cranks.reduce((s, a) => s + Math.cos(k * a), 0), cranks.reduce((s, a) => s + Math.sin(k * a), 0))
   return { primary: mag(1), secondary: mag(2) }
 }
+
+/**
+ * A slider-crank at one instant: crank centre at the origin, the slider on the x axis at C. The same
+ * relative equations, except that C's motion is known to lie along the line of stroke.
+ */
+export function sliderCrankDiagrams(r: number, l: number, theta: number, w2: number): LinkState & { C: [number, number]; B: [number, number] } {
+  const B: [number, number] = [r * Math.cos(theta), r * Math.sin(theta)]
+  const C: [number, number] = [B[0] + Math.sqrt(l * l - B[1] * B[1]), 0]
+  const rCB = sub(C, B)
+  const vB = perp(B, w2)
+  // v_C = v_B + w3 × rCB, with v_C having no y part
+  const u3 = perp(rCB, 1)
+  const w3 = -vB[1] / u3[1]
+  const vCB = perp(rCB, w3)
+  const vC: [number, number] = [vB[0] + vCB[0], 0]
+  const aB = scale(B, -w2 * w2)
+  const aCBn = scale(rCB, -w3 * w3)
+  // a_C = a_B + a_n + a3 × rCB, again with no y part
+  const known = add(aB, aCBn)
+  const a3 = -known[1] / u3[1]
+  const aCBt = perp(rCB, a3)
+  const aC: [number, number] = [known[0] + aCBt[0], 0]
+  return { B, C, vB, vC, vCB, w3, w4: 0, aB, aC, aCn: [0, 0], aCt: aC, aCBn, aCBt, a3, a4: 0 }
+}

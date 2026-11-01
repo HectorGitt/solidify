@@ -17,7 +17,7 @@ const X0 = -CENTRES / 2 - 0.06
 const lockRadius = (a: number) => a * 0.66
 
 /** The star: n slots, and a concave arc between each pair that the driver's locking disc rides on. */
-function wheelShape(n: number) {
+function wheelShape(n: number, closed: boolean) {
   const a = pinRadius(n)
   const c = CENTRES
   const R = Math.sqrt(c * c - a * a) + 0.004
@@ -42,12 +42,15 @@ function wheelShape(n: number) {
     const start = local(phi, radiusAt(phi + edge), -halfWidth)
     if (i === 0) s.moveTo(...start)
     else s.lineTo(...start)
-    s.lineTo(...local(phi, bottom, -halfWidth))
-    for (let k = 1; k < 10; k++) {
-      const q = (k / 10) * Math.PI
-      s.lineTo(...local(phi, bottom - halfWidth * Math.sin(q), -halfWidth * Math.cos(q)))
+    // a stop has its last slot left solid: the pin can go no further
+    if (!(closed && i === n - 1)) {
+      s.lineTo(...local(phi, bottom, -halfWidth))
+      for (let k = 1; k < 10; k++) {
+        const q = (k / 10) * Math.PI
+        s.lineTo(...local(phi, bottom - halfWidth * Math.sin(q), -halfWidth * Math.cos(q)))
+      }
+      s.lineTo(...local(phi, bottom, halfWidth))
     }
-    s.lineTo(...local(phi, bottom, halfWidth))
     s.lineTo(...local(phi, radiusAt(phi + edge), halfWidth))
     // round the rim to the next slot
     for (let k = 1; k < 40; k++) {
@@ -79,24 +82,27 @@ function lockShape(n: number) {
 
 export function Geneva3D() {
   const slots = useGeneva((s) => s.slots)
+  const stop = useGeneva((s) => s.stop)
   const a = pinRadius(slots)
   const refs = { driver: useRef<THREE.Group>(null), wheel: useRef<THREE.Group>(null) }
   const geo = useMemo(
     () => ({
-      wheel: extrude(wheelShape(slots), THICK, { curveSegments: 12 }),
+      wheel: extrude(wheelShape(slots, stop), THICK, { curveSegments: 12 }),
       lock: extrude(lockShape(slots), THICK),
       arm: flatBar(a, 0.044, 0.01),
       pin: xform(cylinder(0.0095, 0.03, 24), mat4.c(mat4.t(a, 0, 0.002), axial)),
       shaft: xform(cylinder(0.015, 0.05, 28), mat4.c(mat4.t(0, 0, 0.004), axial)),
       fixed: merge(...[0, CENTRES].map((x) => xform(cylinder(0.03, 0.02, 32), mat4.c(mat4.t(x, 0, -0.016), axial)))),
     }),
-    [slots, a],
+    [slots, stop, a],
   )
 
   const phase = useRef(0)
   useSimFrame((dt) => {
     const st = useGeneva.getState()
     phase.current += (st.rpm * 2 * Math.PI * dt) / 60
+    // with a stop, the pin comes up against the closed slot after n − 1 steps, and everything stops
+    if (st.stop) phase.current = Math.min(phase.current, (st.slots - 1) * 2 * Math.PI - 0.05)
     const t = phase.current
     live.theta = t
     const half = genevaHalfEngagement(st.slots)

@@ -59,6 +59,13 @@ const scene: SceneDef = {
       select: 'rocker',
       cites: [A('acceleration of a point on a link')],
     },
+    {
+      title: 'The slider-crank',
+      body: 'Here C can only move **along the line of stroke**, so that is the second line on each diagram. The rod’s motion comes out just the same way. The slider’s velocity is zero at the dead centres, and its acceleration there is **ω²r(1 ± 1/n)**.',
+      params: { mech: 'slider', crank: 0.05, coupler: 0.2, run: true },
+      select: 'slider',
+      cites: [V('slider-crank mechanism'), A('slider-crank mechanism')],
+    },
   ],
 }
 
