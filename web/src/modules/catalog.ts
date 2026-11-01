@@ -261,6 +261,9 @@ export const MODULES: ModuleDef[] = [
       { id: 'slider-crank', title: 'Slider-crank & scotch yoke', summary: 'Displacement every 15° against a true sine; rod length and an offset line of stroke.', exam: true },
       { id: 'geneva', title: 'Geneva wheel', summary: 'Steady rotation in, stop-start motion out: steps, dwell, output speed and acceleration.' },
       { id: 'oldham', title: 'Oldham coupling', summary: 'Parallel shafts out of line: tongues, grooves and the disc centre’s circle.' },
+      { id: 'inertia', title: 'Moment of inertia by oscillation', summary: 'Compound pendulum, bifilar and trifilar suspensions: time the swing, work out the inertia.', exam: true },
+      { id: 'balancing', title: 'Static & dynamic balancing rig', summary: 'The m r polygon, one balance mass or two, and a sprung plate that shows what is left.', exam: true },
+      { id: 'governors', title: 'Watt, Porter & Hartnell governors', summary: 'Sleeve lift, speed range, controlling force and stability.', exam: true },
     ],
   },
   {
