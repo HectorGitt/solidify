@@ -5,7 +5,7 @@ import { Icon } from './icons'
 import { Logo } from './Logo'
 import { ThemeToggle } from './ThemeToggle'
 
-/** The one-minute tour: the promo film (made by scripts/promo from the real scenes and screens). */
+/** The tour: the promo film (made by scripts/promo from the real scenes and screens). */
 const SRC = 'media/tour/solidify-tour.mp4'
 const POSTER = 'media/tour/poster.jpg'
 
@@ -41,9 +41,9 @@ export default function PromoPage() {
         <Link to="/" className="mb-5 inline-flex items-center gap-1 text-[13px] text-mute hover:text-ink">
           <Icon.back width={16} height={16} /> Home
         </Link>
-        <h1 className="text-[28px] font-semibold tracking-tight sm:text-[34px]">Solidify in a minute</h1>
+        <h1 className="text-[28px] font-semibold tracking-tight sm:text-[34px]">The Solidify tour</h1>
         <p className="mt-2 max-w-2xl text-[15px] leading-relaxed text-mute">
-          Cut through a running tractor, see through it, slow it down and take it apart. Change the settings, ask about any part, practise with worked solutions, then build the engine yourself.
+          One session on one tractor: cut through it, see through it, take it apart and open it up. Change the settings, ask about any part, practise with worked solutions, then build the engine yourself.
         </p>
 
         <div className="relative mt-7 overflow-hidden rounded-3xl border border-line bg-panel-2 shadow-2xl shadow-black/20">

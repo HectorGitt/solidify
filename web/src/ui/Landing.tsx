@@ -224,7 +224,7 @@ function Hero({ copy }: { copy: (typeof COPY)[keyof typeof COPY] }) {
                 {copy.primary.label} <Icon.chevron width={16} height={16} />
               </Link>
               <Link to="/promo" className="inline-flex items-center gap-2 rounded-full border border-line-2 bg-[var(--color-scrim)] px-6 py-4 text-[15px] font-medium text-ink backdrop-blur-xl transition-colors hover:border-accent/50">
-                <Icon.tour width={16} height={16} /> Watch the 1-minute tour
+                <Icon.tour width={16} height={16} /> Watch the tour
               </Link>
             </div>
           </div>
