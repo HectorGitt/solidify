@@ -5539,6 +5539,53 @@
   "Driven shaft",
   "Driving shaft"
  ],
+ "mechanisms/inertia": [
+  "Knife-edge pivot",
+  "Pendulum bar",
+  "Platform",
+  "Support frame",
+  "Test block"
+ ],
+ "mechanisms/balancing": [
+  "Bench",
+  "Shaft",
+  "Sprung plate and bearings"
+ ],
+ "mechanisms/governors": [
+  "Base and drive",
+  "Central load",
+  "Sleeve",
+  "Spindle",
+  "Spring"
+ ],
+ "mechanisms/flywheel": [
+  "Bedplate and bearings",
+  "Connecting rod",
+  "Cylinder",
+  "Flywheel",
+  "Piston"
+ ],
+ "mechanisms/reciprocating": [
+  "Crankcase and liners",
+  "Crankshaft",
+  "Test bed"
+ ],
+ "mechanisms/cam": [
+  "Follower guide",
+  "Plate cam"
+ ],
+ "mechanisms/velocity-diagram": [
+  "Coupler",
+  "Crank",
+  "Frame",
+  "Output lever"
+ ],
+ "mechanisms/inversions": [
+  "Crossed guides",
+  "Horizontal slider",
+  "Trammel bar",
+  "Vertical slider"
+ ],
  "materials/beam": [
   "Beam",
   "Built-in end",

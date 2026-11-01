@@ -247,3 +247,62 @@ export function instantaneousCentre(B: [number, number], C: [number, number], D:
   const t = cross(D, dC) / denom
   return scale(B, t)
 }
+
+/* ------------------------------------------------------------------ turning moment */
+export type TurningKind = 'four-stroke' | 'four-cylinder' | 'press'
+
+/** one repeat of the turning moment, in radians of crank */
+export const turningPeriod = (k: TurningKind) => (k === 'four-stroke' ? 4 * Math.PI : k === 'four-cylinder' ? Math.PI : 2 * Math.PI)
+
+/**
+ * A representative turning moment for peak torque Tp: a four-stroke's expansion, exhaust, suction and
+ * compression; four such cylinders firing in turn; or a press that takes its load in one short stroke
+ * (the load is then what varies, so the driving moment is steady and this returns the load torque).
+ */
+export function turningMoment(k: TurningKind, Tp: number, theta: number): number {
+  const t = wrap(theta)
+  if (k === 'press') return t < Math.PI / 3 ? Tp * Math.sin(3 * t) : 0.02 * Tp
+  const single = (a: number) => {
+    const q = ((a % (4 * Math.PI)) + 4 * Math.PI) % (4 * Math.PI)
+    const s = Math.sin(q % Math.PI)
+    if (q < Math.PI) return Tp * s
+    if (q < 2 * Math.PI) return -0.05 * Tp * s
+    if (q < 3 * Math.PI) return -0.05 * Tp * s
+    return -0.25 * Tp * s
+  }
+  if (k === 'four-stroke') return single(theta)
+  return single(theta) + single(theta + Math.PI) + single(theta + 2 * Math.PI) + single(theta + 3 * Math.PI)
+}
+
+/** mean moment, the excess energy over the mean at each angle, and its peak-to-peak range */
+export function turningStats(k: TurningKind, Tp: number, n = 720) {
+  const P = turningPeriod(k)
+  const h = P / n
+  let sum = 0
+  for (let i = 0; i < n; i++) sum += turningMoment(k, Tp, (i + 0.5) * h) * h
+  const mean = sum / P
+  const sign = k === 'press' ? -1 : 1
+  const angle: number[] = []
+  const T: number[] = []
+  const E: number[] = []
+  let e = 0
+  let lo = 0
+  let hi = 0
+  for (let i = 0; i <= n; i++) {
+    const a = i * h
+    angle.push(a)
+    T.push(turningMoment(k, Tp, a))
+    E.push(e)
+    lo = Math.min(lo, e)
+    hi = Math.max(hi, e)
+    e += sign * (turningMoment(k, Tp, a + h / 2) - mean) * h
+  }
+  return { mean, angle, T, E, dE: hi - lo, period: P, loE: lo, hiE: hi }
+}
+
+/* ------------------------------------------------------------------ multi-cylinder engines */
+/** the primary and secondary out-of-balance, per m r ω², for crank angles (rad): zero means balanced */
+export function cylinderBalance(cranks: number[]) {
+  const mag = (k: number) => Math.hypot(cranks.reduce((s, a) => s + Math.cos(k * a), 0), cranks.reduce((s, a) => s + Math.sin(k * a), 0))
+  return { primary: mag(1), secondary: mag(2) }
+}

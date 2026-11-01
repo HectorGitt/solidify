@@ -264,6 +264,11 @@ export const MODULES: ModuleDef[] = [
       { id: 'inertia', title: 'Moment of inertia by oscillation', summary: 'Compound pendulum, bifilar and trifilar suspensions: time the swing, work out the inertia.', exam: true },
       { id: 'balancing', title: 'Static & dynamic balancing rig', summary: 'The m r polygon, one balance mass or two, and a sprung plate that shows what is left.', exam: true },
       { id: 'governors', title: 'Watt, Porter & Hartnell governors', summary: 'Sleeve lift, speed range, controlling force and stability.', exam: true },
+      { id: 'flywheel', title: 'Flywheel & turning moment', summary: 'The turning moment diagram, the energy to store, and the speed left fluctuating.', exam: true },
+      { id: 'reciprocating', title: 'Reciprocating balance', summary: 'Primary and secondary shaking forces, counterweights and multi-cylinder engines.', exam: true },
+      { id: 'cam', title: 'Cam profile & follower', summary: 'Lay out a lift diagram, draw the cam it needs, and read the follower’s velocity and acceleration.', exam: true },
+      { id: 'velocity-diagram', title: 'Velocity & acceleration diagrams', summary: 'Polygons that close live on a running four-bar, with its instantaneous centre.', exam: true },
+      { id: 'inversions', title: 'Inversions', summary: 'Hold a different link of one chain still and get a different machine.', exam: true },
     ],
   },
   {

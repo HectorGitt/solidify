@@ -59,7 +59,7 @@ export function Governor3D() {
       sleeve: tube(0.03, 0.015, 0.05, 32),
       load: tube(0.09, 0.015, 0.09, 48),
       collar: xform(tube(0.11, 0.095, 0.012, 48), mat4.t(0, 0, 0)),
-      spring: helixSpring(0.032, 0.005, 0.2, 7),
+      spring: helixSpring(0.032, 0.005, 0.2, 7).translate(0, -0.1, 0),
       bracket: merge(xform(box(0.62, 0.024, 0.05), mat4.t(0, TOP, 0)), ...[-1, 1].map((s) => xform(box(0.02, PIVOT_DROP, 0.03), mat4.t(s * 0.264, TOP - PIVOT_DROP / 2, 0)))),
     }),
     [],

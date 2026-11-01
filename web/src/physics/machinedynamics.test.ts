@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { solve } from './fourbar'
-import { CLASSIC_CAM, ballsToBalance, camLift, coupleMrz, dynamicBalance, energyFluctuation, equivalentMasses, flywheelInertia, fourBarDiagrams, hartnell, instantaneousCentre, motionLaw, pendulumInertia, pendulumPeriod, porter, porterAlphaAfterLift, radToRpm, reciprocatingForce, requiredInertia, resultantMr, rodEnds, rpmToRad, sensitivity, speedFluctuation, staticBalance, suspensionInertia, suspensionPeriod, wattHeight, wattSpeed } from './machinedynamics'
+import { cylinderBalance, turningMoment, turningPeriod, turningStats, CLASSIC_CAM, ballsToBalance, camLift, coupleMrz, dynamicBalance, energyFluctuation, equivalentMasses, flywheelInertia, fourBarDiagrams, hartnell, instantaneousCentre, motionLaw, pendulumInertia, pendulumPeriod, porter, porterAlphaAfterLift, radToRpm, reciprocatingForce, requiredInertia, resultantMr, rodEnds, rpmToRad, sensitivity, speedFluctuation, staticBalance, suspensionInertia, suspensionPeriod, wattHeight, wattSpeed } from './machinedynamics'
 
 const rad = (d: number) => (d * Math.PI) / 180
 const deg = (r: number) => (r * 180) / Math.PI
@@ -178,5 +178,50 @@ describe('velocity and acceleration diagrams', () => {
     const rC = Math.hypot(p.C[0] - I[0], p.C[1] - I[1])
     expect(Math.hypot(...d.vB) / rB).toBeCloseTo(Math.abs(d.w3), 6)
     expect(Math.hypot(...d.vC) / rC).toBeCloseTo(Math.abs(d.w3), 6)
+  })
+})
+
+describe('turning moment', () => {
+  it('a four-stroke averages far below its peak: that is what a flywheel smooths', () => {
+    const s = turningStats('four-stroke', 1000)
+    expect(s.mean).toBeGreaterThan(0)
+    expect(s.mean).toBeLessThan(250)
+    expect(s.dE).toBeGreaterThan(0)
+    expect(turningPeriod('four-stroke')).toBeCloseTo(4 * Math.PI, 9)
+  })
+  it('the energy over a full cycle closes', () => {
+    const s = turningStats('four-stroke', 1000)
+    expect(s.E[s.E.length - 1]).toBeCloseTo(0, 6)
+  })
+  it('four cylinders firing in turn need far less flywheel for the same peak', () => {
+    expect(turningStats('four-cylinder', 1000).dE).toBeLessThan(turningStats('four-stroke', 1000).dE / 4)
+  })
+  it('a press takes its load in one part of the turn', () => {
+    expect(turningMoment('press', 1000, 0.5)).toBeGreaterThan(900)
+    expect(turningMoment('press', 1000, 3)).toBeLessThan(30)
+  })
+})
+
+describe('multi-cylinder balance', () => {
+  it('one cylinder: nothing cancels', () => {
+    const b = cylinderBalance([0])
+    expect(b.primary).toBeCloseTo(1, 9)
+    expect(b.secondary).toBeCloseTo(1, 9)
+  })
+  it('two at 180°: primary cancels, secondary doubles', () => {
+    const b = cylinderBalance([0, Math.PI])
+    expect(b.primary).toBeCloseTo(0, 9)
+    expect(b.secondary).toBeCloseTo(2, 9)
+  })
+  it('a flat four: primary cancels, secondary is four times one cylinder', () => {
+    const b = cylinderBalance([0, Math.PI, Math.PI, 0])
+    expect(b.primary).toBeCloseTo(0, 9)
+    expect(b.secondary).toBeCloseTo(4, 9)
+  })
+  it('a straight six cancels both', () => {
+    const t = (2 * Math.PI) / 3
+    const b = cylinderBalance([0, t, 2 * t, 2 * t, t, 0])
+    expect(b.primary).toBeCloseTo(0, 9)
+    expect(b.secondary).toBeCloseTo(0, 9)
   })
 })
