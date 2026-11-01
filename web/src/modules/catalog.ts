@@ -302,6 +302,17 @@ export const MODULES: ModuleDef[] = [
       { id: 'steam-plant', title: 'Rankine steam plant', summary: 'Boiler, turbine, condenser and feed pump: raise the pressure and read the work, the dryness and the efficiency.', exam: true },
     ],
   },
+  {
+    id: 'drawing',
+    code: 'M20',
+    title: 'Technical drawing lab',
+    courses: [],
+    blurb: 'Projection you can walk around: viewing planes that swing into place, and cutting planes that plot a curve point by point.',
+    scenes: [
+      { id: 'true-length', title: 'True length & auxiliary views', summary: 'Swing a viewing plane round a line until it shows its true length.', exam: true },
+      { id: 'interpenetration', title: 'Interpenetration of cylinders', summary: 'Plot the curve where two pipes meet, and unroll the flat pattern.', exam: true },
+    ],
+  },
 ]
 
 for (const m of MODULES) {

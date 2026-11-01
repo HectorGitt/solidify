@@ -5678,5 +5678,16 @@
   "Steam and water lines",
   "Superheater",
   "Turbine casing"
+ ],
+ "drawing/true-length": [
+  "Block",
+  "Horizontal plane",
+  "Viewing plane"
+ ],
+ "drawing/interpenetration": [
+  "Base",
+  "Branch cylinder",
+  "Cutting plane",
+  "Main cylinder"
  ]
 }
