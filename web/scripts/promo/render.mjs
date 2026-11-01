@@ -17,7 +17,7 @@ const browser = await chromium.launch({ executablePath: CHROME, headless: true, 
 const page = await browser.newPage({ viewport: { width: 1920, height: 1080 } })
 page.on('pageerror', (e) => console.log('pageerror', e.message))
 const shots = pathToFileURL(path.join(dir, 'shots')).href + '/'
-await page.goto(pathToFileURL(path.resolve('scripts/promo/comp.html')).href + '?shots=' + encodeURIComponent(shots))
+await page.goto(pathToFileURL(path.resolve('scripts/promo/' + arg('--comp', 'comp.html'))).href + '?shots=' + encodeURIComponent(shots))
 await page.waitForFunction(() => window.PROMO_READY)
 await page.evaluate(() => window.PROMO_READY)
 const { DURATION, FPS } = await page.evaluate(() => window.PROMO)

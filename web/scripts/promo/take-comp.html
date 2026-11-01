@@ -1,0 +1,175 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>Solidify one take</title>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=block" rel="stylesheet" />
+<style>
+  :root { --bg: #f5f6f2; --ink: #0e120c; --dim: #626c5e; --line: rgba(14, 18, 12, 0.1); --accent: #4d7c0f; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 1920px; height: 1080px; overflow: hidden; background: var(--bg); }
+  body { font-family: 'Sora', sans-serif; color: var(--ink); -webkit-font-smoothing: antialiased; }
+  #stage, .layer { position: absolute; inset: 0; overflow: hidden; }
+  #app { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; transform-origin: 0 0; }
+  .mono { font-family: 'JetBrains Mono', monospace; }
+  .card { position: absolute; max-width: 700px; padding: 24px 32px 26px; background: rgba(255, 255, 255, 0.9); border: 1px solid var(--line); border-radius: 22px; backdrop-filter: blur(18px); box-shadow: 0 30px 60px -30px rgba(14, 18, 12, 0.3); }
+  .eb { font-size: 18px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--accent); margin-bottom: 10px; font-weight: 500; }
+  .t { font-size: 48px; line-height: 1.04; font-weight: 600; letter-spacing: -0.04em; }
+  .s { margin-top: 10px; font-size: 22px; line-height: 1.36; color: var(--dim); }
+  .w { display: inline-block; overflow: hidden; vertical-align: top; padding-bottom: 0.12em; margin-bottom: -0.12em; }
+  .w > span { display: inline-block; }
+  svg { overflow: visible; }
+</style>
+</head>
+<body>
+<div id="stage"><img id="app" decoding="sync" /></div>
+<script>
+const Q = new URLSearchParams(location.search)
+const DIR = (Q.get('shots') || '../shots/') + '../'
+const clamp01 = (x) => Math.max(0, Math.min(1, x))
+const lerp = (a, b, t) => a + (b - a) * t
+const seg = (t, a, b) => clamp01((t - a) / (b - a))
+const E = {
+  out: (x) => (x >= 1 ? 1 : 1 - Math.pow(2, -10 * x)),
+  io: (x) => (x < 0.5 ? 4 * x ** 3 : 1 - Math.pow(-2 * x + 2, 3) / 2),
+  in: (x) => x * x * x,
+  back: (x) => { const c = 1.5; return 1 + (c + 1) * Math.pow(x - 1, 3) + c * Math.pow(x - 1, 2) },
+}
+const stage = document.getElementById('stage')
+const app = document.getElementById('app')
+function el(tag, cls, parent = stage, html) {
+  const e = document.createElement(tag)
+  if (cls) e.className = cls
+  if (html !== undefined) e.innerHTML = html
+  parent.appendChild(e)
+  return e
+}
+const css = (e, s) => { for (const k in s) e.style[k] = s[k] }
+function words(parent, text) {
+  const out = []
+  text.split(/(\s+|\n)/).forEach((w) => {
+    if (w === '\n') return void parent.appendChild(document.createElement('br'))
+    if (/^\s+$/.test(w)) return void parent.appendChild(document.createTextNode(' '))
+    if (w) out.push(el('span', '', el('span', 'w', parent), w))
+  })
+  return out
+}
+function animWords(ws, t, a, b, { stagger = 0.045, d = 0.7, out = 0.28 } = {}) {
+  ws.forEach((w, i) => {
+    const p = E.out(seg(t, a + i * stagger, a + i * stagger + d))
+    const q = E.in(seg(t, b - out, b))
+    css(w, { transform: `translate3d(0, ${(1 - p) * 110 - q * 60}%, 0)`, opacity: String(1 - q) })
+  })
+}
+const LOGO = (size) => `<svg width="${size}" height="${size}" viewBox="0 0 24 24">
+  <path d="M12 2 L20.66 7 L12 12 L3.34 7 Z" fill="#f4f4f5" stroke="#09090b" stroke-width=".9" stroke-linejoin="round"/>
+  <path d="M3.34 7 L12 12 L12 22 L3.34 17 Z" fill="#3f3f46" stroke="#09090b" stroke-width=".9" stroke-linejoin="round"/>
+  <path d="M12 12 L20.66 7 L20.66 17 L12 22 Z" fill="var(--accent)" stroke="#09090b" stroke-width=".9" stroke-linejoin="round"/></svg>`
+
+window.PROMO_READY = (async () => {
+  const film = await (await fetch(DIR + 'take.json')).json()
+  await document.fonts.ready
+  const POS = { tr: { right: '56px', top: '56px' }, tl: { left: '56px', top: '56px' }, bl: { left: '56px', bottom: '56px' } }
+  const caps = film.captions.map((c) => {
+    const card = el('div', 'card')
+    css(card, POS[c.pos])
+    const eb = words(el('div', 'eb mono', card), c.eyebrow)
+    const t = words(el('div', 't', card), c.title)
+    const s = c.sub ? words(el('div', 's', card), c.sub) : []
+    return { ...c, card, eb, tw: t, sw: s }
+  })
+  // the end card, over the running app
+  const endA = film.marks.end
+  const endL = el('div', 'layer')
+  css(endL, { background: 'linear-gradient(90deg, rgba(245,246,242,1) 0%, rgba(245,246,242,.97) 36%, rgba(245,246,242,.4) 46%, rgba(245,246,242,0) 56%)' })
+  const box = el('div', '', endL)
+  css(box, { position: 'absolute', left: '150px', top: '270px' })
+  const row = el('div', '', box)
+  css(row, { display: 'flex', alignItems: 'center', gap: '26px' })
+  const mark = el('div', '', row, LOGO(112))
+  const name = el('div', '', row)
+  css(name, { fontSize: '96px', fontWeight: '600', letterSpacing: '-0.045em' })
+  const nw = words(name, 'Solidify')
+  const tag = el('div', '', box)
+  css(tag, { marginTop: '46px', fontSize: '64px', fontWeight: '500', letterSpacing: '-0.04em' })
+  const tw = words(tag, 'Open up the machine.')
+  const url = el('div', '', box)
+  css(url, { display: 'inline-flex', marginTop: '48px', borderRadius: '999px', background: 'var(--accent)', color: '#fff', fontSize: '30px', padding: '22px 36px', fontWeight: '600', transformOrigin: '0% 50%' })
+  url.textContent = 'solidify.studio'
+  const small = el('div', '', box)
+  css(small, { marginTop: '34px', fontSize: '26px', color: 'var(--dim)' })
+  const smw = words(small, 'Nothing to install. Runs in your browser.')
+
+  // the intro: the name and what it is, then the page lifts off the running machine on the first hit
+  const introA = 0.2, introB = 3.6
+  const introL = el('div', 'layer')
+  css(introL, { background: 'var(--bg)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' })
+  const irow = el('div', '', introL)
+  css(irow, { display: 'flex', alignItems: 'center', gap: '30px' })
+  const imark = el('div', '', irow, LOGO(136))
+  const iname = el('div', '', irow)
+  css(iname, { fontSize: '124px', fontWeight: '600', letterSpacing: '-0.045em' })
+  const inw = words(iname, 'Solidify')
+  const itag = el('div', '', introL)
+  css(itag, { marginTop: '40px', fontSize: '50px', fontWeight: '500', letterSpacing: '-0.035em', color: 'var(--dim)' })
+  const itw = words(itag, 'See inside the machine.')
+
+  const cropAt = (t) => {
+    let c = film.crops[0]
+    for (const k of film.crops) {
+      if (t < k.t) break
+      const e = k.d > 0 ? E.io(seg(t, k.t, k.t + k.d)) : 1
+      c = { cx: lerp(c.cx, k.cx, e), cy: lerp(c.cy, k.cy, e), w: lerp(c.w, k.w, e) }
+    }
+    // pull back to the whole app for the end card
+    const p = E.io(seg(t, endA - 0.2, endA + 0.8))
+    const w = lerp(c.w, 1920, p), cx = lerp(c.cx, 960, p), cy = lerp(c.cy, 540, p)
+    const h = (w * 9) / 16
+    return { slide: 420 * p, k: 1920 / w, cx: Math.max(w / 2, Math.min(1920 - w / 2, cx)), cy: Math.max(h / 2, Math.min(1080 - h / 2, cy)) }
+  }
+  let last = ''
+  window.render = async (t) => {
+    const n = Math.min(film.frames - 1, Math.round(t * film.fps))
+    const src = `${DIR}take/${String(n).padStart(5, '0')}.jpg`
+    const waits = []
+    if (src !== last) { last = src; app.src = src; waits.push(app.decode().catch(() => {})) }
+    const { k, cx, cy, slide } = cropAt(t)
+    app.style.transform = `translate3d(${960 - cx * k + slide}px, ${540 - cy * k}px, 0) scale(${k})`
+    for (const [i, c] of caps.entries()) {
+      // a caption gives way to the next one
+      const b = Math.min(c.t + c.d, caps[i + 1]?.t ?? endA, endA)
+      const vis = t >= c.t && t < b
+      c.card.style.visibility = vis ? 'visible' : 'hidden'
+      if (!vis) continue
+      css(c.card, { opacity: String(Math.min(E.out(seg(t, c.t, c.t + 0.35)), 1 - E.in(seg(t, b - 0.25, b)))), transform: `translate3d(0, ${(1 - E.out(seg(t, c.t, c.t + 0.5))) * 20}px, 0)` })
+      animWords(c.eb, t, c.t + 0.05, b, { stagger: 0.03 })
+      animWords(c.tw, t, c.t + 0.12, b, { stagger: 0.05 })
+      animWords(c.sw, t, c.t + 0.35, b, { stagger: 0.015, d: 0.5 })
+    }
+    introL.style.visibility = t < introB ? 'visible' : 'hidden'
+    if (t < introB) {
+      const out = E.io(seg(t, introB - 0.55, introB))
+      css(introL, { transform: `translate3d(0, ${-out * 1080}px, 0)` })
+      css(imark, { transform: `scale(${Math.max(0.001, E.back(seg(t, introA, introA + 0.6)))})` })
+      animWords(inw, t, introA + 0.3, 1e9)
+      animWords(itw, t, introA + 0.9, 1e9, { stagger: 0.07 })
+    }
+    endL.style.visibility = t >= endA ? 'visible' : 'hidden'
+    if (t >= endA) {
+      endL.style.opacity = String(E.out(seg(t, endA, endA + 0.6)))
+      const pm = E.back(seg(t, endA + 0.15, endA + 0.7))
+      css(mark, { transform: `scale(${Math.max(0.001, pm)})` })
+      animWords(nw, t, endA + 0.45, 1e9)
+      animWords(tw, t, endA + 0.8, 1e9, { stagger: 0.06 })
+      const pu = E.back(seg(t, endA + 1.25, endA + 1.85))
+      css(url, { opacity: String(clamp01(pu)), transform: `scale(${0.8 + 0.2 * pu})` })
+      animWords(smw, t, endA + 1.6, 1e9, { stagger: 0.03 })
+    }
+    stage.style.opacity = String(1 - E.in(seg(t, film.duration - 0.45, film.duration)))
+    await Promise.all(waits)
+  }
+  window.PROMO = { DURATION: film.duration, FPS: film.fps }
+})()
+</script>
+</body>
+</html>
