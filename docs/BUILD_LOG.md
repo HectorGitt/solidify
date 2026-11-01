@@ -178,3 +178,10 @@ Each entry: **Symptom** · **Cause** · **Fix** · **Lesson**.
 ### Browser checks raced with hot reload
 - **Symptom:** a click landed just as an edit hot-reloaded the page, resetting UI state.
 - **Lesson:** reload the page before measuring or testing behaviour in the browser.
+
+## Live test rollout and thermal lab (2026-11-01)
+
+- **Rail test logged one temperature.** Symptom: every row read 15 °C and the chart was empty. Cause: the default target equalled the laying temperature, so the test had no range. Fix: default target 45 °C. Lesson: when a slider becomes a test's end point, check its default differs from the start.
+- **Governor test seemed to hang.** Cause: the driver runs on sim time and that scene runs at 1/20 speed, so a 7.5 s test took 150 s. Fix: shorter steps. Lesson: set test lengths against the scene's `timeScale`.
+- **`tyre/build.test.ts` fails under load.** It asserts a wall-clock limit of 1.5 s, and reads 1.5 to 1.7 s when the machine is busy. It passes alone. Not a logic failure, but it makes the full run unreliable.
+- **Source error.** The heat exchanger tutorial's first answer, 2.07 m², works out at 2.03 m²; that question is left out of Exam Practice.
