@@ -11,9 +11,11 @@ await p.waitForTimeout(6000)
 const ctx = await s.js(`
   const { useView } = await import('/src/render/view.ts')
   const { useParts } = await import('/src/parts/registry.ts')
-  if (arg.inside) { const { enterInside } = await import('/src/ui/inside.ts'); enterInside(useParts.getState().parts[arg.inside]); await new Promise((r) => setTimeout(r, 3000)) }
   // as the film has it at this point: the section is off
   useView.getState().setCut({ enabled: false })
+  // the engine's detail arrives well after the scene reports ready
+  for (let i = 0; i < 240 && !(useParts.getState().parts[arg.part] && (!arg.inside || useParts.getState().parts[arg.inside])); i++) await new Promise((r) => setTimeout(r, 500))
+  if (arg.inside) { const { enterInside } = await import('/src/ui/inside.ts'); enterInside(useParts.getState().parts[arg.inside]); await new Promise((r) => setTimeout(r, 2000)) }
   useView.getState().select(arg.part)
   await new Promise((r) => setTimeout(r, 1500))
   const o = await import('/src/cloud/onScreen.ts')
