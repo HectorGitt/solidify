@@ -59,7 +59,7 @@ async function frame() {
   }, [mouse.x, mouse.y])
   if (!PREVIEW || n % 20 === 0) {
     const name = PREVIEW ? `t${now().toFixed(2).padStart(6, '0')}.jpg` : `${String(n).padStart(5, '0')}.jpg`
-    await page.screenshot({ path: path.join(FRAMES, name), type: 'jpeg', quality: PREVIEW ? 70 : 92 })
+    await page.screenshot({ path: path.join(FRAMES, name), type: 'jpeg', quality: PREVIEW ? 70 : 85 })
   } else await realSleep(3)
   n++
 }
@@ -201,6 +201,9 @@ async function settled() {
 await page.clock.install()
 await page.goto(`${BASE}/#/m/powertrain/line-of-drive`)
 await page.waitForFunction(() => !!window.__agriState, null, { timeout: 180000 })
+// the engine's detail arrives well after the scene is up: a take without it is no good
+for (let i = 0; i < 360 && !(await partId('Pistons')); i++) await realSleep(1000)
+if (!(await partId('Pistons'))) throw new Error('the engine detail never arrived')
 console.log('meshes', await settled())
 await js(`
   const { useAuth } = await import('/src/cloud/auth.ts')
