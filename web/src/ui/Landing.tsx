@@ -88,6 +88,7 @@ const COPY = {
     title: 'Engineering, brought to life.',
     lead: 'Engines, mechanisms, strength of materials, thermal plant and technical drawing, as models you can run. Do the lab test on screen, then practise with fresh numbers and see the slip behind a wrong answer.',
     primary: { label: 'Start with the diesel engine', to: '/m/engine/four-stroke-diesel' },
+    labs: { label: 'Open the labs', to: '/m/materials/tensile' },
     features: [
       { icon: 'cut', title: 'Interactive diagrams', text: 'Every textbook figure becomes a model you can turn, slice, explode and run in slow motion, down to 1/200 of real speed.' },
       { icon: 'book', title: 'Worked examples', text: 'Load exam-style data into any scene and follow the working: the formula, the numbers substituted, then the answer.' },
@@ -96,6 +97,39 @@ const COPY = {
     ],
   },
 } as const
+
+/** Rigs to jump to from the live test section. */
+const LAB_LINKS = [
+  { label: 'Tensile test', to: '/m/materials/tensile' },
+  { label: 'Beam bending', to: '/m/materials/beam' },
+  { label: 'Steam plant', to: '/m/thermal/steam-plant' },
+  { label: 'Refrigeration', to: '/m/thermal/refrigeration' },
+  { label: 'Governors', to: '/m/mechanisms/governors' },
+]
+
+/** A real recording of the tensile rig: the feature is easier to show than to describe. */
+function LiveTest() {
+  // no autoplay for anyone who has asked for less motion; they still get the controls
+  const calm = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+  return (
+    <section id="live-test" className="mx-auto grid max-w-[1360px] scroll-mt-20 items-center gap-8 px-5 pt-16 sm:px-10 lg:grid-cols-12 lg:gap-12">
+      <div className="lg:col-span-4">
+        <h2 className="text-[30px] font-semibold tracking-[-0.03em] sm:text-[38px]">Set the conditions. Watch the test run.</h2>
+        <p className="mt-3 text-[15px] leading-relaxed text-mute">Choose a material and the machine pulls it until it breaks. The curve draws itself, the readings fill the table, and the properties are worked out from those readings, scatter and all.</p>
+        <div className="mt-6 flex flex-wrap gap-2">
+          {LAB_LINKS.map((l) => (
+            <Link key={l.to} to={l.to} className="rounded-full border border-line-2 px-3.5 py-1.5 text-[13px] font-medium text-ink transition-colors hover:border-accent/50">
+              {l.label}
+            </Link>
+          ))}
+        </div>
+      </div>
+      <div className="overflow-hidden rounded-3xl border border-line bg-[var(--color-stage)] lg:col-span-8">
+        <video className="block aspect-video w-full" src={`${MEDIA}/lab/tensile-test.mp4`} poster={`${MEDIA}/lab/tensile-test.webp`} autoPlay={!calm} controls={calm} muted loop playsInline preload="metadata" aria-label="A specimen pulled to failure in the tensile rig, with the stress-strain curve and table of readings building beside it" />
+      </div>
+    </section>
+  )
+}
 
 /**
  * A scene render for the current theme (`<name>-light.webp` / `<name>-dark.webp`, made by
@@ -228,6 +262,11 @@ function Hero({ copy }: { copy: (typeof COPY)[keyof typeof COPY] }) {
               <Link to={copy.primary.to} className="inline-flex items-center gap-2 rounded-full bg-accent px-7 py-4 text-[15px] font-semibold text-accent-ink transition-transform hover:brightness-105 active:scale-[0.98]">
                 {copy.primary.label} <Icon.chevron width={16} height={16} />
               </Link>
+              {'labs' in copy ? (
+                <Link to={copy.labs.to} className="inline-flex items-center gap-2 rounded-full border border-line-2 bg-[var(--color-scrim)] px-6 py-4 text-[15px] font-medium text-ink backdrop-blur-xl transition-colors hover:border-accent/50">
+                  {copy.labs.label}
+                </Link>
+              ) : null}
               <Link to="/promo" className="inline-flex items-center gap-2 rounded-full border border-line-2 bg-[var(--color-scrim)] px-6 py-4 text-[15px] font-medium text-ink backdrop-blur-xl transition-colors hover:border-accent/50">
                 <Icon.tour width={16} height={16} /> Watch the tour
               </Link>
@@ -431,6 +470,8 @@ export function Landing() {
 
       <Hero copy={copy} />
 
+      <LiveTest />
+
       <section id="systems" className="mx-auto max-w-[1360px] scroll-mt-20 px-5 pt-16 sm:px-10">
         <div className="mb-7 flex flex-wrap items-end justify-between gap-4">
           <div>
@@ -472,13 +513,13 @@ export function Landing() {
 
       <section className="mx-auto grid max-w-[1360px] gap-4 px-5 pt-20 sm:grid-cols-2 sm:px-10 lg:grid-cols-4">
         <Stat value={total} label="interactive 3D scenes" />
-        <Stat value={READY.length} label="machine systems" />
+        <Stat value={READY.length} label="systems and labs" />
         <Stat value="1,000+" label="verified calculations" />
         <Stat value="0 MB" label="to install: it runs in the browser" />
       </section>
 
       <section className="mx-auto max-w-[1360px] px-5 pt-20 sm:px-10">
-        <h2 className="max-w-[620px] text-[30px] font-semibold tracking-[-0.03em] sm:text-[38px]">Built for mechanical depth</h2>
+        <h2 className="max-w-[620px] text-[30px] font-semibold tracking-[-0.03em] sm:text-[38px]">Built for engineering depth</h2>
         <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {copy.features.map((f) => (
             <div key={f.title} className="rounded-3xl border border-line bg-panel p-7">
@@ -501,7 +542,7 @@ export function Landing() {
             onChoose={() => setAudience('professional')}
             points={[
               'A clean engineering view: mechanisms, sections and sizing calculations',
-              'Size drives, pumps, clutches and hitches with live formulas and sweeps',
+              'Size drives, pumps and hitches, or test beams, shafts and exchangers, with live formulas',
               'Show clients and teams how it works with exploded and X-ray views',
             ]}
           />
@@ -511,7 +552,7 @@ export function Landing() {
             active={academic}
             onChoose={() => setAudience('academic')}
             points={[
-              'Exam-style questions with fresh numbers, solved step by step in the scenes',
+              'Lab tests that log readings to work up, and exam-style questions with fresh numbers',
               'Method marks, spaced review and topic mastery that follow you between devices',
               'Classes and papers with per-student numbers and a weak-spot report',
             ]}
@@ -525,8 +566,8 @@ export function Landing() {
         <div className="relative overflow-hidden rounded-[32px] border border-line bg-[var(--color-stage)]">
           <Media name="modules/implements" alt="Tractor and implement in 3D" className="absolute inset-0 h-full w-full object-cover object-right" />
           <div className="relative bg-gradient-to-r from-[var(--color-stage)] via-[color-mix(in_srgb,var(--color-stage)_85%,transparent)] to-transparent p-8 sm:p-14">
-            <h2 className="max-w-xl text-[32px] font-semibold leading-tight tracking-[-0.03em] text-ink sm:text-[44px]">Open a machine and see how it works.</h2>
-            <p className="mt-3 max-w-xl text-[15.5px] text-mute">No sign-up, nothing to download. Pick any system and start cutting.</p>
+            <h2 className="max-w-xl text-[32px] font-semibold leading-tight tracking-[-0.03em] text-ink sm:text-[44px]">Open a machine. Run a test. See how it works.</h2>
+            <p className="mt-3 max-w-xl text-[15.5px] text-mute">No sign-up, nothing to download. Pick any system or rig and start.</p>
             <div className="mt-8 flex flex-wrap gap-3">
               <Link to={copy.primary.to} className="inline-flex items-center gap-2 rounded-full bg-accent px-7 py-4 text-[15px] font-semibold text-accent-ink">
                 {copy.primary.label} <Icon.chevron width={16} height={16} />
