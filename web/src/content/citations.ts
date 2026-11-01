@@ -3,7 +3,7 @@
  * to where it comes from so the app stays faithful to the notes.
  */
 export interface Citation {
-  course: 'AEE501' | 'AEE502' | 'AEE503' | 'AEE505' | 'AEE509' | 'AEE510' | 'AEE518' | 'Textbook' | 'AEE504' | 'AEE507' | 'AEE536'
+  course: 'AEE501' | 'AEE502' | 'AEE503' | 'AEE505' | 'AEE509' | 'AEE510' | 'AEE518' | 'Textbook' | 'AEE504' | 'AEE507' | 'AEE536' | 'MEE303' | 'MEE305' | 'MEE306' | 'MEE395' | 'MEE396' | 'MSE305' | 'CVE202' | 'AEE305' | 'AEE306'
   /** file name as it appears in the course folder */
   file: string
   /** page / figure / equation reference */

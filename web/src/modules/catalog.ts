@@ -250,6 +250,16 @@ export const MODULES: ModuleDef[] = [
       { id: 'drone-scan', title: 'Drone field scan', summary: 'Flight planning, image overlap and NDVI from a multispectral camera.' },
     ],
   },
+  {
+    id: 'mechanisms',
+    code: 'M17',
+    title: 'Mechanisms & machine dynamics lab',
+    courses: [],
+    blurb: 'The bench experiments of a mechanics of machines lab: linkages, cams, balancing, governors and flywheels you can reconfigure and measure.',
+    scenes: [
+      { id: 'four-bar', title: 'Four-bar linkage rig', summary: 'Change the links, fix a different one: Grashof’s law, transmission angle, mechanical advantage and coupler curves.', exam: true },
+    ],
+  },
 ]
 
 for (const m of MODULES) {
