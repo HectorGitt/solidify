@@ -260,6 +260,16 @@ export const MODULES: ModuleDef[] = [
       { id: 'four-bar', title: 'Four-bar linkage rig', summary: 'Change the links, fix a different one: Grashof’s law, transmission angle, mechanical advantage and coupler curves.', exam: true },
     ],
   },
+  {
+    id: 'materials',
+    code: 'M18',
+    title: 'Strength of materials lab',
+    courses: [],
+    blurb: 'Test pieces and rigs that load, bend and break: stress, strain, beams, torsion and buckling you can see and measure.',
+    scenes: [
+      { id: 'beam', title: 'Beam bending rig', summary: 'Supports, loads and sections: shear force, bending moment, stress through the depth and deflection.', exam: true },
+    ],
+  },
 ]
 
 for (const m of MODULES) {
