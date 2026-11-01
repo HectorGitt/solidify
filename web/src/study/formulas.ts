@@ -1,4 +1,4 @@
-import { SRC, type Citation } from '@/content/citations'
+import { SRC, cite, type Citation } from '@/content/citations'
 import type { Course } from './types'
 
 /**
@@ -24,6 +24,10 @@ export interface Formula {
 const r = String.raw
 type Opt = Pick<Formula, 'beyond' | 'errata' | 'note'>
 let seq = 0
+const CV = (where: string) => cite('CVE202', 'CVE PQ.pdf', where)
+const MD = (file: string, where: string) => cite('MEE306', file, where)
+const TH = (file: string, where: string) => cite('AEE306', file, where)
+
 const F = (course: Course, topic: string, name: string, tex: string, scene: string, cite: Citation, o: Opt = {}): Formula => ({
   id: `${course}-${++seq}`,
   course,
@@ -173,4 +177,23 @@ export const FORMULAS: Formula[] = [
   F('AEE518', 'Equivalent systems', 'Cantilever stiffness', r`k_e = \dfrac{3 E I}{L^3},\quad I = \dfrac{b h^3}{12}`, 'vibration/isolation', SRC.ln518('equivalent systems'), { errata: 'cantilever-E' }),
   F('AEE518', 'Equivalent systems', 'Effective mass of a cantilever', r`M_e = M + 0.23\,m_{beam}`, 'vibration/isolation', SRC.ln518('equivalent systems')),
   F('AEE518', 'Ride', 'Seat transmissibility (base excitation)', r`\left|\dfrac{X}{Y}\right| = \sqrt{\dfrac{1 + (2\zeta r)^2}{(1 - r^2)^2 + (2\zeta r)^2}}`, 'vibration/seat', SRC.ln518('eq 14')),
+  // ------------------------------------------------------------------ strength of materials
+  F('CVE202', 'Direct stress', 'Extension', r`\delta = \dfrac{PL}{AE}`, 'materials/tensile', CV('direct stress')),
+  F('CVE202', 'Thermal stress', 'Stress when expansion is stopped', r`\sigma = E\alpha\,\Delta T`, 'materials/axial', CV('thermal stress')),
+  F('CVE202', 'Composite bars', 'Same strain, shared load', r`\dfrac{\sigma_1}{E_1} = \dfrac{\sigma_2}{E_2},\quad P = \sigma_1 A_1 + \sigma_2 A_2`, 'materials/axial', CV('composite bars')),
+  F('CVE202', 'Torsion', 'Torsion equation', r`\dfrac{T}{J} = \dfrac{\tau}{r} = \dfrac{G\theta}{L}`, 'materials/torsion', CV('torsion')),
+  F('CVE202', 'Beams', 'Bending equation', r`\dfrac{M}{I} = \dfrac{\sigma}{y} = \dfrac{E}{R}`, 'materials/beam', CV('bending')),
+  F('CVE202', 'Columns', 'Euler load', r`P_{cr} = \dfrac{\pi^2 E I}{L_e^2}`, 'materials/buckling', CV('columns')),
+  F('CVE202', 'Pressure vessels', 'Hoop and axial stress', r`\sigma_h = \dfrac{pr}{t},\quad \sigma_a = \dfrac{pr}{2t}`, 'materials/pressure-vessel', cite('MSE305', 'Module 7 - Pressure Vessels.pdf', 'Eqns 1–2')),
+  // ------------------------------------------------------------------ machine dynamics
+  F('MEE306', 'Governors', 'Porter governor', r`(m + M) g\tan\alpha = m\omega^2 r`, 'mechanisms/governors', MD('Chapter 6 - Governors.pdf', 'Porter governor')),
+  F('MEE306', 'Governors', 'Sensitivity', r`S = \dfrac{N_2 - N_1}{\bar N}`, 'mechanisms/governors', MD('Chapter 6 - Governors.pdf', 'sensitivity')),
+  F('MEE306', 'Flywheels', 'Energy fluctuation', r`\Delta E = \tfrac{1}{2} I(\omega_1^2 - \omega_2^2) = I\bar\omega^2 C_s`, 'mechanisms/flywheel', MD('Chapter 5 - Flywheel.pdf', 'energy stored')),
+  F('MEE306', 'Balancing', 'Balance mass', r`m_b r_b = \sqrt{(\Sigma m r\cos\theta)^2 + (\Sigma m r\sin\theta)^2}`, 'mechanisms/balancing', MD('Chapter 3 - Balancing Rotors.pdf', 'static balance')),
+  F('MEE306', 'Reciprocating masses', 'Inertia force', r`F = m\omega^2 r\left(\cos\theta + \dfrac{\cos 2\theta}{n}\right)`, 'mechanisms/reciprocating', MD('Chapter 4 - Balancing Reciprocating Masses.pdf', 'primary and secondary')),
+  // ------------------------------------------------------------------ thermal plant
+  F('AEE306', 'Heat exchangers', 'Log-mean temperature difference', r`\Delta T_m = \dfrac{\Delta T_1 - \Delta T_2}{\ln(\Delta T_1 / \Delta T_2)}`, 'thermal/heat-exchanger', TH('heat exchangers.pdf', 'LMTD')),
+  F('AEE306', 'Heat exchangers', 'Duty', r`Q = U A\,\Delta T_m = \dot m c\,\Delta T`, 'thermal/heat-exchanger', TH('heat exchangers.pdf', 'duty')),
+  F('AEE306', 'Refrigeration', 'Coefficient of performance', r`\text{COP} = \dfrac{h_1 - h_4}{h_2 - h_1}`, 'thermal/refrigeration', TH('refrigeration and air conditioning note.docx', 'performance rating')),
+  F('AEE306', 'Steam plant', 'Rankine efficiency', r`\eta = \dfrac{(h_3 - h_4) - (h_2 - h_1)}{h_3 - h_2}`, 'thermal/steam-plant', cite('AEE305', '305 POWER.pdf', 'steam power plant')),
 ]
