@@ -5,10 +5,10 @@ import { checkAnswer } from '../types'
 import { QUESTIONS } from './index'
 
 describe('exam question bank', () => {
-  it('has at least 40 questions with unique ids, covering all six courses', () => {
+  it('has at least 40 questions with unique ids, covering all the courses', () => {
     expect(QUESTIONS.length).toBeGreaterThanOrEqual(40)
     expect(new Set(QUESTIONS.map((q) => q.id)).size).toBe(QUESTIONS.length)
-    expect(new Set(QUESTIONS.map((q) => q.course)).size).toBe(6)
+    expect(new Set(QUESTIONS.map((q) => q.course)).size).toBe(9)
   })
 
   for (const q of QUESTIONS) {
