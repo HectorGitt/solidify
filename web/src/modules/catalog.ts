@@ -283,6 +283,11 @@ export const MODULES: ModuleDef[] = [
       { id: 'axial', title: 'Thermal stress & composite bars', summary: 'Rails that close their gaps as they warm, and a rod and tube sharing one pull.', exam: true },
       { id: 'torsion', title: 'Torsion rig', summary: 'Twist a solid or hollow shaft and read the angle and the shear stress.', exam: true },
       { id: 'buckling', title: 'Column buckling rig', summary: 'End conditions, slenderness, and where buckling gives way to crushing.', exam: true },
+      { id: 'stress-state', title: 'Stress at a point: Mohr’s circle', summary: 'Turn a stressed element; Mohr’s circle, strain-gauge rosettes, and the yield criteria.', exam: true },
+      { id: 'pressure-vessel', title: 'Thin-walled pressure vessel', summary: 'Hoop and axial stress, strains and change in volume, and the thin-wall limit.', exam: true },
+      { id: 'fatigue', title: 'Rotating-bending fatigue machine', summary: 'S–N curves, the endurance limit, and Goodman, Gerber and Soderberg.', exam: true },
+      { id: 'fracture', title: 'Fracture mechanics rig', summary: 'Stress intensity, toughness, and the crack size a material can tolerate.', exam: true },
+      { id: 'creep', title: 'Creep testing rig', summary: 'Primary, secondary and tertiary creep, and trading heat for time with Larson–Miller.', exam: true },
     ],
   },
 ]

@@ -5591,5 +5591,56 @@
   "Built-in end",
   "Supports",
   "Test frame"
+ ],
+ "materials/tensile": [
+  "Lower grip",
+  "Machine frame",
+  "Moving crosshead",
+  "Test specimen"
+ ],
+ "materials/axial": [
+  "Inner rod",
+  "Lower plate",
+  "Next rail",
+  "Outer tube",
+  "Rail",
+  "Rigid plate",
+  "Sleepers and ballast"
+ ],
+ "materials/torsion": [
+  "Fixed end",
+  "Loading arm",
+  "Stand and bearing",
+  "Test shaft"
+ ],
+ "materials/buckling": [
+  "Column",
+  "End fittings",
+  "Loading frame"
+ ],
+ "materials/stress-state": [
+  "Stand",
+  "Stress element"
+ ],
+ "materials/pressure-vessel": [
+  "Contents under pressure",
+  "Saddles",
+  "Vessel shell"
+ ],
+ "materials/fatigue": [
+  "Dead weight",
+  "Machine base",
+  "Test specimen"
+ ],
+ "materials/fracture": [
+  "Cracked plate",
+  "Grips",
+  "Test frame"
+ ],
+ "materials/creep": [
+  "Creep frame",
+  "Dead weights",
+  "Furnace",
+  "Specimen"
  ]
 }

@@ -59,7 +59,10 @@ export function ForceArrow({ spec, color, radius = 0.004, labelEvery = 6 }: { sp
       head.current.position.set(0, s.length - headL / 2, 0)
     }
     if (labelAnchor.current) labelAnchor.current.position.set(0, s.length + radius * 4, 0)
-    if (labelEl.current && frame.current++ % labelEvery === 0) labelEl.current.textContent = s.label ?? ''
+    if (labelEl.current && frame.current++ % labelEvery === 0) {
+      labelEl.current.textContent = s.label ?? ''
+      labelEl.current.style.display = s.label ? '' : 'none'
+    }
   })
 
   const labels = useView((s) => s.labels)
