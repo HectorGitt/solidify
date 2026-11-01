@@ -5515,5 +5515,16 @@
   "Water pump",
   "Weeds",
   "Wet disc brakes"
+ ],
+ "mechanisms/four-bar": [
+  "Baseboard",
+  "Pivot pins",
+  "Protractor"
+ ],
+ "materials/beam": [
+  "Beam",
+  "Built-in end",
+  "Supports",
+  "Test frame"
  ]
 }
