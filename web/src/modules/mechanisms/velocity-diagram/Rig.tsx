@@ -2,7 +2,7 @@ import { useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { create } from 'zustand'
 import { useSimFrame } from '@/core/sim'
-import { TestBench, createRun, instrument, useAutoRun, useRunDriver } from '@/lab/run'
+import { TestBench, createRun, instrument, useResetOnChange, useRunDriver } from '@/lab/run'
 import { fourBarDiagrams, instantaneousCentre, sliderCrankDiagrams, type LinkState } from '@/physics/machinedynamics'
 import { crankRange, solve, type FourBar } from '@/physics/fourbar'
 import { box, cylinder, mat4, merge, xform } from '@/geometry'
@@ -75,7 +75,7 @@ export function Diagram3D() {
   const p = useDiagram()
   const refs = { crank: useRef<THREE.Group>(null), coupler: useRef<THREE.Group>(null), rocker: useRef<THREE.Group>(null), ic: useRef<THREE.Mesh>(null), slider: useRef<THREE.Group>(null) }
   const theta = useRef(live.theta)
-  useAutoRun(diagramRun, JSON.stringify([p.mech, p.frame, p.crank, p.coupler, p.rocker, p.w]))
+  useResetOnChange(diagramRun, JSON.stringify([p.mech, p.frame, p.crank, p.coupler, p.rocker, p.w]))
   useRunDriver(
     diagramRun,
     PROCEDURE,

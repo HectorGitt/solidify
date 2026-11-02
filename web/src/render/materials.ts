@@ -316,10 +316,10 @@ export function getMaterial(key: MaterialKey, opts: MaterialOptions): THREE.Mate
  * An uncached, always-clipped material whose body and cap colours can be changed every
  * frame (e.g. cylinder gas coloured by temperature). Mutate `color` / `emissive` / `capColor`.
  */
-export function createDynamicCutMaterial(base: Partial<MaterialDef> & { color: string }) {
+export function createDynamicCutMaterial(base: Partial<MaterialDef> & { color: string; vertexColors?: boolean }) {
   const def: MaterialDef = { label: 'dynamic', metalness: 0, roughness: 0.5, hatch: 'fluid', ...base }
   const capColor = new THREE.Color(def.cap ?? def.color)
-  const m = new THREE.MeshPhysicalMaterial({ color: def.color, metalness: def.metalness, roughness: def.roughness, emissive: def.emissive ?? '#000000', emissiveIntensity: def.emissiveIntensity ?? 1 })
+  const m = new THREE.MeshPhysicalMaterial({ color: def.color, vertexColors: base.vertexColors ?? false, metalness: def.metalness, roughness: def.roughness, emissive: def.emissive ?? '#000000', emissiveIntensity: def.emissiveIntensity ?? 1 })
   m.clippingPlanes = cutPlanes
   m.side = THREE.DoubleSide
   injectCap(m, def, 'none', capColor)

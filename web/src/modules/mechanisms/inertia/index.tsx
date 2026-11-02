@@ -18,7 +18,7 @@ const scene: SceneDef = {
   floorY: FLOOR,
   hatchScale: 0.012,
   timeScale: 1,
-  cutPresets: [{ id: 'mid', label: 'Through the frame', planes: [{ normal: [0, 0, 1], pos: 0 }] }],
+  cutPresets: [{ id: 'mid', label: 'Through the frame', planes: [{ normal: [0, 0, 1], pos: 0 }], sectionMoving: true }],
   cites: [LAB('pendulum, bifilar and trifilar experiments')],
   reset: () => useInertia.getState().reset(),
   applyParams: (p) => useInertia.getState().set(p as Partial<InertiaParams>),

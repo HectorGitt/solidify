@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { TestBench, createRun, instrument, useAutoRun, useRunDriver } from '@/lab/run'
+import { TestBench, createRun, instrument, useResetOnChange, useRunDriver } from '@/lab/run'
 import * as THREE from 'three'
 import { create } from 'zustand'
 import { useSimFrame } from '@/core/sim'
@@ -53,7 +53,7 @@ const strainAt = (m: ReturnType<typeof creepModel>, t: number) => creepStrain(m.
 export function Creep3D() {
   const p = useCreep()
   const m = useMemo(() => creepModel(p.sigma, p.T), [p.sigma, p.T])
-  useAutoRun(creepRun, JSON.stringify([p.sigma, p.T]))
+  useResetOnChange(creepRun, JSON.stringify([p.sigma, p.T]))
   useRunDriver(
     creepRun,
     PROCEDURE,
@@ -212,6 +212,7 @@ export function CreepPanel() {
         <Note>The test’s months are compressed into seconds. The steel’s numbers are representative, set by a Larson–Miller line: use real data for a real design.</Note>
       </Section>
       <Section title="The test">
+        {creepRun.getState().status === 'idle' ? <Slider label="Time under load" value={u * 100} min={0} max={100} step={0.5} unit="% of life" onChange={(v) => { live.u = v / 100; live.broke = v >= 100 }} /> : null}
         <Slider label="Stress" value={p.sigma} min={20} max={320} step={5} unit="MPa" onChange={(sigma) => set({ sigma })} />
         <Slider label="Temperature" value={p.T} min={400} max={700} step={5} unit="°C" onChange={(T) => set({ T })} />
       </Section>

@@ -19,7 +19,7 @@ const scene: SceneDef = {
   floorY: FLOOR,
   hatchScale: 0.01,
   timeScale: 1 / 4,
-  cutPresets: [{ id: 'mid', label: 'Along the shaft', planes: [{ normal: [0, 0, 1], pos: 0 }] }],
+  cutPresets: [{ id: 'mid', label: 'Along the shaft', planes: [{ normal: [0, 0, 1], pos: 0 }], sectionMoving: true }],
   cites: [NOTE('Examples'), LAB('dynamic balancing apparatus')],
   reset: () => useBalance.getState().reset(),
   applyParams: (p) => {

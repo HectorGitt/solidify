@@ -3,7 +3,7 @@ import { useLayoutEffect, useMemo, useRef, type ReactNode } from 'react'
 import * as THREE from 'three'
 import { useSimFrame } from '@/core/sim'
 import { box, cylinder, extrude, mat4, merge, roundedBox, tube, xform } from '@/geometry'
-import { instrument, useAutoRun, useRunDriver } from '@/lab/run'
+import { instrument, useResetOnChange, useRunDriver } from '@/lab/run'
 import { classify, sweep } from '@/physics/fourbar'
 import { PartLabel } from '@/render/Label'
 import { Part, PartMesh } from '@/render/Part'
@@ -112,7 +112,7 @@ export function FourBar3D() {
   }
   const phase = useRef(0.6)
   const testAngle = useRef(0)
-  useAutoRun(fourBarRun, JSON.stringify([frame, crank, coupler, rocker, branch]))
+  useResetOnChange(fourBarRun, JSON.stringify([frame, crank, coupler, rocker, branch]))
   useRunDriver(
     fourBarRun,
     FOUR_BAR_PROC,

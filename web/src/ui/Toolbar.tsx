@@ -65,15 +65,22 @@ export function Toolbar({ scene }: { scene: SceneDef }) {
           </select>
         </label>
         <Divider />
-        <IconButton label={cut.enabled ? 'Section: on (C)' : 'Section: off (C)'} onClick={() => setCut({ enabled: !cut.enabled })} active={cut.enabled}>
+        <IconButton
+          label={cut.enabled ? 'Section: on (C)' : 'Section: off (C)'}
+          onClick={() => {
+            if (!cut.enabled && cut.planes.length === 0 && presets[0]) applyPreset(presets[0].id)
+            else setCut({ enabled: !cut.enabled })
+          }}
+          active={cut.enabled}
+        >
           <Icon.cut />
         </IconButton>
         {cut.enabled && primaryPlane ? (
-          <div className="hidden items-center gap-1.5 px-1 sm:flex" title="Sweep section plane across assembly">
+          <div className="flex items-center gap-1.5 px-1" title="Sweep section plane across assembly">
             <input
               aria-label="Sweep section plane"
               type="range"
-              className="slider w-20"
+              className="slider w-14 sm:w-20"
               min={-cutRange}
               max={cutRange}
               step={scene.extent / 1000}

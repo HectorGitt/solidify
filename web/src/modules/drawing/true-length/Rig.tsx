@@ -2,7 +2,7 @@ import { Edges, Line } from '@react-three/drei'
 import { useEffect, useMemo, useState } from 'react'
 import { create } from 'zustand'
 import { box, mat4, xform } from '@/geometry'
-import { TestBench, createRun, useAutoRun, useRunDriver } from '@/lab/run'
+import { TestBench, createRun, useResetOnChange, useRunDriver } from '@/lab/run'
 import { apparentLength, trueLength } from '@/physics/drawing'
 import { PartLabel } from '@/render/Label'
 import { Part, PartMesh } from '@/render/Part'
@@ -28,7 +28,7 @@ interface Params {
   reset: () => void
 }
 
-export const DEFAULTS = { dx: 80, dy: 50, dz: 60, f: 0 }
+export const DEFAULTS = { dx: 80, dy: 50, dz: 60, f: 1 }
 export const useLine = create<Params>((set) => ({ ...DEFAULTS, set: (q) => set(q), reset: () => set(DEFAULTS) }))
 const set = (q: Partial<Params>) => useLine.getState().set(q)
 
@@ -38,7 +38,7 @@ const angleOf = (p: Params, f = p.f) => trueLength(p.dx, p.dy, p.dz).bearing * f
 
 export function Line3D() {
   const p = useLine()
-  useAutoRun(lineRun, JSON.stringify([p.dx, p.dy, p.dz]))
+  useResetOnChange(lineRun, JSON.stringify([p.dx, p.dy, p.dz]))
   useRunDriver(
     lineRun,
     PROCEDURE,
@@ -54,7 +54,8 @@ export function Line3D() {
   useEffect(
     () =>
       lineRun.subscribe((r, prev) => {
-        if ((r.status === 'idle' && prev.status !== 'idle') || (r.status === 'running' && prev.status !== 'running' && r.rows.length === 0)) useLine.getState().set({ f: 0 })
+        if ((r.status === 'idle' && prev.status !== 'idle')) useLine.getState().set({ f: 1 })
+        if ((r.status === 'running' && prev.status !== 'running' && r.rows.length === 0)) useLine.getState().set({ f: 0 })
       }),
     [],
   )
@@ -91,7 +92,7 @@ export function Line3D() {
       <Part id="ground" name="Horizontal plane" role="static" material="concrete" info={{ summary: 'The plan view is drawn on this.', role: 'Looked at from above, the line shows its plan length: shorter than the true length, unless the line is level.' }} cut={false}>
         <PartMesh geometry={geo.ground} />
       </Part>
-      <Part id="block" name="Block" role="housing" material="glass" info={{ summary: 'Gives the line its three sizes.', role: 'The line runs corner to corner, so each principal view shows only a face diagonal. None of them shows the true length.' }} cut={false}>
+      <Part id="block" name="Block" role="housing" material="glass" info={{ summary: 'Gives the line its three sizes.', role: 'The line runs corner to corner, so each principal view shows only a face diagonal. None of them shows the true length.' }}>
         <PartMesh geometry={geo.block} />
         <mesh geometry={geo.block}>
           <meshBasicMaterial transparent opacity={0} depthWrite={false} />

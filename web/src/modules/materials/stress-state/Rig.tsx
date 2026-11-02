@@ -3,7 +3,7 @@ import * as THREE from 'three'
 import { create } from 'zustand'
 import { useSimFrame } from '@/core/sim'
 import { box } from '@/geometry'
-import { TestBench, createRun, instrument, useAutoRun, useRunDriver } from '@/lab/run'
+import { TestBench, createRun, instrument, useResetOnChange, useRunDriver } from '@/lab/run'
 import { principal, principalStrains, rosette, rotateStress, stressFromStrain, trescaEquivalent, vonMisesEquivalent, type Plane } from '@/physics/strength'
 import { PartLabel } from '@/render/Label'
 import { Part, PartMesh } from '@/render/Part'
@@ -43,7 +43,7 @@ interface Params {
   reset: () => void
 }
 
-export const DEFAULTS = { f: 0, mode: 'stress' as Mode, sx: 80, sy: -40, txy: 25, theta: 0, yieldS: 250, ea: 500, eb: 250, ec: -200, delta: false, E: 200, nu: 0.3 }
+export const DEFAULTS = { f: 1, mode: 'stress' as Mode, sx: 80, sy: -40, txy: 25, theta: 0, yieldS: 250, ea: 500, eb: 250, ec: -200, delta: false, E: 200, nu: 0.3 }
 export const useStressState = create<Params>((set) => ({ ...DEFAULTS, set: (p) => set(p), reset: () => set(DEFAULTS) }))
 const set = (p: Partial<Params>) => useStressState.getState().set(p)
 
@@ -66,7 +66,7 @@ function loaded(p: Params, f = p.f): Plane {
 
 export function Stress3D() {
   const p = useStressState()
-  useAutoRun(stressRun, JSON.stringify([p.mode, p.sx, p.sy, p.txy, p.yieldS, p.ea, p.eb, p.ec, p.delta, p.E, p.nu]))
+  useResetOnChange(stressRun, JSON.stringify([p.mode, p.sx, p.sy, p.txy, p.yieldS, p.ea, p.eb, p.ec, p.delta, p.E, p.nu]))
   useRunDriver(
     stressRun,
     PROCEDURE,
@@ -83,7 +83,8 @@ export function Stress3D() {
   useEffect(
     () =>
       stressRun.subscribe((r, prev) => {
-        if ((r.status === 'idle' && prev.status !== 'idle') || (r.status === 'running' && prev.status !== 'running' && r.rows.length === 0)) useStressState.getState().set({ f: 0 })
+        if ((r.status === 'idle' && prev.status !== 'idle')) useStressState.getState().set({ f: 1 })
+        if ((r.status === 'running' && prev.status !== 'running' && r.rows.length === 0)) useStressState.getState().set({ f: 0 })
       }),
     [],
   )
@@ -129,7 +130,7 @@ export function Stress3D() {
         </group>
       </Part>
       <group ref={el}>
-        <Part id="element" name="Stress element" role="moving" material="aluminium" info={{ summary: 'One point in the material.', role: 'Turn it, and the stresses on its faces change, though the state of stress at the point does not. Three numbers describe it fully.' }} cut={false}>
+        <Part id="element" name="Stress element" role="moving" material="aluminium" info={{ summary: 'One point in the material.', role: 'Turn it, and the stresses on its faces change, though the state of stress at the point does not. Three numbers describe it fully.' }} cut>
           <PartMesh geometry={geo.cube} />
         </Part>
         {p.mode === 'rosette'

@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef } from 'react'
-import { TestBench, createRun, instrument, slopeThroughOrigin, useAutoRun, useRunDriver } from '@/lab/run'
+import { TestBench, createRun, instrument, slopeThroughOrigin, useResetOnChange, useRunDriver } from '@/lab/run'
 import * as THREE from 'three'
 import { create } from 'zustand'
 import { useSimFrame } from '@/core/sim'
 import { box, cylinder, lathe, mat4, merge, xform } from '@/geometry'
 import { TEST_MATERIALS, circleArea, percentElongation, percentReduction, stressAt, toughness } from '@/physics/strength'
 import { PartLabel } from '@/render/Label'
+import { createDynamicCutMaterial } from '@/render/materials'
 import { Part, PartMesh } from '@/render/Part'
 import { Chart } from '@/ui/Chart'
 import { Readout, Section, Slider, fmt } from '@/ui/controls'
@@ -97,7 +98,18 @@ export function Tensile3D() {
     }
   }, [])
   const startGeo = useMemo(() => specimen(radius, 0, 0, false), [radius])
-  useAutoRun(tensileRun, JSON.stringify([p.material, p.d, p.L0]))
+  const specMat = useMemo(
+    () =>
+      createDynamicCutMaterial({
+        color: m.ductile ? '#aeb6bc' : '#6a6f73',
+        cap: m.ductile ? '#c8d0d6' : '#9aa3a8',
+        hatch: m.ductile ? 'steel' : 'castIron',
+        metalness: 0.7,
+        roughness: 0.35,
+      }).material,
+    [m.ductile],
+  )
+  useResetOnChange(tensileRun, JSON.stringify([p.material, p.d, p.L0]))
   useRunDriver(
     tensileRun,
     PROCEDURE,
@@ -158,18 +170,16 @@ export function Tensile3D() {
         <PartMesh geometry={frame.screws} material="steelDark" />
         <PartMesh geometry={frame.stem} material="steel" />
       </Part>
-      <Part id="lower-grip" name="Lower grip" role="static" material="steelDark" info={{ summary: 'Holds one end of the specimen.', role: 'Grips by the shoulders, so that the break happens in the gauge length.' }} cut={false}>
+      <Part id="lower-grip" name="Lower grip" role="static" material="steelDark" info={{ summary: 'Holds one end of the specimen.', role: 'Grips by the shoulders, so that the break happens in the gauge length.' }}>
         <PartMesh geometry={frame.lowerGrip} />
       </Part>
       <group ref={crosshead} position={[0, lowerY + 0.8, 0]}>
-        <Part id="crosshead" name="Moving crosshead" role="moving" material="paintGrey" info={{ summary: 'Driven up the screws at a steady rate.', role: 'It sets the strain; the load cell reads the force the specimen pushes back with.' }} cut={false}>
+        <Part id="crosshead" name="Moving crosshead" role="moving" material="paintGrey" info={{ summary: 'Driven up the screws at a steady rate.', role: 'It sets the strain; the load cell reads the force the specimen pushes back with.' }} cut>
           <PartMesh geometry={frame.upperHead} />
         </Part>
       </group>
-      <Part id="specimen" name="Test specimen" role="moving" material={m.ductile ? 'steel' : 'castIron'} info={{ summary: 'A round bar with a marked gauge length.', role: 'The stress is load over the original area, and the strain is extension over the original gauge length.' }} cut={false}>
-        <mesh ref={piece} geometry={startGeo} position={[0, lowerY + 0.3, 0]} castShadow>
-          <meshStandardMaterial color={m.ductile ? '#aeb6bc' : '#6a6f73'} metalness={0.7} roughness={0.35} />
-        </mesh>
+      <Part id="specimen" name="Test specimen" role="moving" material={m.ductile ? 'steel' : 'castIron'} info={{ summary: 'A round bar with a marked gauge length.', role: 'The stress is load over the original area, and the strain is extension over the original gauge length.' }} cut>
+        <mesh ref={piece} geometry={startGeo} material={specMat} position={[0, lowerY + 0.3, 0]} castShadow />
       </Part>
       <PartLabel partId="specimen" at={[0.1, 0.05, 0.05]} />
       <PartLabel partId="crosshead" at={[0.52, 0.2, 0.08]} />
@@ -235,6 +245,7 @@ export function TensilePanel() {
             </button>
           ))}
         </div>
+        {status === 'idle' ? <Slider label="Pull by hand" value={u * 100} min={0} max={100} step={0.5} unit="%" onChange={(v) => { live.u = v / 100; live.broken = v >= 100 }} /> : null}
         <Slider label="Specimen diameter" value={p.d} min={6} max={20} step={1} unit="mm" onChange={(d) => set({ d })} />
         <Slider label="Gauge length" value={p.L0} min={25} max={200} step={5} unit="mm" onChange={(L0) => set({ L0 })} />
         <Note>The extension is drawn exaggerated, more so for brittle materials. The curves are typical shapes for each material, not one specific test.</Note>

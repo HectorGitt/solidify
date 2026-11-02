@@ -5,7 +5,7 @@ import { create } from 'zustand'
 import { useSimFrame } from '@/core/sim'
 import { box, cylinder, mat4, merge, tube, xform } from '@/geometry'
 import { polarSolid, polarTube, shaftStress, shaftTorque, solidShaftForStress, twist } from '@/physics/strength'
-import { TestBench, createRun, instrument, slopeThroughOrigin, useAutoRun, useRunDriver } from '@/lab/run'
+import { TestBench, createRun, instrument, slopeThroughOrigin, useResetOnChange, useRunDriver } from '@/lab/run'
 import { PartLabel } from '@/render/Label'
 import { Part, PartMesh } from '@/render/Part'
 import { Chart } from '@/ui/Chart'
@@ -35,7 +35,7 @@ interface Params {
   reset: () => void
 }
 
-export const DEFAULTS = { T: 25, L: 3, D: 146, d: 125, hollow: true, G: 85, tauY: 150, f: 0 }
+export const DEFAULTS = { T: 25, L: 3, D: 146, d: 125, hollow: true, G: 85, tauY: 150, f: 1 }
 export const useTorsion = create<Params>((set) => ({ ...DEFAULTS, set: (p) => set(p), reset: () => set(DEFAULTS) }))
 const set = (p: Partial<Params>) => useTorsion.getState().set(p)
 
@@ -63,8 +63,8 @@ export function Torsion3D() {
   const eased = useRef(0)
   const hanger = useRef<THREE.Group>(null)
   const panText = useRef<HTMLDivElement>(null)
-  const loadNow = useRef(0)
-  useAutoRun(torsionRun, conditionsOf(p))
+  const loadNow = useRef(1)
+  useResetOnChange(torsionRun, conditionsOf(p))
   useRunDriver(
     torsionRun,
     PROCEDURE,
@@ -84,7 +84,11 @@ export function Torsion3D() {
   useEffect(
     () =>
       torsionRun.subscribe((r, prev) => {
-        if ((r.status === 'idle' && prev.status !== 'idle') || (r.status === 'running' && prev.status !== 'running' && r.rows.length === 0)) {
+        if ((r.status === 'idle' && prev.status !== 'idle')) {
+          loadNow.current = 1
+          useTorsion.getState().set({ f: 1 })
+        }
+        if ((r.status === 'running' && prev.status !== 'running' && r.rows.length === 0)) {
           loadNow.current = 0
           useTorsion.getState().set({ f: 0 })
         }

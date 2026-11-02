@@ -55,7 +55,7 @@ export const DEFAULTS = {
   stress: true,
   diagrams: true,
   yieldS: 250,
-  f: 0,
+  f: 1,
 }
 
 export const useBeam = create<BeamParams>((set) => ({

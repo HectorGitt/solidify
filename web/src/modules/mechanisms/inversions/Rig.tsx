@@ -3,7 +3,7 @@ import * as THREE from 'three'
 import { create } from 'zustand'
 import { useSimFrame } from '@/core/sim'
 import { box, cylinder } from '@/geometry'
-import { TestBench, createRun, instrument, useAutoRun, useRunDriver } from '@/lab/run'
+import { TestBench, createRun, instrument, useResetOnChange, useRunDriver } from '@/lab/run'
 import { PartLabel } from '@/render/Label'
 import { Part, PartMesh } from '@/render/Part'
 import { Readout, Section, Segmented, Slider, fmt } from '@/ui/controls'
@@ -81,7 +81,7 @@ export function Inversions3D() {
   const trammel = p.fixed === 'trammel'
   const refs = { guide: useRef<THREE.Group>(null), crank: useRef<THREE.Group>(null), rod: useRef<THREE.Group>(null), slider: useRef<THREE.Group>(null), slider2: useRef<THREE.Group>(null), pen: useRef<THREE.Mesh>(null), pivot: useRef<THREE.Group>(null) }
   const phase = useRef(0.5)
-  useAutoRun(invRun, JSON.stringify([p.fixed, p.n, p.a, p.b]))
+  useResetOnChange(invRun, JSON.stringify([p.fixed, p.n, p.a, p.b]))
   useRunDriver(
     invRun,
     PROCEDURE,
@@ -162,26 +162,22 @@ export function Inversions3D() {
       <BenchPlate width={1.2} height={0.86} floor={FLOOR} />
       {trammel ? (
         <>
-          <Part id="guides" name="Crossed guides" role="static" material="paintGrey" info={{ summary: 'Two grooves at right angles: the fixed link.', role: 'Each slider can only run along its own groove.' }} cut={false}>
-            <mesh geometry={geo.cross} position={[0, 0, 0.012]}>
-              <meshStandardMaterial color="#5c6670" />
-            </mesh>
-            <mesh geometry={geo.crossV} position={[0, 0, 0.012]}>
-              <meshStandardMaterial color="#5c6670" />
-            </mesh>
+          <Part id="guides" name="Crossed guides" role="static" material="paintGrey" info={{ summary: 'Two grooves at right angles: the fixed link.', role: 'Each slider can only run along its own groove.' }}>
+            <PartMesh geometry={geo.cross} position={[0, 0, 0.012]} />
+            <PartMesh geometry={geo.crossV} position={[0, 0, 0.012]} />
           </Part>
           <group ref={refs.slider}>
-            <Part id="slider-x" name="Horizontal slider" role="moving" material="paintBlue" info={{ summary: 'Runs along the horizontal groove.', role: 'A sliding pair.' }} cut={false}>
+            <Part id="slider-x" name="Horizontal slider" role="moving" material="paintBlue" info={{ summary: 'Runs along the horizontal groove.', role: 'A sliding pair.' }}>
               <PartMesh geometry={geo.slider} />
             </Part>
           </group>
           <group ref={refs.slider2}>
-            <Part id="slider-y" name="Vertical slider" role="moving" material="paintOrange" info={{ summary: 'Runs along the vertical groove.', role: 'A sliding pair at right angles to the first.' }} cut={false}>
+            <Part id="slider-y" name="Vertical slider" role="moving" material="paintOrange" info={{ summary: 'Runs along the vertical groove.', role: 'A sliding pair at right angles to the first.' }}>
               <PartMesh geometry={geo.slider} />
             </Part>
           </group>
           <group ref={refs.rod}>
-            <Part id="bar" name="Trammel bar" role="moving" material="paintRed" info={{ summary: 'Joins the two sliders.', role: 'A point at distances a and b from the sliders draws an ellipse with those semi-axes.' }} cut={false}>
+            <Part id="bar" name="Trammel bar" role="moving" material="paintRed" info={{ summary: 'Joins the two sliders.', role: 'A point at distances a and b from the sliders draws an ellipse with those semi-axes.' }}>
               <PartMesh geometry={geo.rod} />
             </Part>
           </group>
@@ -193,22 +189,22 @@ export function Inversions3D() {
       ) : (
         <>
           <group ref={refs.guide}>
-            <Part id="guide" name={p.fixed === 'frame' ? 'Cylinder (fixed)' : 'Cylinder'} role={p.fixed === 'frame' ? 'static' : 'moving'} material={fixedColor('frame') ?? 'paintBlue'} info={{ summary: 'Link 1, the line of stroke.', role: 'The slider runs along it. In this inversion it may or may not be what stands still.' }} cut={false}>
+            <Part id="guide" name={p.fixed === 'frame' ? 'Cylinder (fixed)' : 'Cylinder'} role={p.fixed === 'frame' ? 'static' : 'moving'} material={fixedColor('frame') ?? 'paintBlue'} info={{ summary: 'Link 1, the line of stroke.', role: 'The slider runs along it. In this inversion it may or may not be what stands still.' }}>
               <PartMesh geometry={geo.guide} />
             </Part>
           </group>
           <group ref={refs.crank}>
-            <Part id="crank" name={p.fixed === 'crank' ? 'Crank (fixed)' : 'Crank'} role={p.fixed === 'crank' ? 'static' : 'moving'} material={fixedColor('crank') ?? 'paintOrange'} info={{ summary: 'Link 2.', role: 'A turning pair at each end.' }} cut={false}>
+            <Part id="crank" name={p.fixed === 'crank' ? 'Crank (fixed)' : 'Crank'} role={p.fixed === 'crank' ? 'static' : 'moving'} material={fixedColor('crank') ?? 'paintOrange'} info={{ summary: 'Link 2.', role: 'A turning pair at each end.' }}>
               <PartMesh geometry={geo.crank} />
             </Part>
           </group>
           <group ref={refs.rod}>
-            <Part id="rod" name={p.fixed === 'rod' ? 'Rod (fixed)' : 'Connecting rod'} role={p.fixed === 'rod' ? 'static' : 'moving'} material={fixedColor('rod') ?? 'paintRed'} info={{ summary: 'Link 3.', role: 'A turning pair at each end.' }} cut={false}>
+            <Part id="rod" name={p.fixed === 'rod' ? 'Rod (fixed)' : 'Connecting rod'} role={p.fixed === 'rod' ? 'static' : 'moving'} material={fixedColor('rod') ?? 'paintRed'} info={{ summary: 'Link 3.', role: 'A turning pair at each end.' }}>
               <PartMesh geometry={geo.rod} />
             </Part>
           </group>
           <group ref={refs.slider}>
-            <Part id="slider" name={p.fixed === 'slider' ? 'Slider (fixed)' : 'Slider'} role={p.fixed === 'slider' ? 'static' : 'moving'} material={fixedColor('slider') ?? 'aluminium'} info={{ summary: 'Link 4.', role: 'A sliding pair on the line of stroke, a turning pair with the rod.' }} cut={false}>
+            <Part id="slider" name={p.fixed === 'slider' ? 'Slider (fixed)' : 'Slider'} role={p.fixed === 'slider' ? 'static' : 'moving'} material={fixedColor('slider') ?? 'aluminium'} info={{ summary: 'Link 4.', role: 'A sliding pair on the line of stroke, a turning pair with the rod.' }}>
               <PartMesh geometry={geo.slider} />
             </Part>
           </group>

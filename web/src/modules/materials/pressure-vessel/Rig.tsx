@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { TestBench, createRun, instrument, slopeThroughOrigin, useAutoRun, useRunDriver } from '@/lab/run'
+import { TestBench, createRun, instrument, slopeThroughOrigin, useResetOnChange, useRunDriver } from '@/lab/run'
 import * as THREE from 'three'
 import { create } from 'zustand'
 import { box, lathe, mat4, merge, xform } from '@/geometry'
@@ -30,7 +30,7 @@ interface Params {
   reset: () => void
 }
 
-export const DEFAULTS = { p: 2, r: 500, t: 10, E: 200, nu: 0.3, Y: 250, length: 1500, f: 0 }
+export const DEFAULTS = { p: 2, r: 500, t: 10, E: 200, nu: 0.3, Y: 250, length: 1500, f: 1 }
 export const useVessel = create<Params>((set) => ({ ...DEFAULTS, set: (q) => set(q), reset: () => set(DEFAULTS) }))
 const set = (q: Partial<Params>) => useVessel.getState().set(q)
 
@@ -50,7 +50,7 @@ export function Vessel3D() {
   const s = useVessel()
   const a = useMemo(() => analyse(s), [s])
   const fullA = useMemo(() => analyse(s, 1), [s.p, s.r, s.t, s.E, s.nu])
-  useAutoRun(vesselRun, JSON.stringify([s.p, s.r, s.t, s.E, s.nu, s.Y]))
+  useResetOnChange(vesselRun, JSON.stringify([s.p, s.r, s.t, s.E, s.nu, s.Y]))
   useRunDriver(
     vesselRun,
     PROCEDURE,
@@ -67,7 +67,8 @@ export function Vessel3D() {
   useEffect(
     () =>
       vesselRun.subscribe((r, prev) => {
-        if ((r.status === 'idle' && prev.status !== 'idle') || (r.status === 'running' && prev.status !== 'running' && r.rows.length === 0)) useVessel.getState().set({ f: 0 })
+        if ((r.status === 'idle' && prev.status !== 'idle')) useVessel.getState().set({ f: 1 })
+        if ((r.status === 'running' && prev.status !== 'running' && r.rows.length === 0)) useVessel.getState().set({ f: 0 })
       }),
     [],
   )

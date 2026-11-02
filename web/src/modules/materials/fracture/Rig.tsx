@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
-import { TestBench, createRun, instrument, useAutoRun, useRunDriver } from '@/lab/run'
+import { TestBench, createRun, instrument, useResetOnChange, useRunDriver } from '@/lab/run'
 import * as THREE from 'three'
 import { create } from 'zustand'
 import { box, extrude, mat4, merge, xform } from '@/geometry'
 import { criticalCrack, criticalStress, griffithStress, parisLife, stressIntensity } from '@/physics/strength'
 import { PartLabel } from '@/render/Label'
+import { createDynamicCutMaterial } from '@/render/materials'
 import { Part, PartMesh } from '@/render/Part'
 import { Chart } from '@/ui/Chart'
 import { Readout, Section, Segmented, Slider, fmt } from '@/ui/controls'
@@ -77,7 +78,7 @@ export function Fracture3D() {
   const K = stressIntensity(factor(p.kind), p.sigma * 1e6, p.aNow / 1000) / 1e6
   /** the crack is grown from its start until it reaches the size this plate can't carry, plus a little */
   const grown = (st: Params, f: number) => st.a + (Math.max(st.a, criticalCrack(factor(st.kind), st.KIc * 1e6, st.sigma * 1e6) * 1000 * 1.001) - st.a) * f
-  useAutoRun(fractureRun, JSON.stringify([p.kind, p.sigma, p.a, p.KIc, p.Y]))
+  useResetOnChange(fractureRun, JSON.stringify([p.kind, p.sigma, p.a, p.KIc, p.Y]))
   useRunDriver(
     fractureRun,
     PROCEDURE,
@@ -114,10 +115,12 @@ export function Fracture3D() {
     [p.kind, aDrawn],
   )
   // the plate colours up as K nears its limit
+  const dynMat = useMemo(() => createDynamicCutMaterial({ color: '#9aa3ab', cap: '#c8d0d6', hatch: 'steel', metalness: 0.45, roughness: 0.5 }), [])
   const mat = useMemo(() => {
     const u = Math.min(1, K / p.KIc)
-    return new THREE.MeshStandardMaterial({ color: new THREE.Color('#9aa3ab').lerp(new THREE.Color('#d0452c'), u * u), metalness: 0.45, roughness: 0.5 })
-  }, [K, p.KIc])
+    dynMat.material.color.set('#9aa3ab').lerp(new THREE.Color('#d0452c'), u * u)
+    return dynMat.material
+  }, [K, p.KIc, dynMat])
   const gap = broken ? 0.09 : 0
   return (
     <group>
@@ -127,11 +130,11 @@ export function Fracture3D() {
         <PartMesh geometry={geo.head} />
         <PartMesh geometry={geo.rods} material="steelDark" />
       </Part>
-      <Part id="grips" name="Grips" role="moving" material="steelDark" info={{ summary: 'Hold the plate along its full width.', role: 'They spread the load evenly into the plate.' }} cut={false}>
+      <Part id="grips" name="Grips" role="moving" material="steelDark" info={{ summary: 'Hold the plate along its full width.', role: 'They spread the load evenly into the plate.' }} cut>
         <PartMesh geometry={geo.grips} />
       </Part>
       <group position={[0, gap, 0]}>
-        <Part id="plate" name="Cracked plate" role="moving" material="aluminium" info={{ summary: 'A plate with one sharp crack.', role: 'The crack concentrates stress at its tip. What matters is K, which combines the stress and the crack’s size: it fails when K reaches the toughness K_Ic.' }} cut={false}>
+        <Part id="plate" name="Cracked plate" role="moving" material="aluminium" info={{ summary: 'A plate with one sharp crack.', role: 'The crack concentrates stress at its tip. What matters is K, which combines the stress and the crack’s size: it fails when K reaches the toughness K_Ic.' }} cut>
           <PartMesh geometry={geo.plate} customMaterial={mat} />
         </Part>
       </group>

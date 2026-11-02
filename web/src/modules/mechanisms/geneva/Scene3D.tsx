@@ -3,7 +3,7 @@ import * as THREE from 'three'
 import { useSimFrame } from '@/core/sim'
 import { cylinder, extrude, mat4, merge, xform } from '@/geometry'
 import { genevaAngle, genevaHalfEngagement, genevaStep } from '@/physics/linkages'
-import { instrument, useAutoRun, useRunDriver } from '@/lab/run'
+import { instrument, useResetOnChange, useRunDriver } from '@/lab/run'
 import { PartLabel } from '@/render/Label'
 import { Part, PartMesh } from '@/render/Part'
 import { BenchPlate, flatBar, polarShape } from '../_shared/rig'
@@ -99,7 +99,7 @@ export function Geneva3D() {
   )
 
   const phase = useRef(0)
-  useAutoRun(genevaRun, JSON.stringify([slots, stop]))
+  useResetOnChange(genevaRun, JSON.stringify([slots, stop]))
   useRunDriver(
     genevaRun,
     GENEVA_PROC,

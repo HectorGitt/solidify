@@ -3,7 +3,7 @@ import * as THREE from 'three'
 import { create } from 'zustand'
 import { useSimFrame } from '@/core/sim'
 import { box, cylinder, helixSpring, lathe, mat4, merge, tube, xform } from '@/geometry'
-import { TestBench, createRun, instrument, useAutoRun, useRunDriver } from '@/lab/run'
+import { TestBench, createRun, instrument, useResetOnChange, useRunDriver } from '@/lab/run'
 import { rankine, steamDome, steamSat } from '@/physics/plantcycles'
 import { Flow } from '@/render/Flow'
 import { PartLabel } from '@/render/Label'
@@ -31,7 +31,7 @@ interface Params {
   reset: () => void
 }
 
-export const DEFAULTS = { pb: 40, pc: 0.04, T: 400, etaT: 100, m: 10, f: 0 }
+export const DEFAULTS = { pb: 40, pc: 0.04, T: 400, etaT: 100, m: 10, f: 1 }
 export const useSteam = create<Params>((set) => ({ ...DEFAULTS, set: (q) => set(q), reset: () => set(DEFAULTS) }))
 const set = (q: Partial<Params>) => useSteam.getState().set(q)
 
@@ -49,7 +49,7 @@ const FEED: Pt[] = [[-0.42, -0.5, 0.1], [-0.55, -0.5, 0.1], [-0.55, -0.54, 0.34]
 
 export function Steam3D() {
   const s = useSteam()
-  useAutoRun(steamRun, JSON.stringify([s.pb, s.pc, s.T, s.etaT, s.m]))
+  useResetOnChange(steamRun, JSON.stringify([s.pb, s.pc, s.T, s.etaT, s.m]))
   useRunDriver(
     steamRun,
     PROCEDURE,
@@ -66,7 +66,8 @@ export function Steam3D() {
   useEffect(
     () =>
       steamRun.subscribe((r, prev) => {
-        if ((r.status === 'idle' && prev.status !== 'idle') || (r.status === 'running' && prev.status !== 'running' && r.rows.length === 0)) useSteam.getState().set({ f: 0 })
+        if ((r.status === 'idle' && prev.status !== 'idle')) useSteam.getState().set({ f: 1 })
+        if ((r.status === 'running' && prev.status !== 'running' && r.rows.length === 0)) useSteam.getState().set({ f: 0 })
       }),
     [],
   )
@@ -106,7 +107,7 @@ export function Steam3D() {
   const rotor = useRef<THREE.Group>(null)
   const imp = useRef<THREE.Group>(null)
   const flame = useRef<THREE.Group>(null)
-  const on = () => (steamRun.getState().status === 'idle' ? 0 : 1)
+  const on = () => 1
   useSimFrame((dt, t) => {
     const st = useSteam.getState()
     const k = on() * (0.25 + 0.75 * st.f)

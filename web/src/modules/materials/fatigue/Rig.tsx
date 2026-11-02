@@ -1,5 +1,5 @@
 import { useMemo, useRef } from 'react'
-import { TestBench, createRun, instrument, useAutoRun, useRunDriver } from '@/lab/run'
+import { TestBench, createRun, instrument, useResetOnChange, useRunDriver } from '@/lab/run'
 import * as THREE from 'three'
 import { create } from 'zustand'
 import { useSimFrame } from '@/core/sim'
@@ -56,7 +56,7 @@ export function Fatigue3D() {
   const dot = useRef<THREE.Mesh>(null)
   const load = useRef<THREE.Group>(null)
   const whole = useFatigue()
-  useAutoRun(fatigueRun, JSON.stringify([whole.Su, whole.Se, whole.Sy]))
+  useResetOnChange(fatigueRun, JSON.stringify([whole.Su, whole.Se, whole.Sy]))
   useRunDriver(
     fatigueRun,
     PROCEDURE,
@@ -111,7 +111,7 @@ export function Fatigue3D() {
         <PartMesh geometry={geo.motorStand} material="paintBlue" />
       </Part>
       <group ref={shaft} position={[0, -0.02, 0]}>
-        <Part id="specimen" name="Test specimen" role="moving" material="chrome" info={{ summary: 'A polished, waisted bar.', role: 'Bent one way all the time while it spins, so each point on its surface swings between tension and compression once per turn.' }}>
+        <Part id="specimen" name="Test specimen" role="moving" material="chrome" info={{ summary: 'A polished, waisted bar.', role: 'Bent one way all the time while it spins, so each point on its surface swings between tension and compression once per turn.' }} cut>
           <PartMesh geometry={geo.piece} />
         </Part>
       </group>

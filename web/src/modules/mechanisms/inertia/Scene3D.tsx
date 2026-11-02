@@ -2,7 +2,7 @@ import { useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { useSimFrame } from '@/core/sim'
 import { box, cylinder, mat4, merge, tube, xform } from '@/geometry'
-import { useAutoRun, useRunDriver } from '@/lab/run'
+import { useResetOnChange, useRunDriver } from '@/lab/run'
 import { PartLabel } from '@/render/Label'
 import { Part, PartMesh } from '@/render/Part'
 import { placeBetween, unitRod } from '../_shared/strut'
@@ -39,7 +39,7 @@ export function Inertia3D() {
   const rod = useMemo(() => unitRod(0.0028), [])
 
   const platY = TOP - p.L
-  useAutoRun(inertiaRun, conditionsOf(p))
+  useResetOnChange(inertiaRun, conditionsOf(p))
   useRunDriver(
     inertiaRun,
     INERTIA_PROC,
@@ -100,12 +100,12 @@ export function Inertia3D() {
             ))}
           </Part>
           <group position={[0, platY, 0]} ref={plat}>
-            <Part id="platform" name="Platform" role="moving" material="aluminium" info={{ summary: 'Takes bodies that cannot be swung on their own.', role: 'Time it empty, then with the body on. The difference in inertia is the body’s.' }} cut={false}>
+            <Part id="platform" name="Platform" role="moving" material="aluminium" info={{ summary: 'Takes bodies that cannot be swung on their own.', role: 'Time it empty, then with the body on. The difference in inertia is the body’s.' }}>
               <PartMesh geometry={platform} />
               <PartMesh geometry={ring} material="steelDark" />
             </Part>
             {p.block ? (
-              <Part id="block" name="Test block" role="moving" material="castIron" info={{ summary: 'The body being measured.', role: 'Its centre of gravity must be set exactly on the axis, or it adds a swing of its own.' }} cut={false}>
+              <Part id="block" name="Test block" role="moving" material="castIron" info={{ summary: 'The body being measured.', role: 'Its centre of gravity must be set exactly on the axis, or it adds a swing of its own.' }}>
                 <PartMesh geometry={block} />
               </Part>
             ) : null}

@@ -3,7 +3,7 @@ import * as THREE from 'three'
 import { create } from 'zustand'
 import { useSimFrame } from '@/core/sim'
 import { box, cylinder, mat4, merge, tube, xform } from '@/geometry'
-import { TestBench, createRun, instrument, useAutoRun, useRunDriver } from '@/lab/run'
+import { TestBench, createRun, instrument, useResetOnChange, useRunDriver } from '@/lab/run'
 import { energyFluctuation, flywheelInertia, radToRpm, requiredInertia, rpmToRad, speedFluctuation, turningStats, type TurningKind } from '@/physics/machinedynamics'
 import { PartLabel } from '@/render/Label'
 import { Part, PartMesh } from '@/render/Part'
@@ -53,7 +53,7 @@ function speedOf(st: ReturnType<typeof turningStats>, I: number, w: number, thet
 export function Flywheel3D() {
   const p = useFly()
   const st = useMemo(() => turningStats(p.kind, p.Tp), [p.kind, p.Tp])
-  useAutoRun(flyRun, JSON.stringify([p.kind, p.Tp, p.rpm, p.m, p.k]))
+  useResetOnChange(flyRun, JSON.stringify([p.kind, p.Tp, p.rpm, p.m, p.k]))
   useRunDriver(
     flyRun,
     PROCEDURE,

@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from 'react'
 import * as THREE from 'three'
 import { create } from 'zustand'
 import { box, cylinder, finalize, mat4, xform } from '@/geometry'
-import { TestBench, createRun, useAutoRun, useRunDriver } from '@/lab/run'
+import { TestBench, createRun, useResetOnChange, useRunDriver } from '@/lab/run'
 import { curvePoint, development, meets, type Junction } from '@/physics/drawing'
 import { PartLabel } from '@/render/Label'
 import { createDynamicCutMaterial } from '@/render/materials'
@@ -25,7 +25,7 @@ interface Params extends Junction {
   reset: () => void
 }
 
-export const DEFAULTS = { R: 50, r: 30, angle: 90, offset: 0, f: 0 }
+export const DEFAULTS = { R: 50, r: 30, angle: 90, offset: 0, f: 1 }
 export const useJoin = create<Params>((set) => ({ ...DEFAULTS, set: (q) => set(q), reset: () => set(DEFAULTS) }))
 const set = (q: Partial<Params>) => useJoin.getState().set(q)
 
@@ -57,7 +57,7 @@ function branchSurface(j: Junction) {
 
 export function Join3D() {
   const p = useJoin()
-  useAutoRun(joinRun, JSON.stringify([p.R, p.r, p.angle, p.offset]))
+  useResetOnChange(joinRun, JSON.stringify([p.R, p.r, p.angle, p.offset]))
   useRunDriver(
     joinRun,
     PROCEDURE,
@@ -75,7 +75,8 @@ export function Join3D() {
   useEffect(
     () =>
       joinRun.subscribe((r, prev) => {
-        if ((r.status === 'idle' && prev.status !== 'idle') || (r.status === 'running' && prev.status !== 'running' && r.rows.length === 0)) useJoin.getState().set({ f: 0 })
+        if ((r.status === 'idle' && prev.status !== 'idle')) useJoin.getState().set({ f: 1 })
+        if ((r.status === 'running' && prev.status !== 'running' && r.rows.length === 0)) useJoin.getState().set({ f: 0 })
       }),
     [],
   )
@@ -178,7 +179,7 @@ function Sheet({ p }: { p: Params }) {
         </g>
       ))}
       <line x1={176} y1={120} x2={176 + pw * dk} y2={120} stroke="currentColor" opacity={0.5} />
-      {joinRun.getState().status === 'done' ? (
+      {['done', 'idle'].includes(joinRun.getState().status) ? (
         <polyline fill="none" stroke="#c0391f" strokeWidth={1.2} points={pattern.s.map((s, i) => `${176 + s * dk},${120 - pattern.L[i] * dk}`).join(' ')} />
       ) : null}
     </svg>

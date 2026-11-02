@@ -4,8 +4,9 @@ import * as THREE from 'three'
 import { box, cylinder, extrude, mat4, merge, roundedBox, xform } from '@/geometry'
 import { bendingStress, reactions } from '@/physics/beam'
 import { PartLabel } from '@/render/Label'
+import { createDynamicCutMaterial } from '@/render/materials'
 import { Part, PartMesh } from '@/render/Part'
-import { useAutoRun, useRunDriver, instrument } from '@/lab/run'
+import { useResetOnChange, useRunDriver, instrument } from '@/lab/run'
 import { LENGTH_DRAWN, PROCEDURE, analyse, beamRun, conditionsOf, useBeam } from './model'
 
 export const FLOOR = -0.56
@@ -195,7 +196,7 @@ export function Beam3D() {
   const a = useMemo(() => analyse(p), [p])
   const full = useMemo(() => analyse(p, 1), [p.support, p.L, p.P1, p.x1, p.P2, p.x2, p.w, p.section, p.bf, p.tf, p.hw, p.tw, p.E])
   const needle = useRef<THREE.Group>(null)
-  useAutoRun(beamRun, conditionsOf(p))
+  useResetOnChange(beamRun, conditionsOf(p))
   useRunDriver(
     beamRun,
     PROCEDURE,
@@ -215,13 +216,13 @@ export function Beam3D() {
     },
   )
   useEffect(() => {
-    // unloaded before a test starts
+    // fully loaded while interactive, unloaded as a test starts
     return beamRun.subscribe((r, prev) => {
-      if (r.status === 'idle' && prev.status !== 'idle') useBeam.getState().set({ f: 0 })
+      if (r.status === 'idle' && prev.status !== 'idle') useBeam.getState().set({ f: 1 })
       if (r.status === 'running' && prev.status !== 'running' && r.step === 0 && r.rows.length === 0) useBeam.getState().set({ f: 0 })
     })
   }, [])
-  const stressMat = useMemo(() => new THREE.MeshStandardMaterial({ vertexColors: true, metalness: 0.25, roughness: 0.5 }), [])
+  const stressMat = useMemo(() => createDynamicCutMaterial({ color: '#ffffff', cap: '#c8d0d6', hatch: 'steel', metalness: 0.25, roughness: 0.5, vertexColors: true }).material, [])
   const beamGeo = useMemo(() => bentBeam(a, full, p.stress), [a, full, p.stress])
   const sx = LENGTH_DRAWN / p.L
   const k = sectionScale(a.props.depth)
@@ -298,7 +299,7 @@ export function Beam3D() {
           </group>
         </Part>
       )}
-      <Part id="beam" name="Beam" role="moving" material="steel" info={{ summary: 'The test beam, coloured by bending stress.', role: 'Under load, one face stretches (red) and the other shortens (blue). The neutral axis between them carries no bending stress.' }} cut={false}>
+      <Part id="beam" name="Beam" role="moving" material="steel" info={{ summary: 'The test beam, coloured by bending stress.', role: 'Under load, one face stretches (red) and the other shortens (blue). The neutral axis between them carries no bending stress.' }} cut>
         <PartMesh geometry={beamGeo} customMaterial={stressMat} />
       </Part>
       {p.P1 > 0 ? <Weights id="load-1" name="Load 1" index={1} x={X0 + Math.min(p.x1, p.L) * sx} y={yAt(p.x1) + under} value={p.P1 * p.f} peak={peakLoad} /> : null}

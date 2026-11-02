@@ -18,7 +18,10 @@ const scene: SceneDef = {
   floorY: FLOOR,
   hatchScale: 0.008,
   timeScale: 1,
-  cutPresets: [{ id: 'mid', label: 'Through the element', planes: [{ normal: [0, 0, 1], pos: 0 }] }],
+  cutPresets: [
+    { id: 'oblique', label: 'Oblique plane (45°)', planes: [{ normal: [0.7071, 0.7071, 0], pos: 0 }] },
+    { id: 'mid', label: 'Through the element', planes: [{ normal: [0, 0, 1], pos: 0 }] },
+  ],
   cites: [M3('stress transformation; Mohr’s circle'), M5('rosettes'), M8('Tresca and von Mises')],
   reset: () => useStressState.getState().reset(),
   applyParams: (p) => useStressState.getState().set(p as Partial<typeof DEFAULTS>),

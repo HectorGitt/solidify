@@ -1,13 +1,14 @@
 import { useEffect, useRef, type ReactNode } from 'react'
 import { create } from 'zustand'
-import { useSimFrame } from '@/core/sim'
+import { useSim, useSimFrame } from '@/core/sim'
 import { Section } from '@/ui/controls'
 import { Table } from '@/modules/elements/_shared/PanelBits'
 
 /**
- * A live laboratory test. Set the conditions and the rig runs itself the way a bench test does: the load
- * goes on a step at a time, the machine settles, the instruments are read and logged, and the results
- * build up as you watch. A rig owns the physics; this owns the procedure.
+ * A live laboratory test. A rig opens interactive, following its controls with the full conditions applied.
+ * Start the test and it runs the way a bench test does: the load goes on a step at a time, the machine
+ * settles, the instruments are read and logged, and the results build up as you watch. A rig owns the
+ * physics; this owns the procedure.
  */
 export type RunStatus = 'idle' | 'running' | 'paused' | 'done' | 'failed'
 
@@ -37,9 +38,15 @@ export function createRun() {
     progress: 0,
     rows: [],
     message: '',
-    start: () => set({ status: 'running', step: 0, progress: 0, rows: [], message: '' }),
+    start: () => {
+      useSim.setState({ playing: true })
+      set({ status: 'running', step: 0, progress: 0, rows: [], message: '' })
+    },
     pause: () => set((s) => (s.status === 'running' ? { status: 'paused' } : s)),
-    resume: () => set((s) => (s.status === 'paused' ? { status: 'running' } : s)),
+    resume: () => {
+      useSim.setState({ playing: true })
+      set((s) => (s.status === 'paused' ? { status: 'running' } : s))
+    },
     reset: () => set({ status: 'idle', step: 0, progress: 0, rows: [], message: '' }),
     fail: (message) => set({ status: 'failed', message }),
     log: (row) => set((s) => ({ rows: [...s.rows, row] })),
@@ -49,6 +56,8 @@ export function createRun() {
 }
 
 export type RunStore = ReturnType<typeof createRun>
+
+const useActiveRun = create<{ run: RunStore | null; steps: number }>(() => ({ run: null, steps: 0 }))
 
 /** smooth a move from rest to rest */
 export const settle = (u: number) => u * u * (3 - 2 * u)
@@ -87,6 +96,12 @@ export function useRunDriver(run: RunStore, proc: Procedure, apply: (f: number) 
   const readRef = useRef(read)
   applyRef.current = apply
   readRef.current = read
+  useEffect(() => {
+    useActiveRun.setState({ run, steps: proc.steps })
+    return () => {
+      if (useActiveRun.getState().run === run) useActiveRun.setState({ run: null, steps: 0 })
+    }
+  }, [run, proc.steps])
   useSimFrame((dt) => {
     const r = run.getState()
     if (r.status === 'idle') clock.current = 0
@@ -115,16 +130,14 @@ export function useRunDriver(run: RunStore, proc: Procedure, apply: (f: number) 
   })
 }
 
-/** Restarts the test whenever the conditions change, after a pause so that dragging a slider doesn't restart it each time. */
-export function useAutoRun(run: RunStore, conditions: string, delay = 450) {
+/** Readings only hold for the conditions they were taken under: changing those ends the test and goes back to interactive. */
+export function useResetOnChange(run: RunStore, conditions: string) {
   useEffect(() => {
-    const id = window.setTimeout(() => run.getState().start(), delay)
     run.getState().reset()
-    return () => window.clearTimeout(id)
-  }, [run, conditions, delay])
+  }, [run, conditions])
 }
 
-const LABEL: Record<RunStatus, string> = { idle: 'Setting up', running: 'Test running', paused: 'Paused', done: 'Test complete', failed: 'Specimen failed' }
+const LABEL: Record<RunStatus, string> = { idle: 'Interactive', running: 'Test running', paused: 'Paused', done: 'Test complete', failed: 'Specimen failed' }
 
 /** The test's controls and its log, for the top of a rig's panel. */
 export function TestBench({ run, steps, title = 'The test', head, format, children }: { run: RunStore; steps: number; title?: string; head: string[]; format: (row: number[]) => string[]; children?: ReactNode }) {
@@ -141,9 +154,11 @@ export function TestBench({ run, steps, title = 'The test', head, format, childr
       <div className="flex items-center gap-2">
         <span className={`h-2 w-2 shrink-0 rounded-full ${running ? 'animate-pulse bg-accent' : status === 'failed' ? 'bg-danger' : status === 'done' ? 'bg-accent' : 'bg-dim'}`} />
         <span className="text-[12.5px] font-medium text-ink">{LABEL[status]}</span>
-        <span className="ml-auto font-mono text-[11.5px] text-mute">
-          step {Math.min(step + (running ? 1 : 0), steps)} of {steps}
-        </span>
+        {status === 'idle' ? null : (
+          <span className="ml-auto font-mono text-[11.5px] text-mute">
+            step {Math.min(step + (running ? 1 : 0), steps)} of {steps}
+          </span>
+        )}
       </div>
       <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-panel-3" role="progressbar" aria-valuenow={Math.round(share * 100)} aria-valuemin={0} aria-valuemax={100} aria-label="Test progress">
         <div className={`h-full ${status === 'failed' ? 'bg-danger' : 'bg-accent'}`} style={{ width: `${share * 100}%` }} />
@@ -158,11 +173,48 @@ export function TestBench({ run, steps, title = 'The test', head, format, childr
             {running ? 'Pause' : 'Resume'}
           </button>
         ) : null}
+        {status === 'idle' ? null : (
+          <button onClick={() => s.reset()} className="rounded-md border border-line-2 px-3 py-1 text-[12.5px] text-ink">
+            Back to interactive
+          </button>
+        )}
       </div>
       {children}
       <div className="mt-2 max-h-52 overflow-y-auto">
-        {rows.length ? <Table head={head} rows={rows.map(format)} highlight={rows.length - 1} /> : <p className="text-[11.5px] text-dim">Readings appear here as each step settles.</p>}
+        {rows.length ? <Table head={head} rows={rows.map(format)} highlight={rows.length - 1} /> : <p className="text-[11.5px] text-dim">Move the controls and the rig follows. Start the test to load it step by step and log the readings.</p>}
       </div>
     </Section>
+  )
+}
+
+/** Compact floating pill on the 3D viewport when the right-hand controls/readings drawer is closed. */
+export function LabHud({ onOpenPanel }: { onOpenPanel: () => void }) {
+  const activeRun = useActiveRun((s) => s.run)
+  const steps = useActiveRun((s) => s.steps)
+  if (!activeRun) return null
+  return <LabHudInner run={activeRun} steps={steps} onOpenPanel={onOpenPanel} />
+}
+
+function LabHudInner({ run, steps, onOpenPanel }: { run: RunStore; steps: number; onOpenPanel: () => void }) {
+  const status = run((s) => s.status)
+  const step = run((s) => s.step)
+  const rows = run((s) => s.rows)
+  const running = status === 'running'
+  return (
+    <div className="pointer-events-auto flex items-center gap-2 rounded-full border border-line bg-panel/95 px-3 py-1.5 text-[12px] text-ink shadow-lg backdrop-blur">
+      <span className={`h-2 w-2 shrink-0 rounded-full ${running ? 'animate-pulse bg-accent' : status === 'failed' ? 'bg-danger' : status === 'done' ? 'bg-accent' : 'bg-dim'}`} />
+      <span className="font-medium">{LABEL[status]}</span>
+      <span className="font-mono text-[11px] text-mute">
+        {Math.min(step + (running ? 1 : 0), steps)}/{steps}
+      </span>
+      {status === 'done' || status === 'failed' || status === 'idle' ? (
+        <button onClick={() => run.getState().start()} className="rounded-full bg-accent px-2.5 py-0.5 text-[11.5px] font-medium text-accent-ink hover:brightness-105">
+          {status === 'idle' ? 'Start' : 'Run again'}
+        </button>
+      ) : null}
+      <button onClick={onOpenPanel} className="rounded-full border border-line-2 px-2.5 py-0.5 text-[11.5px] text-mute hover:border-accent/50 hover:text-ink">
+        Readings ({rows.length}) →
+      </button>
+    </div>
   )
 }

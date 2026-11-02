@@ -20,7 +20,10 @@ const scene: SceneDef = {
   floorY: FLOOR,
   hatchScale: 0.012,
   timeScale: 1,
-  cutPresets: [{ id: 'mid', label: 'Along the beam', planes: [{ normal: [0, 0, 1], pos: 0 }] }],
+  cutPresets: [
+    { id: 'cross', label: 'Cross-section at mid-span', planes: [{ normal: [1, 0, 0], pos: 0 }] },
+    { id: 'mid', label: 'Along the beam', planes: [{ normal: [0, 0, 1], pos: 0 }] },
+  ],
   cites: [NOTE('course outline'), PQ('2010/11 test Fig 1; 2012/13 Q3')],
   reset: () => useBeam.getState().reset(),
   applyParams: (p) => {

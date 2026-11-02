@@ -2,7 +2,7 @@ import { useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { useSimFrame } from '@/core/sim'
 import { box, cylinder, helixSpring, mat4, merge, tube, xform } from '@/geometry'
-import { instrument, useAutoRun, useRunDriver } from '@/lab/run'
+import { instrument, useResetOnChange, useRunDriver } from '@/lab/run'
 import { PartLabel } from '@/render/Label'
 import { Part, PartMesh } from '@/render/Part'
 import { placeBetween, unitRod } from '../_shared/strut'
@@ -53,7 +53,7 @@ export function Governor3D() {
   }
   const phase = useRef(0)
   const whole = useGov()
-  useAutoRun(govRun, JSON.stringify([whole.kind, whole.m, whole.M, whole.arm, whole.offset, whole.a, whole.b, whole.r0, whole.n0, whole.k]))
+  useResetOnChange(govRun, JSON.stringify([whole.kind, whole.m, whole.M, whole.arm, whole.offset, whole.a, whole.b, whole.r0, whole.n0, whole.k]))
   useRunDriver(
     govRun,
     GOV_PROC,

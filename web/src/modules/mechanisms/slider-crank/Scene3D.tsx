@@ -2,7 +2,7 @@ import { useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { useSimFrame } from '@/core/sim'
 import { box, cylinder, mat4, merge, tube, xform } from '@/geometry'
-import { instrument, useAutoRun, useRunDriver } from '@/lab/run'
+import { instrument, useResetOnChange, useRunDriver } from '@/lab/run'
 import { deadCentres, sliderDisplacement, sliderPosition, yokeDisplacement } from '@/physics/linkages'
 import { PartLabel } from '@/render/Label'
 import { Part, PartMesh } from '@/render/Part'
@@ -65,7 +65,7 @@ export function Slider3D() {
   }, [r, l, e, xMid, xOut, yoke])
 
   const phase = useRef(0.5)
-  useAutoRun(sliderRun, JSON.stringify([mode, rmm, n, emm]))
+  useResetOnChange(sliderRun, JSON.stringify([mode, rmm, n, emm]))
   /** from the outer dead centre, as the procedure starts */
   const startAngle = () => {
     const st = useSlider.getState()

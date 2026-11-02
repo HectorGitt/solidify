@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { create } from 'zustand'
 import { useSimFrame } from '@/core/sim'
 import { box, cylinder, mat4, merge, tube, xform } from '@/geometry'
-import { TestBench, createRun, instrument, useAutoRun, useRunDriver } from '@/lab/run'
+import { TestBench, createRun, instrument, useResetOnChange, useRunDriver } from '@/lab/run'
 import { along, areaFor, endDifferences, lmtd, rate, type Exchanger, type Flow as Arrangement } from '@/physics/heatexchanger'
 import { Flow } from '@/render/Flow'
 import { PartLabel } from '@/render/Label'
@@ -38,7 +38,7 @@ interface Params {
   reset: () => void
 }
 
-export const DEFAULTS = { flow: 'counter' as Arrangement, Thi: 105, Tci: 40, mh: 0.217, cph: 2.2, mc: 0.1, cpc: 4.18, U: 300, A: 2.03, want: 80, f: 0 }
+export const DEFAULTS = { flow: 'counter' as Arrangement, Thi: 105, Tci: 40, mh: 0.217, cph: 2.2, mc: 0.1, cpc: 4.18, U: 300, A: 2.03, want: 80, f: 1 }
 export const useHx = create<Params>((set) => ({ ...DEFAULTS, set: (q) => set(q), reset: () => set(DEFAULTS) }))
 const set = (q: Partial<Params>) => useHx.getState().set(q)
 
@@ -55,7 +55,7 @@ const probeOf = (f: number) => Math.max(0, Math.min(1, (f * PROCEDURE.steps - SE
 
 export function Exchanger3D() {
   const p = useHx()
-  useAutoRun(hxRun, JSON.stringify([p.flow, p.Thi, p.Tci, p.mh, p.cph, p.mc, p.cpc, p.U, p.A]))
+  useResetOnChange(hxRun, JSON.stringify([p.flow, p.Thi, p.Tci, p.mh, p.cph, p.mc, p.cpc, p.U, p.A]))
   useRunDriver(
     hxRun,
     PROCEDURE,
@@ -73,7 +73,8 @@ export function Exchanger3D() {
   useEffect(
     () =>
       hxRun.subscribe((r, prev) => {
-        if ((r.status === 'idle' && prev.status !== 'idle') || (r.status === 'running' && prev.status !== 'running' && r.rows.length === 0)) useHx.getState().set({ f: 0 })
+        if ((r.status === 'idle' && prev.status !== 'idle')) useHx.getState().set({ f: 1 })
+        if ((r.status === 'running' && prev.status !== 'running' && r.rows.length === 0)) useHx.getState().set({ f: 0 })
       }),
     [],
   )

@@ -2,7 +2,7 @@ import { useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { useSimFrame } from '@/core/sim'
 import { box, cylinder, extrude, mat4, merge, xform } from '@/geometry'
-import { instrument, useAutoRun, useRunDriver } from '@/lab/run'
+import { instrument, useResetOnChange, useRunDriver } from '@/lab/run'
 import { PartLabel } from '@/render/Label'
 import { Part, PartMesh } from '@/render/Part'
 import { Trace } from '../_shared/rig'
@@ -69,7 +69,7 @@ export function Oldham3D() {
     return pts
   }, [d])
 
-  useAutoRun(oldhamRun, String(dmm))
+  useResetOnChange(oldhamRun, String(dmm))
   useRunDriver(
     oldhamRun,
     OLDHAM_PROC,

@@ -16,6 +16,7 @@ const scene: SceneDef = {
   floorY: FLOOR,
   hatchScale: 0.012,
   timeScale: 1,
+  cutPresets: [{ id: 'mid', label: 'Through the plant', planes: [{ normal: [0, 0, 1], pos: 0 }] }],
   cites: [NOTE('vapour compression cycle, worked examples 1 and 2')],
   reset: () => useFridge.getState().reset(),
   applyParams: (p) => useFridge.getState().set(p as Partial<typeof DEFAULTS>),

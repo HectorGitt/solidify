@@ -3,7 +3,7 @@ import * as THREE from 'three'
 import { create } from 'zustand'
 import { useSimFrame } from '@/core/sim'
 import { box, cylinder, extrude, mat4, merge, tube, xform } from '@/geometry'
-import { TestBench, createRun, instrument, useAutoRun, useRunDriver } from '@/lab/run'
+import { TestBench, createRun, instrument, useResetOnChange, useRunDriver } from '@/lab/run'
 import { camLift, motionLaw, type CamMotion, type CamSegment } from '@/physics/machinedynamics'
 import { PartLabel } from '@/render/Label'
 import { Part, PartMesh } from '@/render/Part'
@@ -119,7 +119,7 @@ export function Cam3D() {
     [p.base, p.lift, p.shaft, p.roller, p.riseEnd, p.dwellEnd, p.rise, p.fall, p.follower],
   )
 
-  useAutoRun(camRun, JSON.stringify([p.base, p.lift, p.roller, p.riseEnd, p.dwellEnd, p.rise, p.fall, p.follower]))
+  useResetOnChange(camRun, JSON.stringify([p.base, p.lift, p.roller, p.riseEnd, p.dwellEnd, p.rise, p.fall, p.follower]))
   useRunDriver(
     camRun,
     PROCEDURE,

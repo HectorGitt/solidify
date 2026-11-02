@@ -15,6 +15,7 @@ const scene: SceneDef = {
   extent: 3,
   floorY: FLOOR,
   timeScale: 1,
+  cutPresets: [{ id: 'diag', label: 'Plane through the line', planes: [{ normal: [-0.6, 0, 0.8], pos: 0 }] }],
   cites: [NOTE('true length of a line; first auxiliary views')],
   reset: () => useLine.getState().reset(),
   applyParams: (p) => useLine.getState().set(p as Partial<typeof DEFAULTS>),

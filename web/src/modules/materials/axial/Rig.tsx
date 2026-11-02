@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { TestBench, createRun, instrument, useAutoRun, useRunDriver } from '@/lab/run'
+import { TestBench, createRun, instrument, useResetOnChange, useRunDriver } from '@/lab/run'
 import * as THREE from 'three'
 import { create } from 'zustand'
 import { box, cylinder, mat4, merge, tube, xform } from '@/geometry'
 import { circleArea, compositeBar, railGapAt, railStressAt, railsTouchAt, tubeArea } from '@/physics/strength'
 import { PartLabel } from '@/render/Label'
+import { createDynamicCutMaterial } from '@/render/materials'
 import { Part, PartMesh } from '@/render/Part'
 import { Chart } from '@/ui/Chart'
 import { Readout, Section, Segmented, Slider, fmt } from '@/ui/controls'
@@ -39,7 +40,7 @@ interface Params {
   reset: () => void
 }
 
-export const DEFAULTS = { mode: 'rails' as Mode, T: 45, T0: 15, gap: 3.2, railL: 18, alpha: 11.7, Er: 207, dIn: 50, dOut: 75, EIn: 200, EOut: 97, P: 300, L: 254, f: 0 }
+export const DEFAULTS = { mode: 'rails' as Mode, T: 45, T0: 15, gap: 3.2, railL: 18, alpha: 11.7, Er: 207, dIn: 50, dOut: 75, EIn: 200, EOut: 97, P: 300, L: 254, f: 1 }
 export const useAxial = create<Params>((set) => ({ ...DEFAULTS, set: (p) => set(p), reset: () => set(DEFAULTS) }))
 const set = (p: Partial<Params>) => useAxial.getState().set(p)
 
@@ -65,7 +66,11 @@ function Rails() {
     // a rail section along +x
     return merge(xform(box(DRAWN, 0.022, 0.09), mat4.t(0, -0.05, 0)), xform(box(DRAWN, 0.07, 0.022), mat4.t(0, -0.006, 0)), xform(box(DRAWN, 0.03, 0.06), mat4.t(0, 0.044, 0)))
   }, [])
-  const mat = useMemo(() => new THREE.MeshStandardMaterial({ color: colour, metalness: 0.5, roughness: 0.45 }), [colour])
+  const dynMat = useMemo(() => createDynamicCutMaterial({ color: '#9aa3ab', cap: '#c8d0d6', hatch: 'steel', metalness: 0.5, roughness: 0.45 }), [])
+  const mat = useMemo(() => {
+    dynMat.material.color.copy(colour)
+    return dynMat.material
+  }, [colour, dynMat])
   const bed = useMemo(() => merge(xform(box(2.0, 0.03, 0.3), mat4.t(0, FLOOR + 0.17, 0)), ...[-0.85, -0.5, -0.17, 0.17, 0.5, 0.85].map((x) => xform(box(0.09, 0.08, 0.5), mat4.t(x, FLOOR + 0.11, 0))), xform(box(2.2, 0.04, 0.7), mat4.t(0, FLOOR + 0.02, 0))), [])
   const y = FLOOR + 0.24
   const offset = DRAWN / 2 + gapDrawn / 2
@@ -75,12 +80,12 @@ function Rails() {
         <PartMesh geometry={bed} />
       </Part>
       <group position={[-offset, y, 0]}>
-        <Part id="rail-a" name="Rail" role="static" material="steel" info={{ summary: 'Laid with a gap between the lengths.', role: 'Free to grow until the gap closes. After that, the rest of its growth is stopped, which is what makes the stress.' }} cut={false}>
+        <Part id="rail-a" name="Rail" role="static" material="steel" info={{ summary: 'Laid with a gap between the lengths.', role: 'Free to grow until the gap closes. After that, the rest of its growth is stopped, which is what makes the stress.' }}>
           <PartMesh geometry={profile} customMaterial={mat} />
         </Part>
       </group>
       <group position={[offset, y, 0]}>
-        <Part id="rail-b" name="Next rail" role="static" material="steel" info={{ summary: 'The next length of rail.', role: 'It grows too: each rail takes up its own share of the gaps, one per rail.' }} cut={false}>
+        <Part id="rail-b" name="Next rail" role="static" material="steel" info={{ summary: 'The next length of rail.', role: 'It grows too: each rail takes up its own share of the gaps, one per rail.' }}>
           <PartMesh geometry={profile} customMaterial={mat} />
         </Part>
       </group>
@@ -148,7 +153,7 @@ function CompositeBar() {
 export function Axial3D() {
   const mode = useAxial((s) => s.mode)
   const p = useAxial()
-  useAutoRun(axialRun, JSON.stringify([p.mode, p.T, p.T0, p.gap, p.railL, p.alpha, p.Er, p.dIn, p.dOut, p.EIn, p.EOut, p.P, p.L]))
+  useResetOnChange(axialRun, JSON.stringify([p.mode, p.T, p.T0, p.gap, p.railL, p.alpha, p.Er, p.dIn, p.dOut, p.EIn, p.EOut, p.P, p.L]))
   useRunDriver(
     axialRun,
     PROCEDURE,
@@ -170,7 +175,8 @@ export function Axial3D() {
   useEffect(
     () =>
       axialRun.subscribe((r, prev) => {
-        if ((r.status === 'idle' && prev.status !== 'idle') || (r.status === 'running' && prev.status !== 'running' && r.rows.length === 0)) useAxial.getState().set({ f: 0 })
+        if ((r.status === 'idle' && prev.status !== 'idle')) useAxial.getState().set({ f: 1 })
+        if ((r.status === 'running' && prev.status !== 'running' && r.rows.length === 0)) useAxial.getState().set({ f: 0 })
       }),
     [],
   )

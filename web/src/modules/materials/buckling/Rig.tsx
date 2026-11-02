@@ -1,11 +1,12 @@
-import { useMemo, useRef, useState } from 'react'
-import { TestBench, createRun, instrument, useAutoRun, useRunDriver } from '@/lab/run'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { TestBench, createRun, instrument, useResetOnChange, useRunDriver } from '@/lab/run'
 import * as THREE from 'three'
 import { create } from 'zustand'
 import { useSimFrame } from '@/core/sim'
 import { box, cylinder, mat4, merge, xform } from '@/geometry'
 import { END_FACTORS, circleArea, eulerLimitSlenderness, eulerLoad, secondMomentCircle, secondMomentTube, tubeArea, type ColumnEnds } from '@/physics/strength'
 import { PartLabel } from '@/render/Label'
+import { createDynamicCutMaterial } from '@/render/materials'
 import { Part, PartMesh } from '@/render/Part'
 import { Chart } from '@/ui/Chart'
 import { Readout, Section, Segmented, Slider, Toggle, fmt } from '@/ui/controls'
@@ -106,7 +107,7 @@ function columnGeometry(ends: ColumnEnds, radius: number, bow: number, N = 48) {
 export function Column3D() {
   const p = useColumn()
   const a = useMemo(() => analyse(p), [p])
-  useAutoRun(columnRun, JSON.stringify([p.ends, p.L, p.D, p.d, p.hollow, p.E, p.sigmaP]))
+  useResetOnChange(columnRun, JSON.stringify([p.ends, p.L, p.D, p.d, p.hollow, p.E, p.sigmaP]))
   useRunDriver(
     columnRun,
     PROCEDURE,
@@ -124,6 +125,14 @@ export function Column3D() {
       columnRun.getState().fail(q.valid ? `It buckled at ${(load / 1000).toFixed(1)} kN: the bow ran away, far below the ${(q.Pc / 1000).toFixed(0)} kN that would crush it.` : `Too short to buckle: it reached the material’s limit and crushed at ${(load / 1000).toFixed(1)} kN.`)
     },
   )
+  useEffect(
+    () =>
+      columnRun.subscribe((r, prev) => {
+        if ((r.status === 'idle' && prev.status !== 'idle')) useColumn.getState().set({ loadPct: DEFAULTS.loadPct })
+        if ((r.status === 'running' && prev.status !== 'running' && r.rows.length === 0)) useColumn.getState().set({ loadPct: 0 })
+      }),
+    [],
+  )
   const ratio = (p.loadPct / 100) * 1
   const load = ratio * a.Pcr
   // the bow grows as the load nears the critical load: amplification 1/(1 − P/Pcr), and it buckles beyond
@@ -134,7 +143,7 @@ export function Column3D() {
   const head = useRef<THREE.Group>(null)
   const radius = Math.min(0.05, Math.max(0.014, 0.03 * (p.D / 50)))
   const last = useRef(-1)
-  const mat = useMemo(() => new THREE.MeshStandardMaterial({ color: '#9aa3ab', metalness: 0.6, roughness: 0.4 }), [])
+  const mat = useMemo(() => createDynamicCutMaterial({ color: '#9aa3ab', cap: '#c8d0d6', hatch: 'steel', metalness: 0.6, roughness: 0.4 }).material, [])
   const frame = useMemo(
     () => ({
       base: xform(box(1.1, 0.1, 0.6), mat4.t(0, FLOOR + 0.05, 0)),
@@ -166,11 +175,11 @@ export function Column3D() {
         <PartMesh geometry={frame.top} />
         <PartMesh geometry={frame.ram} material="steelDark" />
       </Part>
-      <Part id="column" name="Column" role="moving" material="steel" info={{ summary: 'A slender strut.', role: 'A long thin one fails by bending sideways, at a load far below what would crush it.' }} cut={false}>
+      <Part id="column" name="Column" role="moving" material="steel" info={{ summary: 'A slender strut.', role: 'A long thin one fails by bending sideways, at a load far below what would crush it.' }} cut>
         <mesh ref={ref} geometry={start} material={mat} castShadow />
       </Part>
       <group ref={head}>
-        <Part id="ends" name="End fittings" role="static" material="steelDark" info={{ summary: 'Set how the ends are held.', role: 'A fixed end holds its direction as well as its place. Effective length Le is the distance between points of zero moment.' }} cut={false}>
+        <Part id="ends" name="End fittings" role="static" material="steelDark" info={{ summary: 'Set how the ends are held.', role: 'A fixed end holds its direction as well as its place. Effective length Le is the distance between points of zero moment.' }}>
           <PartMesh geometry={frame.plate} />
           <PartMesh geometry={frame.foot} />
         </Part>
@@ -247,6 +256,7 @@ export function ColumnPanel() {
             { value: 'fixed-free', label: 'Fix-free' },
           ]}
         />
+        {columnRun.getState().status === 'idle' ? <Slider label="Load, share of critical" value={p.loadPct} min={0} max={100} step={1} unit="%" onChange={(loadPct) => set({ loadPct })} /> : null}
         <Slider label="Length" value={p.L} min={0.2} max={10} step={0.01} unit="m" onChange={(L) => set({ L })} />
         <Slider label="Outer diameter" value={p.D} min={10} max={300} step={1} unit="mm" onChange={(D) => set({ D, d: Math.min(p.d, D - 4) })} />
         <Toggle label="Hollow" checked={p.hollow} onChange={(hollow) => set({ hollow })} />

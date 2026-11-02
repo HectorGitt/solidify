@@ -6,7 +6,8 @@ import { ChallengeHud } from '@/challenges/ChallengeHud'
 import { challengesFor } from '@/challenges/registry'
 import { useChallenge } from '@/challenges/store'
 import { useSim } from '@/core/sim'
-import { findModule } from '@/modules/catalog'
+import { LabHud } from '@/lab/run'
+import { MODULES, findModule } from '@/modules/catalog'
 import type { SceneDef } from '@/modules/types'
 import { DEFAULT_CUT_PRESETS, useView } from '@/render/view'
 import { useAcademic } from './audience'
@@ -223,7 +224,10 @@ export function Viewer() {
       if (e.key === ' ') {
         e.preventDefault()
         useSim.getState().toggle()
-      } else if (e.key === 'c') v.setCut({ enabled: !v.cut.enabled })
+      } else if (e.key === 'c') {
+        if (!v.cut.enabled && v.cut.planes.length === 0 && v.cutPresets[0]) v.applyPreset(v.cutPresets[0].id)
+        else v.setCut({ enabled: !v.cut.enabled })
+      }
       else if (e.key === 'x') v.setXray(!v.xray)
       else if (e.key === 'l') v.setLabels(!v.labels)
       else if (e.key === 'Escape' && !useTour.getState().active) {
@@ -257,7 +261,22 @@ export function Viewer() {
         </Link>
         <span className="hidden text-line-2 sm:inline">/</span>
         <span className="hidden text-[13px] text-mute md:inline">
-          {mod.title}
+          <select
+            aria-label="Module"
+            className="rounded-md border border-line-2 bg-panel-2 px-2 py-1 text-[13px] text-mute hover:text-ink"
+            value={mod.id}
+            onChange={(e) => {
+              const nextMod = findModule(e.target.value)
+              const first = nextMod?.scenes.find((s) => s.load) ?? nextMod?.scenes[0]
+              if (nextMod && first) navigate(`/m/${nextMod.id}/${first.id}`)
+            }}
+          >
+            {MODULES.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.title}
+              </option>
+            ))}
+          </select>
         </span>
         <span className="hidden text-line-2 md:inline">/</span>
         <select
@@ -383,6 +402,7 @@ export function Viewer() {
               <div className="pointer-events-none absolute right-3 top-3 z-10 flex flex-col items-end gap-2">
                 <OrientationGizmo scene={scene} />
                 <ChallengeHud />
+                {!rightOpen ? <LabHud onOpenPanel={() => setRightOpen(true)} /> : null}
               </div>
               <InsidePill />
               <BuildHud />

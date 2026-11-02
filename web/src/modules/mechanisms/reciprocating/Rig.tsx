@@ -3,7 +3,7 @@ import * as THREE from 'three'
 import { create } from 'zustand'
 import { useSimFrame } from '@/core/sim'
 import { box, cylinder, mat4, merge, tube, xform } from '@/geometry'
-import { TestBench, createRun, instrument, useAutoRun, useRunDriver } from '@/lab/run'
+import { TestBench, createRun, instrument, useResetOnChange, useRunDriver } from '@/lab/run'
 import { cylinderBalance, equivalentMasses, reciprocatingForce, rodEnds, rpmToRad } from '@/physics/machinedynamics'
 import { PartLabel } from '@/render/Label'
 import { Part, PartMesh } from '@/render/Part'
@@ -40,7 +40,7 @@ interface Params {
   reset: () => void
 }
 
-export const DEFAULTS = { layout: 'one' as Layout, m: 2, r: 50, n: 4, rpm: 1500, c: 0, f: 0 }
+export const DEFAULTS = { layout: 'one' as Layout, m: 2, r: 50, n: 4, rpm: 1500, c: 0, f: 1 }
 export const useRecip = create<Params>((set) => ({ ...DEFAULTS, set: (p) => set(p), reset: () => set(DEFAULTS) }))
 const set = (p: Partial<Params>) => useRecip.getState().set(p)
 const live = { theta: 0 }
@@ -83,7 +83,7 @@ function peaks(p: Parameters<typeof shaking>[0]) {
 
 export function Recip3D() {
   const p = useRecip()
-  useAutoRun(recipRun, JSON.stringify([p.layout, p.m, p.r, p.n, p.rpm, p.c]))
+  useResetOnChange(recipRun, JSON.stringify([p.layout, p.m, p.r, p.n, p.rpm, p.c]))
   useRunDriver(
     recipRun,
     PROCEDURE,
@@ -100,7 +100,8 @@ export function Recip3D() {
   useEffect(
     () =>
       recipRun.subscribe((r, prev) => {
-        if ((r.status === 'idle' && prev.status !== 'idle') || (r.status === 'running' && prev.status !== 'running' && r.rows.length === 0)) useRecip.getState().set({ f: 0 })
+        if ((r.status === 'idle' && prev.status !== 'idle')) useRecip.getState().set({ f: 1 })
+        if ((r.status === 'running' && prev.status !== 'running' && r.rows.length === 0)) useRecip.getState().set({ f: 0 })
       }),
     [],
   )

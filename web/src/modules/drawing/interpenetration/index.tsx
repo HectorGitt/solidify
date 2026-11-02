@@ -16,6 +16,7 @@ const scene: SceneDef = {
   floorY: FLOOR,
   hatchScale: 0.012,
   timeScale: 1,
+  cutPresets: [{ id: 'mid', label: 'Through the joint', planes: [{ normal: [0, 0, 1], pos: 0 }] }],
   cites: [NOTE('major procedure; cylinders at right angles and at an angle')],
   reset: () => useJoin.getState().reset(),
   applyParams: (p) => useJoin.getState().set(p as Partial<typeof DEFAULTS>),

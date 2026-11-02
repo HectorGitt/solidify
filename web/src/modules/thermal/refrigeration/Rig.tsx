@@ -3,7 +3,7 @@ import * as THREE from 'three'
 import { create } from 'zustand'
 import { useSimFrame } from '@/core/sim'
 import { box, cylinder, helixSpring, mat4, merge, xform } from '@/geometry'
-import { TestBench, createRun, instrument, useAutoRun, useRunDriver } from '@/lab/run'
+import { TestBench, createRun, instrument, useResetOnChange, useRunDriver } from '@/lab/run'
 import { AMMONIA, R134A } from '@/physics/fluidtables'
 import { refrigeration } from '@/physics/plantcycles'
 import { Flow } from '@/render/Flow'
@@ -37,7 +37,7 @@ interface Params {
   reset: () => void
 }
 
-export const DEFAULTS = { fluid: 'ammonia' as Fluid, Te: -15, Tc: 30, m: 3, wet: true, f: 0 }
+export const DEFAULTS = { fluid: 'ammonia' as Fluid, Te: -15, Tc: 30, m: 3, wet: true, f: 1 }
 export const useFridge = create<Params>((set) => ({ ...DEFAULTS, set: (q) => set(q), reset: () => set(DEFAULTS) }))
 const set = (q: Partial<Params>) => useFridge.getState().set(q)
 
@@ -57,7 +57,7 @@ const SUCTION: Pt[] = [[-0.5, 0.1, 0.1], [-0.1, -0.05, -0.28], [-0.1, -0.42, -0.
 
 export function Fridge3D() {
   const p = useFridge()
-  useAutoRun(fridgeRun, JSON.stringify([p.fluid, p.Te, p.Tc, p.m, p.wet]))
+  useResetOnChange(fridgeRun, JSON.stringify([p.fluid, p.Te, p.Tc, p.m, p.wet]))
   useRunDriver(
     fridgeRun,
     PROCEDURE,
@@ -76,7 +76,8 @@ export function Fridge3D() {
   useEffect(
     () =>
       fridgeRun.subscribe((r, prev) => {
-        if ((r.status === 'idle' && prev.status !== 'idle') || (r.status === 'running' && prev.status !== 'running' && r.rows.length === 0)) useFridge.getState().set({ f: 0 })
+        if ((r.status === 'idle' && prev.status !== 'idle')) useFridge.getState().set({ f: 1 })
+        if ((r.status === 'running' && prev.status !== 'running' && r.rows.length === 0)) useFridge.getState().set({ f: 0 })
       }),
     [],
   )
@@ -111,7 +112,7 @@ export function Fridge3D() {
   const fans = [useRef<THREE.Group>(null), useRef<THREE.Group>(null)]
   const white = useMemo(() => new THREE.Color('#f4f8fb'), [])
   const bare = useMemo(() => new THREE.Color('#b9c0c4'), [])
-  const running = () => (fridgeRun.getState().status === 'idle' ? 0 : 1)
+  const running = () => 1
   useSimFrame((dt) => {
     const k = running()
     if (fly.current) fly.current.rotation.z -= dt * 16 * k
@@ -131,22 +132,22 @@ export function Fridge3D() {
         <PartMesh geometry={geo.legs} material="steelDark" />
         <PartMesh geometry={geo.condFrame} material="steelDark" />
       </Part>
-      <Part id="room" name="Cold room" role="housing" material="paintBlue" info={{ summary: 'The insulated space being cooled.', role: 'The load is what leaks through its walls, plus what is stored inside as it cools. Its front is open here so that the coil can be seen.' }} cut={false}>
+      <Part id="room" name="Cold room" role="housing" material="paintBlue" info={{ summary: 'The insulated space being cooled.', role: 'The load is what leaks through its walls, plus what is stored inside as it cools. Its front is open here so that the coil can be seen.' }}>
         <PartMesh geometry={geo.room} />
         <PartMesh geometry={geo.crates} material="wood" />
       </Part>
-      <Part id="evaporator" name="Evaporator" role="static" material="copper" info={{ summary: 'Refrigerant boils here at low pressure.', role: 'It takes its latent heat from the room: this is the refrigerating effect, h₁ − h₄. Below 0 °C the fins frost over, and frost insulates, so they need defrosting.' }} cut={false}>
+      <Part id="evaporator" name="Evaporator" role="static" material="copper" info={{ summary: 'Refrigerant boils here at low pressure.', role: 'It takes its latent heat from the room: this is the refrigerating effect, h₁ − h₄. Below 0 °C the fins frost over, and frost insulates, so they need defrosting.' }}>
         <PartMesh geometry={geo.evapCoil} />
         <PartMesh geometry={geo.evapFins} customMaterial={frost.material} />
       </Part>
-      <Part id="compressor" name="Compressor" role="moving" material="paintBlack" info={{ summary: 'Raises the vapour’s pressure, and so its saturation temperature.', role: 'This is the work put in, h₂ − h₁. The pressure lift must put the condensing temperature above the air or water that will cool it.' }} cut={false}>
+      <Part id="compressor" name="Compressor" role="moving" material="paintBlack" info={{ summary: 'Raises the vapour’s pressure, and so its saturation temperature.', role: 'This is the work put in, h₂ − h₁. The pressure lift must put the condensing temperature above the air or water that will cool it.' }} cut>
         <PartMesh geometry={geo.compressor} />
         <group position={[0.05, -0.47, 0.2]} ref={fly}>
           <PartMesh geometry={geo.flywheel} material="steelDark" />
           <PartMesh geometry={geo.spoke} position={[0, 0, 0.022]} material="paintRed" />
         </group>
       </Part>
-      <Part id="condenser" name="Condenser" role="static" material="copper" info={{ summary: 'Hot vapour gives up its heat and condenses.', role: 'It rejects the room’s heat and the compressor’s work together: h₂ − h₃ = effect + work.' }} cut={false}>
+      <Part id="condenser" name="Condenser" role="static" material="copper" info={{ summary: 'Hot vapour gives up its heat and condenses.', role: 'It rejects the room’s heat and the compressor’s work together: h₂ − h₃ = effect + work.' }}>
         <PartMesh geometry={geo.condCoil} />
         <PartMesh geometry={geo.condFins} material="aluminium" />
         <group position={[0.54, 0.1, 0]} ref={fans[0]}>
@@ -155,10 +156,10 @@ export function Fridge3D() {
           </group>
         </group>
       </Part>
-      <Part id="receiver" name="Receiver" role="static" material="steel" info={{ summary: 'Stores the condensed liquid.', role: 'It keeps a steady supply of liquid available for the expansion valve, whatever the load.' }} cut={false}>
+      <Part id="receiver" name="Receiver" role="static" material="steel" info={{ summary: 'Stores the condensed liquid.', role: 'It keeps a steady supply of liquid available for the expansion valve, whatever the load.' }}>
         <PartMesh geometry={geo.receiver} />
       </Part>
-      <Part id="valve" name="Expansion valve" role="static" material="brass" info={{ summary: 'Drops the pressure, with no work and no heat.', role: 'A throttle: enthalpy is the same each side, h₃ = h₄. Some liquid flashes to vapour, which cools the rest to evaporator temperature.' }} cut={false}>
+      <Part id="valve" name="Expansion valve" role="static" material="brass" info={{ summary: 'Drops the pressure, with no work and no heat.', role: 'A throttle: enthalpy is the same each side, h₃ = h₄. Some liquid flashes to vapour, which cools the rest to evaporator temperature.' }}>
         <PartMesh geometry={geo.valve} />
       </Part>
       <Part id="lines" name="Refrigerant lines" role="static" material="copper" info={{ summary: 'High pressure from the compressor to the valve; low pressure from the valve back again.', role: 'Hot discharge, warm liquid, cold wet mixture and cool suction vapour: the four legs of the cycle.' }} cut={false}>
