@@ -3,7 +3,7 @@ import type { WorkingStep } from '@/ui/Working'
 import type { Seed, Vals, VariantMaker } from './variants'
 
 /** Subject areas. The ids are internal authoring keys and are never shown; users see the titles. */
-export type Course = 'AEE509' | 'AEE510' | 'AEE502' | 'AEE501' | 'AEE503' | 'AEE518' | 'CVE202' | 'MEE306' | 'AEE306'
+export type Course = 'AEE509' | 'AEE510' | 'AEE502' | 'AEE501' | 'AEE503' | 'AEE518' | 'CVE202' | 'MEE306' | 'AEE306' | 'MEE201'
 
 export const COURSES: { id: Course; title: string }[] = [
   { id: 'AEE509', title: 'Engines' },
@@ -15,6 +15,7 @@ export const COURSES: { id: Course; title: string }[] = [
   { id: 'CVE202', title: 'Strength of materials' },
   { id: 'MEE306', title: 'Mechanisms & machine dynamics' },
   { id: 'AEE306', title: 'Thermal plant' },
+  { id: 'MEE201', title: 'Technical drawing' },
 ]
 
 export const courseTitle = (c: string) => COURSES.find((x) => x.id === c)?.title ?? c

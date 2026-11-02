@@ -196,4 +196,8 @@ export const FORMULAS: Formula[] = [
   F('AEE306', 'Heat exchangers', 'Duty', r`Q = U A\,\Delta T_m = \dot m c\,\Delta T`, 'thermal/heat-exchanger', TH('heat exchangers.pdf', 'duty')),
   F('AEE306', 'Refrigeration', 'Coefficient of performance', r`\text{COP} = \dfrac{h_1 - h_4}{h_2 - h_1}`, 'thermal/refrigeration', TH('refrigeration and air conditioning note.docx', 'performance rating')),
   F('AEE306', 'Steam plant', 'Rankine efficiency', r`\eta = \dfrac{(h_3 - h_4) - (h_2 - h_1)}{h_3 - h_2}`, 'thermal/steam-plant', cite('AEE305', '305 POWER.pdf', 'steam power plant')),
+  // ------------------------------------------------------------------ technical drawing
+  F('MEE201', 'Auxiliary views', 'True length and plan length', r`TL = \sqrt{\Delta x^2 + \Delta y^2 + \Delta z^2},\quad L_{\text{plan}} = \sqrt{\Delta x^2 + \Delta z^2}`, 'drawing/true-length', cite('Textbook', 'True Lengths and Auxiliary views.pdf', 'true length of a line')),
+  F('MEE201', 'Auxiliary views', 'True inclination to the horizontal plane', r`\theta = \sin^{-1}\!\left(\dfrac{\Delta y}{TL}\right) = \tan^{-1}\!\left(\dfrac{\Delta y}{L_{\text{plan}}}\right)`, 'drawing/true-length', cite('Textbook', 'True Lengths and Auxiliary views.pdf', 'first auxiliary elevation')),
+  F('MEE201', 'Interpenetration', 'Intersection of cylinders (cutting plane at z)', r`x = \sqrt{R^2 - (r\sin\phi + e)^2},\quad s = r\phi`, 'drawing/interpenetration', cite('Textbook', 'Interpenetration.pdf', 'curve of intersection & development')),
 ]

@@ -1,5 +1,6 @@
 import { cite } from '@/content/citations'
 import { reactions, moment, type Beam } from '@/physics/beam'
+import { curvePoint, trueLength } from '@/physics/drawing'
 import { AMMONIA } from '@/physics/fluidtables'
 import { areaFor } from '@/physics/heatexchanger'
 import { energyFluctuation, equivalentMasses, flywheelInertia, hartnell, porter, porterAlphaAfterLift, radToRpm, rpmToRad, sensitivity, staticBalance } from '@/physics/machinedynamics'
@@ -452,4 +453,71 @@ export const THERMAL: Question[] = [
     params: { fluid: 'ammonia', Te: -15, Tc: 30, wet: true },
     cite: cite('AEE306', 'refrigeration and air conditioning note.docx', 'worked example 1'),
   },
+]
+
+/** Technical drawing */
+export const DRAWING: Question[] = [
+  parametric({
+    id: 'drw-true-length',
+    course: 'MEE201',
+    topic: 'Auxiliary views',
+    moduleId: 'drawing',
+    sceneId: 'true-length',
+    title: 'True length and inclination from plan and elevation',
+    inputs: [
+      { key: 'dx', value: 80, min: 30, max: 120, step: 5 },
+      { key: 'dy', value: 50, min: 20, max: 100, step: 5 },
+      { key: 'dz', value: 60, min: 30, max: 120, step: 5 },
+    ],
+    statement: (v) => `A line AB runs across a ${num(v.dx)} mm × ${num(v.dy)} mm × ${num(v.dz)} mm block (width Δx = ${num(v.dx)} mm, height Δy = ${num(v.dy)} mm, depth Δz = ${num(v.dz)} mm). Find its plan length, its true length, and its true angle to the horizontal plane.`,
+    answers: [
+      { key: 'plan', label: 'L_{\\text{plan}}', unit: 'mm', expected: 100 },
+      { key: 'tl', label: 'TL', unit: 'mm', expected: 111.8 },
+      { key: 'th', label: '\\theta', unit: '°', expected: 26.57 },
+    ],
+    solve: (v) => {
+      const t = trueLength(v.dx, v.dy, v.dz)
+      return { plan: t.plan, tl: t.length, th: t.toHorizontal }
+    },
+    working: (v, r) => [
+      { label: 'Plan length', tex: 'L_{\\text{plan}} = \\sqrt{\\Delta x^2 + \\Delta z^2}', sub: `\\sqrt{${tnum(v.dx)}^2 + ${tnum(v.dz)}^2}`, result: `${n(r.plan, 4)}\\ \\text{mm}` },
+      { label: 'True length on auxiliary elevation', tex: 'TL = \\sqrt{L_{\\text{plan}}^2 + \\Delta y^2}', sub: `\\sqrt{${n(r.plan, 4)}^2 + ${tnum(v.dy)}^2}`, result: `${n(r.tl, 4)}\\ \\text{mm}` },
+      { label: 'True angle to the horizontal', tex: '\\theta = \\sin^{-1}(\\Delta y / TL)', result: `${n(r.th, 3)}^\\circ` },
+    ],
+    follow: (v, g) => ('tl' in g ? { th: deg(Math.asin(v.dy / g.tl)) } : {}),
+    params: (v) => ({ dx: v.dx, dy: v.dy, dz: v.dz }),
+    cite: cite('Textbook', 'True Lengths and Auxiliary views.pdf', 'true length of a line'),
+  }),
+  parametric({
+    id: 'drw-cylinder-tee',
+    course: 'MEE201',
+    topic: 'Interpenetration',
+    moduleId: 'drawing',
+    sceneId: 'interpenetration',
+    title: 'Square tee of two unequal cylinders',
+    inputs: [
+      { key: 'R', value: 50, min: 35, max: 75, step: 1 },
+      { key: 'r', value: 30, min: 15, max: 45, step: 1 },
+    ],
+    valid: (v) => v.r < v.R - 4,
+    statement: (v) => `A horizontal branch pipe of radius r = ${num(v.r)} mm meets a vertical main pipe of radius R = ${num(v.R)} mm at right angles with their axes intersecting. Find the distance from the main axis to the curve of intersection at the top/bottom generator (φ = 0°) and at the flank generator (φ = 90°), and the depth of the saddle cut between them.`,
+    answers: [
+      { key: 'x0', label: 'x_{0^\\circ}', unit: 'mm', expected: 50 },
+      { key: 'x90', label: 'x_{90^\\circ}', unit: 'mm', expected: 40 },
+      { key: 'cut', label: '\\Delta x', unit: 'mm', expected: 10 },
+    ],
+    solve: (v) => {
+      const c0 = curvePoint({ R: v.R, r: v.r, angle: 90, offset: 0 }, 0)
+      const c90 = curvePoint({ R: v.R, r: v.r, angle: 90, offset: 0 }, Math.PI / 2)
+      return { x0: c0.t, x90: c90.t, cut: c0.t - c90.t }
+    },
+    working: (v, r) => [
+      { label: 'At φ = 0° (z = 0), the generator meets the front of the main pipe', tex: 'x_{0^\\circ} = R', result: `${n(r.x0, 3)}\\ \\text{mm}` },
+      { label: 'At φ = 90° (z = r), the cutting plane is offset by r', tex: 'x_{90^\\circ} = \\sqrt{R^2 - r^2}', sub: `\\sqrt{${tnum(v.R)}^2 - ${tnum(v.r)}^2}`, result: `${n(r.x90, 3)}\\ \\text{mm}` },
+      { label: 'Saddle depth along the branch', tex: '\\Delta x = x_{0^\\circ} - x_{90^\\circ}', result: `${n(r.cut, 3)}\\ \\text{mm}` },
+    ],
+    follow: (_v, g) => ('x0' in g && 'x90' in g ? { cut: g.x0 - g.x90 } : {}),
+    params: (v) => ({ R: v.R, r: v.r, angle: 90, offset: 0 }),
+    cite: cite('Textbook', 'Interpenetration.pdf', 'curve of intersection'),
+  }),
 ]
