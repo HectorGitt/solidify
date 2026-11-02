@@ -50,7 +50,7 @@ export function About() {
         </Link>
         <h1 className="text-[32px] font-semibold tracking-tight">How Solidify works</h1>
         <p className="mt-2 max-w-2xl text-[15px] leading-relaxed text-mute">
-          Solidify turns agricultural machinery into interactive models you can slice, explode and run — with the engineering behind every motion shown alongside.
+          Solidify turns farm machinery and engineering laboratory rigs into interactive 3D models you can slice, explode and run — with live bench tests and the working behind every calculation shown alongside.
         </p>
 
         <div className="mt-8 grid gap-4 sm:grid-cols-2">

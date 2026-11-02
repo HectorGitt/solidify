@@ -26,7 +26,7 @@ export function SiteFooter() {
       <div className="mx-auto grid max-w-[1360px] gap-10 px-5 py-14 sm:grid-cols-2 sm:px-10 lg:grid-cols-[1.4fr_1fr_1fr_1fr]">
         <div className="max-w-xs">
           <Logo size={22} />
-          <p className="mt-4 text-[13.5px] leading-relaxed text-mute">Interactive 3D tractors and farm machinery, with the engineering worked live. For the workshop and the lecture hall.</p>
+          <p className="mt-4 text-[13.5px] leading-relaxed text-mute">Interactive 3D machinery and engineering laboratories, with the physics and bench tests worked live. For the workshop and the lecture hall.</p>
           <button
             onClick={openSales}
             className="mt-6 inline-flex items-center gap-2 rounded-full bg-ink px-5 py-2.5 text-[13px] font-semibold text-bg transition-opacity hover:opacity-90"

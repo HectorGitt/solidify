@@ -30,16 +30,37 @@ const MEDIA = './media'
 type HeroReadout = { label: string; value: string; unit: string; fill?: number }
 const HERO_SCENES: { moduleId: string; sceneId: string; label: string; frame: StageFrame; readouts: HeroReadout[] }[] = [
   { moduleId: 'vibration', sceneId: 'seat', label: 'Seat suspension', frame: { back: 1.6, shift: 0.55 }, readouts: [{ label: 'Operator vibration', value: '0.666', unit: 'm/s² RMS' }, { label: 'Seat transmissibility', value: '0.549', unit: 'floor to operator' }] },
+  { moduleId: 'mechanisms', sceneId: 'four-bar', label: 'Four-bar linkage', frame: { back: 1.45, shift: 0.35 }, readouts: [{ label: 'Rocker swing', value: '73.8', unit: '° (crank-rocker)' }, { label: 'Transmission angle', value: '18.2–65.4', unit: '°' }] },
   { moduleId: 'traction', sceneId: 'traction-lab', label: 'Traction & drawbar pull', frame: { back: 1.25, shift: 0.2, lift: 0.12 }, readouts: [{ label: 'Drawbar pull', value: '12', unit: 'kN at 14.6 % slip' }, { label: 'Drawbar power', value: '11.4', unit: 'kW of 17.3', fill: 11.4 / 17.3 }] },
+  { moduleId: 'mechanisms', sceneId: 'governors', label: 'Centrifugal governor', frame: { back: 1.5, shift: 0.3 }, readouts: [{ label: 'Spindle speed', value: '240', unit: 'rpm' }, { label: 'Sleeve lift', value: '42', unit: 'mm' }] },
   { moduleId: 'powertrain', sceneId: 'differential', label: 'Differential & diff lock', frame: { back: 1.8, shift: 0.35 }, readouts: [{ label: 'Pinion', value: '600', unit: 'rpm' }, { label: 'Crown wheel', value: '140', unit: 'rpm' }] },
   { moduleId: 'engine', sceneId: 'cooling', label: 'Engine cooling', frame: { back: 1.4, shift: 0.45 }, readouts: [{ label: 'Heat to coolant', value: '36', unit: 'kW' }] },
 ]
 
+const ALL_ORDER = [
+  'engine',
+  'mechanisms',
+  'powertrain',
+  'materials',
+  'hydraulics',
+  'thermal',
+  'traction',
+  'elements',
+  'pto',
+  'vibration',
+  'steering',
+  'drawing',
+  'chassis',
+  'implements',
+  'testing',
+  'field',
+]
+
 const DISCIPLINES: { id: string; label: string; modules: string[] }[] = [
-  { id: 'all', label: 'All systems', modules: [] },
+  { id: 'all', label: 'All systems', modules: ALL_ORDER },
+  { id: 'labs', label: 'Engineering labs', modules: ['mechanisms', 'materials', 'thermal', 'drawing'] },
   { id: 'power', label: 'Power & drivetrain', modules: ['engine', 'powertrain', 'pto', 'hydraulics', 'elements', 'vibration'] },
   { id: 'field', label: 'Traction & implements', modules: ['traction', 'steering', 'chassis', 'implements', 'testing', 'field'] },
-  { id: 'labs', label: 'Engineering labs', modules: ['mechanisms', 'materials', 'thermal', 'drawing'] },
 ]
 
 /** Systems still being finished: listed as coming soon on the home page, not shown as tiles. */
@@ -80,7 +101,7 @@ const COPY = {
       { icon: 'cut', title: 'True cutaways', text: 'Slice any assembly at any angle. Cut faces are hatched by material like an engineering drawing; moving parts stay whole so you can watch them work.' },
       { icon: 'sliders', title: 'Live calculations', text: 'Every slider drives the physics: belt tensions, clutch capacity, hydrostatic flow, slip and tractive efficiency, with the working shown.' },
       { icon: 'target', title: 'Verified physics', text: 'Over a thousand automated checks pin the calculations to reference answers, and mechanisms follow exact kinematics.' },
-      { icon: 'tour', title: 'Live lab tests', text: 'Machines, materials and thermal rigs that run when you set them: gauges move, specimens break, and the readings log themselves as a real test would.' },
+      { icon: 'tour', title: 'Live lab tests', text: 'Move the controls freely, then start a test on any machine, material or thermal rig: gauges move, specimens break, and the readings log themselves.' },
     ],
   },
   academic: {
@@ -93,7 +114,7 @@ const COPY = {
       { icon: 'cut', title: 'Interactive diagrams', text: 'Every textbook figure becomes a model you can turn, slice, explode and run in slow motion, down to 1/200 of real speed.' },
       { icon: 'book', title: 'Worked examples', text: 'Load exam-style data into any scene and follow the working: the formula, the numbers substituted, then the answer.' },
       { icon: 'target', title: 'Marked like an examiner', text: 'Method marks carry an early slip forward, and each wrong answer names the likely mistake.' },
-      { icon: 'tour', title: 'A lab that runs itself', text: 'Set the conditions and the experiment runs, logging a table of readings to work up. Each rig also has a guided tour with checkpoints.' },
+      { icon: 'tour', title: 'A lab that runs itself', text: 'Explore the rig freely, then start the experiment and it logs a table of readings to work up. Each rig also has a guided tour with checkpoints.' },
     ],
   },
 } as const
@@ -101,6 +122,7 @@ const COPY = {
 /** Rigs to jump to from the live test section. */
 const LAB_LINKS = [
   { label: 'Tensile test', to: '/m/materials/tensile' },
+  { label: 'Four-bar linkage', to: '/m/mechanisms/four-bar' },
   { label: 'Beam bending', to: '/m/materials/beam' },
   { label: 'Steam plant', to: '/m/thermal/steam-plant' },
   { label: 'Refrigeration', to: '/m/thermal/refrigeration' },
@@ -115,7 +137,7 @@ function LiveTest() {
     <section id="live-test" className="mx-auto grid max-w-[1360px] scroll-mt-20 items-center gap-8 px-5 pt-16 sm:px-10 lg:grid-cols-12 lg:gap-12">
       <div className="lg:col-span-4">
         <h2 className="text-[30px] font-semibold tracking-[-0.03em] sm:text-[38px]">Set the conditions. Watch the test run.</h2>
-        <p className="mt-3 text-[15px] leading-relaxed text-mute">Choose a material and the machine pulls it until it breaks. The curve draws itself, the readings fill the table, and the properties are worked out from those readings, scatter and all.</p>
+        <p className="mt-3 text-[15px] leading-relaxed text-mute">Choose a material, start the test, and the machine pulls it until it breaks. The curve draws itself, the readings fill the table, and the properties are worked out from those readings, scatter and all.</p>
         <div className="mt-6 flex flex-wrap gap-2">
           {LAB_LINKS.map((l) => (
             <Link key={l.to} to={l.to} className="rounded-full border border-line-2 px-3.5 py-1.5 text-[13px] font-medium text-ink transition-colors hover:border-accent/50">
@@ -197,6 +219,7 @@ function Hero({ copy }: { copy: (typeof COPY)[keyof typeof COPY] }) {
         v.resetView()
         v.setPresets(def.cutPresets ?? DEFAULT_CUT_PRESETS)
         v.applyPreset(def.defaultPreset ?? (def.cutPresets ?? DEFAULT_CUT_PRESETS)[0].id)
+        if (def.defaultPreset === undefined) v.setCut({ enabled: false })
         useSim.setState({ playing: true, timeScale: def.timeScale ?? 1 / 40, time: 0 })
         def.reset?.()
         setScene(def)
@@ -386,7 +409,7 @@ function AudienceCard({ who, title, points, active, onChoose }: { who: string; t
   )
 }
 
-const HOME_TITLE = 'Solidify — Interactive 3D Tractor & Farm Machinery'
+const HOME_TITLE = 'Solidify — Interactive 3D Machinery & Engineering Labs'
 
 /** Two ways to reach us: ask for a feature, or talk to us about a school or company plan. */
 function Contact() {
@@ -429,7 +452,10 @@ export function Landing() {
   const [scrolled, setScrolled] = useState(false)
 
   const activeDiscipline = DISCIPLINES.find((d) => d.id === discipline) ?? DISCIPLINES[0]
-  const filteredModules = activeDiscipline.modules.length === 0 ? READY : READY.filter((m) => activeDiscipline.modules.includes(m.id))
+  const filteredModules =
+    activeDiscipline.modules.length === 0
+      ? READY
+      : activeDiscipline.modules.map((id) => READY.find((m) => m.id === id)).filter((m): m is ModuleDef => !!m)
 
   return (
     <div className="h-full overflow-y-auto bg-bg text-ink selection:bg-accent/25" onScroll={(e) => setScrolled(e.currentTarget.scrollTop > 24)}>
@@ -492,20 +518,32 @@ export function Landing() {
           </div>
         </div>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-12">
-          {filteredModules.map((m, i) => (
-            <ModuleTile key={m.id} m={m} academic={academic} big={i < 2} />
-          ))}
+          {filteredModules.map((m, i) => {
+            const bigCount = [0, 4, 2][filteredModules.length % 3] ?? 2
+            return <ModuleTile key={m.id} m={m} academic={academic} big={i < bigCount} />
+          })}
         </div>
         {discipline === 'all' ? (
           <div className="mt-6">
-            <h3 className="mb-3 text-[13px] font-medium text-dim">Coming soon</h3>
+            <h3 className="mb-3 text-[13px] font-medium text-dim">In preview — early builds</h3>
             <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              {MODULES.filter((m) => SOON.has(m.id)).map((m) => (
-                <li key={m.id} className="rounded-2xl border border-dashed border-line-2 px-5 py-4">
-                  <div className="text-[15px] font-semibold tracking-[-0.01em] text-ink/80">{m.title}</div>
-                  <p className="mt-1 line-clamp-2 text-[12.5px] leading-relaxed text-dim">{m.blurb}</p>
-                </li>
-              ))}
+              {MODULES.filter((m) => SOON.has(m.id)).map((m) => {
+                const first = m.scenes.find((s) => s.id === FEATURED[m.id]) ?? m.scenes.find((s) => s.load) ?? m.scenes[0]
+                return (
+                  <li key={m.id}>
+                    <Link
+                      to={first ? `/m/${m.id}/${first.id}` : '#'}
+                      className="block h-full rounded-2xl border border-dashed border-line-2 px-5 py-4 transition-colors hover:border-accent/50 hover:bg-panel/60"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-[15px] font-semibold tracking-[-0.01em] text-ink/85">{m.title}</span>
+                        <span className="font-mono text-[11px] text-dim">{m.scenes.length} scenes →</span>
+                      </div>
+                      <p className="mt-1 line-clamp-2 text-[12.5px] leading-relaxed text-dim">{m.blurb}</p>
+                    </Link>
+                  </li>
+                )
+              })}
             </ul>
           </div>
         ) : null}
