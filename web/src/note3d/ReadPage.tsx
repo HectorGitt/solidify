@@ -4,12 +4,15 @@ import { findModule } from '@/modules/catalog'
 import type { SceneDef } from '@/modules/types'
 import { useView } from '@/render/view'
 import { StudyShell } from '@/study/ui/StudyShell'
-import { Notice, primaryBtn } from '@/cloud/ui/Modal'
+import { ApiError } from '@/cloud/api'
+import { useAuth } from '@/cloud/auth'
+import { primaryBtn } from '@/cloud/ui/Modal'
 import { PartCard } from '@/ui/PartCard'
 import { PartsTree } from '@/ui/PartsTree'
 import { OrientationGizmo, Stage } from '@/ui/Stage'
 import { Icon } from '@/ui/icons'
 import { Tex } from '@/ui/Tex'
+import { toast } from '@/ui/toast'
 import { Toolbar } from '@/ui/Toolbar'
 import { InlineFigure3D } from './InlineFigure3D'
 import { createSceneDefFromSpec } from './NoteSceneRenderer'
@@ -193,7 +196,6 @@ export default function ReadPage() {
   const [pageIdx, setPageIdx] = useState(0)
   const [readingMode, setReadingMode] = useState<'page-overlay' | 'reflow'>('page-overlay')
   const [uploading, setUploading] = useState(false)
-  const [uploadError, setUploadError] = useState<string | null>(null)
   const [lassoActive, setLassoActive] = useState(false)
   const [lassoStart, setLassoStart] = useState<[number, number] | null>(null)
   const [lassoCurrent, setLassoCurrent] = useState<[number, number] | null>(null)
@@ -223,17 +225,23 @@ export default function ReadPage() {
     setActiveFigureId((firstHighConf ?? currentPage.figures[0])?.id ?? null)
   }, [activeDoc.id, currentPage.pageNumber, currentPage.figures])
 
+  /** problems are shown as a toast; a missing sign-in offers to sign in */
+  const showError = (e: unknown, otherwise: string) => {
+    if (e instanceof ApiError && e.status === 401)
+      toast('Sign in to read your own pages in 3D. Pages are read by Solidify’s AI, which needs an account.', { tone: 'warn', action: { label: 'Sign in', run: () => useAuth.getState().openDialog() } })
+    else toast(e instanceof Error ? e.message : otherwise, { tone: 'warn' })
+  }
+
   const handleFileUpload = async (file: File | undefined) => {
     if (!file) return
     setUploading(true)
-    setUploadError(null)
     try {
       const loaded = await loadUploadedDocument(file)
       setDocuments((prev) => [loaded, ...prev])
       setActiveDocId(loaded.id)
       setPageIdx(0)
     } catch (e) {
-      setUploadError(e instanceof Error ? e.message : 'Could not process document.')
+      showError(e, 'Couldn’t read that document.')
     } finally {
       setUploading(false)
     }
@@ -295,7 +303,11 @@ export default function ReadPage() {
           ),
         )
         setActiveFigureId(newFigs[0].id)
+      } else {
+        toast('Solidify couldn’t turn that part of the page into 3D. Try a box tighter around the figure.')
       }
+    } catch (e) {
+      showError(e, 'Couldn’t read that part of the page.')
     } finally {
       setUploading(false)
     }
@@ -332,16 +344,10 @@ export default function ReadPage() {
         </>
       }
     >
-      {uploadError && (
-        <div className="mb-4">
-          <Notice tone="warn">{uploadError}</Notice>
-        </div>
-      )}
-
       <div className="mb-5 rounded-2xl border border-line bg-panel shadow-sm">
         {/* documents + layout */}
         <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
-          <div className="-mx-4 flex min-w-0 items-center gap-1.5 overflow-x-auto px-4 text-[12.5px] [scrollbar-width:none] sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0" role="group" aria-label="Documents">
+          <div className="-mx-4 flex min-w-0 items-center gap-1.5 overflow-x-auto px-4 text-[12.5px] scrollbar-none sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0" role="group" aria-label="Documents">
             {documents.map((doc) => {
               const active = doc.id === activeDoc.id
               return (
@@ -397,7 +403,7 @@ export default function ReadPage() {
                 {gatedCount} kept as {gatedCount === 1 ? 'a drawing' : 'drawings'}
               </span>
             )}
-            <span className="hidden text-dim lg:inline">Pages are sent only to find figures and are never saved.</span>
+            <span className="hidden text-dim xl:inline">Pages are sent only to find figures and are never saved.</span>
           </div>
 
           <div className="flex items-center gap-2">
