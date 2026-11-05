@@ -19,6 +19,7 @@
     "firebase": "^13.1.0",
     "idb-keyval": "^6.3.0",
     "katex": "^0.19.0",
+    "pdfjs-dist": "4.10.38",
     "postprocessing": "^6.39.5",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",

@@ -526,12 +526,12 @@ export async function loadUploadedDocument(file: File): Promise<TextbookDocument
   // Case 2: PDF file — try PDF.js ESM first, fallback to offline PDF stream extractor
   const buffer = await file.arrayBuffer()
   try {
-    const pdfjsUrl = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.min.mjs'
-    const workerUrl = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.worker.min.mjs'
-    const pdfjs: any = await import(/* @vite-ignore */ pdfjsUrl)
-    if (pdfjs.GlobalWorkerOptions) {
-      pdfjs.GlobalWorkerOptions.workerSrc = workerUrl
-    }
+    // bundled with the app (loaded only when a PDF is opened), so reading works offline and on networks that block CDNs
+    const [pdfjs, worker] = await Promise.all([
+      import('pdfjs-dist'),
+      import('pdfjs-dist/build/pdf.worker.min.mjs?url'),
+    ])
+    pdfjs.GlobalWorkerOptions.workerSrc = worker.default
     const doc = await pdfjs.getDocument({ data: buffer }).promise
     const maxPages = Math.min(doc.numPages, 6)
     const pages: RenderedTextbookPage[] = []
