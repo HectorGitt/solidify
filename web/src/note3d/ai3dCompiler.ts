@@ -6,6 +6,7 @@ import {
 import {
   ALLOWED_MATERIALS,
   noteSceneSpecSchema,
+  noteShapeSchema,
   type NoteCalculationSpec,
   type NoteParameterSpec,
   type NotePartSpec,
@@ -96,6 +97,20 @@ function sanitizeGeneratedSpec(raw: Record<string, unknown>, fallbackTitle: stri
         : [],
       parts: candidate.parts as NotePartSpec[],
     }
+
+    // keep only shapes the builder can make, and only parts that still have a shape (children included)
+    const kinds = new Set<string>(noteShapeSchema.shape.kind.options)
+    const usable = (list: unknown): NotePartSpec[] =>
+      (Array.isArray(list) ? list : [])
+        .filter((pt): pt is NotePartSpec => !!pt && typeof pt === 'object')
+        .map((pt) => ({
+          ...pt,
+          shapes: (Array.isArray(pt.shapes) ? pt.shapes : []).filter((sh) => !!sh && kinds.has((sh as { kind?: string }).kind ?? '')),
+          children: pt.children ? usable(pt.children) : undefined,
+        }))
+        .filter((pt) => pt.shapes.length > 0 || (pt.children?.length ?? 0) > 0)
+    spec.parts = usable(spec.parts)
+    if (!spec.parts.length) return null
 
     const validMatSet = new Set<string>(ALLOWED_MATERIALS)
     for (const pt of spec.parts) {

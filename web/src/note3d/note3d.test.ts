@@ -105,6 +105,14 @@ describe('note3d safeguards, benchmark & back-projection checks', () => {
     await expect(analyzeTextbookPage({ pageNumber: 1, pageImageUrl: '', pageText: 'beam', fileName: 'x.pdf' })).rejects.toMatchObject({ status: 0 })
     apiMock.mockResolvedValueOnce({ figures: [{ id: 'f', visualization: { kind: 'none' } }] })
     await expect(analyzeTextbookPage({ pageNumber: 1, pageImageUrl: '', pageText: 'beam', fileName: 'x.pdf' })).resolves.toEqual([])
+    // shapes the builder can't draw are dropped; a reply with nothing drawable is an incomplete answer
+    const good = { id: 'shaft', name: 'Shaft', shapes: [{ kind: 'cylinder', r: 0.02, h: 0.2 }] }
+    apiMock.mockResolvedValueOnce({ spec: { title: 'T', parts: [good, { id: 'b', name: 'Bolt', shapes: [{ kind: 'bolt' }] }, { id: 'n', name: 'No shapes' }] } })
+    const cleaned = await generateOrEdit3DScene('A shaft')
+    expect(cleaned.spec.parts.map((p) => p.id)).toEqual(['shaft'])
+    apiMock.mockResolvedValueOnce({ spec: { title: 'T', parts: [{ id: 'b', name: 'Bolt', shapes: [{ kind: 'hexagon' }] }] } })
+    await expect(generateOrEdit3DScene('A bolt')).rejects.toMatchObject({ status: 502 })
+    expect(buildPartGeometry([{ kind: 'plate' } as never], {}).attributes.position.count).toBeGreaterThan(0)
     expect(apiMock).toHaveBeenCalledWith('/v1/create-3d', expect.anything())
     expect(apiMock).toHaveBeenCalledWith('/v1/notes/analyze', expect.anything())
   })

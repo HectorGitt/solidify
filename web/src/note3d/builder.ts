@@ -150,6 +150,9 @@ function buildSingleShapeGeometry(
       const g = helixSpring(r, wr, h, turns, true)
       return xform(g, mat4.t(0, -h / 2, 0))
     }
+    default:
+      // a shape this builder does not know (from an older or unexpected model) shows as a small block, never a crash
+      return box(0.04, 0.04, 0.04)
   }
 }
 
@@ -171,11 +174,12 @@ export function buildPartGeometry(
   shapes: NoteShapeSpec[],
   params: Record<string, number>,
 ): THREE.BufferGeometry {
-  if (!shapes.length) return box(0.05, 0.05, 0.05)
+  if (!Array.isArray(shapes) || !shapes.length) return box(0.05, 0.05, 0.05)
 
   const expanded: { op: 'add' | 'subtract' | 'intersect'; geom: THREE.BufferGeometry; matrix: THREE.Matrix4 }[] = []
 
   for (const s of shapes) {
+    if (!s || typeof s !== 'object') continue
     const baseGeom = buildSingleShapeGeometry(s, params)
     const pos = evalVec3(s.position, params, [0, 0, 0])
     const rot = evalVec3(s.rotation, params, [0, 0, 0])
