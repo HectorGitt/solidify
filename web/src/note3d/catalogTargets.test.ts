@@ -57,3 +57,17 @@ describe('a figure’s values become the rig’s settings', () => {
         }
   })
 })
+
+describe('create in 3D shapes', () => {
+  it('the API tells Gemini exactly the shapes and materials the builder supports', async () => {
+    const { noteShapeSchema, ALLOWED_MATERIALS } = await import('./schema')
+    const api = fs.readFileSync(path.resolve(__dirname, '../../../api/src/createPrompt.ts'), 'utf8')
+    const list = (name: string) => {
+      const start = api.indexOf(`export const ${name} = [`)
+      const body = api.slice(start, api.indexOf('] as const', start))
+      return [...body.matchAll(/'([a-zA-Z]+)'/g)].map((m) => m[1])
+    }
+    expect(list('SHAPE_KINDS').sort()).toEqual([...noteShapeSchema.shape.kind.options].sort())
+    expect(list('MATERIALS').sort()).toEqual([...ALLOWED_MATERIALS].sort())
+  })
+})

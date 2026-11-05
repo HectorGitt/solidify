@@ -1,5 +1,6 @@
 import { GoogleGenAI } from '@google/genai'
 import { z } from 'zod'
+import { CREATE_3D_PROMPT } from './createPrompt.js'
 import { catalogPromptText } from './noteCatalog.js'
 
 export const noteAnalyzeRequest = z.object({
@@ -70,15 +71,9 @@ Rules:
 - confidence (0 to 1) is how sure you are that the figure really is the chosen rig AND that the values are right. Use below 0.75 if either is a guess. Never omit it.
 - Use "kind": "catalog" only for one of these rigs, with params named exactly as listed and in the units listed:
 ${catalogPromptText()}
-- Otherwise, for a single machine part shown in orthographic, isometric or sectional views, use "kind": "procedural" with a NoteSceneSpec built from simple solids (box, cylinder, tube, cone, lathe, extrude, gear) and holes cut from them.
+- Otherwise, for a single machine part shown in orthographic, isometric or sectional views, use "kind": "procedural" with a NoteSceneSpec built from simple solids (box, cylinder, tube, cone, lathe, extrude, gear, hexNut, hexBolt) and holes cut from them.
 - For graphs, equations, photos and anything else, use "kind": "none". Do not force a figure onto a rig it is not.`
 
-const CREATE_3D_PROMPT = `You are the Solidify 3D Parametric CAD & Engineering Physics Compiler.
-Given any natural-language machine description, edit instruction, or uploaded photo, compile a complete interactive 3D NoteSceneSpec JSON object with:
-- parts (housing with cut: true, moving parts with motion: rotate/translate/oscillate, explode vectors, and CSG shapes: box, cylinder, tube, cone, sphere, torus, gear, bevelGear, rack, pulley, sprocket, spring, lathe, extrude)
-- parameters (4-7 sliders referenced in shape dimension expressions)
-- calculations (3-6 live engineering formulas with latex and units)
-Return valid JSON: { "explanation": "...", "isNewMachine": true, "spec": { ... } }`
 
 type Part = { text: string } | { inlineData: { mimeType: string; data: string } }
 
