@@ -185,3 +185,10 @@ Each entry: **Symptom** · **Cause** · **Fix** · **Lesson**.
 - **Governor test seemed to hang.** Cause: the driver runs on sim time and that scene runs at 1/20 speed, so a 7.5 s test took 150 s. Fix: shorter steps. Lesson: set test lengths against the scene's `timeScale`.
 - **`tyre/build.test.ts` fails under load.** It asserts a wall-clock limit of 1.5 s, and reads 1.5 to 1.7 s when the machine is busy. It passes alone. Not a logic failure, but it makes the full run unreliable.
 - **Source error.** The heat exchanger tutorial's first answer, 2.07 m², works out at 2.03 m²; that question is left out of Exam Practice.
+
+## Notes to 3D review (2026-11-04)
+
+- **Figures showed the rig's defaults, not the document's values.** Cause: the samples and the vision prompt used their own names (`span`, `l2`, `mainR`), and `applyParams` passed them straight into the stores. Fix: `web/src/note3d/catalogTargets.ts` turns a figure's values into each rig's real settings, with aliases and unit factors. The API prompt lists the same rigs and keys (`api/src/noteCatalog.ts`), and a test keeps the two in step. Lesson: a test that only checks a figure "renders" can't catch this; check the values that reach the store.
+- **Hiding in-scene readings behind the Labels toggle removed them from the main app.** Labels are off by default, so the steam plant, beam and torsion readouts disappeared. Fix: reverted, with a patch kept in the scratchpad. Lesson: a reader-only need belongs in the reader, not in shared scene code.
+- **The client called the live API from unit tests.** `generateOrEdit3DScene` would have sent real Gemini requests during `vitest`. Fix: the backend call returns early outside a browser.
+- **"Low confidence stays 2D" never fired.** A missing confidence defaulted to 0.92, and the prompt never asked for one. Fix: missing means 0, and the prompt requires it.
