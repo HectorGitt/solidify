@@ -1,15 +1,18 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { useSim } from '@/core/sim'
+import { findModule } from '@/modules/catalog'
 import type { SceneDef } from '@/modules/types'
 import { generateOrEdit3DScene } from '@/note3d/ai3dCompiler'
-import { CREATE_TEMPLATES, TWO_STAGE_REDUCER_SPEC, type CatalogSceneMatch } from '@/note3d/createCatalog'
+import type { CatalogSceneMatch } from '@/note3d/createCatalog'
 import { createSceneDefFromSpec } from '@/note3d/NoteSceneRenderer'
 import { ALLOWED_MATERIALS, evaluateCalculations, type NotePartSpec, type NoteSceneSpec, type NoteShapeKind } from '@/note3d/schema'
 import { MATERIALS, type MaterialKey } from '@/render/materials'
 import { useView } from '@/render/view'
 import { StudyShell } from '@/study/ui/StudyShell'
 import { Stage } from '@/ui/Stage'
+import { Icon } from '@/ui/icons'
+import { toast } from '@/ui/toast'
 import { Tex } from '@/ui/Tex'
 import { api, ApiError } from '../api'
 import { useAuth } from '../auth'
@@ -19,15 +22,20 @@ import { Field, Notice, ghostBtn, inputCls, primaryBtn } from './Modal'
 type Role = 'student' | 'teacher' | 'engineer' | 'other'
 type Interest = 'describe' | 'photo' | 'customize' | 'chat' | 'classroom'
 
-/** edits to suggest once there is a model to edit */
-const QUICK_EDITS = ['Add a cooling fan', 'Make the output shaft 40 mm longer', 'Change the housing to aluminium', 'Why isn’t this 20 : 1?']
+/** edits to suggest once there is a model; each goes to the AI like anything typed */
+const QUICK_EDITS = ['Add a cooling fan', 'Change the housing to aluminium', 'Make it 25% larger', 'Show the fasteners']
 
-/** machines with no ready-made template, to show what a description can build */
-const IDEAS = [
-  { label: 'Wind turbine', prompt: 'A 3-blade horizontal-axis wind turbine on a tubular tower with nacelle generator' },
-  { label: 'Screw auger', prompt: 'A helical grain screw auger conveyor with feed hopper at 180 rpm' },
-  { label: 'Bench vice', prompt: 'A cast-iron workshop bench vice with sliding jaw and Acme lead screw' },
+/** samples: the app's own lab rigs, open to everyone. Building or changing a model uses the AI and needs sign-in. */
+const SAMPLES = [
+  { label: 'Diesel engine', moduleId: 'engine', sceneId: 'four-stroke-diesel', prompt: 'A single-cylinder four-stroke diesel engine with crankshaft, piston, valves and injector' },
+  { label: 'Gearbox', moduleId: 'powertrain', sceneId: 'gearboxes', prompt: 'A constant-mesh tractor gearbox with layshaft and dog clutches' },
+  { label: 'Planetary gear set', moduleId: 'powertrain', sceneId: 'planetary', prompt: 'A planetary gear set with sun, three planets, carrier and ring gear' },
+  { label: 'Differential', moduleId: 'powertrain', sceneId: 'differential', prompt: 'A crown wheel and pinion differential with spider gears and diff lock' },
+  { label: 'Gear pump', moduleId: 'hydraulics', sceneId: 'pumps', prompt: 'An external gear pump with two spur gears in a housing, 16 cc/rev at 2000 rpm' },
+  { label: 'Hydraulic cylinder', moduleId: 'hydraulics', sceneId: 'cylinder', prompt: 'A double-acting hydraulic cylinder, 80 mm bore, 400 mm stroke, at 160 bar' },
+  { label: 'Belt drive', moduleId: 'elements', sceneId: 'belts', prompt: 'A V-belt drive between a 150 mm and a 400 mm pulley on two shafts with bearings' },
 ]
+
 const INTERESTS: { value: Interest; label: string }[] = [
   { value: 'describe', label: 'Describing a design' },
   { value: 'photo', label: 'Modelling from a photo' },
@@ -191,7 +199,6 @@ interface HistoryItem {
   id: string
   prompt: string
   response: string
-  source?: 'gemini' | 'compositional'
 }
 
 type Tab = 'calculations' | 'dimensions' | 'parts'
@@ -214,12 +221,11 @@ function Tool({ on, onClick, children, title }: { on?: boolean; onClick: () => v
 const selectCls = 'rounded-lg border border-line-2 bg-bg px-2 py-1 text-[12px] text-ink focus:border-accent focus:outline-none'
 
 export default function CreatePage() {
-  const [spec, setSpec] = useState<NoteSceneSpec>(() => JSON.parse(JSON.stringify(TWO_STAGE_REDUCER_SPEC)) as NoteSceneSpec)
-  const [params, setParams] = useState<Record<string, number>>(() => Object.fromEntries(TWO_STAGE_REDUCER_SPEC.parameters.map((p) => [p.id, p.value])))
+  const [spec, setSpec] = useState<NoteSceneSpec | null>(null)
+  const [params, setParams] = useState<Record<string, number>>({})
   const [promptInput, setPromptInput] = useState('')
   const [uploadedPhoto, setUploadedPhoto] = useState<{ name: string; url: string } | null>(null)
   const [isGenerating, setIsGenerating] = useState(false)
-  const [error, setError] = useState<{ message: string; signIn?: boolean } | null>(null)
   const [matchedCatalog, setMatchedCatalog] = useState<CatalogSceneMatch | null>(null)
   const [loadedCatalogScene, setLoadedCatalogScene] = useState<SceneDef | null>(null)
   const [viewMode, setViewMode] = useState<'parametric' | 'catalog'>('parametric')
@@ -231,14 +237,7 @@ export default function CreatePage() {
   const [newPartMaterial, setNewPartMaterial] = useState<MaterialKey>('steel')
   const [newPartMotion, setNewPartMotion] = useState<'none' | 'rotate' | 'translate'>('rotate')
 
-  const [history, setHistory] = useState<HistoryItem[]>([
-    {
-      id: 'init',
-      prompt: 'A two-stage spur gear reducer, 20 : 1, for a 15 kW motor at 1450 rpm.',
-      response: 'Two pinions of 16 teeth driving wheels of 72, in a sectioned cast-iron housing, with the torque and tooth stresses worked out live.',
-      source: 'compositional',
-    },
-  ])
+  const [history, setHistory] = useState<HistoryItem[]>([])
 
   const cut = useView((s) => s.cut)
   const explode = useView((s) => s.explode)
@@ -256,7 +255,7 @@ export default function CreatePage() {
 
   // each new model opens with its recommended section, and nothing else switched on
   useEffect(() => {
-    const rec = spec.recommendedCut
+    const rec = spec?.recommendedCut
     if (rec) {
       setCutAxis(Math.abs(rec.normal[0]) > 0.5 ? 'x' : Math.abs(rec.normal[1]) > 0.5 ? 'y' : 'z')
       setCutPos(rec.pos)
@@ -267,7 +266,7 @@ export default function CreatePage() {
     useView.getState().setExplode(0)
     useView.getState().setXray(false)
     useView.getState().setLabels(false)
-  }, [spec.id])
+  }, [spec?.id])
 
   useEffect(() => {
     let cancelled = false
@@ -293,36 +292,48 @@ export default function CreatePage() {
 
   /** a failed build says why: not signed in, out of builds for today, or something else */
   const showError = (e: unknown) => {
-    if (e instanceof ApiError && e.status === 401) setError({ message: 'Sign in to build a model from your own description or photo. The examples work without an account.', signIn: true })
-    else setError({ message: e instanceof ApiError ? e.message : 'That build didn’t work. Please try again.' })
+    if (e instanceof ApiError && e.status === 401)
+      toast('Sign in to build a model. Every model is built by Solidify’s AI, which needs an account.', { tone: 'warn', action: { label: 'Sign in', run: () => useAuth.getState().openDialog() } })
+    else toast(e instanceof ApiError ? e.message : 'That build didn’t work. Please try again.', { tone: 'warn' })
   }
 
-  const selectTemplate = (tplSpec: NoteSceneSpec, tplPrompt: string) => {
-    const cloned = JSON.parse(JSON.stringify(tplSpec)) as NoteSceneSpec
-    cloned.id = `${cloned.id.replace(/-rev\d+$/, '')}-rev${Date.now() % 10000}`
-    setSpec(cloned)
-    setParams(Object.fromEntries(cloned.parameters.map((p) => [p.id, p.value])))
-    setUploadedPhoto(null)
-    setViewMode('parametric')
-    setMatchedCatalog(null)
-    setError(null)
-    setPromptInput('')
-    remember({ prompt: tplPrompt, response: `${cloned.title}: ${cloned.parts.length} parts, ${cloned.calculations?.length ?? 0} live calculations.`, source: 'compositional' })
+  const needSignIn = () => {
+    toast('Sign in to build your own model, change a sample or build from a photo. Models are built by Solidify’s AI, which needs an account.', { tone: 'warn', action: { label: 'Sign in', run: () => useAuth.getState().openDialog() } })
   }
+
+  const [sampleId, setSampleId] = useState<string | null>(null)
+  const sample = SAMPLES.find((x) => x.sceneId === sampleId) ?? null
+
+  /** a sample opens its lab rig right away; nothing is built */
+  const openSample = (x: (typeof SAMPLES)[number]) => {
+    const mod = findModule(x.moduleId)
+    const scene = mod?.scenes.find((sc) => sc.id === x.sceneId)
+    if (!mod || !scene) return
+    setSpec(null)
+    setUploadedPhoto(null)
+    setSampleId(x.sceneId)
+    setMatchedCatalog({ module: mod, scene })
+    setViewMode('catalog')
+  }
+
+  // the page opens on the first sample, so there is always something to turn and cut open
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => openSample(SAMPLES[0]), [])
 
   const build = async (text: string, photo?: { name: string; url: string }) => {
+    if (!signedIn) return needSignIn()
     setIsGenerating(true)
-    setError(null)
     try {
-      const res = await generateOrEdit3DScene(text, photo ? undefined : spec, photo?.url)
+      const res = await generateOrEdit3DScene(text, photo ? undefined : (spec ?? undefined), photo?.url)
       setSpec(res.spec)
+      setSampleId(null)
       setParams(Object.fromEntries(res.spec.parameters.map((p) => [p.id, p.value])))
-      if (res.isNewMachine || photo) {
+      if (res.isNewMachine || photo || sample) {
         setMatchedCatalog(res.matchedCatalogScene)
         setViewMode('parametric')
       }
       if (photo) setUploadedPhoto(photo)
-      remember({ prompt: photo ? `From a photo: ${photo.name}${text ? ` (${text})` : ''}` : text, response: res.explanation, source: res.source })
+      remember({ prompt: photo ? `From a photo: ${photo.name}${text ? ` (${text})` : ''}` : text, response: res.explanation })
       setPromptInput('')
     } catch (e) {
       showError(e)
@@ -351,6 +362,7 @@ export default function CreatePage() {
 
   const handleMaterialChange = (partId: string, nextMat: MaterialKey) => {
     setSpec((prev) => {
+      if (!prev) return prev
       const cloned = JSON.parse(JSON.stringify(prev)) as NoteSceneSpec
       const walk = (list: NotePartSpec[]) => {
         for (const pt of list) {
@@ -365,7 +377,7 @@ export default function CreatePage() {
 
   const handleDeletePart = (partId: string) => {
     setSpec((prev) => {
-      if (prev.parts.length <= 1) return prev
+      if (!prev || prev.parts.length <= 1) return prev
       const cloned = JSON.parse(JSON.stringify(prev)) as NoteSceneSpec
       cloned.parts = cloned.parts.filter((p) => p.id !== partId)
       return cloned
@@ -374,6 +386,7 @@ export default function CreatePage() {
 
   const handleManualAddPart = (e: FormEvent) => {
     e.preventDefault()
+    if (!spec) return
     const housing = newPartKind === 'tube' || newPartKind === 'cone'
     const newPart: NotePartSpec = {
       id: `custom-part-${Date.now() % 10000}`,
@@ -400,16 +413,15 @@ export default function CreatePage() {
                     ? [{ kind: 'cylinder', r: 0.035, h: 0.18 }]
                     : [{ kind: 'box', sx: 0.14, sy: 0.06, sz: 0.1 }],
     }
-    setSpec((prev) => ({ ...(JSON.parse(JSON.stringify(prev)) as NoteSceneSpec), parts: [...prev.parts, newPart] }))
+    setSpec((prev) => (prev ? { ...(JSON.parse(JSON.stringify(prev)) as NoteSceneSpec), parts: [...prev.parts, newPart] } : prev))
     setViewMode('parametric')
     setShowAddPart(false)
   }
 
-  const { results: calcResults } = useMemo(() => evaluateCalculations(spec.calculations, params), [spec.calculations, params])
-  const parametricSceneDef = useMemo(() => createSceneDefFromSpec(spec, params), [spec, params])
+  const { results: calcResults } = useMemo(() => evaluateCalculations(spec?.calculations, params), [spec?.calculations, params])
+  const parametricSceneDef = useMemo(() => (spec ? createSceneDefFromSpec(spec, params) : null), [spec, params])
   const activeSceneDef = viewMode === 'catalog' && loadedCatalogScene ? loadedCatalogScene : parametricSceneDef
-  const extent = activeSceneDef.extent ?? 0.45
-  const baseId = spec.id.replace(/-rev\d+$/, '')
+  const extent = activeSceneDef?.extent ?? 0.45
   const latest = history[0]
 
   return (
@@ -436,7 +448,7 @@ export default function CreatePage() {
           />
           <input ref={photoInputRef} type="file" accept="image/*" onChange={handlePhotoUpload} className="hidden" />
           <div className="flex gap-2">
-            <button type="button" onClick={() => photoInputRef.current?.click()} disabled={isGenerating} className={`${ghostBtn} rounded-2xl px-4`} title="Build from a photo or drawing">
+            <button type="button" onClick={() => (signedIn ? photoInputRef.current?.click() : needSignIn())} disabled={isGenerating} className={`${ghostBtn} rounded-2xl px-4`} title="Build from a photo or drawing">
               From a photo
             </button>
             <button type="submit" disabled={isGenerating || !promptInput.trim()} className={`${primaryBtn} rounded-2xl px-5`}>
@@ -445,48 +457,45 @@ export default function CreatePage() {
           </div>
         </form>
 
-        {error ? (
-          <div className="mt-3 flex flex-wrap items-center gap-3">
-            <div className="flex-1">
-              <Notice tone="warn">{error.message}</Notice>
-            </div>
-            {error.signIn && !signedIn ? (
-              <button className={primaryBtn} onClick={() => useAuth.getState().openDialog()}>
-                Sign in
-              </button>
-            ) : null}
-          </div>
-        ) : null}
-
         <div className="mt-3 flex flex-wrap items-center gap-1.5 text-[12.5px]">
-          <span className="mr-1 text-dim">Examples</span>
-          {CREATE_TEMPLATES.slice(0, 7).map((tpl) => (
-            <button
-              key={tpl.id}
-              type="button"
-              onClick={() => selectTemplate(tpl.spec, tpl.prompt)}
-              className={`rounded-full border px-3 py-1 transition-colors ${baseId === tpl.spec.id && viewMode === 'parametric' ? 'border-accent/60 bg-accent/10 text-ink' : 'border-line-2 text-mute hover:border-accent/40 hover:text-ink'}`}
-            >
-              {tpl.title}
-            </button>
-          ))}
-          {IDEAS.map((idea) => (
-            <button key={idea.label} type="button" onClick={() => handlePromptSubmit(undefined, idea.prompt)} disabled={isGenerating} className="rounded-full border border-dashed border-line-2 px-3 py-1 text-mute transition-colors hover:border-accent/40 hover:text-ink" title="Built from a description">
-              {idea.label}
+          <span className="mr-1 text-dim">Try</span>
+          {SAMPLES.map((x) => (
+            <button key={x.sceneId} type="button" aria-pressed={sampleId === x.sceneId} onClick={() => openSample(x)} disabled={isGenerating} className={`rounded-full border px-3 py-1 transition-colors disabled:opacity-50 ${sampleId === x.sceneId ? 'border-ink bg-ink text-bg' : 'border-line-2 text-mute hover:border-ink/40 hover:text-ink'}`}>
+              {x.label}
             </button>
           ))}
         </div>
       </section>
 
+      {!activeSceneDef ? (
+        <section className="relative flex h-[420px] flex-col items-center justify-center gap-3 rounded-3xl border border-dashed border-line-2 bg-panel px-6 text-center">
+          {isGenerating || sample ? (
+            <p className="text-[14px] text-ink">{sample ? `Opening the ${sample.label.toLowerCase()}…` : 'Building the model… this can take up to a minute.'}</p>
+          ) : (
+            <>
+              <Icon.build width={30} height={30} className="text-dim" />
+              <h2 className="text-[16px] font-semibold text-ink">Your model appears here</h2>
+              <p className="max-w-md text-[13px] leading-relaxed text-mute">
+                Open a sample above, or describe a machine or build from a photo once you’re signed in. You can section it, take it apart, run it and change it by asking.
+              </p>
+              {!signedIn ? (
+                <button type="button" className={`${primaryBtn} mt-1`} onClick={() => useAuth.getState().openDialog()}>
+                  Sign in to build
+                </button>
+              ) : null}
+            </>
+          )}
+        </section>
+      ) : (
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_400px]">
         {/* the model */}
         <section className="flex min-w-0 flex-col overflow-hidden rounded-3xl border border-line bg-panel">
           <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-4 py-2.5">
             <div className="min-w-0">
               <h2 className="truncate text-[15px] font-semibold text-ink">{activeSceneDef.title}</h2>
-              {latest ? <p className="truncate text-[12px] text-mute">{latest.source === 'gemini' ? 'Built from your description' : 'Ready-made model'}{latest.prompt ? ` · “${latest.prompt}”` : ''}</p> : null}
+              {sample ? <p className="truncate text-[12px] text-mute">Ready-made lab rig, free to explore</p> : latest?.prompt ? <p className="truncate text-[12px] text-mute">“{latest.prompt}”</p> : null}
             </div>
-            {matchedCatalog && loadedCatalogScene ? (
+            {spec && matchedCatalog && loadedCatalogScene ? (
               <button type="button" onClick={() => setViewMode((m) => (m === 'parametric' ? 'catalog' : 'parametric'))} className={`${ghostBtn} text-[12px]`}>
                 {viewMode === 'parametric' ? `Open the ${matchedCatalog.scene.title} lab` : 'Back to the model'}
               </button>
@@ -546,7 +555,15 @@ export default function CreatePage() {
             ) : null}
           </div>
 
-          {spec.parts.length && viewMode === 'parametric' && !isGenerating ? (
+          {sample && !isGenerating ? (
+            <div className="flex flex-wrap items-center gap-2 border-t border-line px-4 py-2.5 text-[12.5px]">
+              <span className="flex-1 text-mute">{signedIn ? 'Want your own version? Solidify can build it from a description, then you can change anything.' : 'Sign in to build your own version, change this one, or build from a photo.'}</span>
+              <button type="button" onClick={() => (signedIn ? void build(sample.prompt) : needSignIn())} className={`${primaryBtn} px-4 py-1.5 text-[12.5px]`}>
+                {signedIn ? 'Build my own version' : 'Sign in to customise'}
+              </button>
+            </div>
+          ) : null}
+          {spec && viewMode === 'parametric' && !isGenerating ? (
             <div className="flex flex-wrap items-center gap-1.5 border-t border-line px-4 py-2.5 text-[12px]">
               <span className="mr-1 text-dim">Change it</span>
               {QUICK_EDITS.map((q) => (
@@ -564,6 +581,8 @@ export default function CreatePage() {
             <div className="max-h-[680px] overflow-y-auto p-4">
               <loadedCatalogScene.Panel />
             </div>
+          ) : !spec ? (
+            <p className="p-4 text-[13px] text-mute">Readings for this sample appear here.</p>
           ) : (
             <>
               <div className="flex gap-1 border-b border-line p-2" role="tablist" aria-label="Model details">
@@ -712,6 +731,7 @@ export default function CreatePage() {
           )}
         </section>
       </div>
+      )}
 
       <details className="mt-8 rounded-3xl border border-line p-4">
         <summary className="cursor-pointer text-[13.5px] font-medium text-ink">Using this with a class or a team?</summary>
