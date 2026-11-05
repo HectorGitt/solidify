@@ -127,7 +127,7 @@ export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision
     cors({
       origin: (o) => (config.allowedOrigins.includes(o) ? o : null),
       allowHeaders: ['Authorization', 'Content-Type'],
-      allowMethods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
+      allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
       maxAge: 3600,
     }),
   )
@@ -295,6 +295,103 @@ export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision
     const remaining = await spend(u.uid, 'createUsage', config.createDailyLimit ?? 15, '3D builds')
     const out = await model(() => noteVision.createOrEdit3D(req))
     return c.json({ ...out, remaining })
+  })
+
+  /* ------------------------------------------------------------------ creation lab */
+
+  /** a student's saved models: everything they build in Create in 3D, to reopen and keep changing */
+  const CREATION_LIMIT = 50
+  const historyItem = z.object({ prompt: z.string().max(2000), response: z.string().max(2000) })
+  const creationFields = {
+    title: z.string().trim().min(1).max(120),
+    prompt: z.string().trim().max(2000),
+    fromPhoto: z.boolean(),
+    /** the model itself (a NoteSceneSpec); opaque to the API apart from its size */
+    spec: z.record(z.string().max(60), z.unknown()),
+    /** slider values the student set */
+    params: z.record(z.string().max(60), z.number()),
+    history: z.array(historyItem).max(30),
+    /** a small JPEG or WebP of the model for the card */
+    thumbnail: z.string().max(150_000).regex(/^data:image\/(jpeg|webp|png);base64,/),
+  }
+  const creationInput = z.object({
+    ...creationFields,
+    prompt: creationFields.prompt.default(''),
+    fromPhoto: creationFields.fromPhoto.default(false),
+    params: creationFields.params.default({}),
+    history: creationFields.history.default([]),
+    thumbnail: creationFields.thumbnail.optional(),
+  })
+  /** an update changes only the fields it sends (no defaults, or it would wipe the others) */
+  const creationPatch = z.object(creationFields).partial()
+
+  interface CreationDoc {
+    [k: string]: unknown
+    title: string
+    prompt: string
+    fromPhoto: boolean
+    spec: Record<string, unknown>
+    params: Record<string, number>
+    history: { prompt: string; response: string }[]
+    thumbnail?: string
+    parts: number
+    createdAt: number
+    updatedAt: number
+  }
+
+  const checkSpecSize = (spec?: Record<string, unknown>) => {
+    if (spec && JSON.stringify(spec).length > 300_000) throw fail(413, 'This model is too large to save.')
+  }
+  const partCount = (spec: Record<string, unknown>) => (Array.isArray(spec.parts) ? spec.parts.length : 0)
+  const creationPath = (uid: string, id: string) => {
+    if (!/^[a-z0-9]{6,20}$/.test(id)) throw fail(404, 'Model not found.')
+    return `users/${uid}/creations/${id}`
+  }
+
+  /** the list leaves out each model's spec and history, so it stays small */
+  app.get('/v1/creations', async (c) => {
+    const u = requireUser(c)
+    const rows = await db.list<CreationDoc>(`users/${u.uid}/creations`)
+    const items = rows
+      .map(({ id, data: d }) => ({ id, title: d.title, prompt: d.prompt, fromPhoto: d.fromPhoto, thumbnail: d.thumbnail, parts: d.parts, createdAt: d.createdAt, updatedAt: d.updatedAt }))
+      .sort((a, b) => b.updatedAt - a.updatedAt)
+    return c.json({ items, limit: CREATION_LIMIT })
+  })
+
+  app.get('/v1/creations/:id', async (c) => {
+    const u = requireUser(c)
+    const d = await db.get<CreationDoc>(creationPath(u.uid, c.req.param('id')))
+    if (!d) throw fail(404, 'Model not found.')
+    return c.json({ id: c.req.param('id'), ...d })
+  })
+
+  app.post('/v1/creations', async (c) => {
+    const u = requireUser(c)
+    const input = await body(c, creationInput)
+    checkSpecSize(input.spec)
+    const existing = await db.list(`users/${u.uid}/creations`, { limit: CREATION_LIMIT + 1 })
+    if (existing.length >= CREATION_LIMIT) throw fail(409, `You have ${CREATION_LIMIT} saved models. Delete one in My models to save more.`)
+    const id = randomId()
+    const t = now()
+    await db.set(creationPath(u.uid, id), { ...input, parts: partCount(input.spec), createdAt: t, updatedAt: t })
+    return c.json({ id }, 201)
+  })
+
+  app.put('/v1/creations/:id', async (c) => {
+    const u = requireUser(c)
+    const path = creationPath(u.uid, c.req.param('id'))
+    const patch = await body(c, creationPatch)
+    checkSpecSize(patch.spec)
+    if (!(await db.get(path))) throw fail(404, 'Model not found.')
+    const clean = Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined))
+    await db.set(path, { ...clean, ...(patch.spec ? { parts: partCount(patch.spec) } : {}), updatedAt: now() }, { merge: true })
+    return c.body(null, 204)
+  })
+
+  app.delete('/v1/creations/:id', async (c) => {
+    const u = requireUser(c)
+    await db.delete(creationPath(u.uid, c.req.param('id')))
+    return c.body(null, 204)
   })
 
   /* ------------------------------------------------------------------ classes */
