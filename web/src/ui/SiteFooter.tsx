@@ -52,7 +52,7 @@ export function SiteFooter() {
           </li>
           <li>
             <Link to="/create" className={linkCls}>
-              Create in 3D <span className="ml-1 rounded-full bg-warn/15 px-1.5 py-px text-[10px] font-semibold uppercase tracking-wide text-warn">Soon</span>
+              Create in 3D
             </Link>
           </li>
         </Column>
@@ -70,6 +70,11 @@ export function SiteFooter() {
           <li>
             <Link to="/formulas" className={linkCls}>
               Formula sheet
+            </Link>
+          </li>
+          <li>
+            <Link to="/read" className={linkCls}>
+              Read notes in 3D
             </Link>
           </li>
           <li>

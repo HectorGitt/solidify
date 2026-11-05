@@ -13,6 +13,8 @@ export const STUDY_LINKS = [
   { to: '/progress', label: 'Progress', short: 'Progress' },
   { to: '/formulas', label: 'Formula sheet', short: 'Formulas' },
   { to: '/challenges', label: 'Challenges', short: 'Challenges' },
+  { to: '/read', label: 'Read notes in 3D', short: 'Notes 3D' },
+  { to: '/create', label: 'Create in 3D', short: 'Create 3D' },
 ] as const
 
 /** Header links to the study pages. Shown in Study mode, or always when `always` is set. */

@@ -474,8 +474,7 @@ export function Landing() {
               How it works
             </Link>
             <Link to="/create" className="flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-mute transition-colors hover:bg-ink/[0.06] hover:text-ink">
-              Create
-              <span className="rounded-full bg-warn/15 px-1.5 py-px text-[10px] font-semibold uppercase tracking-wide text-warn">Soon</span>
+              Create in 3D
             </Link>
             {academic ? null : (
               <Link to="/challenges" className="rounded-full px-3.5 py-1.5 text-mute transition-colors hover:bg-ink/[0.06] hover:text-ink">

@@ -1,0 +1,626 @@
+import { z } from 'zod'
+import type { MaterialKey } from '@/render/materials'
+import type { PartRole } from '@/parts/registry'
+
+export const ALLOWED_MATERIALS: readonly MaterialKey[] = [
+  'castIron',
+  'steel',
+  'steelMatte',
+  'steelDark',
+  'chrome',
+  'forged',
+  'aluminium',
+  'bronze',
+  'brass',
+  'copper',
+  'bearing',
+  'rubber',
+  'friction',
+  'gasket',
+  'ceramic',
+  'plastic',
+  'wood',
+  'paintGreen',
+  'paintYellow',
+  'paintRed',
+  'paintGrey',
+  'paintBlack',
+  'paintBlue',
+  'paintOrange',
+  'galvanised',
+  'leather',
+  'nylon',
+  'concrete',
+  'crop',
+  'straw',
+  'glass',
+  'oil',
+  'hydraulicOil',
+  'coolant',
+  'fuel',
+  'water',
+  'soil',
+  'grain',
+] as const
+
+export const ALLOWED_ROLES: readonly PartRole[] = [
+  'housing',
+  'moving',
+  'fluid',
+  'static',
+] as const
+
+export type DimExpr = number | string
+export type Vec3Expr = [DimExpr, DimExpr, DimExpr]
+
+export interface NoteParameterSpec {
+  id: string
+  label: string
+  symbol?: string
+  value: number
+  min: number
+  max: number
+  step: number
+  unit: string
+}
+
+export type NoteShapeKind =
+  | 'box'
+  | 'cylinder'
+  | 'tube'
+  | 'cone'
+  | 'sphere'
+  | 'torus'
+  | 'lathe'
+  | 'extrude'
+  | 'gear'
+  | 'bevelGear'
+  | 'rack'
+  | 'pulley'
+  | 'sprocket'
+  | 'spring'
+
+export interface NoteShapeSpec {
+  kind: NoteShapeKind
+  /** CSG boolean operation against preceding shapes in the same part (default: 'add') */
+  op?: 'add' | 'subtract' | 'intersect'
+  /** Local translation [x, y, z] in scene units (meters) */
+  position?: Vec3Expr
+  /** Local Euler rotation [rx, ry, rz] in radians */
+  rotation?: Vec3Expr
+  /** Optional circular pattern around Y axis (e.g., bolt circle holes or ribs) */
+  radialCount?: DimExpr
+  radialRadius?: DimExpr
+  // Box: sx, sy, sz
+  sx?: DimExpr
+  sy?: DimExpr
+  sz?: DimExpr
+  // Cylinder / Tube / Cone / Gear / Pulley / Sprocket / Spring
+  r?: DimExpr
+  rTop?: DimExpr
+  rBot?: DimExpr
+  rOuter?: DimExpr
+  rInner?: DimExpr
+  h?: DimExpr
+  tubeRadius?: DimExpr
+  // Gear / Sprocket / Rack
+  teeth?: DimExpr
+  module?: DimExpr
+  pressureAngle?: number
+  helixAngle?: number
+  pitch?: DimExpr
+  // Spring
+  turns?: DimExpr
+  wireRadius?: DimExpr
+  // Lathe: array of [r, y] points
+  profile?: [DimExpr, DimExpr][]
+  // Extrude: array of [x, y] points + depth
+  polygon?: [DimExpr, DimExpr][]
+  depth?: DimExpr
+}
+
+export interface NoteMotionSpec {
+  kind: 'rotate' | 'oscillate' | 'translate'
+  axis: 'x' | 'y' | 'z'
+  /** rad/s for rotate, Hz for oscillate/translate (number or parametric expression like "rpm * 2 * pi / 60") */
+  speed: DimExpr
+  /** radians for oscillate, meters for translate */
+  amplitude?: DimExpr
+  phase?: number
+}
+
+export interface NotePartSpec {
+  id: string
+  name: string
+  material?: MaterialKey
+  role?: PartRole
+  position?: Vec3Expr
+  rotation?: Vec3Expr
+  explode?: [number, number, number]
+  cut?: boolean
+  info?: {
+    summary: string
+    role?: string
+  }
+  motion?: NoteMotionSpec
+  shapes: NoteShapeSpec[]
+  children?: NotePartSpec[]
+}
+
+export interface NoteAnnotationSpec {
+  id: string
+  kind: 'force' | 'moment' | 'dimension' | 'label'
+  label: string
+  value?: string
+  from: Vec3Expr
+  to?: Vec3Expr
+  color?: string
+}
+
+export interface NoteCalculationSpec {
+  id: string
+  label: string
+  symbol: string
+  /** Math expression evaluated live from `parameters` and preceding calculation IDs */
+  formula: string
+  unit: string
+  /** Optional LaTeX equation string for display */
+  latex?: string
+  description?: string
+  limit?: {
+    kind: 'max' | 'min'
+    value: DimExpr
+    label?: string
+  }
+}
+
+export interface EvaluatedCalculation {
+  spec: NoteCalculationSpec
+  value: number
+  formatted: string
+  status: 'ok' | 'warn'
+  limitValue?: number
+}
+
+export interface NoteSceneSpec {
+  id: string
+  title: string
+  summary: string
+  /** Display unit for UI sliders; internal 3D geometry coordinates are in meters */
+  units: 'mm' | 'm'
+  extent?: number
+  floorY?: number
+  camera?: {
+    position: [number, number, number]
+    target: [number, number, number]
+  }
+  parameters: NoteParameterSpec[]
+  parts: NotePartSpec[]
+  annotations?: NoteAnnotationSpec[]
+  calculations?: NoteCalculationSpec[]
+  showProjectionPlanes?: 'none' | 'first-angle' | 'third-angle'
+  recommendedCut?: {
+    enabled: boolean
+    normal: [number, number, number]
+    pos: number
+  }
+}
+
+export type FigureVisualization =
+  | {
+      kind: 'catalog'
+      moduleId: string
+      sceneId: string
+      /** Parameters mapped to scene.applyParams(...) */
+      params: Record<string, number>
+      /** Parameter metadata so the student gets live sliders right inside the textbook figure */
+      paramSpecs?: NoteParameterSpec[]
+      cutPreset?: string
+    }
+  | {
+      kind: 'procedural'
+      spec: NoteSceneSpec
+    }
+
+export const CONFIDENCE_THRESHOLD = 0.75
+
+export interface DetectedPageFigure {
+  id: string
+  pageNumber: number
+  /** Normalized bounding box [ymin, xmin, ymax, xmax] in 0..1000 page coordinates */
+  box: [number, number, number, number]
+  title: string
+  caption: string
+  courseTag?: string
+  /** Recognition confidence (0..1). Below CONFIDENCE_THRESHOLD (0.75), figure stays as original 2D by default. */
+  confidence?: number
+  /** Original 2D figure crop data URL (for the 3D <-> 2D Original switcher) */
+  originalCropUrl?: string
+  extractedGivens: {
+    symbol: string
+    label: string
+    value: number
+    unit: string
+  }[]
+  extractedFormulas?: {
+    label: string
+    latex: string
+    result?: string
+  }[]
+  visualization: FigureVisualization
+}
+
+/* -------------------------------------------------------------------------- */
+/* Safe Parametric Expression Evaluator                                       */
+/* -------------------------------------------------------------------------- */
+
+const IDENT_RE = /^[a-zA-Z_][a-zA-Z0-9_]*$/
+
+type Token =
+  | { type: 'num'; value: number }
+  | { type: 'id'; name: string }
+  | { type: 'op'; op: '+' | '-' | '*' | '/' | '^' | '(' | ')' | ',' }
+
+function tokenize(expr: string): Token[] {
+  const out: Token[] = []
+  let i = 0
+  while (i < expr.length) {
+    const ch = expr[i]
+    if (/\s/.test(ch)) {
+      i++
+      continue
+    }
+    if (ch === '+' || ch === '-' || ch === '*' || ch === '/' || ch === '^' || ch === '(' || ch === ')' || ch === ',') {
+      out.push({ type: 'op', op: ch })
+      i++
+      continue
+    }
+    if (/[0-9.]/.test(ch)) {
+      let start = i
+      while (i < expr.length && /[0-9.eE+-]/.test(expr[i])) {
+        if ((expr[i] === '+' || expr[i] === '-') && expr[i - 1] !== 'e' && expr[i - 1] !== 'E') break
+        i++
+      }
+      const n = Number(expr.slice(start, i))
+      out.push({ type: 'num', value: Number.isFinite(n) ? n : 0 })
+      continue
+    }
+    if (/[a-zA-Z_]/.test(ch)) {
+      let start = i
+      while (i < expr.length && /[a-zA-Z0-9_]/.test(expr[i])) i++
+      out.push({ type: 'id', name: expr.slice(start, i) })
+      continue
+    }
+    // Skip unknown character safely
+    i++
+  }
+  return out
+}
+
+/**
+ * Safely evaluates a numeric literal or parametric expression string (e.g. "flangeOD / 2000", "L * 0.5")
+ * against the current parameter map without `eval` or `Function`.
+ */
+export function evalDim(
+  expr: DimExpr | undefined,
+  params: Record<string, number>,
+  fallback = 0,
+): number {
+  if (expr === undefined || expr === null) return fallback
+  if (typeof expr === 'number') return Number.isFinite(expr) ? expr : fallback
+  const trimmed = String(expr).trim()
+  if (!trimmed) return fallback
+  const direct = Number(trimmed)
+  if (Number.isFinite(direct)) return direct
+  if (IDENT_RE.test(trimmed)) {
+    if (trimmed === 'PI' || trimmed === 'pi') return Math.PI
+    return params[trimmed] !== undefined && Number.isFinite(params[trimmed]) ? params[trimmed] : fallback
+  }
+
+  try {
+    const tokens = tokenize(trimmed)
+    let pos = 0
+
+    const peek = () => tokens[pos]
+    const next = () => tokens[pos++]
+
+    const parseExpr = (): number => {
+      let left = parseTerm()
+      while (pos < tokens.length) {
+        const t = peek()
+        if (t?.type === 'op' && (t.op === '+' || t.op === '-')) {
+          next()
+          const right = parseTerm()
+          left = t.op === '+' ? left + right : left - right
+        } else {
+          break
+        }
+      }
+      return left
+    }
+
+    const parseTerm = (): number => {
+      let left = parsePower()
+      while (pos < tokens.length) {
+        const t = peek()
+        if (t?.type === 'op' && (t.op === '*' || t.op === '/')) {
+          next()
+          const right = parsePower()
+          left = t.op === '*' ? left * right : right === 0 ? 0 : left / right
+        } else {
+          break
+        }
+      }
+      return left
+    }
+
+    const parsePower = (): number => {
+      const base = parseFactor()
+      const t = peek()
+      if (t?.type === 'op' && t.op === '^') {
+        next()
+        const exp = parsePower()
+        return Math.pow(base, exp)
+      }
+      return base
+    }
+
+    const parseFactor = (): number => {
+      const t = peek()
+      if (!t) return 0
+      if (t.type === 'op' && (t.op === '+' || t.op === '-')) {
+        next()
+        const v = parseFactor()
+        return t.op === '-' ? -v : v
+      }
+      if (t.type === 'op' && t.op === '(') {
+        next()
+        const v = parseExpr()
+        if (peek()?.type === 'op' && (peek() as { op: string }).op === ')') next()
+        return v
+      }
+      if (t.type === 'num') {
+        next()
+        return t.value
+      }
+      if (t.type === 'id') {
+        next()
+        const name = t.name
+        if (peek()?.type === 'op' && (peek() as { op: string }).op === '(') {
+          next() // consume '('
+          const args: number[] = []
+          if (!(peek()?.type === 'op' && (peek() as { op: string }).op === ')')) {
+            args.push(parseExpr())
+            while (peek()?.type === 'op' && (peek() as { op: string }).op === ',') {
+              next()
+              args.push(parseExpr())
+            }
+          }
+          if (peek()?.type === 'op' && (peek() as { op: string }).op === ')') next()
+          switch (name.toLowerCase()) {
+            case 'sin':
+              return Math.sin(args[0] ?? 0)
+            case 'cos':
+              return Math.cos(args[0] ?? 0)
+            case 'tan':
+              return Math.tan(args[0] ?? 0)
+            case 'sqrt':
+              return Math.sqrt(Math.max(0, args[0] ?? 0))
+            case 'abs':
+              return Math.abs(args[0] ?? 0)
+            case 'min':
+              return Math.min(...(args.length ? args : [0]))
+            case 'max':
+              return Math.max(...(args.length ? args : [0]))
+            default:
+              return args[0] ?? 0
+          }
+        }
+        if (name === 'PI' || name === 'pi') return Math.PI
+        return params[name] !== undefined && Number.isFinite(params[name]) ? params[name] : 0
+      }
+      next()
+      return 0
+    }
+
+    const res = parseExpr()
+    return Number.isFinite(res) ? res : fallback
+  } catch {
+    return fallback
+  }
+}
+
+export function evalVec3(
+  v: Vec3Expr | undefined,
+  params: Record<string, number>,
+  fallback: [number, number, number] = [0, 0, 0],
+): [number, number, number] {
+  if (!v) return fallback
+  return [
+    evalDim(v[0], params, fallback[0]),
+    evalDim(v[1], params, fallback[1]),
+    evalDim(v[2], params, fallback[2]),
+  ]
+}
+
+export function evaluateCalculations(
+  calculations: NoteCalculationSpec[] | undefined,
+  params: Record<string, number>,
+): { results: EvaluatedCalculation[]; scope: Record<string, number> } {
+  const scope: Record<string, number> = { ...params }
+  if (!calculations?.length) return { results: [], scope }
+  const results: EvaluatedCalculation[] = []
+  for (const spec of calculations) {
+    const value = evalDim(spec.formula, scope, 0)
+    scope[spec.id] = value
+    if (spec.symbol && IDENT_RE.test(spec.symbol)) {
+      scope[spec.symbol] = value
+    }
+    let status: 'ok' | 'warn' = 'ok'
+    let limitValue: number | undefined
+    if (spec.limit) {
+      limitValue = evalDim(spec.limit.value, scope, 0)
+      if (spec.limit.kind === 'max' && value > limitValue) status = 'warn'
+      if (spec.limit.kind === 'min' && value < limitValue) status = 'warn'
+    }
+    const abs = Math.abs(value)
+    const formatted =
+      abs === 0
+        ? '0'
+        : abs >= 1000
+          ? value.toFixed(0)
+          : abs >= 100
+            ? value.toFixed(1)
+            : abs >= 1
+              ? value.toFixed(2)
+              : Number(value.toPrecision(3)).toString()
+    results.push({ spec, value, formatted, status, limitValue })
+  }
+  return { results, scope }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Zod Validation Schemas                                                     */
+/* -------------------------------------------------------------------------- */
+
+const dimExprSchema = z.union([z.number(), z.string().max(120)])
+const vec3ExprSchema = z.tuple([dimExprSchema, dimExprSchema, dimExprSchema])
+
+export const noteParameterSchema = z.object({
+  id: z.string().min(1).max(60),
+  label: z.string().min(1).max(120),
+  symbol: z.string().max(30).optional(),
+  value: z.number(),
+  min: z.number(),
+  max: z.number(),
+  step: z.number().positive(),
+  unit: z.string().max(24),
+})
+
+export const noteShapeSchema = z.object({
+  kind: z.enum([
+    'box',
+    'cylinder',
+    'tube',
+    'cone',
+    'sphere',
+    'torus',
+    'lathe',
+    'extrude',
+    'gear',
+    'bevelGear',
+    'rack',
+    'pulley',
+    'sprocket',
+    'spring',
+  ]),
+  op: z.enum(['add', 'subtract', 'intersect']).optional(),
+  position: vec3ExprSchema.optional(),
+  rotation: vec3ExprSchema.optional(),
+  radialCount: dimExprSchema.optional(),
+  radialRadius: dimExprSchema.optional(),
+  sx: dimExprSchema.optional(),
+  sy: dimExprSchema.optional(),
+  sz: dimExprSchema.optional(),
+  r: dimExprSchema.optional(),
+  rTop: dimExprSchema.optional(),
+  rBot: dimExprSchema.optional(),
+  rOuter: dimExprSchema.optional(),
+  rInner: dimExprSchema.optional(),
+  h: dimExprSchema.optional(),
+  tubeRadius: dimExprSchema.optional(),
+  teeth: dimExprSchema.optional(),
+  module: dimExprSchema.optional(),
+  pressureAngle: z.number().optional(),
+  helixAngle: z.number().optional(),
+  pitch: dimExprSchema.optional(),
+  turns: dimExprSchema.optional(),
+  wireRadius: dimExprSchema.optional(),
+  profile: z.array(z.tuple([dimExprSchema, dimExprSchema])).max(64).optional(),
+  polygon: z.array(z.tuple([dimExprSchema, dimExprSchema])).max(64).optional(),
+  depth: dimExprSchema.optional(),
+})
+
+export const notePartSchema: z.ZodType<NotePartSpec> = z.lazy(() =>
+  z.object({
+    id: z.string().min(1).max(80),
+    name: z.string().min(1).max(120),
+    material: z.enum(ALLOWED_MATERIALS as unknown as [MaterialKey, ...MaterialKey[]]).optional(),
+    role: z.enum(ALLOWED_ROLES as unknown as [PartRole, ...PartRole[]]).optional(),
+    position: vec3ExprSchema.optional(),
+    rotation: vec3ExprSchema.optional(),
+    explode: z.tuple([z.number(), z.number(), z.number()]).optional(),
+    cut: z.boolean().optional(),
+    info: z
+      .object({
+        summary: z.string().max(600),
+        role: z.string().max(600).optional(),
+      })
+      .optional(),
+    motion: z
+      .object({
+        kind: z.enum(['rotate', 'oscillate', 'translate']),
+        axis: z.enum(['x', 'y', 'z']),
+        speed: dimExprSchema,
+        amplitude: dimExprSchema.optional(),
+        phase: z.number().optional(),
+      })
+      .optional(),
+    shapes: z.array(noteShapeSchema).min(1).max(32),
+    children: z.array(notePartSchema).max(24).optional(),
+  }),
+)
+
+export const noteAnnotationSchema = z.object({
+  id: z.string().min(1).max(60),
+  kind: z.enum(['force', 'moment', 'dimension', 'label']),
+  label: z.string().min(1).max(120),
+  value: z.string().max(80).optional(),
+  from: vec3ExprSchema,
+  to: vec3ExprSchema.optional(),
+  color: z.string().max(32).optional(),
+})
+
+export const noteCalculationSchema = z.object({
+  id: z.string().min(1).max(60),
+  label: z.string().min(1).max(120),
+  symbol: z.string().min(1).max(40),
+  formula: z.string().min(1).max(240),
+  unit: z.string().max(32),
+  latex: z.string().max(240).optional(),
+  description: z.string().max(400).optional(),
+  limit: z
+    .object({
+      kind: z.enum(['max', 'min']),
+      value: dimExprSchema,
+      label: z.string().max(80).optional(),
+    })
+    .optional(),
+})
+
+export const noteSceneSpecSchema = z.object({
+  id: z.string().min(1).max(80),
+  title: z.string().min(1).max(160),
+  summary: z.string().max(1000),
+  units: z.enum(['mm', 'm']).default('mm'),
+  extent: z.number().positive().optional(),
+  floorY: z.number().optional(),
+  camera: z
+    .object({
+      position: z.tuple([z.number(), z.number(), z.number()]),
+      target: z.tuple([z.number(), z.number(), z.number()]),
+    })
+    .optional(),
+  parameters: z.array(noteParameterSchema).max(20).default([]),
+  parts: z.array(notePartSchema).min(1).max(32),
+  annotations: z.array(noteAnnotationSchema).max(24).optional(),
+  calculations: z.array(noteCalculationSchema).max(20).optional(),
+  showProjectionPlanes: z.enum(['none', 'first-angle', 'third-angle']).optional(),
+  recommendedCut: z
+    .object({
+      enabled: z.boolean(),
+      normal: z.tuple([z.number(), z.number(), z.number()]),
+      pos: z.number(),
+    })
+    .optional(),
+})
