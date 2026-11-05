@@ -1,20 +1,33 @@
-import { useState, type FormEvent, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent, type ReactNode } from 'react'
+import { Link } from 'react-router-dom'
+import { useSim } from '@/core/sim'
+import type { SceneDef } from '@/modules/types'
+import { generateOrEdit3DScene } from '@/note3d/ai3dCompiler'
+import { CREATE_TEMPLATES, TWO_STAGE_REDUCER_SPEC, type CatalogSceneMatch } from '@/note3d/createCatalog'
+import { createSceneDefFromSpec } from '@/note3d/NoteSceneRenderer'
+import { ALLOWED_MATERIALS, evaluateCalculations, type NotePartSpec, type NoteSceneSpec, type NoteShapeKind } from '@/note3d/schema'
+import { MATERIALS, type MaterialKey } from '@/render/materials'
+import { useView } from '@/render/view'
 import { StudyShell } from '@/study/ui/StudyShell'
+import { Stage } from '@/ui/Stage'
+import { Tex } from '@/ui/Tex'
 import { api, ApiError } from '../api'
 import { useAuth } from '../auth'
 import { SUPPORT_EMAIL } from '../config'
-import { Field, Notice, inputCls, primaryBtn } from './Modal'
+import { Field, Notice, ghostBtn, inputCls, primaryBtn } from './Modal'
 
 type Role = 'student' | 'teacher' | 'engineer' | 'other'
 type Interest = 'describe' | 'photo' | 'customize' | 'chat' | 'classroom'
 
-const FEATURES: { title: string; body: string }[] = [
-  { title: 'Describe it', body: '“A two-stage spur gear reducer, 20 : 1, for a 15 kW motor.” Get a working model built from real parts: gears that mesh, shafts that turn, live speeds and torques.' },
-  { title: 'Start from a photo', body: 'Upload a picture of a gearbox, an implement or a part. Solidify proposes a model of the mechanism and its proportions for you to confirm.' },
-  { title: 'Customize everything', body: 'Every dimension, tooth count, ratio and material is a control. Cut it, explode it, X-ray it, and watch the calculations follow.' },
-  { title: 'Design by chat', body: '“Make the output shaft 40 mm longer.” “Why isn’t this 20 : 1?” A design assistant edits the model and explains what changed.' },
-]
+/** edits to suggest once there is a model to edit */
+const QUICK_EDITS = ['Add a cooling fan', 'Make the output shaft 40 mm longer', 'Change the housing to aluminium', 'Why isn’t this 20 : 1?']
 
+/** machines with no ready-made template, to show what a description can build */
+const IDEAS = [
+  { label: 'Wind turbine', prompt: 'A 3-blade horizontal-axis wind turbine on a tubular tower with nacelle generator' },
+  { label: 'Screw auger', prompt: 'A helical grain screw auger conveyor with feed hopper at 180 rpm' },
+  { label: 'Bench vice', prompt: 'A cast-iron workshop bench vice with sliding jaw and Acme lead screw' },
+]
 const INTERESTS: { value: Interest; label: string }[] = [
   { value: 'describe', label: 'Describing a design' },
   { value: 'photo', label: 'Modelling from a photo' },
@@ -30,7 +43,9 @@ function Choice({ checked, onClick, children }: { checked: boolean; onClick: () 
       role="checkbox"
       aria-checked={checked}
       onClick={onClick}
-      className={`rounded-full border px-3 py-1 text-[12.5px] transition-colors ${checked ? 'border-accent/60 bg-accent/15 text-accent' : 'border-line-2 text-ink/85 hover:border-accent/40'}`}
+      className={`rounded-full border px-3 py-1 text-[12.5px] transition-colors ${
+        checked ? 'border-accent/60 bg-accent/15 text-accent' : 'border-line-2 text-ink/85 hover:border-accent/40'
+      }`}
     >
       {children}
     </button>
@@ -57,7 +72,15 @@ function WaitlistForm() {
     setError(null)
     try {
       await api('/v1/waitlist', {
-        body: { email, name: name.trim() || undefined, role, interest, useCase: useCase.trim() || undefined, organisation: organisation.trim() || undefined, website: website || undefined },
+        body: {
+          email,
+          name: name.trim() || undefined,
+          role,
+          interest,
+          useCase: useCase.trim() || undefined,
+          organisation: organisation.trim() || undefined,
+          website: website || undefined,
+        },
       })
       setState('done')
     } catch (err) {
@@ -70,20 +93,38 @@ function WaitlistForm() {
     return (
       <div className="rounded-2xl border border-accent/40 bg-accent/5 p-5">
         <h2 className="text-[16px] font-semibold text-ink">You’re on the list</h2>
-        <p className="mt-1 text-[13px] leading-relaxed text-mute">We’ll email {email} when Create in 3D opens, with early access for the first people on the list.</p>
+        <p className="mt-1 text-[13px] leading-relaxed text-mute">
+          We’ll email {email} with classroom &amp; team rollout updates.
+        </p>
       </div>
     )
 
   return (
     <form onSubmit={(e) => void submit(e)} className="rounded-3xl border border-line bg-panel p-5">
-      <h2 className="mb-1 text-[16px] font-semibold">Join the waiting list</h2>
-      <p className="mb-4 text-[12.5px] text-mute">Be first in when it opens. We’ll only email you about Create in 3D.</p>
+      <h2 className="mb-1 text-[16px] font-semibold">Schools &amp; Teams Rollout List</h2>
+      <p className="mb-4 text-[12.5px] text-mute">
+        Request institutional access or custom department part libraries.
+      </p>
       <div className="grid gap-x-3 sm:grid-cols-2">
         <Field label="Email">
-          <input className={inputCls} type="email" required value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" maxLength={200} />
+          <input
+            className={inputCls}
+            type="email"
+            required
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            autoComplete="email"
+            maxLength={200}
+          />
         </Field>
         <Field label="Name (optional)">
-          <input className={inputCls} value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" maxLength={80} />
+          <input
+            className={inputCls}
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            autoComplete="name"
+            maxLength={80}
+          />
         </Field>
       </div>
       <div className="mb-3">
@@ -107,48 +148,587 @@ function WaitlistForm() {
         </div>
       </div>
       <Field label="What would you make? (optional)">
-        <textarea className={`${inputCls} min-h-[72px] resize-y`} value={useCase} onChange={(e) => setUseCase(e.target.value)} maxLength={1000} placeholder="e.g. a model of our maize sheller drive for my final-year project" />
+        <textarea
+          className={`${inputCls} min-h-[64px] resize-y`}
+          value={useCase}
+          onChange={(e) => setUseCase(e.target.value)}
+          maxLength={1000}
+          placeholder="e.g. a model of our maize sheller drive for my final-year project"
+        />
       </Field>
       <Field label="School or company (optional)">
-        <input className={inputCls} value={organisation} onChange={(e) => setOrganisation(e.target.value)} maxLength={120} autoComplete="organization" />
+        <input
+          className={inputCls}
+          value={organisation}
+          onChange={(e) => setOrganisation(e.target.value)}
+          maxLength={120}
+          autoComplete="organization"
+        />
       </Field>
-      {/* honeypot: hidden from people, filled in by bots */}
-      <input type="text" tabIndex={-1} autoComplete="off" aria-hidden="true" value={website} onChange={(e) => setWebsite(e.target.value)} className="absolute -left-[9999px] h-0 w-0 opacity-0" name="website" />
-      {error ? <div className="mb-3"><Notice tone="warn">{error}</Notice></div> : null}
+      <input
+        type="text"
+        tabIndex={-1}
+        autoComplete="off"
+        aria-hidden="true"
+        value={website}
+        onChange={(e) => setWebsite(e.target.value)}
+        className="absolute -left-[9999px] h-0 w-0 opacity-0"
+        name="website"
+      />
+      {error ? (
+        <div className="mb-3">
+          <Notice tone="warn">{error}</Notice>
+        </div>
+      ) : null}
       <button type="submit" className={`${primaryBtn} w-full py-2.5`} disabled={state === 'sending'}>
-        {state === 'sending' ? 'Joining…' : 'Join the waiting list'}
+        {state === 'sending' ? 'Joining…' : 'Join the rollout list'}
       </button>
     </form>
   )
 }
 
+interface HistoryItem {
+  id: string
+  prompt: string
+  response: string
+  source?: 'gemini' | 'compositional'
+}
+
+type Tab = 'calculations' | 'dimensions' | 'parts'
+
+/** a toolbar toggle in the app's own style */
+function Tool({ on, onClick, children, title }: { on?: boolean; onClick: () => void; children: ReactNode; title?: string }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={title}
+      aria-pressed={on}
+      className={`rounded-full px-3 py-1 text-[12px] font-medium transition-colors ${on ? 'bg-ink text-bg' : 'text-mute hover:bg-panel-2 hover:text-ink'}`}
+    >
+      {children}
+    </button>
+  )
+}
+
+const selectCls = 'rounded-lg border border-line-2 bg-bg px-2 py-1 text-[12px] text-ink focus:border-accent focus:outline-none'
+
 export default function CreatePage() {
+  const [spec, setSpec] = useState<NoteSceneSpec>(() => JSON.parse(JSON.stringify(TWO_STAGE_REDUCER_SPEC)) as NoteSceneSpec)
+  const [params, setParams] = useState<Record<string, number>>(() => Object.fromEntries(TWO_STAGE_REDUCER_SPEC.parameters.map((p) => [p.id, p.value])))
+  const [promptInput, setPromptInput] = useState('')
+  const [uploadedPhoto, setUploadedPhoto] = useState<{ name: string; url: string } | null>(null)
+  const [isGenerating, setIsGenerating] = useState(false)
+  const [error, setError] = useState<{ message: string; signIn?: boolean } | null>(null)
+  const [matchedCatalog, setMatchedCatalog] = useState<CatalogSceneMatch | null>(null)
+  const [loadedCatalogScene, setLoadedCatalogScene] = useState<SceneDef | null>(null)
+  const [viewMode, setViewMode] = useState<'parametric' | 'catalog'>('parametric')
+  const [tab, setTab] = useState<Tab>('calculations')
+
+  const [showAddPart, setShowAddPart] = useState(false)
+  const [newPartName, setNewPartName] = useState('New part')
+  const [newPartKind, setNewPartKind] = useState<NoteShapeKind>('gear')
+  const [newPartMaterial, setNewPartMaterial] = useState<MaterialKey>('steel')
+  const [newPartMotion, setNewPartMotion] = useState<'none' | 'rotate' | 'translate'>('rotate')
+
+  const [history, setHistory] = useState<HistoryItem[]>([
+    {
+      id: 'init',
+      prompt: 'A two-stage spur gear reducer, 20 : 1, for a 15 kW motor at 1450 rpm.',
+      response: 'Two pinions of 16 teeth driving wheels of 72, in a sectioned cast-iron housing, with the torque and tooth stresses worked out live.',
+      source: 'compositional',
+    },
+  ])
+
+  const cut = useView((s) => s.cut)
+  const explode = useView((s) => s.explode)
+  const xray = useView((s) => s.xray)
+  const labels = useView((s) => s.labels)
+  const caliperMode = useView((s) => s.caliperMode)
+  const playing = useSim((s) => s.playing)
+  const timeScale = useSim((s) => s.timeScale)
+  const signedIn = useAuth((s) => s.status) === 'signed-in'
+
+  const [cutAxis, setCutAxis] = useState<'x' | 'y' | 'z'>('z')
+  const [cutPos, setCutPos] = useState(0.02)
+  const photoInputRef = useRef<HTMLInputElement>(null)
+  const promptRef = useRef<HTMLInputElement>(null)
+
+  // each new model opens with its recommended section, and nothing else switched on
+  useEffect(() => {
+    const rec = spec.recommendedCut
+    if (rec) {
+      setCutAxis(Math.abs(rec.normal[0]) > 0.5 ? 'x' : Math.abs(rec.normal[1]) > 0.5 ? 'y' : 'z')
+      setCutPos(rec.pos)
+      useView.getState().setCut({ enabled: rec.enabled, planes: [{ normal: rec.normal, pos: rec.pos }] })
+    } else {
+      useView.getState().setCut({ enabled: false, planes: [{ normal: [0, 0, 1], pos: 0 }] })
+    }
+    useView.getState().setExplode(0)
+    useView.getState().setXray(false)
+    useView.getState().setLabels(false)
+  }, [spec.id])
+
+  useEffect(() => {
+    let cancelled = false
+    if (!matchedCatalog?.scene.load) {
+      setLoadedCatalogScene(null)
+      return
+    }
+    matchedCatalog.scene
+      .load()
+      .then((mod) => !cancelled && setLoadedCatalogScene(mod.default))
+      .catch(() => !cancelled && setLoadedCatalogScene(null))
+    return () => {
+      cancelled = true
+    }
+  }, [matchedCatalog])
+
+  const applyCutPlane = (enabled: boolean, axis: 'x' | 'y' | 'z', pos: number) => {
+    const normal: [number, number, number] = axis === 'x' ? [1, 0, 0] : axis === 'y' ? [0, 1, 0] : [0, 0, 1]
+    useView.getState().setCut({ enabled, planes: [{ normal, pos }] })
+  }
+
+  const remember = (item: Omit<HistoryItem, 'id'>) => setHistory((prev) => [{ id: `h-${Date.now()}`, ...item }, ...prev.slice(0, 6)])
+
+  /** a failed build says why: not signed in, out of builds for today, or something else */
+  const showError = (e: unknown) => {
+    if (e instanceof ApiError && e.status === 401) setError({ message: 'Sign in to build a model from your own description or photo. The examples work without an account.', signIn: true })
+    else setError({ message: e instanceof ApiError ? e.message : 'That build didn’t work. Please try again.' })
+  }
+
+  const selectTemplate = (tplSpec: NoteSceneSpec, tplPrompt: string) => {
+    const cloned = JSON.parse(JSON.stringify(tplSpec)) as NoteSceneSpec
+    cloned.id = `${cloned.id.replace(/-rev\d+$/, '')}-rev${Date.now() % 10000}`
+    setSpec(cloned)
+    setParams(Object.fromEntries(cloned.parameters.map((p) => [p.id, p.value])))
+    setUploadedPhoto(null)
+    setViewMode('parametric')
+    setMatchedCatalog(null)
+    setError(null)
+    setPromptInput('')
+    remember({ prompt: tplPrompt, response: `${cloned.title}: ${cloned.parts.length} parts, ${cloned.calculations?.length ?? 0} live calculations.`, source: 'compositional' })
+  }
+
+  const build = async (text: string, photo?: { name: string; url: string }) => {
+    setIsGenerating(true)
+    setError(null)
+    try {
+      const res = await generateOrEdit3DScene(text, photo ? undefined : spec, photo?.url)
+      setSpec(res.spec)
+      setParams(Object.fromEntries(res.spec.parameters.map((p) => [p.id, p.value])))
+      if (res.isNewMachine || photo) {
+        setMatchedCatalog(res.matchedCatalogScene)
+        setViewMode('parametric')
+      }
+      if (photo) setUploadedPhoto(photo)
+      remember({ prompt: photo ? `From a photo: ${photo.name}${text ? ` (${text})` : ''}` : text, response: res.explanation, source: res.source })
+      setPromptInput('')
+    } catch (e) {
+      showError(e)
+    } finally {
+      setIsGenerating(false)
+    }
+  }
+
+  const handlePromptSubmit = (e?: FormEvent, custom?: string) => {
+    e?.preventDefault()
+    const text = (custom ?? promptInput).trim()
+    if (text) void build(text)
+  }
+
+  const handlePhotoUpload = (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = () => {
+      const url = typeof reader.result === 'string' ? reader.result : ''
+      void build(promptInput.trim() || file.name.replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' '), { name: file.name, url })
+    }
+    reader.readAsDataURL(file)
+  }
+
+  const handleMaterialChange = (partId: string, nextMat: MaterialKey) => {
+    setSpec((prev) => {
+      const cloned = JSON.parse(JSON.stringify(prev)) as NoteSceneSpec
+      const walk = (list: NotePartSpec[]) => {
+        for (const pt of list) {
+          if (pt.id === partId) pt.material = nextMat
+          if (pt.children?.length) walk(pt.children)
+        }
+      }
+      walk(cloned.parts)
+      return cloned
+    })
+  }
+
+  const handleDeletePart = (partId: string) => {
+    setSpec((prev) => {
+      if (prev.parts.length <= 1) return prev
+      const cloned = JSON.parse(JSON.stringify(prev)) as NoteSceneSpec
+      cloned.parts = cloned.parts.filter((p) => p.id !== partId)
+      return cloned
+    })
+  }
+
+  const handleManualAddPart = (e: FormEvent) => {
+    e.preventDefault()
+    const housing = newPartKind === 'tube' || newPartKind === 'cone'
+    const newPart: NotePartSpec = {
+      id: `custom-part-${Date.now() % 10000}`,
+      name: newPartName.trim() || `Custom ${newPartKind}`,
+      material: newPartMaterial,
+      role: housing ? 'housing' : newPartMotion === 'none' ? 'static' : 'moving',
+      cut: housing,
+      position: [0, ((spec.parts.length % 3) - 1) * 0.08, 0.1],
+      explode: [0, 0.12, 0.12],
+      motion: newPartMotion === 'rotate' ? { kind: 'rotate', axis: 'y', speed: 2.2 } : newPartMotion === 'translate' ? { kind: 'translate', axis: 'y', speed: 1.2, amplitude: 0.03 } : undefined,
+      info: { summary: `Added ${newPartKind} (${MATERIALS[newPartMaterial].label}).` },
+      shapes:
+        newPartKind === 'gear'
+          ? [{ kind: 'gear', teeth: 24, module: 0.003, h: 0.028, rInner: 0.012 }]
+          : newPartKind === 'pulley'
+            ? [{ kind: 'pulley', rOuter: 0.075, rInner: 0.016, h: 0.032 }]
+            : newPartKind === 'spring'
+              ? [{ kind: 'spring', r: 0.04, wireRadius: 0.006, h: 0.1, turns: 6 }]
+              : newPartKind === 'tube'
+                ? [{ kind: 'tube', rOuter: 0.085, rInner: 0.068, h: 0.16 }]
+                : newPartKind === 'cone'
+                  ? [{ kind: 'cone', rTop: 0.09, rBot: 0.04, h: 0.12 }]
+                  : newPartKind === 'cylinder'
+                    ? [{ kind: 'cylinder', r: 0.035, h: 0.18 }]
+                    : [{ kind: 'box', sx: 0.14, sy: 0.06, sz: 0.1 }],
+    }
+    setSpec((prev) => ({ ...(JSON.parse(JSON.stringify(prev)) as NoteSceneSpec), parts: [...prev.parts, newPart] }))
+    setViewMode('parametric')
+    setShowAddPart(false)
+  }
+
+  const { results: calcResults } = useMemo(() => evaluateCalculations(spec.calculations, params), [spec.calculations, params])
+  const parametricSceneDef = useMemo(() => createSceneDefFromSpec(spec, params), [spec, params])
+  const activeSceneDef = viewMode === 'catalog' && loadedCatalogScene ? loadedCatalogScene : parametricSceneDef
+  const extent = activeSceneDef.extent ?? 0.45
+  const baseId = spec.id.replace(/-rev\d+$/, '')
+  const latest = history[0]
+
   return (
     <StudyShell
       title="Create in 3D"
-      lead="Describe a machine or upload a photo, and get a 3D model you can cut open, take apart, animate and change in every detail, with the engineering calculated live."
-      right={<span className="rounded-full border border-warn/50 bg-warn/10 px-3 py-1 text-[12px] font-semibold text-warn">Coming soon</span>}
+      lead="Describe a machine or upload a photo, and get a 3D model you can cut open, take apart, animate and change, with the engineering worked out live."
+      right={
+        <Link to="/read" className="rounded-full border border-line-2 bg-panel px-3.5 py-1.5 text-[12.5px] font-medium text-ink hover:border-accent/50">
+          Read notes in 3D →
+        </Link>
+      }
     >
-      <div className="grid gap-5 lg:grid-cols-[1fr_400px]">
-        <section className="grid content-start gap-3 sm:grid-cols-2">
-          {FEATURES.map((f) => (
-            <div key={f.title} className="rounded-3xl border border-line bg-panel-2/50 p-4">
-              <h3 className="mb-1 text-[14px] font-semibold text-ink">{f.title}</h3>
-              <p className="text-[12.5px] leading-relaxed text-mute">{f.body}</p>
+      {/* describe, or start from an example */}
+      <section className="mb-5 rounded-3xl border border-line bg-panel p-4">
+        <form onSubmit={handlePromptSubmit} className="flex flex-col gap-2 sm:flex-row">
+          <input
+            ref={promptRef}
+            value={promptInput}
+            onChange={(e) => setPromptInput(e.target.value)}
+            placeholder="Describe a machine, or how to change this one…"
+            aria-label="Describe a machine"
+            maxLength={2000}
+            className="min-w-0 flex-1 rounded-2xl border border-line-2 bg-bg px-4 py-3 text-[14px] text-ink placeholder:text-dim focus:border-accent focus:outline-none"
+          />
+          <input ref={photoInputRef} type="file" accept="image/*" onChange={handlePhotoUpload} className="hidden" />
+          <div className="flex gap-2">
+            <button type="button" onClick={() => photoInputRef.current?.click()} disabled={isGenerating} className={`${ghostBtn} rounded-2xl px-4`} title="Build from a photo or drawing">
+              From a photo
+            </button>
+            <button type="submit" disabled={isGenerating || !promptInput.trim()} className={`${primaryBtn} rounded-2xl px-5`}>
+              {isGenerating ? 'Building…' : 'Build'}
+            </button>
+          </div>
+        </form>
+
+        {error ? (
+          <div className="mt-3 flex flex-wrap items-center gap-3">
+            <div className="flex-1">
+              <Notice tone="warn">{error.message}</Notice>
             </div>
+            {error.signIn && !signedIn ? (
+              <button className={primaryBtn} onClick={() => useAuth.getState().openDialog()}>
+                Sign in
+              </button>
+            ) : null}
+          </div>
+        ) : null}
+
+        <div className="mt-3 flex flex-wrap items-center gap-1.5 text-[12.5px]">
+          <span className="mr-1 text-dim">Examples</span>
+          {CREATE_TEMPLATES.slice(0, 7).map((tpl) => (
+            <button
+              key={tpl.id}
+              type="button"
+              onClick={() => selectTemplate(tpl.spec, tpl.prompt)}
+              className={`rounded-full border px-3 py-1 transition-colors ${baseId === tpl.spec.id && viewMode === 'parametric' ? 'border-accent/60 bg-accent/10 text-ink' : 'border-line-2 text-mute hover:border-accent/40 hover:text-ink'}`}
+            >
+              {tpl.title}
+            </button>
           ))}
-          <p className="text-[12px] leading-relaxed text-dim sm:col-span-2">
-            Built on the same parts library and tested calculations as every Solidify scene. Create in 3D will be part of Solidify’s paid plans, with a free trial. Questions, or interested for your school or company? Email{' '}
-            <a className="text-accent hover:underline" href={`mailto:${SUPPORT_EMAIL}`}>
-              {SUPPORT_EMAIL}
-            </a>
-            .
-          </p>
+          {IDEAS.map((idea) => (
+            <button key={idea.label} type="button" onClick={() => handlePromptSubmit(undefined, idea.prompt)} disabled={isGenerating} className="rounded-full border border-dashed border-line-2 px-3 py-1 text-mute transition-colors hover:border-accent/40 hover:text-ink" title="Built from a description">
+              {idea.label}
+            </button>
+          ))}
+        </div>
+      </section>
+
+      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_400px]">
+        {/* the model */}
+        <section className="flex min-w-0 flex-col overflow-hidden rounded-3xl border border-line bg-panel">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-4 py-2.5">
+            <div className="min-w-0">
+              <h2 className="truncate text-[15px] font-semibold text-ink">{activeSceneDef.title}</h2>
+              {latest ? <p className="truncate text-[12px] text-mute">{latest.source === 'gemini' ? 'Built from your description' : 'Ready-made model'}{latest.prompt ? ` · “${latest.prompt}”` : ''}</p> : null}
+            </div>
+            {matchedCatalog && loadedCatalogScene ? (
+              <button type="button" onClick={() => setViewMode((m) => (m === 'parametric' ? 'catalog' : 'parametric'))} className={`${ghostBtn} text-[12px]`}>
+                {viewMode === 'parametric' ? `Open the ${matchedCatalog.scene.title} lab` : 'Back to the model'}
+              </button>
+            ) : null}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-1 border-b border-line px-3 py-1.5">
+            <Tool on={cut.enabled} onClick={() => applyCutPlane(!cut.enabled, cutAxis, cutPos)}>Section</Tool>
+            <Tool on={explode > 0.05} onClick={() => useView.getState().setExplode(explode > 0.05 ? 0 : 0.7)}>Take apart</Tool>
+            <Tool on={xray} onClick={() => useView.getState().setXray(!xray)}>X-ray</Tool>
+            <Tool on={labels} onClick={() => useView.getState().setLabels(!labels)}>Labels</Tool>
+            <Tool on={caliperMode} onClick={() => useView.getState().setCaliperMode(!caliperMode)} title="Click two points on the model to measure between them">Measure</Tool>
+            <span className="mx-1 h-4 w-px bg-line" />
+            <Tool onClick={() => useSim.getState().toggle()}>{playing ? 'Pause' : 'Play'}</Tool>
+            {[0.5, 1, 2].map((spd) => (
+              <Tool key={spd} on={Math.abs(timeScale - spd) < 0.05} onClick={() => useSim.getState().setTimeScale(spd)}>{spd}×</Tool>
+            ))}
+          </div>
+
+          {cut.enabled || explode > 0.05 ? (
+            <div className="flex flex-wrap items-center gap-x-5 gap-y-2 border-b border-line bg-panel-2/40 px-4 py-2 text-[12px] text-mute">
+              {cut.enabled ? (
+                <div className="flex min-w-[220px] flex-1 items-center gap-2" role="group" aria-label="Section plane">
+                  Section through
+                  {(['x', 'y', 'z'] as const).map((ax) => (
+                    <button key={ax} type="button" aria-label={`Section across ${ax}`} aria-pressed={cutAxis === ax} onClick={() => { setCutAxis(ax); applyCutPlane(true, ax, cutPos) }} className={`rounded px-1.5 font-mono uppercase ${cutAxis === ax ? 'bg-ink text-bg' : 'hover:text-ink'}`}>
+                      {ax}
+                    </button>
+                  ))}
+                  <input type="range" aria-label="Section position" min={-extent * 0.6} max={extent * 0.6} step={extent / 100} value={cutPos} onChange={(e) => { const v = parseFloat(e.target.value); setCutPos(v); applyCutPlane(true, cutAxis, v) }} className="slider flex-1" />
+                </div>
+              ) : null}
+              {explode > 0.05 ? (
+                <label className="flex min-w-[180px] flex-1 items-center gap-2">
+                  Apart
+                  <input type="range" aria-label="How far apart" min={0} max={1} step={0.02} value={explode} onChange={(e) => useView.getState().setExplode(parseFloat(e.target.value))} className="slider flex-1" />
+                </label>
+              ) : null}
+            </div>
+          ) : null}
+
+          <div className="relative h-[460px] w-full sm:h-[520px]">
+            <Stage scene={activeSceneDef} />
+            {isGenerating ? (
+              <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center bg-bg/40 backdrop-blur-[2px]">
+                <div className="rounded-full border border-line bg-panel px-4 py-2 text-[12.5px] text-ink shadow-lg">Building the model…</div>
+              </div>
+            ) : null}
+            {uploadedPhoto ? (
+              <div className="absolute bottom-3 left-3 z-20 flex items-center gap-2 rounded-2xl border border-line bg-panel/95 p-1.5 pr-3 shadow-lg backdrop-blur">
+                <img src={uploadedPhoto.url} alt={`Reference: ${uploadedPhoto.name}`} className="h-12 w-12 rounded-lg bg-white object-contain" />
+                <div className="text-[11.5px]">
+                  <div className="font-medium text-ink">Your photo</div>
+                  <button type="button" onClick={() => setUploadedPhoto(null)} className="text-mute hover:text-ink">Hide</button>
+                </div>
+              </div>
+            ) : null}
+          </div>
+
+          {spec.parts.length && viewMode === 'parametric' && !isGenerating ? (
+            <div className="flex flex-wrap items-center gap-1.5 border-t border-line px-4 py-2.5 text-[12px]">
+              <span className="mr-1 text-dim">Change it</span>
+              {QUICK_EDITS.map((q) => (
+                <button key={q} type="button" onClick={() => handlePromptSubmit(undefined, q)} className="rounded-full border border-line-2 px-2.5 py-0.5 text-mute transition-colors hover:border-accent/40 hover:text-ink">
+                  {q}
+                </button>
+              ))}
+            </div>
+          ) : null}
         </section>
-        <aside>
-          <WaitlistForm />
-        </aside>
+
+        {/* the engineering */}
+        <section className="flex min-w-0 flex-col rounded-3xl border border-line bg-panel">
+          {viewMode === 'catalog' && loadedCatalogScene?.Panel ? (
+            <div className="max-h-[680px] overflow-y-auto p-4">
+              <loadedCatalogScene.Panel />
+            </div>
+          ) : (
+            <>
+              <div className="flex gap-1 border-b border-line p-2" role="tablist" aria-label="Model details">
+                {(
+                  [
+                    ['calculations', 'Calculations'],
+                    ['dimensions', 'Dimensions'],
+                    ['parts', 'Parts'],
+                  ] as const
+                ).map(([id, label]) => (
+                  <button key={id} type="button" role="tab" aria-selected={tab === id} onClick={() => setTab(id)} className={`flex-1 rounded-full px-3 py-1.5 text-[12.5px] font-medium transition-colors ${tab === id ? 'bg-ink text-bg' : 'text-mute hover:text-ink'}`}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+
+              <div className="max-h-[620px] flex-1 overflow-y-auto p-4">
+                {tab === 'calculations' ? (
+                  calcResults.length ? (
+                    <div className="space-y-2">
+                      {calcResults.map(({ spec: c, formatted, status }) => (
+                        <div key={c.id} className={`rounded-2xl border p-3 ${status === 'warn' ? 'border-warn/50 bg-warn/5' : 'border-line-2'}`}>
+                          <div className="flex items-baseline justify-between gap-3">
+                            <span className="text-[12.5px] text-mute">{c.label}</span>
+                            <span className="font-mono text-[16px] font-semibold text-ink">
+                              {formatted} <span className="text-[12px] font-normal text-mute">{c.unit}</span>
+                            </span>
+                          </div>
+                          {status === 'warn' && c.limit ? <p className="mt-1 text-[11.5px] text-warn">Over the limit: {c.limit.label ?? 'check this value'}</p> : null}
+                          {c.latex ? (
+                            <div className="mt-1.5 overflow-x-auto text-[11.5px] text-mute">
+                              <Tex tex={c.latex} />
+                            </div>
+                          ) : null}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-[13px] text-mute">This model has no calculations yet.</p>
+                  )
+                ) : null}
+
+                {tab === 'dimensions' ? (
+                  <div className="space-y-3">
+                    {spec.parameters.map((p) => {
+                      const val = params[p.id] ?? p.value
+                      return (
+                        <label key={p.id} className="block">
+                          <div className="mb-1 flex items-baseline justify-between gap-2 text-[12.5px]">
+                            <span className="text-ink">{p.label}</span>
+                            <span className="font-mono text-mute">{p.unit === 'm' ? `${(val * 1000).toFixed(1)} mm` : `${Number(val.toPrecision(4))} ${p.unit}`}</span>
+                          </div>
+                          <input
+                            type="range"
+                            min={p.min}
+                            max={p.max}
+                            step={p.step}
+                            value={val}
+                            onChange={(e) => {
+                              setViewMode('parametric')
+                              setParams((prev) => ({ ...prev, [p.id]: parseFloat(e.target.value) }))
+                            }}
+                            className="slider w-full"
+                          />
+                        </label>
+                      )
+                    })}
+                    <button type="button" onClick={() => setParams(Object.fromEntries(spec.parameters.map((p) => [p.id, p.value])))} className={`${ghostBtn} text-[12px]`}>
+                      Reset dimensions
+                    </button>
+                  </div>
+                ) : null}
+
+                {tab === 'parts' ? (
+                  <div className="space-y-2">
+                    {spec.parts.map((pt) => (
+                      <div key={pt.id} className="flex items-center gap-2 rounded-2xl border border-line-2 px-3 py-2">
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate text-[13px] font-medium text-ink">{pt.name}</div>
+                          {pt.info?.summary ? <div className="truncate text-[11.5px] text-mute">{pt.info.summary}</div> : null}
+                        </div>
+                        <select aria-label={`Material of ${pt.name}`} value={pt.material && pt.material in MATERIALS ? pt.material : 'steel'} onChange={(e) => { setViewMode('parametric'); handleMaterialChange(pt.id, e.target.value as MaterialKey) }} className={selectCls}>
+                          {ALLOWED_MATERIALS.slice(0, 26).map((mk) => (
+                            <option key={mk} value={mk}>{MATERIALS[mk].label}</option>
+                          ))}
+                        </select>
+                        {spec.parts.length > 1 ? (
+                          <button type="button" onClick={() => handleDeletePart(pt.id)} aria-label={`Remove ${pt.name}`} className="rounded-full px-2 text-[13px] text-dim hover:text-danger">×</button>
+                        ) : null}
+                      </div>
+                    ))}
+
+                    {showAddPart ? (
+                      <form onSubmit={handleManualAddPart} className="space-y-2 rounded-2xl border border-line-2 p-3">
+                        <input aria-label="Part name" value={newPartName} onChange={(e) => setNewPartName(e.target.value)} className={`${inputCls} w-full`} />
+                        <div className="grid grid-cols-3 gap-2">
+                          <select aria-label="Shape" value={newPartKind} onChange={(e) => setNewPartKind(e.target.value as NoteShapeKind)} className={selectCls}>
+                            <option value="gear">Spur gear</option>
+                            <option value="pulley">Pulley</option>
+                            <option value="spring">Spring</option>
+                            <option value="cylinder">Shaft</option>
+                            <option value="tube">Tube</option>
+                            <option value="cone">Cone</option>
+                            <option value="box">Block</option>
+                          </select>
+                          <select aria-label="Material" value={newPartMaterial} onChange={(e) => setNewPartMaterial(e.target.value as MaterialKey)} className={selectCls}>
+                            {ALLOWED_MATERIALS.slice(0, 26).map((mk) => (
+                              <option key={mk} value={mk}>{MATERIALS[mk].label}</option>
+                            ))}
+                          </select>
+                          <select aria-label="Motion" value={newPartMotion} onChange={(e) => setNewPartMotion(e.target.value as 'none' | 'rotate' | 'translate')} className={selectCls}>
+                            <option value="rotate">Turns</option>
+                            <option value="translate">Slides</option>
+                            <option value="none">Fixed</option>
+                          </select>
+                        </div>
+                        <div className="flex gap-2">
+                          <button type="submit" className={primaryBtn}>Add part</button>
+                          <button type="button" onClick={() => setShowAddPart(false)} className={ghostBtn}>Cancel</button>
+                        </div>
+                      </form>
+                    ) : (
+                      <div className="flex gap-2 pt-1">
+                        <button type="button" onClick={() => setShowAddPart(true)} className={`${ghostBtn} text-[12px]`}>Add a part</button>
+                        <button type="button" onClick={() => useView.getState().showAll()} className={`${ghostBtn} text-[12px]`}>Show hidden parts</button>
+                      </div>
+                    )}
+                  </div>
+                ) : null}
+              </div>
+
+              {history.length > 1 ? (
+                <details className="border-t border-line px-4 py-2.5 text-[12px]">
+                  <summary className="cursor-pointer text-mute">Earlier changes ({history.length - 1})</summary>
+                  <ul className="mt-2 space-y-2">
+                    {history.slice(1).map((h) => (
+                      <li key={h.id}>
+                        <div className="text-ink">“{h.prompt}”</div>
+                        <div className="text-mute">{h.response}</div>
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              ) : null}
+            </>
+          )}
+        </section>
       </div>
+
+      <details className="mt-8 rounded-3xl border border-line p-4">
+        <summary className="cursor-pointer text-[13.5px] font-medium text-ink">Using this with a class or a team?</summary>
+        <div className="mt-4 grid gap-5 lg:grid-cols-[1fr_420px]">
+          <div className="space-y-2 text-[13px] leading-relaxed text-mute">
+            <p>Create in 3D uses the same parts library, section tools and tested calculations as every Solidify lab.</p>
+            <p>
+              For school or company access, or custom templates, email{' '}
+              <a className="text-accent hover:underline" href={`mailto:${SUPPORT_EMAIL}`}>
+                {SUPPORT_EMAIL}
+              </a>
+              .
+            </p>
+          </div>
+          <WaitlistForm />
+        </div>
+      </details>
     </StudyShell>
   )
 }
