@@ -79,6 +79,8 @@ export type NoteShapeKind =
   | 'pulley'
   | 'sprocket'
   | 'spring'
+  | 'hexNut'
+  | 'hexBolt'
 
 export interface NoteShapeSpec {
   kind: NoteShapeKind
@@ -109,6 +111,8 @@ export interface NoteShapeSpec {
   pressureAngle?: number
   helixAngle?: number
   pitch?: DimExpr
+  // Hex nut / hex bolt: thread diameter (bolt shank length is h)
+  d?: DimExpr
   // Spring
   turns?: DimExpr
   wireRadius?: DimExpr
@@ -513,6 +517,8 @@ export const noteShapeSchema = z.object({
     'pulley',
     'sprocket',
     'spring',
+    'hexNut',
+    'hexBolt',
   ]),
   op: z.enum(['add', 'subtract', 'intersect']).optional(),
   position: vec3ExprSchema.optional(),
@@ -534,6 +540,7 @@ export const noteShapeSchema = z.object({
   pressureAngle: z.number().optional(),
   helixAngle: z.number().optional(),
   pitch: dimExprSchema.optional(),
+  d: dimExprSchema.optional(),
   turns: dimExprSchema.optional(),
   wireRadius: dimExprSchema.optional(),
   profile: z.array(z.tuple([dimExprSchema, dimExprSchema])).max(64).optional(),

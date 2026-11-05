@@ -15,6 +15,8 @@ import {
   type CsgOp,
   type V2,
 } from '@/geometry'
+import { hexBolt } from '@/geometry/parts'
+import { hexNut } from '@/parts/lib/elements'
 import { evalDim, evalVec3, type NoteShapeSpec } from './schema'
 
 function buildSingleShapeGeometry(
@@ -149,6 +151,17 @@ function buildSingleShapeGeometry(
       const turns = Math.max(2, Math.min(40, Math.round(evalDim(spec.turns, params, 6))))
       const g = helixSpring(r, wr, h, turns, true)
       return xform(g, mat4.t(0, -h / 2, 0))
+    }
+    case 'hexNut': {
+      const d = Math.max(0.002, evalDim(spec.d ?? spec.rInner, params, 0.02))
+      const h = Math.max(0.001, evalDim(spec.h, params, 0.8 * d))
+      // the library nut stands on y = 0 at its standard height (0.8 d); scale it to h and centre it like the other shapes
+      return xform(hexNut(d), mat4.c(mat4.t(0, -h / 2, 0), new THREE.Matrix4().makeScale(1, h / (0.8 * d), 1)))
+    }
+    case 'hexBolt': {
+      const d = Math.max(0.002, evalDim(spec.d ?? spec.r, params, 0.016))
+      const length = Math.max(d, evalDim(spec.h, params, 5 * d))
+      return hexBolt(d, length)
     }
     default:
       // a shape this builder does not know (from an older or unexpected model) shows as a small block, never a crash

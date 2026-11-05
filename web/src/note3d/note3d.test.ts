@@ -113,6 +113,12 @@ describe('note3d safeguards, benchmark & back-projection checks', () => {
     apiMock.mockResolvedValueOnce({ spec: { title: 'T', parts: [{ id: 'b', name: 'Bolt', shapes: [{ kind: 'hexagon' }] }] } })
     await expect(generateOrEdit3DScene('A bolt')).rejects.toMatchObject({ status: 502 })
     expect(buildPartGeometry([{ kind: 'plate' } as never], {}).attributes.position.count).toBeGreaterThan(0)
+    // fasteners from the parts library: a nut is a hexagon with a bore, centred on its axis
+    const nut = buildPartGeometry([{ kind: 'hexNut', d: 0.1 }], {})
+    nut.computeBoundingBox()
+    expect(nut.boundingBox!.max.y).toBeCloseTo(0.04, 3)
+    expect(nut.boundingBox!.max.x).toBeGreaterThan(0.075)
+    expect(buildPartGeometry([{ kind: 'hexBolt', d: 0.02, h: 0.1 }], {}).attributes.position.count).toBeGreaterThan(0)
     expect(apiMock).toHaveBeenCalledWith('/v1/create-3d', expect.anything())
     expect(apiMock).toHaveBeenCalledWith('/v1/notes/analyze', expect.anything())
   })
