@@ -5,19 +5,15 @@ import { MODULES } from '@/modules/catalog'
 import type { ModuleDef, SceneDef } from '@/modules/types'
 import { DEFAULT_CUT_PRESETS, useView } from '@/render/view'
 import { useAcademic, useAudience } from './audience'
-import { AccountMenu } from '@/cloud/ui/AccountMenu'
 import { SUPPORT_EMAIL } from '@/cloud/config'
 import { useReport } from '@/cloud/ui/ReportDialog'
 import { useSales } from '@/cloud/ui/SalesDialog'
-import { AudienceSwitch } from './AudienceSwitch'
 import { Icon } from './icons'
-import { Logo } from './Logo'
 import { Loader, LoaderMark } from './Loader'
 import { Stage, type StageFrame } from './Stage'
-import { ThemeToggle } from './ThemeToggle'
 import { useTheme } from './theme'
 import { ModuleProgress } from '@/study/ui/badges'
-import { StudyLinks } from '@/study/ui/StudyShell'
+import { SiteHeader } from '@/ui/SiteHeader'
 import { SiteFooter } from './SiteFooter'
 
 const MEDIA = './media'
@@ -236,7 +232,7 @@ function Hero({ copy }: { copy: (typeof COPY)[keyof typeof COPY] }) {
     `rounded-full px-3 py-1.5 text-[12px] font-medium transition-colors ${on ? 'bg-ink text-bg' : 'text-mute hover:bg-ink/[0.06] hover:text-ink'}`
 
   return (
-    <section className="relative overflow-hidden bg-panel-3 lg:h-[min(92vh,860px)] lg:min-h-[620px]">
+    <section className="relative overflow-hidden bg-panel-3 lg:flex lg:min-h-[max(min(92vh,860px),640px)] lg:flex-col lg:justify-end">
       {/* touch screens: the hero is look-only so a swipe always scrolls the page (camera controls
           otherwise capture the touch); "Open scene" is the way in. Mouse users can still drag it. */}
       <div className="absolute inset-0 [&_canvas]:!touch-pan-y pointer-coarse:[&_*]:!pointer-events-none">
@@ -271,8 +267,8 @@ function Hero({ copy }: { copy: (typeof COPY)[keyof typeof COPY] }) {
         ))}
       </div>
 
-      {/* phones: the text sits below the scene (which fills the top half); large screens: over its left side */}
-      <div className="pointer-events-none relative pt-[54vh] lg:absolute lg:inset-x-0 lg:bottom-0 lg:pt-0">
+      {/* phones: the text sits below the scene (which fills the top half); large screens: over its left side, kept clear of the header, and the hero grows if the text needs more room */}
+      <div className="pointer-events-none relative pt-[54vh] lg:pt-28">
         <div className="mx-auto flex max-w-[1360px] flex-wrap items-end justify-between gap-6 px-5 pb-10 sm:px-10 sm:pb-14 lg:gap-8">
           <div className="max-w-[640px]">
             {/* the keyword line is part of the h1, so search engines read the keywords before the title */}
@@ -459,39 +455,7 @@ export function Landing() {
 
   return (
     <div className="h-full overflow-y-auto bg-bg text-ink selection:bg-accent/25" onScroll={(e) => setScrolled(e.currentTarget.scrollTop > 24)}>
-      {/* floating header over the hero */}
-      {/* floats over the hero; once the page scrolls it gets a frosted band so it never sits on content */}
-      <header className={`pointer-events-none fixed inset-x-0 top-0 z-40 transition-colors duration-300 ${scrolled ? 'border-b border-line bg-[var(--color-scrim)] backdrop-blur-xl' : 'border-b border-transparent'}`}>
-        <div className={`mx-auto flex max-w-[1360px] items-center gap-4 px-5 transition-[padding] duration-300 sm:px-10 ${scrolled ? 'py-2.5' : 'py-4'}`}>
-          <Link to="/" aria-label="Solidify home" className="pointer-events-auto rounded-full border border-line-2 bg-[var(--color-scrim)] py-2 pl-3 pr-4 backdrop-blur-xl">
-            <Logo />
-          </Link>
-          <nav className="pointer-events-auto hidden items-center gap-0.5 rounded-full border border-line-2 bg-[var(--color-scrim)] p-1 text-[13px] font-medium backdrop-blur-xl md:flex">
-            <a href="#systems" className="rounded-full px-3.5 py-1.5 text-mute transition-colors hover:bg-ink/[0.06] hover:text-ink">
-              Systems
-            </a>
-            <Link to="/about" className="rounded-full px-3.5 py-1.5 text-mute transition-colors hover:bg-ink/[0.06] hover:text-ink">
-              How it works
-            </Link>
-            <Link to="/create" className="flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-mute transition-colors hover:bg-ink/[0.06] hover:text-ink">
-              Create in 3D
-            </Link>
-            {academic ? null : (
-              <Link to="/challenges" className="rounded-full px-3.5 py-1.5 text-mute transition-colors hover:bg-ink/[0.06] hover:text-ink">
-                Challenges
-              </Link>
-            )}
-            <StudyLinks compact />
-          </nav>
-          <div className="pointer-events-auto ml-auto flex items-center gap-2">
-            <div className="hidden sm:block">
-              <AudienceSwitch />
-            </div>
-            <ThemeToggle />
-            <AccountMenu compact />
-          </div>
-        </div>
-      </header>
+      <SiteHeader floating scrolled={scrolled} width="max-w-[1360px]" />
 
       <Hero copy={copy} />
 
