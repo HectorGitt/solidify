@@ -5,6 +5,7 @@ import { Landing } from './ui/Landing'
 import { Viewer } from './ui/Viewer'
 import { Loader } from './ui/Loader'
 import { PartSearch } from './ui/PartSearch'
+import { Toaster } from './ui/toast'
 import { useAuth } from './cloud/auth'
 import { startProfile } from './cloud/profile'
 import { startSync } from './cloud/sync'
@@ -39,6 +40,7 @@ export default function App() {
       <SignInDialog />
       <ReportDialog />
       <SalesDialog />
+      <Toaster />
       <Routes>
         <Route path="/" element={<Landing />} />
         <Route path="/about" element={<About />} />
