@@ -1,11 +1,9 @@
 import { Link } from 'react-router-dom'
 import { ERRATA } from '@/content/errata'
 import { useAcademic } from './audience'
-import { AudienceSwitch } from './AudienceSwitch'
-import { ThemeToggle } from './ThemeToggle'
 import { Icon } from './icons'
-import { Logo } from './Logo'
 import { SiteFooter } from './SiteFooter'
+import { SiteHeader } from './SiteHeader'
 
 /** Course codes are internal reference only — keep them out of user-facing text. */
 const clean = (t: string) => t.replace(/\s*\((?:[^)]*\bAEE\s?\d{3}[^)]*)\)/g, '').replace(/\bAEE\s?\d{3}\s*/g, '').trim()
@@ -33,17 +31,7 @@ export function About() {
   const academic = useAcademic()
   return (
     <div className="h-full overflow-y-auto bg-bg">
-      <header className="sticky top-0 z-30 border-b border-line/60 bg-bg/80 backdrop-blur">
-        <div className="mx-auto flex h-14 max-w-4xl items-center gap-4 px-5">
-          <Link to="/" aria-label="Solidify home">
-            <Logo />
-          </Link>
-          <div className="ml-auto flex items-center gap-2">
-            <AudienceSwitch />
-            <ThemeToggle />
-          </div>
-        </div>
-      </header>
+      <SiteHeader />
       <div className="mx-auto max-w-4xl px-5 py-10">
         <Link to="/" className="mb-6 inline-flex items-center gap-1 text-[13px] text-mute hover:text-ink">
           <Icon.back width={16} height={16} /> Home

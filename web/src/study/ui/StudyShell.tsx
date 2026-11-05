@@ -1,10 +1,5 @@
 import { useEffect, type ReactNode } from 'react'
-import { Link, NavLink } from 'react-router-dom'
-import { useAcademic } from '@/ui/audience'
-import { AccountMenu } from '@/cloud/ui/AccountMenu'
-import { AudienceSwitch } from '@/ui/AudienceSwitch'
-import { ThemeToggle } from '@/ui/ThemeToggle'
-import { Logo } from '@/ui/Logo'
+import { SiteHeader } from '@/ui/SiteHeader'
 import { SiteFooter } from '@/ui/SiteFooter'
 import { courseTitle } from '../types'
 
@@ -16,27 +11,6 @@ export const STUDY_LINKS = [
   { to: '/read', label: 'Read notes in 3D', short: 'Notes 3D' },
   { to: '/create', label: 'Create in 3D', short: 'Create 3D' },
 ] as const
-
-/** Header links to the study pages. Shown in Study mode, or always when `always` is set. */
-export function StudyLinks({ compact = false, always = false, className = '' }: { compact?: boolean; always?: boolean; className?: string }) {
-  const academic = useAcademic()
-  if (!academic && !always) return null
-  return (
-    <nav aria-label="Study tools" className={`flex items-center gap-1 ${className}`}>
-      {STUDY_LINKS.map((l) => (
-        <NavLink
-          key={l.to}
-          to={l.to}
-          className={({ isActive }) =>
-            `rounded-full px-3 py-1.5 text-[12.5px] font-medium transition-colors ${isActive ? 'bg-ink text-bg' : 'text-mute hover:bg-ink/[0.06] hover:text-ink'}`
-          }
-        >
-          {compact ? l.short : l.label}
-        </NavLink>
-      ))}
-    </nav>
-  )
-}
 
 /** Subject label. The platform serves many schools, so internal course codes are never shown. */
 export function CourseLabel({ course }: { course: string }) {
@@ -50,23 +24,8 @@ export function StudyShell({ title, lead, children, right }: { title: string; le
   }, [title])
   return (
     <div className="h-full overflow-y-auto bg-bg text-ink">
-      <header className="sticky top-0 z-40 bg-bg/80 backdrop-blur-xl">
-        <div className="mx-auto flex h-16 max-w-6xl items-center gap-3 px-4 sm:px-6">
-          <Link to="/" aria-label="Solidify home" className="rounded-full border border-line-2 bg-panel/70 py-1.5 pl-2.5 pr-3.5">
-            <Logo />
-          </Link>
-          <StudyLinks always className="ml-1 hidden rounded-full border border-line-2 bg-panel/70 p-1 sm:flex" />
-          <div className="ml-auto flex items-center gap-2">
-            <AudienceSwitch compact />
-            <div className="hidden sm:block">
-              <ThemeToggle />
-            </div>
-            <AccountMenu compact />
-          </div>
-        </div>
-        <StudyLinks always compact className="justify-center border-y border-line py-1.5 sm:hidden" />
-      </header>
-      <main className="mx-auto max-w-6xl px-4 pt-8 sm:px-6">
+      <SiteHeader />
+      <main className="mx-auto max-w-7xl px-4 pt-8 sm:px-6 lg:px-8">
         <div className="mb-7 flex flex-wrap items-end justify-between gap-4">
           <div>
             <h1 className="text-[30px] font-semibold tracking-[-0.03em] sm:text-[38px]">{title}</h1>
