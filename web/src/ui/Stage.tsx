@@ -7,6 +7,7 @@ import * as THREE from 'three'
 import { SimClockDriver } from '@/core/sim'
 import type { CameraPose, SceneDef } from '@/modules/types'
 import { CutController, CutPlaneHelpers } from '@/render/CutController'
+import { SnapshotGrabber } from '@/render/snapshot'
 import { HoverTelemetry } from '@/render/Telemetry'
 import { InsideHider } from '@/render/InsideHider'
 import { useView } from '@/render/view'
@@ -488,6 +489,7 @@ export function Stage({
       <CameraTracker controlsRef={ref} />
       <CutController hatchScale={scene.hatchScale ?? scene.extent / 220} />
       <CaliperTool extent={scene.extent} />
+      <SnapshotGrabber />
       {scene.build ? <BuildController floorY={scene.floorY ?? 0} /> : null}
       <Lights extent={scene.extent} follow={!!scene.follow} />
       {import.meta.env.DEV ? <DevSceneHandle /> : null}
