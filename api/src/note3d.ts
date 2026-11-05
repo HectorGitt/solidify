@@ -1,6 +1,7 @@
 import { GoogleGenAI } from '@google/genai'
 import { z } from 'zod'
 import { CREATE_3D_PROMPT } from './createPrompt.js'
+import { LAB_SCENES } from './labCatalog.js'
 import { catalogPromptText } from './noteCatalog.js'
 
 export const noteAnalyzeRequest = z.object({
@@ -75,6 +76,13 @@ ${catalogPromptText()}
 - For graphs, equations, photos and anything else, use "kind": "none". Do not force a figure onto a rig it is not.`
 
 
+/** a lab model id the model named, kept only if it is a real one */
+export function toLabMatch(v: unknown): { moduleId: string; sceneId: string } | undefined {
+  if (typeof v !== 'string') return undefined
+  const [moduleId, sceneId] = v.split('/')
+  return LAB_SCENES.some(([m, sc]) => m === moduleId && sc === sceneId) ? { moduleId, sceneId } : undefined
+}
+
 type Part = { text: string } | { inlineData: { mimeType: string; data: string } }
 
 /** an inline image part from a data URL, if it is one */
@@ -121,7 +129,7 @@ export class GeminiNoteVision implements NoteVisionModel {
   }
 
   async createOrEdit3D(req: Create3dRequest) {
-    const parsed = await this.json<{ spec?: Record<string, unknown>; explanation?: string; isNewMachine?: boolean }>(
+    const parsed = await this.json<{ spec?: Record<string, unknown>; explanation?: string; isNewMachine?: boolean; labMatch?: unknown }>(
       CREATE_3D_PROMPT,
       [...imagePart(req.photoBase64), { text: req.currentSpec ? `User prompt: "${req.prompt}"\nCurrent NoteSceneSpec:\n${JSON.stringify(req.currentSpec)}` : `Build a complete 3D NoteSceneSpec for: "${req.prompt}"` }],
       32768,
@@ -131,6 +139,7 @@ export class GeminiNoteVision implements NoteVisionModel {
       spec: parsed.spec ?? req.currentSpec ?? {},
       explanation: parsed.explanation ?? 'Compiled 3D assembly.',
       isNewMachine: parsed.isNewMachine ?? true,
+      labMatch: toLabMatch(parsed.labMatch),
     }
   }
 }

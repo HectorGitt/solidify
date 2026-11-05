@@ -1,4 +1,5 @@
 import { ApiError, api } from '@/cloud/api'
+import { findModule } from '@/modules/catalog'
 import {
   type BuildOrRefineResult,
   matchCatalogSceneFromPrompt,
@@ -86,12 +87,12 @@ async function callBackendCreate3D(
   prompt: string,
   currentSpec?: NoteSceneSpec,
   photoDataUrl?: string,
-): Promise<{ spec: NoteSceneSpec; explanation: string; isNewMachine: boolean }> {
+): Promise<{ spec: NoteSceneSpec; explanation: string; isNewMachine: boolean; labMatch?: { moduleId: string; sceneId: string } }> {
   const ctrl = new AbortController()
   // a full build can take the model well over a minute
   const timer = setTimeout(() => ctrl.abort(), 120_000)
   try {
-    const parsed = await api<{ explanation?: string; isNewMachine?: boolean; spec?: Record<string, unknown> }>('/v1/create-3d', {
+    const parsed = await api<{ explanation?: string; isNewMachine?: boolean; spec?: Record<string, unknown>; labMatch?: { moduleId: string; sceneId: string } }>('/v1/create-3d', {
       body: { prompt, currentSpec, photoBase64: photoDataUrl },
       signal: ctrl.signal,
     })
@@ -101,6 +102,7 @@ async function callBackendCreate3D(
       spec: cleanSpec,
       explanation: parsed.explanation || `Compiled 3D assembly “${cleanSpec.title}” with ${cleanSpec.parts.length} parts.`,
       isNewMachine: parsed.isNewMachine ?? true,
+      labMatch: parsed.labMatch,
     }
   } finally {
     clearTimeout(timer)
@@ -116,11 +118,14 @@ export async function generateOrEdit3DScene(
   currentSpec?: NoteSceneSpec,
   photoDataUrl?: string,
 ): Promise<BuildOrRefineResult & { source: 'gemini' }> {
-  const res = await callBackendCreate3D(prompt, currentSpec, photoDataUrl)
+  const { labMatch, ...res } = await callBackendCreate3D(prompt, currentSpec, photoDataUrl)
+  // the AI names the lab model it saw (works for photos too); keywords in the request are the fallback
+  const mod = labMatch ? findModule(labMatch.moduleId) : undefined
+  const scene = mod?.scenes.find((sc) => sc.id === labMatch?.sceneId && sc.load)
+  const lab = mod && scene ? { module: mod, scene } : res.isNewMachine ? matchCatalogSceneFromPrompt(prompt) : null
   return {
     ...res,
-    // a new machine that resembles one of the lab rigs links to the real rig
-    matchedCatalogScene: res.isNewMachine ? matchCatalogSceneFromPrompt(prompt) : null,
+    matchedCatalogScene: lab,
     source: 'gemini',
   }
 }

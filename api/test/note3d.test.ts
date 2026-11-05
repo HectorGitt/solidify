@@ -83,3 +83,12 @@ describe('model replies', () => {
     for (const c of NOTE_CATALOG) expect(c.sceneId).toMatch(/^[a-z-]+$/)
   })
 })
+
+describe('lab model matches', () => {
+  it('keeps only real lab models', async () => {
+    const { toLabMatch } = await import('../src/note3d.js')
+    expect(toLabMatch('engine/four-stroke-diesel')).toEqual({ moduleId: 'engine', sceneId: 'four-stroke-diesel' })
+    expect(toLabMatch('engine/made-up')).toBeUndefined()
+    expect(toLabMatch(42)).toBeUndefined()
+  })
+})

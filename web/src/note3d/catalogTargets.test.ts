@@ -71,3 +71,12 @@ describe('create in 3D shapes', () => {
     expect(list('MATERIALS').sort()).toEqual([...ALLOWED_MATERIALS].sort())
   })
 })
+
+describe('lab models offered to Gemini', () => {
+  it('the API lists exactly the ready lab models in the app', () => {
+    const api = fs.readFileSync(path.resolve(__dirname, '../../../api/src/labCatalog.ts'), 'utf8')
+    const listed = [...api.matchAll(/\['([\w-]+)', '([\w-]+)', /g)].map((m) => `${m[1]}/${m[2]}`).sort()
+    const ready = MODULES.flatMap((m) => m.scenes.filter((s) => s.load).map((s) => `${m.id}/${s.id}`)).sort()
+    expect(listed).toEqual(ready)
+  })
+})

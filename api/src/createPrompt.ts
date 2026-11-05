@@ -1,3 +1,5 @@
+import { labPromptText } from './labCatalog.js'
+
 /**
  * What Gemini is told when it builds or edits a model for Create in 3D. The shape kinds and materials must
  * match the web app's builder (web/src/note3d/schema.ts); a web test checks that they do.
@@ -64,15 +66,26 @@ GEOMETRY RULES
    - hexBolt: { kind: "hexBolt", d, h } (hexagon-head bolt, thread diameter d, shank length h below the head)
    Every shape may also have op ("add" default, "subtract", "intersect" against the shapes before it), position, rotation, and radialCount with radialRadius for a circular pattern about Y.
    Any other kind is invalid. Build anything else from these: a plate is a box, a washer is a tube, a pin is a cylinder, a hole is a subtracted cylinder.
-4. Materials (the "material" of each part): ${MATERIALS.join(', ')}.
-5. Parameters and calculations
+4. Layout: lay the model out like an engineering assembly drawing, not a pile of parts
+   - Pick one main axis (usually the main shaft, along X) and line the parts up on it. Shafts pass through the bores of what they carry; gears, pulleys and cams sit on their shafts.
+   - Work every position out from the sizes, so parts touch instead of floating: a part sitting on another is offset by half of each one's height; a gear on a shaft is at the shaft's position.
+   - Meshing gears: put their axes parallel and their centres exactly m * (z1 + z2) / 2 apart (same module m), and make their speeds opposite in sign and in the ratio z2 : z1.
+   - Engines and slider-cranks: crankshaft along X at the bottom, cylinder vertical above it; the connecting rod joins the crank pin to the piston pin; the camshaft is parallel to the crankshaft, driven by timing gears with a 2 : 1 ratio.
+   - Keep everything inside the housing when there is one, and centre the whole assembly on [0, 0, 0].
+5. Materials (the "material" of each part): ${MATERIALS.join(', ')}.
+6. Parameters and calculations
    - 3 to 7 parameters: { id, label, symbol, value, min, max, step, unit }. Use their ids in shape fields as expressions (e.g. "rOuter": "D / 2", "teeth": "z1", "speed": "rpm / 60") so moving a slider reshapes the model.
    - 2 to 6 calculations: { id, label, symbol, formula, unit, latex, limit? }. Formulas use parameter ids, earlier calculation ids, pi, sqrt, sin, cos and ^. limit is { kind: "max"|"min", value, label }.
+
+7. Lab models: Solidify already has detailed, working models of these machines (id: title):
+${labPromptText()}
+   If the request or photo shows one of these machines (or a close variant), still build the model, and also set "labMatch" to its id (e.g. "engine/four-stroke-diesel"). Otherwise leave labMatch out.
 
 Return ONLY this JSON:
 {
   "explanation": "One or two sentences on what was built or changed.",
   "isNewMachine": true,
+  "labMatch": "moduleId/sceneId" (optional),
   "spec": {
     "id": "create-...",
     "title": "...",
