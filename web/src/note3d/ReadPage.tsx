@@ -4,10 +4,11 @@ import { findModule } from '@/modules/catalog'
 import type { SceneDef } from '@/modules/types'
 import { useView } from '@/render/view'
 import { StudyShell } from '@/study/ui/StudyShell'
-import { Notice } from '@/cloud/ui/Modal'
+import { Notice, primaryBtn } from '@/cloud/ui/Modal'
 import { PartCard } from '@/ui/PartCard'
 import { PartsTree } from '@/ui/PartsTree'
 import { OrientationGizmo, Stage } from '@/ui/Stage'
+import { Icon } from '@/ui/icons'
 import { Tex } from '@/ui/Tex'
 import { Toolbar } from '@/ui/Toolbar'
 import { InlineFigure3D } from './InlineFigure3D'
@@ -107,7 +108,7 @@ function ExpandedFigureModal({
             onClick={onClose}
             className="rounded-full border border-line-2 bg-panel-2 px-3.5 py-1 text-[12.5px] font-medium text-ink hover:border-accent/50"
           >
-            ✕ Back to Page
+            Back to the page
           </button>
         </div>
       </header>
@@ -303,28 +304,32 @@ export default function ReadPage() {
   const highConfCount = currentPage.figures.filter((f) => (f.confidence ?? 0) >= CONFIDENCE_THRESHOLD).length
   const gatedCount = currentPage.figures.length - highConfCount
 
+  const segBtn = (on: boolean) =>
+    `inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 font-medium transition-colors ${on ? 'bg-ink text-bg' : 'text-mute hover:text-ink'}`
+  const smallGhost =
+    'inline-flex items-center gap-1.5 rounded-full border border-line-2 bg-panel-2 px-3 py-1.5 text-[12.5px] font-medium text-ink/90 transition-colors hover:border-ink/40 hover:text-ink disabled:cursor-not-allowed disabled:opacity-40'
+
   return (
     <StudyShell
-      title="Read Notes & PDFs in 3D"
-      lead="Upload a PDF page or engineering handout. Your document stays intact while high-confidence figures are replaced in-place with interactive 3D models. Low-confidence figures remain as the original 2D drawing."
+      title="Read notes in 3D"
+      lead="Upload a PDF or a photo of a note page. The page stays as it is: figures Solidify recognises become 3D models you can turn and test, and any it isn't sure of stay as the original drawing."
       right={
-        <div className="flex flex-wrap items-center gap-2">
+        <>
           <input
             ref={fileInputRef}
             type="file"
             accept=".pdf,image/png,image/jpeg,image/webp,image/svg+xml"
             className="hidden"
-            onChange={(e) => void handleFileUpload(e.target.files?.[0])}
+            onChange={(e) => {
+              void handleFileUpload(e.target.files?.[0])
+              e.target.value = ''
+            }}
           />
-          <button
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={uploading}
-            className="inline-flex items-center gap-2 rounded-full bg-accent px-4 py-2 text-[13px] font-semibold text-black shadow-lg shadow-accent/20 transition-transform hover:scale-[1.01] disabled:opacity-50"
-          >
-            <span>📄 {uploading ? 'Analyzing Page…' : 'Upload PDF / Note Page'}</span>
+          <button type="button" onClick={() => fileInputRef.current?.click()} disabled={uploading} className={primaryBtn}>
+            <Icon.upload width={16} height={16} />
+            {uploading ? 'Reading the page…' : 'Upload a PDF or page'}
           </button>
-        </div>
+        </>
       }
     >
       {uploadError && (
@@ -333,27 +338,23 @@ export default function ReadPage() {
         </div>
       )}
 
-      {/* Document Selector & Safeguard Status Bar */}
-      <div className="mb-5 flex flex-col gap-3 rounded-2xl border border-line bg-panel p-3.5 shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="flex flex-wrap items-center gap-1.5">
-            <span className="mr-1 font-mono text-[11px] font-semibold uppercase tracking-wider text-mute">
-              Course Notes:
-            </span>
+      <div className="mb-5 rounded-2xl border border-line bg-panel shadow-sm">
+        {/* documents + layout */}
+        <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+          <div className="-mx-4 flex min-w-0 items-center gap-1.5 overflow-x-auto px-4 text-[12.5px] [scrollbar-width:none] sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0" role="group" aria-label="Documents">
             {documents.map((doc) => {
               const active = doc.id === activeDoc.id
               return (
                 <button
                   key={doc.id}
                   type="button"
+                  aria-pressed={active}
                   onClick={() => {
                     setActiveDocId(doc.id)
                     setPageIdx(0)
                   }}
-                  className={`rounded-full border px-3 py-1 text-[12px] font-medium transition-colors ${
-                    active
-                      ? 'border-accent/60 bg-accent/15 text-accent font-semibold'
-                      : 'border-line-2 bg-panel-2/60 text-ink/80 hover:border-accent/40'
+                  className={`max-w-[240px] shrink-0 truncate rounded-full border px-3 py-1.5 font-medium transition-colors ${
+                    active ? 'border-ink bg-ink text-bg' : 'border-line-2 text-ink/80 hover:border-ink/40 hover:text-ink'
                   }`}
                 >
                   {doc.title}
@@ -362,90 +363,71 @@ export default function ReadPage() {
             })}
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            <div
-              className="flex items-center rounded-full border border-line-2 bg-panel-2 p-0.5 text-[11.5px]"
-              role="group"
-              aria-label="Reading layout mode"
+          <div className="flex items-center rounded-full border border-line-2 bg-panel-2 p-0.5 text-[12.5px]" role="group" aria-label="Layout">
+            <button type="button" aria-pressed={readingMode === 'page-overlay'} onClick={() => setReadingMode('page-overlay')} className={segBtn(readingMode === 'page-overlay')}>
+              <Icon.page width={14} height={14} />
+              Page
+            </button>
+            <button
+              type="button"
+              aria-pressed={readingMode === 'reflow'}
+              onClick={() => {
+                setReadingMode('reflow')
+                setLassoActive(false)
+              }}
+              className={segBtn(readingMode === 'reflow')}
             >
-              <button
-                type="button"
-                onClick={() => setReadingMode('page-overlay')}
-                className={`rounded-full px-3 py-1 font-medium transition-colors ${
-                  readingMode === 'page-overlay' ? 'bg-ink text-bg' : 'text-mute hover:text-ink'
-                }`}
-              >
-                📄 Exact Page Layout
-              </button>
-              <button
-                type="button"
-                onClick={() => setReadingMode('reflow')}
-                className={`rounded-full px-3 py-1 font-medium transition-colors ${
-                  readingMode === 'reflow' ? 'bg-ink text-bg' : 'text-mute hover:text-ink'
-                }`}
-              >
-                📖 Phone / Reflow Mode
-              </button>
-            </div>
-
-            {readingMode === 'page-overlay' && (
-              <button
-                type="button"
-                onClick={() => setLassoActive((v) => !v)}
-                className={`rounded-full border px-3 py-1 text-[12px] font-medium transition-colors ${
-                  lassoActive
-                    ? 'border-amber-400/70 bg-amber-400/15 text-amber-300 font-semibold'
-                    : 'border-line-2 bg-panel-2 text-ink/85 hover:border-accent/40'
-                }`}
-                title="Drag a box around any missed diagram on the page to convert it to 3D in-place"
-              >
-                {lassoActive ? '⊹ Drag on Page to Select Diagram…' : '⊹ Lasso Diagram → 3D'}
-              </button>
-            )}
+              <Icon.text width={14} height={14} />
+              Text
+            </button>
           </div>
         </div>
 
-        {/* Subtitle, Confidence Gating Summary & Multi-page Pager */}
-        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line pt-2.5 text-[12px] text-mute">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="font-medium text-ink">{activeDoc.sourceLabel}</span>
-            <span>·</span>
-            <span className="rounded-md border border-accent/30 bg-accent/10 px-2 py-0.5 font-mono text-[10.5px] font-semibold text-accent">
-              {highConfCount} {highConfCount === 1 ? 'figure' : 'figures'} in 3D (1 live + still snapshots)
+        {/* status + page tools */}
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line px-4 py-2.5 text-[12.5px]">
+          <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-mute">
+            <span className="truncate text-ink/90">{activeDoc.sourceLabel}</span>
+            <span className="inline-flex items-center gap-1.5">
+              <span className="h-1.5 w-1.5 rounded-full bg-accent" />
+              {highConfCount} {highConfCount === 1 ? 'figure' : 'figures'} in 3D
             </span>
             {gatedCount > 0 && (
-              <span className="rounded-md border border-amber-400/40 bg-amber-400/10 px-2 py-0.5 font-mono text-[10.5px] font-semibold text-amber-300">
-                {gatedCount} low-confidence kept as 2D
+              <span className="inline-flex items-center gap-1.5 text-warn">
+                <span className="h-1.5 w-1.5 rounded-full bg-warn" />
+                {gatedCount} kept as {gatedCount === 1 ? 'a drawing' : 'drawings'}
               </span>
             )}
-            <span className="hidden text-[11.5px] text-dim xl:inline">
-              🔒 Private: documents stay in your browser and are never stored.
-            </span>
+            <span className="hidden text-dim lg:inline">Pages are sent only to find figures and are never saved.</span>
           </div>
 
-          {activeDoc.pages.length > 1 && (
-            <div className="flex items-center gap-1.5 font-mono text-[11.5px]">
+          <div className="flex items-center gap-2">
+            {readingMode === 'page-overlay' && (
               <button
                 type="button"
-                disabled={pageIdx === 0}
-                onClick={() => setPageIdx((p) => Math.max(0, p - 1))}
-                className="rounded-lg border border-line-2 bg-panel-2 px-2.5 py-0.5 text-ink disabled:opacity-40"
+                aria-pressed={lassoActive}
+                onClick={() => setLassoActive((v) => !v)}
+                disabled={uploading}
+                className={lassoActive ? `${smallGhost} !border-ink !bg-ink !text-bg` : smallGhost}
+                title="Drag a box around a figure the reader missed to turn it into 3D"
               >
-                ← Prev
+                <Icon.select width={14} height={14} />
+                {lassoActive ? 'Drag a box on the page' : 'Select a figure'}
               </button>
-              <span className="px-2">
-                Page {pageIdx + 1} / {activeDoc.pages.length}
-              </span>
-              <button
-                type="button"
-                disabled={pageIdx >= activeDoc.pages.length - 1}
-                onClick={() => setPageIdx((p) => Math.min(activeDoc.pages.length - 1, p + 1))}
-                className="rounded-lg border border-line-2 bg-panel-2 px-2.5 py-0.5 text-ink disabled:opacity-40"
-              >
-                Next →
-              </button>
-            </div>
-          )}
+            )}
+            {activeDoc.pages.length > 1 && (
+              <div className="flex items-center gap-1" role="group" aria-label="Pages">
+                <button type="button" aria-label="Previous page" disabled={pageIdx === 0} onClick={() => setPageIdx((p) => Math.max(0, p - 1))} className={`${smallGhost} !px-2`}>
+                  <Icon.back width={14} height={14} />
+                </button>
+                <span className="min-w-[56px] text-center font-mono text-[12px] text-mute">
+                  {pageIdx + 1} / {activeDoc.pages.length}
+                </span>
+                <button type="button" aria-label="Next page" disabled={pageIdx >= activeDoc.pages.length - 1} onClick={() => setPageIdx((p) => Math.min(activeDoc.pages.length - 1, p + 1))} className={`${smallGhost} !px-2`}>
+                  <Icon.chevron width={14} height={14} />
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 

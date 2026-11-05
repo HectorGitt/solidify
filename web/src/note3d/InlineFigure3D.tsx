@@ -8,6 +8,7 @@ import { toSceneParams } from './catalogTargets'
 import type { SceneDef } from '@/modules/types'
 import { CutController } from '@/render/CutController'
 import { useView } from '@/render/view'
+import { Icon } from '@/ui/icons'
 import { verifyBackProjection } from './backProjectCheck'
 import { NoteSceneViewport, type InlineViewConfig } from './NoteSceneRenderer'
 import {
@@ -368,7 +369,7 @@ export function InlineFigure3D({
                     : (backProjection.reason ?? '2D back-projection check flagged this procedural model.')
               }
             >
-              ⚠ {gatedByValues ? 'Values not matched' : gatedByConfidence ? `Low Confidence (${Math.round(confidence * 100)}%)` : `Check Flagged (${Math.round(backProjection.score * 100)}%)`} · Original Kept
+              {gatedByValues ? 'Values not matched' : gatedByConfidence ? 'Not sure of this figure' : 'Model didn’t match the drawing'} · showing the original
             </span>
           )}
         </div>
@@ -414,7 +415,7 @@ export function InlineFigure3D({
                 }`}
                 title="Toggle cross-section cutaway"
               >
-                ✂ Section
+                <Icon.cut width={11} height={11} className="inline -mt-px mr-1" />Section
               </button>
 
               <button
@@ -433,7 +434,7 @@ export function InlineFigure3D({
                 }`}
                 title="Explode assembly parts"
               >
-                💥 Explode
+                <Icon.explode width={11} height={11} className="inline -mt-px mr-1" />Explode
               </button>
 
               <button
@@ -490,7 +491,7 @@ export function InlineFigure3D({
                   }`}
                   title="Adjust problem dimensions & loads from the note"
                 >
-                  ⚙ Givens
+                  <Icon.sliders width={11} height={11} className="inline -mt-px mr-1" />Values
                 </button>
               )}
             </>
@@ -749,7 +750,7 @@ export function InlineFigure3D({
                   onClick={() => setSelectedPart(null)}
                   className="text-slate-400 hover:text-slate-700"
                 >
-                  ✕
+                  <Icon.close width={12} height={12} />
                 </button>
               </div>
             )}
@@ -766,7 +767,7 @@ export function InlineFigure3D({
                   className="pointer-events-auto rounded border border-slate-300/80 bg-white/90 px-1.5 py-0.5 font-mono text-[9.5px] text-slate-600 shadow-2xs hover:text-slate-950"
                   title="Toggle between Paper Light and Dark Studio canvas"
                 >
-                  {darkCanvas ? '🌙 Dark' : '☀ Paper'}
+                  {darkCanvas ? 'Dark' : 'Paper'}
                 </button>
                 <button
                   type="button"

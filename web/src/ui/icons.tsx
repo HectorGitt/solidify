@@ -189,4 +189,26 @@ export const Icon = {
       <path d="M4 11V6h7l2 5h5l2 4M11 11h2" />
     </svg>
   ),
+  upload: (p: SVGProps<SVGSVGElement>) => (
+    <svg {...base(p)}>
+      <path d="M12 15V4M7.5 8.5L12 4l4.5 4.5M5 15v3.5A1.5 1.5 0 0 0 6.5 20h11a1.5 1.5 0 0 0 1.5-1.5V15" />
+    </svg>
+  ),
+  page: (p: SVGProps<SVGSVGElement>) => (
+    <svg {...base(p)}>
+      <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" />
+      <path d="M14 3v5h5" />
+    </svg>
+  ),
+  text: (p: SVGProps<SVGSVGElement>) => (
+    <svg {...base(p)}>
+      <path d="M5 6h14M5 10h14M5 14h14M5 18h9" />
+    </svg>
+  ),
+  select: (p: SVGProps<SVGSVGElement>) => (
+    <svg {...base(p)}>
+      <path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3" />
+      <rect x="9" y="9" width="6" height="6" rx="1" />
+    </svg>
+  ),
 }
