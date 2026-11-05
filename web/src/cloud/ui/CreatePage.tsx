@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent, type ReactNode } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useSim } from '@/core/sim'
 import { findModule } from '@/modules/catalog'
 import type { SceneDef } from '@/modules/types'
@@ -8,6 +8,7 @@ import type { CatalogSceneMatch } from '@/note3d/createCatalog'
 import { createSceneDefFromSpec } from '@/note3d/NoteSceneRenderer'
 import { ALLOWED_MATERIALS, evaluateCalculations, type NotePartSpec, type NoteSceneSpec, type NoteShapeKind } from '@/note3d/schema'
 import { MATERIALS, type MaterialKey } from '@/render/materials'
+import { requestSnapshot } from '@/render/snapshot'
 import { useView } from '@/render/view'
 import { StudyShell } from '@/study/ui/StudyShell'
 import { Stage } from '@/ui/Stage'
@@ -17,6 +18,7 @@ import { Tex } from '@/ui/Tex'
 import { api, ApiError } from '../api'
 import { useAuth } from '../auth'
 import { SUPPORT_EMAIL } from '../config'
+import { getCreation, saveNewCreation, updateCreation } from '../creations'
 import { Field, Notice, ghostBtn, inputCls, primaryBtn } from './Modal'
 
 type Role = 'student' | 'teacher' | 'engineer' | 'other'
@@ -239,6 +241,15 @@ export default function CreatePage() {
 
   const [history, setHistory] = useState<HistoryItem[]>([])
 
+  // the saved model this page is working on (Creation Lab), if any
+  const { id: routeId } = useParams()
+  const navigate = useNavigate()
+  const [creationId, setCreationId] = useState<string | null>(null)
+  const creationIdRef = useRef<string | null>(null)
+  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
+  /** what was last written, so only real changes are saved */
+  const lastSavedRef = useRef('')
+
   const cut = useView((s) => s.cut)
   const explode = useView((s) => s.explode)
   const xray = useView((s) => s.xray)
@@ -288,7 +299,6 @@ export default function CreatePage() {
     useView.getState().setCut({ enabled, planes: [{ normal, pos }] })
   }
 
-  const remember = (item: Omit<HistoryItem, 'id'>) => setHistory((prev) => [{ id: `h-${Date.now()}`, ...item }, ...prev.slice(0, 6)])
 
   /** a failed build says why: not signed in, out of builds for today, or something else */
   const showError = (e: unknown) => {
@@ -312,13 +322,115 @@ export default function CreatePage() {
     setSpec(null)
     setUploadedPhoto(null)
     setSampleId(x.sceneId)
+    creationIdRef.current = null
+    setCreationId(null)
+    setSaveState('idle')
+    setHistory([])
+    if (routeId) navigate('/create', { replace: true })
     setMatchedCatalog({ module: mod, scene })
     setViewMode('catalog')
   }
 
   // the page opens on the first sample, so there is always something to turn and cut open
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => openSample(SAMPLES[0]), [])
+  useEffect(() => {
+    if (!routeId) openSample(SAMPLES[0])
+  }, [])
+
+  const authStatus = useAuth((s) => s.status)
+
+  /** a picture of the model for its card, taken once the new geometry has settled */
+  const saveThumbnail = (id: string) => {
+    window.setTimeout(() => {
+      void requestSnapshot().then((thumbnail) => {
+        if (thumbnail && creationIdRef.current === id) void updateCreation(id, { thumbnail }).catch(() => {})
+      })
+    }, 1600)
+  }
+
+  /** saves a build: a new machine becomes a new saved model, a change updates the open one */
+  const persist = async (next: { spec: NoteSceneSpec; params: Record<string, number>; history: HistoryItem[]; prompt: string; fromPhoto: boolean }, asNew: boolean) => {
+    const payload = {
+      title: next.spec.title.slice(0, 120) || 'Untitled model',
+      spec: next.spec as unknown as Record<string, unknown>,
+      params: next.params,
+      history: next.history.slice(0, 30).map(({ prompt, response }) => ({ prompt: prompt.slice(0, 2000), response: response.slice(0, 2000) })),
+    }
+    lastSavedRef.current = JSON.stringify([next.spec, next.params])
+    setSaveState('saving')
+    try {
+      let id = creationIdRef.current
+      if (asNew || !id) {
+        id = (await saveNewCreation({ ...payload, prompt: next.prompt.slice(0, 2000), fromPhoto: next.fromPhoto })).id
+        creationIdRef.current = id
+        setCreationId(id)
+        navigate(`/create/${id}`, { replace: true })
+      } else {
+        await updateCreation(id, payload)
+      }
+      setSaveState('saved')
+      saveThumbnail(id)
+    } catch (e) {
+      setSaveState('error')
+      if (e instanceof ApiError && e.status === 409) toast(e.message, { tone: 'warn', action: { label: 'My models', run: () => navigate('/create/lab') } })
+    }
+  }
+
+  // opening /create/:id loads that saved model (once signed in)
+  useEffect(() => {
+    if (!routeId || routeId === creationIdRef.current) return
+    if (authStatus !== 'signed-in') {
+      if (authStatus === 'signed-out') toast('Sign in to open your saved models.', { tone: 'warn', action: { label: 'Sign in', run: () => useAuth.getState().openDialog() } })
+      return
+    }
+    let cancelled = false
+    getCreation(routeId)
+      .then((c) => {
+        if (cancelled) return
+        const loaded = c.spec as unknown as NoteSceneSpec
+        const p = { ...Object.fromEntries((loaded.parameters ?? []).map((x) => [x.id, x.value])), ...c.params }
+        creationIdRef.current = routeId
+        setCreationId(routeId)
+        lastSavedRef.current = JSON.stringify([loaded, p])
+        setSpec(loaded)
+        setParams(p)
+        setHistory(c.history.map((h, i) => ({ id: `saved-${i}`, ...h })))
+        setSampleId(null)
+        setMatchedCatalog(null)
+        setViewMode('parametric')
+        setSaveState('saved')
+      })
+      .catch((e) => {
+        if (cancelled) return
+        toast(e instanceof ApiError && e.status === 404 ? 'That saved model no longer exists.' : 'Couldn’t open that saved model.', { tone: 'warn' })
+        navigate('/create', { replace: true })
+        openSample(SAMPLES[0])
+      })
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [routeId, authStatus])
+
+  // changes made by hand (sliders, materials, parts) save a moment after the last one
+  useEffect(() => {
+    const id = creationIdRef.current
+    if (!id || !spec) return
+    const snapshot = JSON.stringify([spec, params])
+    if (snapshot === lastSavedRef.current) return
+    setSaveState('saving')
+    const t = window.setTimeout(() => {
+      lastSavedRef.current = snapshot
+      updateCreation(id, { spec: spec as unknown as Record<string, unknown>, params, title: spec.title.slice(0, 120) || 'Untitled model' })
+        .then(() => {
+          setSaveState('saved')
+          saveThumbnail(id)
+        })
+        .catch(() => setSaveState('error'))
+    }, 1500)
+    return () => window.clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [spec, params])
 
   const build = async (text: string, photo?: { name: string; url: string }) => {
     if (!signedIn) return needSignIn()
@@ -333,8 +445,12 @@ export default function CreatePage() {
         setViewMode('parametric')
       }
       if (photo) setUploadedPhoto(photo)
-      remember({ prompt: photo ? `From a photo: ${photo.name}${text ? ` (${text})` : ''}` : text, response: res.explanation })
+      const asked = photo ? `From a photo: ${photo.name}${text ? ` (${text})` : ''}` : text
+      const asNew = res.isNewMachine || !!photo || !!sample || !creationIdRef.current
+      const nextHistory = [{ id: `h-${Date.now()}`, prompt: asked, response: res.explanation }, ...(asNew ? [] : history)]
+      setHistory(nextHistory.slice(0, 30))
       setPromptInput('')
+      void persist({ spec: res.spec, params: Object.fromEntries(res.spec.parameters.map((p) => [p.id, p.value])), history: nextHistory, prompt: asked, fromPhoto: !!photo }, asNew)
     } catch (e) {
       showError(e)
     } finally {
@@ -429,8 +545,8 @@ export default function CreatePage() {
       title="Create in 3D"
       lead="Describe a machine or upload a photo, and get a 3D model you can cut open, take apart, animate and change, with the engineering worked out live."
       right={
-        <Link to="/read" className="rounded-full border border-line-2 bg-panel px-3.5 py-1.5 text-[12.5px] font-medium text-ink hover:border-accent/50">
-          Read notes in 3D →
+        <Link to="/create/lab" className={ghostBtn}>
+          My models
         </Link>
       }
     >
@@ -493,7 +609,19 @@ export default function CreatePage() {
           <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-4 py-2.5">
             <div className="min-w-0">
               <h2 className="truncate text-[15px] font-semibold text-ink">{activeSceneDef.title}</h2>
-              {sample ? <p className="truncate text-[12px] text-mute">Ready-made lab rig, free to explore</p> : latest?.prompt ? <p className="truncate text-[12px] text-mute">“{latest.prompt}”</p> : null}
+              {sample ? (
+                <p className="truncate text-[12px] text-mute">Ready-made lab rig, free to explore</p>
+              ) : (
+                <p className="truncate text-[12px] text-mute">
+                  {creationId ? (
+                    <Link to="/create/lab" className="hover:text-ink">
+                      {saveState === 'saving' ? 'Saving…' : saveState === 'error' ? 'Not saved: check your connection' : 'Saved to My models'}
+                    </Link>
+                  ) : null}
+                  {creationId && latest?.prompt ? ' · ' : null}
+                  {latest?.prompt ? `“${latest.prompt}”` : null}
+                </p>
+              )}
             </div>
             {spec && matchedCatalog && loadedCatalogScene ? (
               <button type="button" onClick={() => setViewMode((m) => (m === 'parametric' ? 'catalog' : 'parametric'))} className={`${ghostBtn} text-[12px]`}>
