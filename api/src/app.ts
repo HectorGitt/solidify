@@ -7,12 +7,17 @@ import type { AuthUser, Verifier } from './auth.js'
 import type { Db } from './db.js'
 import { MAX_ENTRIES, emptyProgress, entryCount, mergeProgress, progressSchema, type Progress } from './progress.js'
 import { SYSTEM_PROMPT, buildTurns, tutorRequest, type TutorModel } from './tutor.js'
+import { FakeNoteVision, ModelReplyError, create3dRequest, noteAnalyzeRequest, noteRefineRequest, type NoteVisionModel } from './note3d.js'
 
 export interface Config {
   /** browser origins allowed to call the API */
   allowedOrigins: string[]
   /** tutor questions per user per UTC day */
   tutorDailyLimit: number
+  /** note/PDF pages analyzed per user per UTC day (default 20) */
+  noteDailyPageLimit?: number
+  /** 3D builds and refinements per user per UTC day (default 15) */
+  createDailyLimit?: number
   /** emails allowed to read the feedback queue */
   adminEmails: string[]
   now?: () => number
@@ -22,6 +27,7 @@ export interface Deps {
   db: Db
   verifier: Verifier
   tutor: TutorModel
+  noteVision?: NoteVisionModel
   config: Config
 }
 
@@ -83,7 +89,7 @@ interface SubmissionDoc {
 
 type Env = { Variables: { user: AuthUser | null } }
 
-const fail = (status: 400 | 401 | 403 | 404 | 409 | 413 | 429, message: string) => new HTTPException(status, { message })
+const fail = (status: 400 | 401 | 403 | 404 | 409 | 413 | 429 | 502, message: string) => new HTTPException(status, { message })
 
 /** Parse a JSON body against a schema, or answer 400 with the first problem. */
 async function body<T extends z.ZodType>(c: Context, schema: T): Promise<z.infer<T>> {
@@ -112,7 +118,7 @@ const randomId = () => crypto.randomUUID().replace(/-/g, '').slice(0, 16)
 
 const day = (t: number) => new Date(t).toISOString().slice(0, 10)
 
-export function createApp({ db, verifier, tutor, config }: Deps) {
+export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision(), config }: Deps) {
   const now = config.now ?? Date.now
   const app = new Hono<Env>()
 
@@ -247,6 +253,48 @@ export function createApp({ db, verifier, tutor, config }: Deps) {
         await stream.writeSSE({ event: 'error', data: JSON.stringify({ error: 'The tutor could not answer just now. Please try again.' }) })
       }
     })
+  })
+
+  /* ------------------------------------------------------------------ notes / textbook -> 3D */
+
+  /** counts one use against a per-user daily allowance, failing once it is spent */
+  const spend = async (uid: string, bucket: string, limit: number, what: string) => {
+    const usage = await db.transact<{ count: number }>(`${bucket}/${uid}_${day(now())}`, (prev) => ({ count: (prev?.count ?? 0) + 1 }))
+    if (usage.count > limit) throw fail(429, `You've reached today's limit of ${limit} ${what}. It resets at midnight UTC.`)
+    return limit - usage.count
+  }
+  /** a model call, with an unusable reply turned into a clear error instead of a crash */
+  const model = async <T>(call: () => Promise<T>) => {
+    try {
+      return await call()
+    } catch (e) {
+      if (e instanceof ModelReplyError) throw fail(502, 'The model gave an incomplete answer. Please try again.')
+      throw e
+    }
+  }
+
+  app.post('/v1/notes/analyze', async (c) => {
+    const u = requireUser(c)
+    const req = await body(c, noteAnalyzeRequest)
+    const remainingPages = await spend(u.uid, 'noteUsage', config.noteDailyPageLimit ?? 20, 'note pages')
+    const out = await model(() => noteVision.analyzePage(req))
+    return c.json({ ...out, remainingPages })
+  })
+
+  app.post('/v1/notes/refine', async (c) => {
+    const u = requireUser(c)
+    const req = await body(c, noteRefineRequest)
+    const remaining = await spend(u.uid, 'createUsage', config.createDailyLimit ?? 15, '3D builds')
+    const out = await model(() => noteVision.refineSpec(req))
+    return c.json({ ...out, remaining })
+  })
+
+  app.post('/v1/create-3d', async (c) => {
+    const u = requireUser(c)
+    const req = await body(c, create3dRequest)
+    const remaining = await spend(u.uid, 'createUsage', config.createDailyLimit ?? 15, '3D builds')
+    const out = await model(() => noteVision.createOrEdit3D(req))
+    return c.json({ ...out, remaining })
   })
 
   /* ------------------------------------------------------------------ classes */

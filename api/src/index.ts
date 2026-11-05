@@ -2,6 +2,7 @@ import { serve } from '@hono/node-server'
 import { createApp } from './app.js'
 import { FirebaseVerifier, FirestoreDb } from './firestore.js'
 import { GeminiTutor } from './tutor.js'
+import { GeminiNoteVision } from './note3d.js'
 
 const env = (k: string, d?: string) => {
   const v = process.env[k] ?? d
@@ -20,6 +21,7 @@ const app = createApp({
   db: new FirestoreDb(),
   verifier: new FirebaseVerifier(),
   tutor: new GeminiTutor(env('GEMINI_MODEL', 'gemini-3.8-flash'), project, env('GEMINI_LOCATION', 'global')),
+  noteVision: new GeminiNoteVision(env('GEMINI_MODEL', 'gemini-3.8-flash'), project, env('GEMINI_LOCATION', 'global')),
   config: {
     allowedOrigins: list(env('ALLOWED_ORIGINS', 'https://solidify.studio,http://localhost:5173,http://localhost:5180')),
     tutorDailyLimit: Number(env('TUTOR_DAILY_LIMIT', '40')),
