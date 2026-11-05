@@ -10,6 +10,7 @@ import { primaryBtn } from '@/cloud/ui/Modal'
 import { PartCard } from '@/ui/PartCard'
 import { PartsTree } from '@/ui/PartsTree'
 import { OrientationGizmo, Stage } from '@/ui/Stage'
+import { BuildScreen } from '@/ui/BuildScreen'
 import { Icon } from '@/ui/icons'
 import { Tex } from '@/ui/Tex'
 import { toast } from '@/ui/toast'
@@ -190,12 +191,23 @@ function ExpandedFigureModal({
   )
 }
 
+const READ_STEPS = ['Opening the document', 'Reading each page', 'Finding the figures', 'Matching figures to 3D models', 'Placing them on the page']
+const FIGURE_STEPS = ['Looking at the figure', 'Recognising what it shows', 'Building it in 3D']
+const READ_TIPS = [
+  'The page stays as it is; only the figures become 3D.',
+  'Figures Solidify isn’t sure about stay as the original drawing.',
+  'Missed a figure? Use Select a figure and drag a box around it.',
+  'Text mode reflows the page for a phone.',
+]
+
 export default function ReadPage() {
   const [documents, setDocuments] = useState<TextbookDocument[]>(SAMPLE_TEXTBOOKS)
   const [activeDocId, setActiveDocId] = useState<string>(SAMPLE_TEXTBOOKS[0].id)
   const [pageIdx, setPageIdx] = useState(0)
   const [readingMode, setReadingMode] = useState<'page-overlay' | 'reflow'>('page-overlay')
   const [uploading, setUploading] = useState(false)
+  /** what is being read right now, for the build screen */
+  const [reading, setReading] = useState<{ kind: 'document' | 'figure'; name?: string } | null>(null)
   const [lassoActive, setLassoActive] = useState(false)
   const [lassoStart, setLassoStart] = useState<[number, number] | null>(null)
   const [lassoCurrent, setLassoCurrent] = useState<[number, number] | null>(null)
@@ -235,6 +247,7 @@ export default function ReadPage() {
   const handleFileUpload = async (file: File | undefined) => {
     if (!file) return
     setUploading(true)
+    setReading({ kind: 'document', name: file.name })
     try {
       const loaded = await loadUploadedDocument(file)
       setDocuments((prev) => [loaded, ...prev])
@@ -244,6 +257,7 @@ export default function ReadPage() {
       showError(e, 'Couldn’t read that document.')
     } finally {
       setUploading(false)
+      setReading(null)
     }
   }
 
@@ -272,6 +286,7 @@ export default function ReadPage() {
     if (xmax - xmin < 80 || ymax - ymin < 80) return
     const cropBox: [number, number, number, number] = [ymin, xmin, ymax, xmax]
     setUploading(true)
+    setReading({ kind: 'figure' })
     try {
       const newFigs = await analyzeTextbookPage({
         pageNumber: currentPage.pageNumber,
@@ -310,6 +325,7 @@ export default function ReadPage() {
       showError(e, 'Couldn’t read that part of the page.')
     } finally {
       setUploading(false)
+      setReading(null)
     }
   }
 
@@ -440,7 +456,9 @@ export default function ReadPage() {
       {/* ===================================================================== */}
       {/* MODE 1: EXACT PAGE-FIDELITY OVERLAY (PDF Page + In-Place 3D Figures)  */}
       {/* ===================================================================== */}
-      {readingMode === 'page-overlay' ? (
+      {reading?.kind === 'document' ? (
+        <BuildScreen title="Reading your document" prompt={reading.name} steps={READ_STEPS} expectedSeconds={30} tips={READ_TIPS} />
+      ) : readingMode === 'page-overlay' ? (
         <div
           onDragOver={(e) => e.preventDefault()}
           onDrop={(e) => {
@@ -470,6 +488,7 @@ export default function ReadPage() {
               lassoActive ? 'cursor-crosshair select-none ring-2 ring-amber-400' : ''
             }`}
           >
+            {reading?.kind === 'figure' ? <BuildScreen variant="overlay" title="Turning that figure into 3D" steps={FIGURE_STEPS} expectedSeconds={15} /> : null}
             {/* Original Page Image (All Text, Headings & Equations Remain Intact) */}
             <img
               src={currentPage.pageImageUrl}

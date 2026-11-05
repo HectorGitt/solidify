@@ -304,3 +304,89 @@ input[type="range"].slider::-moz-range-thumb {
 :root[data-theme="light"] [stroke="#ff5b5b" i] { stroke: #993737; }
 :root[data-theme="light"] [fill="#ff7a45" i] { fill: #994929; }
 :root[data-theme="light"] [stroke="#ff7a45" i] { stroke: #994929; }
+
+/* build screen: a blueprint that drafts itself while the AI works (motion stops under reduced motion) */
+.bp-grid {
+  background-image:
+    linear-gradient(color-mix(in srgb, var(--color-accent) 13%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--color-accent) 13%, transparent) 1px, transparent 1px),
+    linear-gradient(color-mix(in srgb, var(--color-ink) 5%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--color-ink) 5%, transparent) 1px, transparent 1px);
+  background-size: 96px 96px, 96px 96px, 24px 24px, 24px 24px;
+  animation: bp-pan 30s linear infinite;
+}
+@keyframes bp-pan {
+  to { background-position: 96px 96px, 96px 96px, 24px 24px, 24px 24px; }
+}
+.bp-scan {
+  top: -6rem;
+  background: linear-gradient(to bottom, transparent, color-mix(in srgb, var(--color-accent) 12%, transparent) 70%, color-mix(in srgb, var(--color-accent) 35%, transparent) 98%, transparent);
+  animation: bp-scan 4.5s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+}
+@keyframes bp-scan {
+  to { top: 100%; }
+}
+.bp-scan-thin::after {
+  content: '';
+  position: absolute;
+  inset-inline: 0;
+  height: 30%;
+  background: linear-gradient(to bottom, transparent, color-mix(in srgb, var(--color-accent) 55%, transparent));
+  animation: bp-scan-thin 1.8s ease-in-out infinite alternate;
+}
+@keyframes bp-scan-thin {
+  from { top: -30%; }
+  to { top: 100%; }
+}
+.bp-draw {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: bp-draw 7.5s ease-in-out infinite;
+  animation-delay: var(--d, 0s);
+}
+@keyframes bp-draw {
+  0% { stroke-dashoffset: 1; opacity: 1; }
+  32%, 82% { stroke-dashoffset: 0; opacity: 1; }
+  94%, 100% { stroke-dashoffset: 0; opacity: 0; }
+}
+.bp-fadein {
+  animation: bp-fadein 7.5s ease-in-out infinite;
+}
+@keyframes bp-fadein {
+  0% { opacity: 0; }
+  15%, 82% { opacity: 0.55; }
+  94%, 100% { opacity: 0; }
+}
+.bp-label {
+  animation: bp-fadein 7.5s ease-in-out infinite;
+  animation-delay: 1.9s;
+  opacity: 0;
+}
+.bp-spin-slow {
+  transform-origin: 200px 200px;
+  animation: bp-spin 40s linear infinite;
+}
+@keyframes bp-spin {
+  to { transform: rotate(360deg); }
+}
+.bp-ping {
+  animation: bp-ping 1.4s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+@keyframes bp-ping {
+  75%, 100% { transform: scale(2); opacity: 0; }
+}
+.bp-bar {
+  background-image: linear-gradient(110deg, transparent 30%, color-mix(in srgb, white 45%, transparent) 50%, transparent 70%);
+  background-size: 200% 100%;
+  animation: bp-shine 1.8s linear infinite;
+}
+@keyframes bp-shine {
+  from { background-position: 150% 0; }
+  to { background-position: -50% 0; }
+}
+.bp-fade {
+  animation: bp-fade-in 0.6s ease-out;
+}
+@keyframes bp-fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+}

@@ -12,6 +12,7 @@ import { requestSnapshot } from '@/render/snapshot'
 import { useView } from '@/render/view'
 import { StudyShell } from '@/study/ui/StudyShell'
 import { Stage } from '@/ui/Stage'
+import { BuildScreen } from '@/ui/BuildScreen'
 import { Icon } from '@/ui/icons'
 import { toast } from '@/ui/toast'
 import { Tex } from '@/ui/Tex'
@@ -26,6 +27,18 @@ type Interest = 'describe' | 'photo' | 'customize' | 'chat' | 'classroom'
 
 /** edits to suggest once there is a model; each goes to the AI like anything typed */
 const QUICK_EDITS = ['Add a cooling fan', 'Change the housing to aluminium', 'Make it 25% larger', 'Show the fasteners']
+
+const NEW_STEPS = ['Reading your description', 'Choosing the parts and materials', 'Sizing every part', 'Working out the engineering', 'Assembling the 3D model']
+const PHOTO_STEPS = ['Studying your photo', 'Recognising the parts', 'Estimating the sizes', 'Working out the engineering', 'Assembling the 3D model']
+const EDIT_STEPS = ['Reading your change', 'Updating the parts', 'Re-checking the engineering', 'Rebuilding the model']
+const BUILD_TIPS = [
+  'Once it’s built, drag the sliders in Dimensions to resize it.',
+  'Section cuts the model open so you can see inside.',
+  'Take apart spreads the parts out so each one is easy to see.',
+  'Ask for changes in plain words, like “make the shaft 40 mm longer”.',
+  'Every model you build is saved in My models.',
+  'Calculations update live as you change the sizes.',
+]
 
 /** samples: the app's own lab rigs, open to everyone. Building or changing a model uses the AI and needs sign-in. */
 const SAMPLES = [
@@ -228,6 +241,8 @@ export default function CreatePage() {
   const [promptInput, setPromptInput] = useState('')
   const [uploadedPhoto, setUploadedPhoto] = useState<{ name: string; url: string } | null>(null)
   const [isGenerating, setIsGenerating] = useState(false)
+  /** what is being built right now, for the build screen */
+  const [building, setBuilding] = useState<{ prompt: string; photoUrl?: string; kind: 'new' | 'photo' | 'edit' } | null>(null)
   const [matchedCatalog, setMatchedCatalog] = useState<CatalogSceneMatch | null>(null)
   const [loadedCatalogScene, setLoadedCatalogScene] = useState<SceneDef | null>(null)
   const [viewMode, setViewMode] = useState<'parametric' | 'catalog'>('parametric')
@@ -435,6 +450,7 @@ export default function CreatePage() {
   const build = async (text: string, photo?: { name: string; url: string }) => {
     if (!signedIn) return needSignIn()
     setIsGenerating(true)
+    setBuilding({ prompt: text, photoUrl: photo?.url, kind: photo ? 'photo' : spec && !sample ? 'edit' : 'new' })
     try {
       const res = await generateOrEdit3DScene(text, photo ? undefined : (spec ?? undefined), photo?.url)
       setSpec(res.spec)
@@ -455,6 +471,7 @@ export default function CreatePage() {
       showError(e)
     } finally {
       setIsGenerating(false)
+      setBuilding(null)
     }
   }
 
@@ -583,7 +600,16 @@ export default function CreatePage() {
         </div>
       </section>
 
-      {!activeSceneDef ? (
+      {building && building.kind !== 'edit' ? (
+        <BuildScreen
+          title={building.kind === 'photo' ? 'Building from your photo' : 'Building your model'}
+          prompt={building.kind === 'photo' ? undefined : building.prompt}
+          photoUrl={building.photoUrl}
+          steps={building.kind === 'photo' ? PHOTO_STEPS : NEW_STEPS}
+          expectedSeconds={60}
+          tips={BUILD_TIPS}
+        />
+      ) : !activeSceneDef ? (
         <section className="relative flex h-[420px] flex-col items-center justify-center gap-3 rounded-3xl border border-dashed border-line-2 bg-panel px-6 text-center">
           {isGenerating || sample ? (
             <p className="text-[14px] text-ink">{sample ? `Opening the ${sample.label.toLowerCase()}…` : 'Building the model… this can take up to a minute.'}</p>
@@ -665,13 +691,20 @@ export default function CreatePage() {
             </div>
           ) : null}
 
+          {spec && matchedCatalog && loadedCatalogScene && viewMode === 'parametric' && !isGenerating ? (
+            <div className="flex flex-wrap items-center gap-3 border-b border-line bg-accent/10 px-4 py-2.5 text-[13px]">
+              <Icon.build width={16} height={16} className="shrink-0 text-accent" />
+              <span className="min-w-0 flex-1 text-ink">
+                Solidify has a detailed, working lab model of this: <span className="font-semibold">{matchedCatalog.scene.title}</span>.
+              </span>
+              <button type="button" onClick={() => setViewMode('catalog')} className={`${primaryBtn} px-4 py-1.5 text-[12.5px]`}>
+                Open the lab model
+              </button>
+            </div>
+          ) : null}
           <div className="relative h-[460px] w-full sm:h-[520px]">
             <Stage scene={activeSceneDef} />
-            {isGenerating ? (
-              <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center bg-bg/40 backdrop-blur-[2px]">
-                <div className="rounded-full border border-line bg-panel px-4 py-2 text-[12.5px] text-ink shadow-lg">Building the model…</div>
-              </div>
-            ) : null}
+            {building?.kind === 'edit' ? <BuildScreen variant="overlay" title="Changing your model" prompt={building.prompt} steps={EDIT_STEPS} expectedSeconds={45} /> : null}
             {uploadedPhoto ? (
               <div className="absolute bottom-3 left-3 z-20 flex items-center gap-2 rounded-2xl border border-line bg-panel/95 p-1.5 pr-3 shadow-lg backdrop-blur">
                 <img src={uploadedPhoto.url} alt={`Reference: ${uploadedPhoto.name}`} className="h-12 w-12 rounded-lg bg-white object-contain" />
