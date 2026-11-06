@@ -15,6 +15,7 @@ export function BuildScreen({
   photoUrl,
   tips = [],
   variant = 'full',
+  stage,
 }: {
   title: string
   steps: string[]
@@ -24,6 +25,8 @@ export function BuildScreen({
   tips?: string[]
   /** full: takes the model's place; overlay: sits over the current model while it changes */
   variant?: 'full' | 'overlay'
+  /** the stage reached, when the work reports it (a streamed build); otherwise stages follow the usual timing */
+  stage?: number
 }) {
   const [elapsed, setElapsed] = useState(0)
   const [tip, setTip] = useState(0)
@@ -42,7 +45,7 @@ export function BuildScreen({
   // eases towards 95 %: about two thirds of the way at the usual time, never "done" before the answer is
   const progress = Math.min(0.95, 1 - Math.exp(-elapsed / (expectedSeconds * 0.9)))
   // stages share the usual time; the last one waits for the answer
-  const active = Math.min(steps.length - 1, Math.floor((elapsed / expectedSeconds) * steps.length))
+  const active = stage !== undefined ? Math.min(steps.length - 1, stage) : Math.min(steps.length - 1, Math.floor((elapsed / expectedSeconds) * steps.length))
   const overlay = variant === 'overlay'
 
   return (

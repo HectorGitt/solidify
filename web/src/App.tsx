@@ -23,6 +23,7 @@ const ClassesPage = lazy(() => import('./cloud/ui/ClassesPage'))
 const ClassPage = lazy(() => import('./cloud/ui/ClassPage'))
 const CreatePage = lazy(() => import('./cloud/ui/CreatePage'))
 const CreationLabPage = lazy(() => import('./cloud/ui/CreationLabPage'))
+const ModelLab = lazy(() => import('./cloud/ui/ModelLab'))
 const ReadPage = lazy(() => import('./note3d/ReadPage'))
 const PaperPage = lazy(() => import('./cloud/ui/PaperPage'))
 // dev only: bare scenes for scripts/capture-tiles.mjs
@@ -55,7 +56,7 @@ export default function App() {
         <Route path="/classes/:classId/papers/:paperId" element={page(<PaperPage />)} />
         <Route path="/create" element={page(<CreatePage />)} />
         <Route path="/create/lab" element={page(<CreationLabPage />)} />
-        <Route path="/create/:id" element={page(<CreatePage />)} />
+        <Route path="/create/:id" element={page(<ModelLab />)} />
         <Route path="/read" element={page(<ReadPage />)} />
         {ShotPage ? <Route path="/shot/:moduleId/:sceneId" element={page(<ShotPage />)} /> : null}
         <Route path="/m/:moduleId" element={<Viewer />} />
