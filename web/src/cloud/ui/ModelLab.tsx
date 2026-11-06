@@ -5,7 +5,7 @@ import type { SceneDef } from '@/modules/types'
 import { previewSpec, streamOrEdit3DScene } from '@/note3d/ai3dCompiler'
 import type { CatalogSceneMatch } from '@/note3d/createCatalog'
 import type { LiveProgress } from '@/note3d/liveBuild'
-import { createSceneDefFromSpec, liveAssembly } from '@/note3d/NoteSceneRenderer'
+import { liveAssembly, useLiveSceneDef } from '@/note3d/NoteSceneRenderer'
 import { ChartView, fmtNum } from '@/note3d/ChartView'
 import { findPart } from '@/note3d/partInfo'
 import { ALLOWED_MATERIALS, evaluateCalculations, evaluateChart, type EvaluatedCalculation, type EvaluatedChart, type NoteParameterSpec, type NotePartSpec, type NoteSceneSpec, type NoteShapeKind } from '@/note3d/schema'
@@ -699,7 +699,8 @@ export default function ModelLab() {
     if (selectedPart) setMobilePane('engineering')
   }, [selectedPart?.id])
   const calcUnits = useMemo(() => Object.fromEntries((shownSpec?.calculations ?? []).map((c) => [c.id, c.unit])), [shownSpec?.calculations])
-  const parametricScene = useMemo(() => (shownSpec ? createSceneDefFromSpec(shownSpec, shownParams) : null), [shownSpec, shownParams])
+  // one viewport for the page, fed the latest model: parts and arrows update in place as sizes change and parts stream in
+  const parametricScene = useLiveSceneDef(shownSpec, shownParams)
   const scene = viewMode === 'catalog' && loadedCatalogScene && !live ? loadedCatalogScene : parametricScene
   const extent = scene?.extent ?? 0.45
   const firstBuild = !!live && live.isNew && !preview

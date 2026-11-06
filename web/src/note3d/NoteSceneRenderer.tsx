@@ -1,6 +1,7 @@
 import { Html, Line } from '@react-three/drei'
 import { useFrame, useThree, type ThreeEvent } from '@react-three/fiber'
-import { createContext, useContext, useEffect, useMemo, useRef } from 'react'
+import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
+import { createStore, useStore } from 'zustand'
 import * as THREE from 'three'
 import { useSim } from '@/core/sim'
 import type { SceneDef } from '@/modules/types'
@@ -10,6 +11,7 @@ import { useView } from '@/render/view'
 import { buildPartGeometry } from './builder'
 import {
   evalDim,
+  evaluateCalculations,
   evalVec3,
   type NoteAnnotationSpec,
   type NotePartSpec,
@@ -153,6 +155,81 @@ function LocalPartNode({
   )
 }
 
+function LabelSprite({ position, label, value, color }: { position: [number, number, number]; label: string; value: string; color: string }) {
+  const sprite = useMemo(() => {
+    const ratio = 2
+    const font = `600 ${13 * ratio}px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace`
+    const measure = document.createElement('canvas').getContext('2d')!
+    measure.font = font
+    const head = label
+    const tail = value ? ` = ${value}` : ''
+    const padX = 8 * ratio
+    const w = Math.ceil(measure.measureText(head + tail).width + padX * 2)
+    const h = 24 * ratio
+    const canvas = document.createElement('canvas')
+    canvas.width = w
+    canvas.height = h
+    const ctx = canvas.getContext('2d')!
+    const r = 6 * ratio
+    ctx.beginPath()
+    ctx.moveTo(r, 0)
+    ctx.arcTo(w, 0, w, h, r)
+    ctx.arcTo(w, h, 0, h, r)
+    ctx.arcTo(0, h, 0, 0, r)
+    ctx.arcTo(0, 0, w, 0, r)
+    ctx.closePath()
+    ctx.fillStyle = 'rgba(10, 14, 18, 0.86)'
+    ctx.fill()
+    ctx.lineWidth = 1.5 * ratio
+    ctx.strokeStyle = color
+    ctx.globalAlpha = 0.75
+    ctx.stroke()
+    ctx.globalAlpha = 1
+    ctx.font = font
+    ctx.textBaseline = 'middle'
+    ctx.fillStyle = '#f3f4f6'
+    ctx.fillText(head, padX, h / 2 + ratio)
+    ctx.fillStyle = color
+    ctx.fillText(tail, padX + ctx.measureText(head).width, h / 2 + ratio)
+    const tex = new THREE.CanvasTexture(canvas)
+    tex.colorSpace = THREE.SRGBColorSpace
+    tex.anisotropy = 4
+    const mat = new THREE.SpriteMaterial({ map: tex, depthTest: false, depthWrite: false, sizeAttenuation: false, toneMapped: false })
+    const sp = new THREE.Sprite(mat)
+    const height = 0.034
+    sp.scale.set((height * w) / h, height, 1)
+    sp.center.set(0.5, -0.35)
+    sp.renderOrder = 999
+    return sp
+  }, [label, value, color])
+  useEffect(
+    () => () => {
+      sprite.material.map?.dispose()
+      sprite.material.dispose()
+    },
+    [sprite],
+  )
+  return <primitive object={sprite} position={position} />
+}
+
+/** a load's value for its label: "P = 250 N", following the sliders */
+function annotationText(ann: NoteAnnotationSpec, scope: Record<string, number>) {
+  if (ann.magnitude !== undefined && ann.magnitude !== '') {
+    const v = evalDim(ann.magnitude, scope, NaN)
+    if (Number.isFinite(v)) {
+      const a = Math.abs(v)
+      const num = a >= 1000 ? v.toFixed(0) : a >= 100 ? v.toFixed(1) : a >= 1 ? v.toFixed(2) : Number(v.toPrecision(3)).toString()
+      return `${num}${ann.unit ? ` ${ann.unit}` : ''}`
+    }
+  }
+  return ann.value ?? ''
+}
+
+/**
+ * Loads drawn the way they are on paper: a force is a solid arrow pointing at where it acts, a moment or
+ * torque is a curved arrow around its axis, and both always carry their value. Dimensions and labels show
+ * with the Labels switch.
+ */
 function Annotation3D({
   ann,
   params,
@@ -165,67 +242,77 @@ function Annotation3D({
   const showLabels = inline ? inline.showLabels : globalLabels
   const from = useMemo(() => evalVec3(ann.from, params, [0, 0, 0]), [ann.from, params])
   const to = useMemo(
-    () => (ann.to ? evalVec3(ann.to, params, [from[0], from[1] + 0.08, from[2]]) : [from[0], from[1] + 0.08, from[2]] as [number, number, number]),
+    () => (ann.to ? evalVec3(ann.to, params, [from[0], from[1] + 0.08, from[2]]) : ([from[0], from[1] + 0.08, from[2]] as [number, number, number])),
     [ann.to, from, params],
   )
-
-  const mid: [number, number, number] = [
-    (from[0] + to[0]) * 0.5,
-    (from[1] + to[1]) * 0.5,
-    (from[2] + to[2]) * 0.5,
-  ]
-
-  const color =
-    ann.color ??
-    (ann.kind === 'force'
-      ? '#ef4444'
-      : ann.kind === 'moment'
-        ? '#f59e0b'
-        : ann.kind === 'dimension'
-          ? '#38bdf8'
-          : '#10b981')
+  const mid: [number, number, number] = [(from[0] + to[0]) * 0.5, (from[1] + to[1]) * 0.5, (from[2] + to[2]) * 0.5]
+  const color = ann.color ?? (ann.kind === 'force' ? '#ef4444' : ann.kind === 'moment' ? '#f59e0b' : ann.kind === 'dimension' ? '#38bdf8' : '#10b981')
+  const text = annotationText(ann, params)
 
   const dir = useMemo(() => {
     const v = new THREE.Vector3(to[0] - from[0], to[1] - from[1], to[2] - from[2])
     const len = v.length()
-    return { vec: len > 1e-5 ? v.normalize() : new THREE.Vector3(0, 1, 0), len }
+    return { vec: len > 1e-5 ? v.clone().normalize() : new THREE.Vector3(0, 1, 0), len }
   }, [from, to])
+  const quat = useMemo(() => new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.vec), [dir.vec])
 
-  const coneQuat = useMemo(() => {
-    return new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.vec)
-  }, [dir.vec])
+  // a solid arrow: shaft and head, sized to its length
+  const arrow = useMemo(() => {
+    const len = Math.max(dir.len, 0.01)
+    const r = Math.min(0.008, Math.max(0.0025, len * 0.035))
+    const head = Math.min(len * 0.32, Math.max(0.02, r * 5))
+    return { r, head, shaft: Math.max(0.001, len - head) }
+  }, [dir.len])
+
+  // a moment: three quarters of a circle around its axis, with a head on the end
+  const moment = useMemo(() => {
+    if (ann.kind !== 'moment') return null
+    const radius = Math.min(0.09, Math.max(0.035, dir.len * 0.6))
+    const axis = dir.vec
+    const u = new THREE.Vector3().crossVectors(axis, Math.abs(axis.y) < 0.9 ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(1, 0, 0)).normalize()
+    const w = new THREE.Vector3().crossVectors(axis, u).normalize()
+    const c = new THREE.Vector3(...from)
+    const pts = Array.from({ length: 33 }, (_, i) => {
+      const t = (i / 32) * Math.PI * 1.5
+      return c.clone().add(u.clone().multiplyScalar(Math.cos(t) * radius)).add(w.clone().multiplyScalar(Math.sin(t) * radius))
+    })
+    const tube = new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 48, Math.max(0.0025, radius * 0.06), 8, false)
+    const end = pts[pts.length - 1]
+    const tangent = end.clone().sub(pts[pts.length - 2]).normalize()
+    return { tube, end: end.toArray() as [number, number, number], q: new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), tangent), radius }
+  }, [ann.kind, dir, from])
+  useEffect(() => () => moment?.tube.dispose(), [moment])
+
+  const material = <meshStandardMaterial color={color} emissive={color} emissiveIntensity={0.3} roughness={0.45} />
+  const isLoad = ann.kind === 'force' || ann.kind === 'moment'
 
   return (
     <group>
-      <Line
-        points={[from, to]}
-        color={color}
-        lineWidth={ann.kind === 'dimension' ? 1.8 : 2.8}
-        dashed={ann.kind === 'dimension'}
-        dashSize={0.012}
-        gapSize={0.008}
-      />
-      {(ann.kind === 'force' || ann.kind === 'moment') && dir.len > 0.01 && (
-        <mesh position={to} quaternion={coneQuat}>
-          <coneGeometry args={[Math.min(0.014, dir.len * 0.18), Math.min(0.032, dir.len * 0.35), 16]} />
-          <meshStandardMaterial color={color} emissive={color} emissiveIntensity={0.35} />
-        </mesh>
+      {ann.kind === 'force' ? (
+        <group position={from} quaternion={quat}>
+          <mesh position={[0, arrow.shaft / 2, 0]}>
+            <cylinderGeometry args={[arrow.r, arrow.r, arrow.shaft, 16]} />
+            {material}
+          </mesh>
+          <mesh position={[0, arrow.shaft + arrow.head / 2, 0]}>
+            <coneGeometry args={[arrow.r * 2.6, arrow.head, 20]} />
+            {material}
+          </mesh>
+        </group>
+      ) : moment ? (
+        <group>
+          <mesh geometry={moment.tube}>{material}</mesh>
+          <mesh position={moment.end} quaternion={moment.q}>
+            <coneGeometry args={[moment.radius * 0.16, moment.radius * 0.38, 18]} />
+            {material}
+          </mesh>
+        </group>
+      ) : (
+        <Line points={[from, to]} color={color} lineWidth={ann.kind === 'dimension' ? 1.8 : 2.4} dashed={ann.kind === 'dimension'} dashSize={0.012} gapSize={0.008} />
       )}
-      {showLabels && (
-        <Html position={ann.kind === 'dimension' ? mid : to} center zIndexRange={[15, 0]} className="pointer-events-none">
-          <div
-            className="whitespace-nowrap rounded border px-1.5 py-0.5 font-mono text-[9.5px] font-semibold shadow-md backdrop-blur-sm"
-            style={{
-              borderColor: `${color}66`,
-              backgroundColor: 'rgba(10, 14, 18, 0.82)',
-              color: '#f3f4f6',
-            }}
-          >
-            <span>{ann.label}</span>
-            {ann.value ? <span className="ml-1 text-accent">{ann.value}</span> : null}
-          </div>
-        </Html>
-      )}
+      {isLoad || showLabels ? (
+        <LabelSprite position={ann.kind === 'force' || ann.kind === 'dimension' ? mid : moment ? moment.end : to} label={ann.label} value={text} color={color} />
+      ) : null}
     </group>
   )
 }
@@ -337,6 +424,8 @@ export function NoteSceneViewport({
     return new THREE.Plane(n.negate(), inlineConfig.cutPos)
   }, [inlineConfig?.cutEnabled, inlineConfig?.cutNormal, inlineConfig?.cutPos])
 
+  // annotation values may be calculated results (a reaction, a torque), not only slider values
+  const scope = useMemo(() => evaluateCalculations(spec.calculations, params).scope, [spec.calculations, params])
   const projMode = projectionOverride ?? spec.showProjectionPlanes ?? 'none'
   const extent = spec.extent ?? 0.35
 
@@ -348,7 +437,7 @@ export function NoteSceneViewport({
           <LocalPartNode key={part.id} part={part} params={params} clipPlane={clipPlane} />
         ))}
         {spec.annotations?.map((ann) => (
-          <Annotation3D key={ann.id} ann={ann} params={params} />
+          <Annotation3D key={ann.id} ann={ann} params={scope} />
         ))}
         {projMode !== 'none' && <OrthographicGlassPlanes extent={extent} mode={projMode} />}
       </group>
@@ -378,4 +467,33 @@ export function createSceneDefFromSpec(
     camera,
     Viewport: () => <NoteSceneViewport spec={spec} params={params} />,
   }
+}
+
+/**
+ * A SceneDef whose viewport stays the same component while the model changes. `createSceneDefFromSpec`
+ * makes a new viewport each time, so React rebuilds the whole 3D scene (parts, arrows, labels) on every
+ * slider move or streamed part; this one feeds the latest model to a single viewport, which updates in
+ * place. For pages where the model changes often (the model workspace).
+ */
+export function useLiveSceneDef(spec: NoteSceneSpec | null, params: Record<string, number>): SceneDef | null {
+  const store = useMemo(() => createStore<{ spec: NoteSceneSpec | null; params: Record<string, number> }>(() => ({ spec, params })), [])
+  useLayoutEffect(() => {
+    store.setState({ spec, params })
+  }, [store, spec, params])
+  const Viewport = useMemo(
+    () =>
+      function LiveNoteViewport() {
+        const s = useStore(store)
+        return s.spec ? <NoteSceneViewport spec={s.spec} params={s.params} /> : null
+      },
+    [store],
+  )
+  const extent = spec?.extent ?? 0.35
+  const cameraKey = JSON.stringify(spec?.camera ?? null)
+  return useMemo(() => {
+    if (!spec) return null
+    const camera = spec.camera ?? { position: [extent * 1.45, extent * 1.05, extent * 1.55] as [number, number, number], target: [0, 0, 0] as [number, number, number] }
+    return { id: spec.id, title: spec.title, summary: spec.summary, extent, floorY: spec.floorY ?? -extent * 0.45, camera, Viewport }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [spec?.id, spec?.title, spec?.summary, extent, spec?.floorY, cameraKey, Viewport, !!spec])
 }
