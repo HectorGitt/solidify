@@ -132,7 +132,7 @@ export function BuildYourOwn() {
             </div>
           </>
         ) : (
-          <ol className="grid h-full gap-3 sm:grid-cols-3">
+          <ol className="grid gap-3 sm:grid-cols-3">
             {[
               ['Describe it', 'In words, with sizes if you have them, or from a photo.'],
               ['Watch it built', 'Parts land one by one as Solidify works out the sizes and the engineering.'],

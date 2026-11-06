@@ -51,7 +51,7 @@ function SystemCard({ m, academic }: { m: ModuleDef; academic: boolean }) {
   const shown = all ? rigs : rigs.slice(0, 5)
   const featured = rigs.find((s) => s.id === FEATURED[m.id]) ?? rigs[0]
   return (
-    <article className="flex flex-col rounded-3xl border border-line bg-panel">
+    <article className="flex min-w-0 flex-col rounded-3xl border border-line bg-panel">
       <Link to={featured ? sceneLink(m, featured) : '#'} className="group relative block aspect-[16/9] overflow-hidden rounded-t-3xl bg-[var(--color-stage)]">
         <Media name={`modules/${m.id}`} alt={`${m.title}: interactive 3D cutaway`} className="absolute inset-0 h-full w-full object-cover transition-transform duration-700 group-hover:scale-[1.04]" />
       </Link>
