@@ -21,6 +21,8 @@ export function setCameraControls(c: CameraControlsImpl | null) {
   if (controls) controls.removeEventListener('controlstart', onUserControl)
   controls = c
   if (controls) controls.addEventListener('controlstart', onUserControl)
+  // development only: the live camera for browser checks (as window.__scene is for the scene)
+  if (import.meta.env.DEV) (window as unknown as { __cameraControls?: CameraControlsImpl | null }).__cameraControls = c
 }
 
 function onUserControl() {

@@ -406,6 +406,7 @@ export function Stage({
   loadingLabel,
   veil = false,
   cover = true,
+  viewKey,
 }: {
   scene: SceneDef
   smooth?: boolean
@@ -416,7 +417,11 @@ export function Stage({
   veil?: boolean
   /** false: no build cover (the capture page photographs the bare canvas) */
   cover?: boolean
+  /** the camera returns to the scene's pose when this changes (default: the scene id); a page that swaps
+   *  scenes for the same model (a live build, then the finished model) keeps it steady so the view stays put */
+  viewKey?: string
 }) {
+  const camKey = viewKey ?? scene.id
   const ref = useRef<CameraControlsImpl>(null)
   const select = useView((s) => s.select)
   const studioMode = useView((s) => s.studioMode)
@@ -433,7 +438,7 @@ export function Stage({
     const k = (frame.back ?? 1) * (window.innerWidth >= 1024 ? 1 : 1.75)
     return { ...scene.camera, position: position.map((v, i) => target[i] + (v - target[i]) * k) as [number, number, number] }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scene.id, frame?.back])
+  }, [camKey, frame?.back])
   // stable ref callback: set the initial pose once per scene, not on every re-render
   const attach = useCallback(
     (c: CameraControlsImpl | null) => {
@@ -453,7 +458,7 @@ export function Stage({
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [scene.id, pageScroll, pose, frame?.shift, frame?.lift],
+    [camKey, pageScroll, pose, frame?.shift, frame?.lift],
   )
 
   const light = useIsLight()
