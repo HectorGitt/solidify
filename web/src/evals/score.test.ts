@@ -71,3 +71,48 @@ describe('nightly drafting topics', () => {
     expect(topicsFor(5, 0)).toEqual([])
   })
 })
+
+describe('mechanisms and labels', () => {
+  const box = (s = 0.05) => [{ kind: 'box', sx: s, sy: s, sz: s }]
+  /** the two-stage compressor that scored 100: rods and pistons set by coordinates, the flywheel loose, two labels on one spot */
+  const compressor = {
+    explanation: 'A compressor.',
+    spec: {
+      title: 'Two-stage compressor',
+      parameters: [{ id: 'P2', label: 'Delivery', value: 1000, min: 500, max: 2000, step: 10, unit: 'kPa' }],
+      calculations: [{ id: 'Pi', label: 'Interstage pressure', formula: 'sqrt(101 * P2)', unit: 'kPa' }],
+      annotations: [
+        { id: 'a', kind: 'force', label: 'Interstage cooling', anchor: { part: 'block', at: '+y' } },
+        { id: 'b', kind: 'force', label: 'Suction', anchor: { part: 'block', at: '+y', along: 0.55 } },
+      ],
+      parts: [
+        { id: 'block', name: 'Crankcase', role: 'housing', shapes: box(0.3) },
+        { id: 'crank', name: 'Crankshaft', mount: { kind: 'centered', target: 'block' }, shapes: [{ kind: 'cylinder', r: 0.01, h: 0.25, rotation: [0, 0, Math.PI / 2] }] },
+        { id: 'fly', name: 'Flywheel', position: [0.2, 0, 0], rotation: [0.6, 0, 0.3], shapes: [{ kind: 'cylinder', r: 0.1, h: 0.02 }] },
+        { id: 'rod', name: 'LP connecting rod', position: [0, 0.05, 0], shapes: box(0.02) },
+        { id: 'pis', name: 'LP piston', position: [0, 0.12, 0], shapes: [{ kind: 'cylinder', r: 0.04, h: 0.04 }] },
+      ],
+    },
+  }
+
+  it('finds rods, pistons and a flywheel not joined the way they move, and labels on top of each other', () => {
+    const { checks } = scoreBuild({ id: 'compressor', prompt: 'A two-stage compressor' }, compressor, 60)
+    const failed = Object.fromEntries(checks.filter((c) => !c.ok).map((c) => [c.name, c.detail ?? '']))
+    expect(failed['moving parts connected']).toMatch(/LP connecting rod is not linked/)
+    expect(failed['moving parts connected']).toMatch(/LP piston does not slide/)
+    expect(failed['moving parts connected']).toMatch(/Flywheel is not mounted on its shaft/)
+    expect(failed['labels clear']).toMatch(/Interstage cooling.*Suction/)
+  })
+
+  it('passes the same machine joined properly, with its labels apart', () => {
+    const fixed = structuredClone(compressor)
+    const parts = fixed.spec.parts as Record<string, unknown>[]
+    Object.assign(parts[2], { mount: { kind: 'coaxial', target: 'crank', at: 1 }, position: undefined, rotation: undefined })
+    Object.assign(parts[3], { mount: { kind: 'link', target: 'crank', to: 'pis', throw: 0.03 }, position: undefined })
+    Object.assign(parts[4], { mount: { kind: 'slider', target: 'crank', throw: 0.03, rod: 0.1 }, position: undefined })
+    ;(fixed.spec.annotations[1].anchor as Record<string, unknown>).at = '-x'
+    const { checks } = scoreBuild({ id: 'compressor', prompt: 'A two-stage compressor' }, fixed, 60)
+    expect(checks.find((c) => c.name === 'moving parts connected')!.ok).toBe(true)
+    expect(checks.find((c) => c.name === 'labels clear')!.ok).toBe(true)
+  })
+})

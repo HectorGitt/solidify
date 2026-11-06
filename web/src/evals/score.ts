@@ -1,6 +1,7 @@
-import { resolveAssembly } from '@/note3d/assembly'
+import * as THREE from 'three'
+import { resolveAnnotation, resolveAssembly, type PartFrame } from '@/note3d/assembly'
 import { sanitizeGeneratedSpec } from '@/note3d/sanitize'
-import { evaluateCalculations, evaluateChart, type NoteSceneSpec } from '@/note3d/schema'
+import { evalVec3, evaluateCalculations, evaluateChart, type NoteSceneSpec } from '@/note3d/schema'
 import type { EvalCase } from './cases'
 
 export interface EvalCheck {
@@ -14,6 +15,65 @@ const RIG = /dial|gauge|indicator|extensometer|load cell|test bed|machine bed|te
 
 /** a known answer may come back in other units (kN·m as N·m, mm as m): accept it at any power of a thousand */
 const matches = (got: number, want: number, tol: number) => [1e-6, 1e-3, 1, 1e3, 1e6].some((k) => Math.abs(got * k - want) <= Math.abs(want) * tol)
+
+const PISTON = /piston|plunger|crosshead/i
+const CONROD = /connecting rod|conrod|con-rod|coupler/i
+/** parts that turn on a shaft and must be mounted on it (a flywheel set by coordinates ends up tilted through the casing) */
+const ON_SHAFT = /flywheel|pulley|sprocket|impeller|sheave|cam\b|disc\b|disk\b/i
+/** named after one but not one: a cam follower, a pulley guard, the shaft itself */
+const NOT_ON_SHAFT = /follower|shaft|guard|cover|casing|housing|brake pad|caliper/i
+
+/**
+ * A mechanism is only a mechanism if its moving parts are joined the way they move: a connecting rod linked to
+ * the crank, the piston it drives sliding on the crank's line, a flywheel or pulley on its shaft. Each part
+ * placed by coordinates instead is named. `checked` is false when the model has none of these parts.
+ */
+export function looseMovingParts(spec: NoteSceneSpec): { checked: boolean; problems: string[] } {
+  const problems: string[] = []
+  let checked = false
+  const rods = spec.parts.filter((p) => CONROD.test(p.name))
+  for (const p of rods) {
+    checked = true
+    if (p.mount?.kind !== 'link') problems.push(`${p.name} is not linked to the crank`)
+  }
+  // a piston needs a slider mount when a rod drives it; a hydraulic piston (no crank, no rod) may sit on its cylinder's axis
+  if (rods.length) {
+    for (const p of spec.parts.filter((x) => PISTON.test(x.name) && !CONROD.test(x.name))) {
+      checked = true
+      if (p.mount?.kind !== 'slider') problems.push(`${p.name} does not slide on the crank`)
+    }
+  }
+  const hasShaft = spec.parts.some((x) => /shaft|axle|crank|spindle|hub/i.test(x.name))
+  for (const p of spec.parts.filter((x) => hasShaft && ON_SHAFT.test(x.name) && !NOT_ON_SHAFT.test(x.name))) {
+    checked = true
+    if (p.mount?.kind !== 'coaxial' && p.mount?.kind !== 'mesh') problems.push(`${p.name} is not mounted on its shaft`)
+  }
+  return { checked, problems }
+}
+
+/**
+ * Labels drawn on top of each other: each arrow or label's text sits at its tail, about as wide as a line of
+ * text and one line high, so two tails closer than that (seen from the front) collide.
+ */
+export function overlappingLabels(spec: NoteSceneSpec, frames: Map<string, PartFrame>, scope: Record<string, number>): string[] {
+  const size = new THREE.Box3()
+  for (const f of frames.values()) size.union(f.box)
+  const extent = Math.max(0.05, ...size.getSize(new THREE.Vector3()).toArray())
+  const spots = (spec.annotations ?? [])
+    .filter((a) => a.kind !== 'dimension')
+    .map((a) => {
+      const at = resolveAnnotation(a, frames, scope)?.from ?? (a.from ? evalVec3(a.from, scope, [0, 0, 0]) : null)
+      return at ? { label: a.label, x: at[0], y: at[1] } : null
+    })
+    .filter((s): s is { label: string; x: number; y: number } => !!s)
+  const clashes: string[] = []
+  for (let i = 0; i < spots.length; i++)
+    for (let j = i + 1; j < spots.length; j++) {
+      const a = spots[i], b = spots[j]
+      if (Math.abs(a.x - b.x) < 0.25 * extent && Math.abs(a.y - b.y) < 0.05 * extent) clashes.push(`“${a.label}” and “${b.label}”`)
+    }
+  return clashes
+}
 
 /**
  * Scores one build against its case, the way the app would see it: the answer is cleaned as the client
@@ -36,8 +96,14 @@ export function scoreBuild(c: EvalCase, reply: Record<string, unknown>, seconds:
   if (c.parts) add('part count', spec.parts.length >= c.parts[0] && spec.parts.length <= c.parts[1], `${spec.parts.length} parts (expected ${c.parts[0]} to ${c.parts[1]})`)
   add('every shape drawable', keptShapes === rawShapes, keptShapes === rawShapes ? undefined : `${rawShapes - keptShapes} of ${rawShapes} shapes dropped`)
 
-  const { issues } = resolveAssembly(spec, scope)
+  const { issues, frames } = resolveAssembly(spec, scope)
   add('layout', issues.length === 0, issues.map((i) => i.message).join('; ') || undefined)
+
+  const loose = looseMovingParts(spec)
+  if (loose.checked) add('moving parts connected', loose.problems.length === 0, loose.problems.join('; ') || undefined)
+
+  const clash = overlappingLabels(spec, frames, scope)
+  add('labels clear', clash.length === 0, clash.length ? `${clash.join('; ')} overlap` : undefined)
   if (spec.parts.length >= 3) {
     const mounted = spec.parts.filter((p) => p.mount).length
     add('assembled by relation', mounted >= 0.6 * (spec.parts.length - 1), `${mounted} of ${spec.parts.length - 1} non-anchor parts mounted`)
