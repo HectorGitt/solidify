@@ -20,6 +20,8 @@ export interface Config {
   createDailyLimit?: number
   /** emails allowed to read the feedback queue */
   adminEmails: string[]
+  /** shared secret for the nightly test run (at least 24 characters); unset = no nightly runs */
+  evalToken?: string
   now?: () => number
 }
 
@@ -324,6 +326,90 @@ export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision
         await stream.writeSSE({ event: 'error', data: JSON.stringify({ error: incomplete ? 'The model gave an incomplete answer. Please try again.' : 'Solidify couldn’t build that just now. Please try again.' }) })
       }
     })
+  })
+
+  /* ------------------------------------------------------------------ getting better every day */
+
+  /** the nightly test run proves itself with a shared secret (EVAL_TOKEN), compared in constant time */
+  const requireEval = (c: Context<Env>) => {
+    const want = config.evalToken ?? ''
+    const got = c.req.header('x-eval-token') ?? ''
+    let diff = want.length === got.length && want.length >= 24 ? 0 : 1
+    for (let i = 0; i < Math.min(want.length, got.length); i++) diff |= want.charCodeAt(i) ^ got.charCodeAt(i)
+    if (diff) throw fail(401, 'Not allowed.')
+  }
+
+  /** one build for the nightly test set: the same model call students get, outside their daily allowance */
+  app.post('/v1/evals/build', async (c) => {
+    requireEval(c)
+    const req = await body(c, create3dRequest)
+    const t0 = now()
+    const out = await model(() => noteVision.createOrEdit3D(req))
+    return c.json({ ...out, ms: now() - t0 })
+  })
+
+  const evalCheck = z.object({ name: z.string().max(80), ok: z.boolean(), detail: z.string().max(300).optional() })
+  const evalRun = z.object({
+    runAt: z.number().int().positive(),
+    label: z.string().max(80).optional(),
+    cases: z
+      .array(
+        z.object({
+          id: z.string().max(60),
+          prompt: z.string().max(400),
+          score: z.number().min(0).max(100),
+          seconds: z.number().min(0).max(3600),
+          checks: z.array(evalCheck).max(24),
+          error: z.string().max(300).optional(),
+        }),
+      )
+      .max(80),
+    summary: z.object({ score: z.number().min(0).max(100), passed: z.number().int().min(0), total: z.number().int().min(0) }),
+  })
+
+  /** a night's results */
+  app.post('/v1/evals/runs', async (c) => {
+    requireEval(c)
+    const run = await body(c, evalRun)
+    await db.set(`evalRuns/${run.runAt}`, run)
+    return c.json({ ok: true }, 201)
+  })
+
+  /** the trend and the latest run in full, for the quality page */
+  app.get('/v1/evals', async (c) => {
+    requireAdmin(c)
+    const rows = await db.list<z.infer<typeof evalRun>>('evalRuns')
+    const runs = rows.map((r) => r.data).sort((a, b) => b.runAt - a.runAt)
+    return c.json({ runs: runs.slice(0, 90).map(({ runAt, label, summary }) => ({ runAt, label, summary })), latest: runs[0] ?? null })
+  })
+
+  /* what students do with the models: counted by day and kind, with no one's identity; a thumbs-down keeps its note */
+  const EVENT_KINDS = ['rating-up', 'rating-down', 'fix-layout', 'layout-issue', 'rebuild', 'delete'] as const
+  const eventInput = z.object({
+    kind: z.enum(EVENT_KINDS),
+    subject: z.string().trim().max(120).optional(),
+    detail: z.string().trim().max(300).optional(),
+  })
+
+  app.post('/v1/events', async (c) => {
+    const u = requireUser(c)
+    const e = await body(c, eventInput)
+    await spend(u.uid, 'eventUsage', 300, 'feedback events')
+    const d = day(now())
+    await db.transact<Record<string, number>>(`eventCounts/${d}`, (prev) => ({ ...(prev ?? {}), [e.kind]: ((prev ?? {})[e.kind] ?? 0) + 1 }))
+    if (e.kind === 'rating-down' || e.kind === 'layout-issue' || e.kind === 'fix-layout') {
+      await db.set(`eventNotes/${now()}_${randomId()}`, { kind: e.kind, subject: e.subject ?? '', detail: e.detail ?? '', day: d })
+    }
+    return c.json({ ok: true }, 201)
+  })
+
+  /** the last 14 days of counts, and the latest notes, for the quality page */
+  app.get('/v1/events/summary', async (c) => {
+    requireAdmin(c)
+    const days = Array.from({ length: 14 }, (_, i) => day(now() - i * 86_400_000)).reverse()
+    const counts = await Promise.all(days.map(async (d) => ({ day: d, ...((await db.get<Record<string, number>>(`eventCounts/${d}`)) ?? {}) })))
+    const notes = (await db.list<{ kind: string; subject: string; detail: string; day: string }>('eventNotes')).slice(-40).reverse().map((r) => r.data)
+    return c.json({ days: counts, notes })
   })
 
   /* ------------------------------------------------------------------ creation lab */
