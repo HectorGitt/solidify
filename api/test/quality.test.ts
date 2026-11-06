@@ -175,3 +175,16 @@ describe('the admin controls', () => {
     expect(calls).toEqual([{ limit: '3', drafts: '0' }])
   })
 })
+
+describe('publishing straight to the library', () => {
+  const boss = { Authorization: 'Bearer user:boss:Boss' }
+  it('lets an admin publish and retitle a model, and no one else', async () => {
+    const model = { title: 'Gear pump', prompt: 'An external gear pump', spec: { title: 'Gear pump', parts: [{ id: 'a' }, { id: 'b' }] }, score: 100 }
+    expect((await req('POST', '/v1/library', model, asUser('sam'))).status).toBe(403)
+    const { id } = (await (await req('POST', '/v1/library', model, boss)).json()) as { id: string }
+    expect((await req('PUT', `/v1/library/${id}`, { title: 'External gear pump', topic: 'Fluids' }, asUser('sam'))).status).toBe(403)
+    expect((await req('PUT', `/v1/library/${id}`, { title: 'External gear pump', topic: 'Fluids' }, boss)).status).toBe(200)
+    const lib = (await (await req('GET', '/v1/library')).json()) as { items: Record<string, unknown>[] }
+    expect(lib.items[0]).toMatchObject({ id, title: 'External gear pump', topic: 'Fluids', parts: 2 })
+  })
+})

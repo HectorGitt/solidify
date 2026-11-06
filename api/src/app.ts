@@ -631,6 +631,27 @@ export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision
     return c.json({ ok: true })
   })
 
+  /** an admin publishes a model straight to the library (from the workspace), skipping the queue */
+  app.post('/v1/library', async (c) => {
+    requireAdmin(c)
+    const d = await body(c, libraryInput)
+    if (JSON.stringify(d.spec).length > 300_000) throw fail(413, 'This model is too large to save.')
+    const id = randomId()
+    await db.set(`library/${id}`, { ...d, parts: Array.isArray(d.spec.parts) ? d.spec.parts.length : 0, createdAt: now(), publishedAt: now() })
+    return c.json({ id }, 201)
+  })
+
+  /** retitle or re-topic a published model */
+  app.put('/v1/library/:id', async (c) => {
+    requireAdmin(c)
+    const id = libraryId(c.req.param('id'))
+    const item = await db.get<LibraryDoc>(`library/${id}`)
+    if (!item) throw fail(404, 'Not found.')
+    const patch = await body(c, z.object({ title: libraryInput.shape.title, topic: z.string().trim().max(60) }).partial())
+    await db.set(`library/${id}`, { ...item, ...patch })
+    return c.json({ ok: true })
+  })
+
   /* ------------------------------------------------------------------ creation lab */
 
   /** a student's saved models: everything they build in Create in 3D, to reopen and keep changing */
