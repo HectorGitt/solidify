@@ -7,6 +7,7 @@ import type { CatalogSceneMatch } from '@/note3d/createCatalog'
 import type { LiveProgress } from '@/note3d/liveBuild'
 import { liveAssembly, useLiveSceneDef } from '@/note3d/NoteSceneRenderer'
 import { ChartView, fmtNum } from '@/note3d/ChartView'
+import { resolveAssembly } from '@/note3d/assembly'
 import { findPart } from '@/note3d/partInfo'
 import { ALLOWED_MATERIALS, evaluateCalculations, evaluateChart, type EvaluatedCalculation, type EvaluatedChart, type NoteParameterSpec, type NotePartSpec, type NoteSceneSpec, type NoteShapeKind } from '@/note3d/schema'
 import { MATERIALS, type MaterialKey } from '@/render/materials'
@@ -693,6 +694,10 @@ export default function ModelLab() {
   const shownParams = useMemo(() => (preview ? Object.fromEntries(preview.parameters.map((p) => [p.id, p.value])) : params), [preview, params])
   const { results: calcResults, scope: calcScope } = useMemo(() => evaluateCalculations(shownSpec?.calculations, shownParams), [shownSpec?.calculations, shownParams])
   const charts = useMemo(() => (shownSpec?.charts ?? []).map((ch) => evaluateChart(ch, calcScope)).filter((ch): ch is EvaluatedChart => !!ch), [shownSpec?.charts, calcScope])
+  // the assembly check: parts left floating or buried, which Gemini can be asked to fix
+  const layoutIssues = useMemo(() => (spec && !live && viewMode === 'parametric' ? resolveAssembly(spec, calcScope).issues : []), [spec, live, viewMode, calcScope])
+  const [layoutDismissed, setLayoutDismissed] = useState('')
+  const layoutKey = layoutIssues.map((i) => i.message).join('|')
   const selectedPart = useMemo(() => (viewMode === 'parametric' ? findPart(shownSpec, selectedId) : null), [shownSpec, selectedId, viewMode])
   // on a phone, choosing a part brings its details up under the model
   useEffect(() => {
@@ -882,6 +887,25 @@ export default function ModelLab() {
                       <input type="range" aria-label="How far apart" min={0} max={1} step={0.02} value={explode} onChange={(e) => useView.getState().setExplode(parseFloat(e.target.value))} className="slider flex-1" />
                     </label>
                   ) : null}
+                </div>
+              ) : null}
+              {layoutIssues.length > 0 && layoutDismissed !== layoutKey ? (
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-line bg-warn/10 px-4 py-2 text-[12.5px]">
+                  <span className="min-w-0 flex-1 text-ink">
+                    <span className="font-semibold">{layoutIssues.length === 1 ? 'A part looks out of place' : `${layoutIssues.length} parts look out of place`}:</span>{' '}
+                    {layoutIssues.slice(0, 3).map((i) => i.message).join('; ')}
+                    {layoutIssues.length > 3 ? '…' : ''}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => void send(`Fix the layout so every part sits where it belongs, using mounts (coaxial, mesh, against, centered) rather than coordinates. The problems: ${layoutIssues.map((i) => i.message).join('; ')}.`)}
+                    className={`${primaryBtn} px-3.5 py-1 text-[12px]`}
+                  >
+                    Fix the layout
+                  </button>
+                  <button type="button" onClick={() => setLayoutDismissed(layoutKey)} className="text-[12px] text-mute hover:text-ink">
+                    Dismiss
+                  </button>
                 </div>
               ) : null}
               <div className="relative min-h-0 flex-1">
