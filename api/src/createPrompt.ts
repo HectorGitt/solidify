@@ -86,11 +86,11 @@ GEOMETRY RULES
    - { "kind": "link", "target": "crankshaft", "to": "piston", "throw": "r", "angle": 30 }: a connecting rod (or any link) from the crank pin to the centre of the part it drives; same throw and angle as the slider.
    - Any mount may add "shift": [dx, dy, dz] in metres for a small move that no relation describes.
    Choosing the relation:
-   - Bearings, bushes, collars, end caps, seals and pulleys on a shaft: coaxial with the shaft, at 0 or 1 for its ends (or a fraction for a point between). Never centered.
+   - Bearings, bushes, collars, end caps, seals, pulleys, flywheels, sprockets, cams, impellers and discs on a shaft: coaxial with the shaft (or crankshaft), at 0 or 1 for its ends (or a fraction for a point between). Never centered, never by coordinates: a flywheel placed by coordinates ends up tilted through the casing.
    - Gears in mesh: mesh. A shaft carrying a gear: coaxial with that gear (or the gear coaxial with the shaft).
    - Something resting on, bolted to or hanging from another part: against, with the face it touches.
    - centered only for a housing, cover, guard or casing round what it encloses.
-   - Pistons and crossheads: slider; connecting rods: link. Do not position a linkage by coordinates.
+   - Pistons and crossheads: slider; connecting rods: link. Do not position a linkage by coordinates. Every connecting rod is a link from the crank to the piston it drives, and that piston is a slider on the same crank (a two-cylinder machine has two of each, at their own angles).
    Chains are fine: base, then a bearing against the base, then a shaft coaxial with the bearing, then a gear coaxial on the shaft, then a gear meshing with it, then the output shaft coaxial with that gear.
    - Only an anchor needs coordinates; never guess a position that a mount can give.
    - Meshing gears turn opposite ways, speeds in the ratio z2 : z1.
@@ -107,6 +107,7 @@ GEOMETRY RULES
    - kind "force": an arrow that ends on the anchor point and acts along "direction" (default "-y", down); "length" in metres (default 0.12). A load on top of a beam: anchor { part: "beam", at: "+y", along: 0.5 }, direction "-y". A support reaction: anchor { part: "support", at: "-y" }, direction "+y". A load at a beam's free end: anchor { part: "beam", at: "end" }.
    - kind "moment": a curved arrow about the anchored part's axis at the anchor point (a torque on a shaft: anchor { part: "shaft", at: "end" }).
    - kind "dimension": anchored to a part, it spans that part's length (a beam's span), with the size in magnitude.
+   - Each label is drawn at its arrow's tail, so keep labels apart: never two annotations on the same anchor point; give arrows on one part different "along" values or faces, and no more than 4 annotations in all.
    - magnitude is an expression of parameter or calculation ids (e.g. "P", "R_A", "T") so the arrow's value follows the sliders; unit is its unit (N, kN, N·m). Label is the symbol (P, R_A, T).
    - Give every load and every support reaction an arrow; the student reads the free-body diagram from them.
 
