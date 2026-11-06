@@ -1,0 +1,421 @@
+import { useCallback, useEffect, useState, type ReactNode } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
+import { Pills, StudyShell } from '@/study/ui/StudyShell'
+import { ListSkeleton } from '@/ui/Skeleton'
+import { toast } from '@/ui/toast'
+import { ApiError, download } from '../api'
+import { useAuth } from '../auth'
+import { saveNewCreation } from '../creations'
+import { useProfile } from '../profile'
+import {
+  approveDraft,
+  getDrafts,
+  getEvals,
+  getEventSummary,
+  getFeedback,
+  getWaitlist,
+  rejectDraft,
+  type EvalRun,
+  type EventDay,
+  type EventNote,
+  type FeedbackItem,
+  type LibraryDraft,
+  type WaitlistEntry,
+} from '../admin'
+import { ghostBtn, inputCls, primaryBtn } from './Modal'
+
+type Tab = 'quality' | 'review' | 'feedback' | 'waitlist'
+
+const date = (t: number) => new Date(t).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })
+const dateTime = (t: number) => new Date(t).toLocaleString(undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
+const smallBtn = 'rounded-full px-3 py-1.5 text-[12.5px] font-medium transition-colors disabled:opacity-50'
+const card = 'rounded-2xl border border-line bg-panel'
+
+/** loads once, with a retry; the shape every tab uses */
+function useLoad<T>(load: () => Promise<T>) {
+  const [data, setData] = useState<T | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const run = useCallback(() => {
+    setError(null)
+    load()
+      .then(setData)
+      .catch((e) => setError(e instanceof ApiError ? e.message : 'Couldn’t load this.'))
+  }, [load])
+  useEffect(run, [run])
+  return { data, setData, error, reload: run }
+}
+
+function Loading({ error, onRetry, children }: { error: string | null; onRetry: () => void; children: ReactNode | null }) {
+  if (error)
+    return (
+      <section className={`${card} flex flex-col items-center gap-3 px-6 py-12 text-center`}>
+        <p className="text-[13.5px] text-ink">{error}</p>
+        <button type="button" className={ghostBtn} onClick={onRetry}>
+          Try again
+        </button>
+      </section>
+    )
+  return children ?? <ListSkeleton rows={5} />
+}
+
+function Empty({ children }: { children: ReactNode }) {
+  return <section className="rounded-2xl border border-dashed border-line-2 bg-panel px-6 py-12 text-center text-[13.5px] text-mute">{children}</section>
+}
+
+const scoreTone = (s: number) => (s >= 90 ? 'text-accent' : s >= 70 ? 'text-ink' : 'text-warn')
+
+/* ------------------------------------------------------------------ quality */
+
+/** one bar per night, tallest = 100 */
+function Trend({ runs }: { runs: { runAt: number; summary: { score: number } }[] }) {
+  const shown = runs.slice(0, 30).reverse()
+  return (
+    <div className="flex h-24 items-end gap-[3px]" role="img" aria-label={`Night scores, last ${shown.length} runs`}>
+      {shown.map((r) => (
+        <div key={r.runAt} title={`${date(r.runAt)}: ${r.summary.score}`} className={`min-w-[6px] flex-1 rounded-t ${r.summary.score >= 90 ? 'bg-accent' : r.summary.score >= 70 ? 'bg-ink/50' : 'bg-warn'}`} style={{ height: `${Math.max(4, r.summary.score)}%` }} />
+      ))}
+    </div>
+  )
+}
+
+const EVENT_LABELS: [string, string][] = [
+  ['rating-up', 'Thumbs up'],
+  ['rating-down', 'Thumbs down'],
+  ['layout-issue', 'Layout flagged'],
+  ['fix-layout', 'Fix the layout'],
+  ['rebuild', 'Rebuilt'],
+  ['delete', 'Deleted'],
+]
+
+function Usage({ days, notes }: { days: EventDay[]; notes: EventNote[] }) {
+  const total = (k: string) => days.reduce((n, d) => n + (Number(d[k]) || 0), 0)
+  return (
+    <section className={`${card} p-5`}>
+      <h2 className="text-[15px] font-semibold">What students did with their models</h2>
+      <p className="mt-1 text-[12.5px] text-mute">Last 14 days. Counted without names.</p>
+      <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+        {EVENT_LABELS.map(([k, label]) => (
+          <div key={k} className="rounded-xl border border-line px-3 py-2.5">
+            <div className="text-[20px] font-semibold tabular-nums">{total(k)}</div>
+            <div className="text-[11.5px] text-mute">{label}</div>
+          </div>
+        ))}
+      </div>
+      {notes.length ? (
+        <>
+          <h3 className="mt-5 text-[13px] font-semibold">Latest notes</h3>
+          <ul className="mt-2 divide-y divide-line">
+            {notes.slice(0, 15).map((n, i) => (
+              <li key={i} className="flex flex-wrap gap-x-3 gap-y-0.5 py-2 text-[12.5px]">
+                <span className="w-24 shrink-0 text-dim">{n.day}</span>
+                <span className="w-28 shrink-0 text-mute">{EVENT_LABELS.find(([k]) => k === n.kind)?.[1] ?? n.kind}</span>
+                <span className="min-w-0 flex-1 text-ink/90">
+                  {n.subject ? <span className="font-medium">{n.subject}</span> : null}
+                  {n.subject && n.detail ? ': ' : null}
+                  {n.detail}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </>
+      ) : null}
+    </section>
+  )
+}
+
+function LatestRun({ run }: { run: EvalRun }) {
+  const [open, setOpen] = useState<string | null>(null)
+  const cases = [...run.cases].sort((a, b) => a.score - b.score)
+  return (
+    <section className={`${card} p-5`}>
+      <h2 className="text-[15px] font-semibold">Last night, case by case</h2>
+      <p className="mt-1 text-[12.5px] text-mute">
+        {dateTime(run.runAt)}
+        {run.label ? ` · ${run.label}` : ''}. Weakest first; open one to see which checks failed.
+      </p>
+      <ul className="mt-3 divide-y divide-line">
+        {cases.map((c) => {
+          const failed = c.checks.filter((x) => !x.ok)
+          const isOpen = open === c.id
+          return (
+            <li key={c.id}>
+              <button type="button" onClick={() => setOpen(isOpen ? null : c.id)} className="flex w-full items-center gap-3 py-2.5 text-left" aria-expanded={isOpen}>
+                <span className={`w-9 shrink-0 text-right text-[14px] font-semibold tabular-nums ${scoreTone(c.score)}`}>{c.score}</span>
+                <span className="min-w-0 flex-1 truncate text-[13px] text-ink/90">{c.prompt}</span>
+                <span className="shrink-0 text-[11.5px] text-dim">{failed.length ? `${failed.length} failed` : 'all passed'}</span>
+                <span className="w-10 shrink-0 text-right text-[11.5px] tabular-nums text-dim">{c.seconds}s</span>
+              </button>
+              {isOpen ? (
+                <ul className="mb-3 ml-12 space-y-1 text-[12.5px]">
+                  {c.checks.map((x) => (
+                    <li key={x.name} className={x.ok ? 'text-mute' : 'text-warn'}>
+                      {x.ok ? '✓' : '✗'} {x.name}
+                      {!x.ok && x.detail ? <span className="text-ink/80">: {x.detail}</span> : null}
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </li>
+          )
+        })}
+      </ul>
+    </section>
+  )
+}
+
+function Quality() {
+  const evals = useLoad(getEvals)
+  const events = useLoad(getEventSummary)
+  const runs = evals.data?.runs ?? []
+  const [last, prev] = runs
+  const delta = last && prev ? last.summary.score - prev.summary.score : null
+  return (
+    <div className="space-y-5">
+      <Loading error={evals.error} onRetry={evals.reload}>
+        {evals.data ? (
+          last ? (
+            <>
+              <section className={`${card} grid gap-6 p-5 sm:grid-cols-[auto_1fr]`}>
+                <div>
+                  <div className="text-[12px] uppercase tracking-wide text-dim">Night score</div>
+                  <div className={`text-[44px] font-semibold leading-none tabular-nums ${scoreTone(last.summary.score)}`}>{last.summary.score}</div>
+                  <div className="mt-2 text-[12.5px] text-mute">
+                    {last.summary.passed} of {last.summary.total} builds perfect
+                    {delta !== null ? <span className={delta >= 0 ? ' text-accent' : ' text-warn'}>{` · ${delta >= 0 ? '+' : ''}${delta} on the night before`}</span> : null}
+                  </div>
+                  <div className="mt-1 text-[11.5px] text-dim">{dateTime(last.runAt)}</div>
+                </div>
+                <div>
+                  <Trend runs={runs} />
+                  <div className="mt-1.5 text-[11.5px] text-dim">Last {Math.min(30, runs.length)} runs</div>
+                </div>
+              </section>
+              {evals.data.latest ? <LatestRun run={evals.data.latest} /> : null}
+            </>
+          ) : (
+            <Empty>No test runs yet. The first one runs tonight, or start one from the repository’s Actions tab (Nightly model tests, Run workflow).</Empty>
+          )
+        ) : null}
+      </Loading>
+      <Loading error={events.error} onRetry={events.reload}>
+        {events.data ? <Usage days={events.data.days} notes={events.data.notes} /> : null}
+      </Loading>
+    </div>
+  )
+}
+
+/* ------------------------------------------------------------------ review queue */
+
+function DraftCard({ d, onDone }: { d: LibraryDraft; onDone: (approved: boolean) => void }) {
+  const navigate = useNavigate()
+  const [title, setTitle] = useState(d.title)
+  const [busy, setBusy] = useState<null | 'open' | 'approve' | 'reject'>(null)
+  const failed = (d.checks ?? []).filter((c) => !c.ok)
+
+  const act = async (kind: 'open' | 'approve' | 'reject') => {
+    setBusy(kind)
+    try {
+      if (kind === 'open') {
+        // a private copy in My models, to look round it in the full workspace before deciding
+        const { id } = await saveNewCreation({ title: `Review: ${d.title}`.slice(0, 120), prompt: d.prompt, spec: d.spec, history: d.explanation ? [{ prompt: d.prompt, response: d.explanation.slice(0, 2000) }] : [] })
+        navigate(`/create/${id}`)
+        return
+      }
+      if (kind === 'approve') await approveDraft(d.id, title.trim() && title.trim() !== d.title ? title.trim() : undefined)
+      else await rejectDraft(d.id)
+      toast(kind === 'approve' ? `Published “${title.trim() || d.title}”.` : 'Draft rejected.')
+      onDone(kind === 'approve')
+    } catch (e) {
+      toast(e instanceof ApiError ? e.message : 'That didn’t work. Please try again.', { tone: 'warn' })
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  return (
+    <article className={`${card} flex flex-col gap-3 p-4`}>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          {d.topic ? <div className="text-[11.5px] uppercase tracking-wide text-dim">{d.topic}</div> : null}
+          <input aria-label="Title" value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120} className={`${inputCls} mt-1 py-1.5! font-semibold`} />
+        </div>
+        <div className="shrink-0 text-right">
+          <div className={`text-[22px] font-semibold leading-none tabular-nums ${scoreTone(d.score)}`}>{d.score}</div>
+          <div className="mt-1 text-[11px] text-dim">score</div>
+        </div>
+      </div>
+      <p className="text-[12.5px] leading-snug text-mute">{d.prompt}</p>
+      <p className="text-[11.5px] text-dim">
+        {d.parts} parts · drafted {dateTime(d.createdAt)}
+        {failed.length ? <span className="text-warn"> · {failed.map((f) => f.name).join(', ')} failed</span> : null}
+      </p>
+      <div className="mt-auto flex flex-wrap gap-2 pt-1">
+        <button type="button" disabled={!!busy} onClick={() => void act('open')} className={`${smallBtn} border border-line-2 text-ink/90 hover:border-ink/40`}>
+          {busy === 'open' ? 'Opening…' : 'Open in 3D'}
+        </button>
+        <button type="button" disabled={!!busy} onClick={() => void act('approve')} className={`${smallBtn} bg-accent text-accent-ink hover:opacity-90`}>
+          {busy === 'approve' ? 'Publishing…' : 'Approve'}
+        </button>
+        <button type="button" disabled={!!busy} onClick={() => void act('reject')} className={`${smallBtn} ml-auto text-mute hover:bg-panel-2 hover:text-warn`}>
+          {busy === 'reject' ? 'Rejecting…' : 'Reject'}
+        </button>
+      </div>
+    </article>
+  )
+}
+
+function Review() {
+  const { data, setData, error, reload } = useLoad(getDrafts)
+  return (
+    <Loading error={error} onRetry={reload}>
+      {data ? (
+        data.drafts.length ? (
+          <>
+            <p className="mb-3 text-[12.5px] text-mute">
+              Drafted overnight and scored by the same checks as the test set. Approved models appear on the Create page for everyone; open one first to look round it (it opens as a private copy in your models).
+            </p>
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              {data.drafts.map((d) => (
+                <DraftCard key={d.id} d={d} onDone={() => setData({ drafts: data.drafts.filter((x) => x.id !== d.id) })} />
+              ))}
+            </div>
+          </>
+        ) : (
+          <Empty>Nothing waiting. The nightly run drafts three new models and queues the ones that score 85 or more.</Empty>
+        )
+      ) : null}
+    </Loading>
+  )
+}
+
+/* ------------------------------------------------------------------ feedback and waitlist */
+
+const KIND_LABEL: Record<FeedbackItem['kind'], string> = { bug: 'Bug', error: 'Error', idea: 'Idea', sales: 'Sales' }
+
+function Feedback() {
+  const { data, error, reload } = useLoad(getFeedback)
+  const [kind, setKind] = useState<'all' | FeedbackItem['kind']>('all')
+  const items = data?.feedback.filter((f) => kind === 'all' || f.kind === kind) ?? []
+  return (
+    <Loading error={error} onRetry={reload}>
+      {data ? (
+        <>
+          <div className="mb-3">
+            <Pills label="Kind" value={kind} onChange={setKind} options={[{ value: 'all', label: `All ${data.feedback.length}` }, ...(['bug', 'error', 'idea', 'sales'] as const).map((k) => ({ value: k, label: `${KIND_LABEL[k]} ${data.feedback.filter((f) => f.kind === k).length}` }))]} />
+          </div>
+          {items.length ? (
+            <ul className={`${card} divide-y divide-line`}>
+              {items.map((f) => (
+                <li key={f.id} className="px-4 py-3">
+                  <div className="flex flex-wrap items-center gap-x-2 text-[11.5px] text-dim">
+                    <span className={`rounded-full px-2 py-0.5 font-medium ${f.kind === 'sales' ? 'bg-accent/15 text-accent' : f.kind === 'idea' ? 'bg-panel-3 text-ink/80' : 'bg-warn/15 text-warn'}`}>{KIND_LABEL[f.kind]}</span>
+                    <span>{dateTime(f.createdAt)}</span>
+                    {f.route ? <span className="truncate">{f.route}</span> : null}
+                  </div>
+                  <p className="mt-1.5 whitespace-pre-wrap text-[13px] leading-relaxed text-ink/90">{f.message}</p>
+                  {f.contact || f.name || f.organisation ? (
+                    <p className="mt-1 text-[12px] text-mute">
+                      {[f.name, f.organisation, f.seats ? `${f.seats} seats` : null].filter(Boolean).join(' · ')}
+                      {f.contact ? (
+                        <>
+                          {f.name || f.organisation ? ' · ' : ''}
+                          <a className="text-accent underline-offset-2 hover:underline" href={`mailto:${f.contact}`}>
+                            {f.contact}
+                          </a>
+                        </>
+                      ) : null}
+                    </p>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <Empty>No messages here yet.</Empty>
+          )}
+        </>
+      ) : null}
+    </Loading>
+  )
+}
+
+function Waitlist() {
+  const { data, error, reload } = useLoad(getWaitlist)
+  const list = (v: WaitlistEntry['interest']) => (Array.isArray(v) ? v.join(', ') : (v ?? ''))
+  return (
+    <Loading error={error} onRetry={reload}>
+      {data ? (
+        <>
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <p className="text-[13px] text-mute">{data.count} on the list</p>
+            <button type="button" className={ghostBtn} onClick={() => void download('/v1/waitlist.csv', 'solidify-waitlist.csv').catch(() => toast('Couldn’t download the list.', { tone: 'warn' }))}>
+              Download CSV
+            </button>
+          </div>
+          {data.entries.length ? (
+            <ul className={`${card} divide-y divide-line`}>
+              {[...data.entries].reverse().map((w) => (
+                <li key={w.email} className="grid gap-1 px-4 py-3 text-[12.5px] sm:grid-cols-[minmax(0,14rem)_1fr_auto] sm:gap-4">
+                  <div className="min-w-0">
+                    <div className="truncate font-medium text-ink">{w.name || w.email}</div>
+                    {w.name ? <div className="truncate text-mute">{w.email}</div> : null}
+                  </div>
+                  <div className="min-w-0 text-mute">
+                    {[w.role, w.organisation, list(w.interest)].filter(Boolean).join(' · ')}
+                    {w.useCase ? <div className="mt-0.5 text-ink/85">{w.useCase}</div> : null}
+                  </div>
+                  <div className="text-dim">{date(w.createdAt)}</div>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <Empty>No one yet.</Empty>
+          )}
+        </>
+      ) : null}
+    </Loading>
+  )
+}
+
+/* ------------------------------------------------------------------ page */
+
+const TABS: { value: Tab; label: string }[] = [
+  { value: 'quality', label: 'Quality' },
+  { value: 'review', label: 'Review queue' },
+  { value: 'feedback', label: 'Feedback' },
+  { value: 'waitlist', label: 'Waitlist' },
+]
+
+/** for the team: how good the builds are each night, models waiting for review, and what people have sent in */
+export default function AdminPage() {
+  const status = useAuth((s) => s.status)
+  const profile = useProfile((s) => s.profile)
+  const [params, setParams] = useSearchParams()
+  const tab = (TABS.find((t) => t.value === params.get('tab'))?.value ?? 'quality') as Tab
+
+  let body: ReactNode
+  if (status === 'loading' || (status === 'signed-in' && !profile)) body = <ListSkeleton rows={5} />
+  else if (status !== 'signed-in')
+    body = (
+      <Empty>
+        <button type="button" className={primaryBtn} onClick={() => useAuth.getState().openDialog()}>
+          Sign in
+        </button>
+      </Empty>
+    )
+  else if (!profile?.isAdmin) body = <Empty>This page is for the Solidify team.</Empty>
+  else
+    body = (
+      <>
+        <div className="mb-5">
+          <Pills label="Section" value={tab} onChange={(t) => setParams(t === 'quality' ? {} : { tab: t }, { replace: true })} options={TABS} />
+        </div>
+        {tab === 'quality' ? <Quality /> : tab === 'review' ? <Review /> : tab === 'feedback' ? <Feedback /> : <Waitlist />}
+      </>
+    )
+
+  return (
+    <StudyShell title="Admin" lead="Nightly build quality, new models waiting for review, and what people have sent in.">
+      <div className="pb-16">{body}</div>
+    </StudyShell>
+  )
+}

@@ -14,6 +14,8 @@ export interface Profile {
   email?: string
   role: 'student' | 'teacher'
   classes?: ClassRef[]
+  /** can open the admin page (the API decides; this only shows the link) */
+  isAdmin?: boolean
 }
 
 /** The signed-in user's Solidify profile (role, display name, classes), from the API. */
