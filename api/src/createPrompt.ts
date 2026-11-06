@@ -38,7 +38,8 @@ Build it as a complete, physically sensible, interactive 3D model in Solidify's 
 
 SCOPE: BUILD THE SUBJECT, NOT A TEST RIG
 - Build exactly what the student asked for, plus only what is needed to show it working.
-  A loaded beam: the beam, its supports and the load, nothing else. A shaft in torsion: the shaft, its fixed end and the applied torque. A tensile specimen: the specimen (and the pull on its ends).
+  A loaded beam: the beam and its supports, with the load drawn as an arrow. A shaft in torsion: the shaft and its fixed end, with the torque drawn as a curved arrow. A tensile specimen: the specimen, with the pull on each end drawn as arrows.
+- Loads, reactions and applied torques are ANNOTATIONS (arrows), never parts: no weights, hangers, load blocks or "load applicator" parts unless a test rig is asked for.
 - Do NOT add test equipment unless the student's words ask for a test, rig, experiment, apparatus or measurement, or the photo shows it. Test equipment means: machine beds and test frames, grips and chucks, loading rams and weight hangers, dial gauges and dial indicators, deflection transducers, extensometers, strain gauges, protractors and pointers, load cells.
 - When test equipment is asked for, use the instrument that measures the right quantity (deflection: dial gauge; strain: extensometer or strain gauge; twist: protractor; force: load cell).
 
@@ -86,7 +87,14 @@ GEOMETRY RULES
    - Charts, whenever the subject has a diagram or a curve (bending moment and shear force diagrams, deflection, stress along a member, pump or fan curves, torque and power against speed, efficiency): 1 to 3 charts { id, title, x: { label, unit, from, to }, y: { label, unit }, series: [{ id, label, formula }] }. Each series formula is in x (the position or variable along the x axis, in x's unit) plus parameter and calculation ids, using the same functions; use mac() or step() for loads and supports partway along a member. x.from and x.to may be expressions (e.g. "0" to "L").
    - A diagram or graph is ALWAYS a chart, never 3D shapes: do not build bending moment, shear force or any other plot out of boxes, plates or extrusions in the model.
 
-7. Lab models: Solidify already has detailed, working models of these machines (id: title):
+7. Annotations (arrows and dimensions drawn in the view): { id, kind, label, magnitude?, unit?, from, to, value? }
+   - kind "force": an arrow from its tail (from) to the point the force acts on (to), about 0.08 to 0.15 m long, e.g. a downward point load at the beam tip: from [L, 0.14, 0], to [L, 0.02, 0] (as expressions).
+   - kind "moment": a curved arrow; from is its centre, to a point along its axis (e.g. a torque about the shaft axis).
+   - kind "dimension": a dashed line between two points, with the size in value or magnitude.
+   - magnitude is an expression of parameter or calculation ids (e.g. "P", "R_A", "T") so the arrow's value follows the sliders; unit is its unit (N, kN, N·m). Label is the symbol (P, R_A, T).
+   - Give every load and every support reaction an arrow; the student reads the free-body diagram from them.
+
+8. Lab models: Solidify already has detailed, working models of these machines (id: title):
 ${labPromptText()}
    If the request or photo shows one of these machines (or a close variant), still build the model as the scope rules say (the student is offered Solidify's own rig separately, so do not turn the model into that rig), and also set "labMatch" to its id (e.g. "engine/four-stroke-diesel"). Otherwise leave labMatch out.
 
@@ -108,6 +116,7 @@ Return ONLY this JSON:
     "parameters": [...],
     "calculations": [...],
     "charts": [...],
+    "annotations": [...],
     "parts": [{ "id", "name", "material", "role", "cut", "position", "explode", "motion"?, "info", "shapes": [...] }]
   }
 }
