@@ -63,16 +63,23 @@ interface CaseResult {
   tokensOut?: number
 }
 
+/** one build; if the model is still busy after the API's own retries, one more try half a minute later (timed from that try) */
 async function buildOne(prompt: string): Promise<{ reply: Record<string, unknown>; seconds: number }> {
-  const t0 = Date.now()
-  const res = await fetch(`${API}/v1/evals/build`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-eval-token': TOKEN },
-    body: JSON.stringify({ prompt }),
-    signal: AbortSignal.timeout(240_000),
-  })
-  if (!res.ok) throw new Error(`build ${res.status}: ${(await res.text()).slice(0, 200)}`)
-  return { reply: (await res.json()) as Record<string, unknown>, seconds: (Date.now() - t0) / 1000 }
+  for (let attempt = 0; ; attempt++) {
+    const t0 = Date.now()
+    const res = await fetch(`${API}/v1/evals/build`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-eval-token': TOKEN },
+      body: JSON.stringify({ prompt }),
+      signal: AbortSignal.timeout(240_000),
+    })
+    if (res.ok) return { reply: (await res.json()) as Record<string, unknown>, seconds: (Date.now() - t0) / 1000 }
+    if (attempt === 0 && (res.status === 503 || res.status === 429)) {
+      await new Promise((r) => setTimeout(r, 30_000))
+      continue
+    }
+    throw new Error(`build ${res.status}: ${(await res.text()).slice(0, 200)}`)
+  }
 }
 
 it('nightly test run', { timeout: 60 * 60_000 }, async () => {
