@@ -266,7 +266,7 @@ function AiCostTable({ days, price }: { days: Record<string, number | string>[];
       <h2 className="text-[15px] font-semibold">What AI actions cost</h2>
       <p className="mt-1 text-[12.5px] text-mute">
         Students’ real use over the last 30 days, averaged per action (nightly tests not included).{' '}
-        {price ? `At $${price.inputPerM} in and $${price.outputPerM} out per million tokens: ${usd(totalCost)} in all.` : 'Set the model’s price in Settings to see costs in dollars.'}
+        {price ? `At $${price.inputPerM} in and $${price.outputPerM} out per million tokens: ${usd(totalCost)} in all.` : 'No price is known for the model in use: set it in Settings to see costs in dollars.'}
       </p>
       <div className="mt-3 overflow-x-auto">
         <table className="w-full min-w-[520px] text-left text-[12.5px]">
@@ -676,15 +676,15 @@ function Settings() {
               </label>
             </div>
             <h2 className="pt-2 text-[15px] font-semibold">Model price</h2>
-            <p className="text-[12px] text-mute">US dollars per million tokens, from Google’s price list for the model the API uses. Gemini 3.8 Flash is 0.75 in and 3.75 out until 31 December 2026, then 1.50 and 7.50.</p>
+            <p className="text-[12px] text-mute">US dollars per million tokens. Leave blank to use Google’s list price, built in for Gemini 3.8 Flash (0.75 in and 3.75 out until 31 December 2026, then 1.50 and 7.50 on its own). Fill in only for a discount or a different model.</p>
             <div className="flex flex-wrap items-end gap-5">
               <label className="text-[12px] text-mute">
                 Input
-                <input type="number" min={0} step={0.01} value={form.price?.inputPerM ?? ''} placeholder="–" onChange={(e) => set({ price: e.target.value === '' ? null : { inputPerM: Number(e.target.value), outputPerM: form.price?.outputPerM ?? 0 } })} className={num} />
+                <input type="number" min={0} step={0.01} value={form.price?.inputPerM ?? ''} placeholder="list" onChange={(e) => set({ price: e.target.value === '' ? null : { inputPerM: Number(e.target.value), outputPerM: form.price?.outputPerM ?? 0 } })} className={num} />
               </label>
               <label className="text-[12px] text-mute">
                 Output
-                <input type="number" min={0} step={0.01} value={form.price?.outputPerM ?? ''} placeholder="–" onChange={(e) => set({ price: e.target.value === '' ? null : { inputPerM: form.price?.inputPerM ?? 0, outputPerM: Number(e.target.value) } })} className={num} />
+                <input type="number" min={0} step={0.01} value={form.price?.outputPerM ?? ''} placeholder="list" onChange={(e) => set({ price: e.target.value === '' ? null : { inputPerM: form.price?.inputPerM ?? 0, outputPerM: Number(e.target.value) } })} className={num} />
               </label>
             </div>
             <button type="button" disabled={busy === 'settings'} onClick={() => void save()} className={primaryBtn}>
