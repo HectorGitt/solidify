@@ -14,7 +14,7 @@ interface NavItem {
 
 /** the main tools, the same on every page */
 const MAIN: NavItem[] = [
-  { to: '/', label: 'Labs' },
+  { to: '/labs', label: 'Labs' },
   { to: '/create', label: 'Create in 3D' },
   { to: '/library', label: 'Library' },
   { to: '/read', label: 'Read notes in 3D' },

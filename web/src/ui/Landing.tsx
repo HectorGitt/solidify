@@ -11,12 +11,10 @@ import { useSales } from '@/cloud/ui/SalesDialog'
 import { Icon } from './icons'
 import { Loader, LoaderMark } from './Loader'
 import { Stage, type StageFrame } from './Stage'
-import { useTheme } from './theme'
-import { ModuleProgress } from '@/study/ui/badges'
 import { SiteHeader } from '@/ui/SiteHeader'
 import { SiteFooter } from './SiteFooter'
+import { ALL_ORDER, MEDIA, Media, ModuleTile, READY } from './labsCatalog'
 
-const MEDIA = './media'
 
 /**
  * The live hero scenes: picked to look their best and to load quickly (the first one downloads with
@@ -33,59 +31,6 @@ const HERO_SCENES: { moduleId: string; sceneId: string; label: string; frame: St
   { moduleId: 'engine', sceneId: 'cooling', label: 'Engine cooling', frame: { back: 1.4, shift: 0.45 }, readouts: [{ label: 'Heat to coolant', value: '36', unit: 'kW' }] },
 ]
 
-const ALL_ORDER = [
-  'engine',
-  'mechanisms',
-  'powertrain',
-  'materials',
-  'hydraulics',
-  'thermal',
-  'traction',
-  'elements',
-  'pto',
-  'vibration',
-  'steering',
-  'drawing',
-  'chassis',
-  'implements',
-  'testing',
-  'field',
-]
-
-const DISCIPLINES: { id: string; label: string; modules: string[] }[] = [
-  { id: 'all', label: 'All systems', modules: ALL_ORDER },
-  { id: 'labs', label: 'Engineering labs', modules: ['mechanisms', 'materials', 'thermal', 'drawing'] },
-  { id: 'power', label: 'Power & drivetrain', modules: ['engine', 'powertrain', 'pto', 'hydraulics', 'elements', 'vibration'] },
-  { id: 'field', label: 'Traction & implements', modules: ['traction', 'steering', 'chassis', 'implements', 'testing', 'field'] },
-]
-
-/** Systems still being finished: listed as coming soon on the home page, not shown as tiles. */
-const SOON = new Set(['processing', 'water', 'structures', 'precision'])
-const READY = MODULES.filter((m) => !SOON.has(m.id))
-
-/** Scene shown on each module card / opened by it. */
-const FEATURED: Record<string, string> = {
-  engine: 'cooling',
-  powertrain: 'differential',
-  pto: 'pto-shaft',
-  hydraulics: 'draft-control',
-  steering: 'boxes',
-  traction: 'tracks',
-  chassis: 'stability',
-  implements: 'combine',
-  elements: 'chains',
-  testing: 'dynamometers',
-  vibration: 'seat',
-  field: 'field',
-  processing: 'palm-oil',
-  water: 'irrigation-methods',
-  structures: 'farmstead',
-  precision: 'see-and-spray',
-  mechanisms: 'four-bar',
-  materials: 'tensile',
-  thermal: 'steam-plant',
-  drawing: 'interpenetration',
-}
 
 const COPY = {
   professional: {
@@ -149,24 +94,6 @@ function LiveTest() {
   )
 }
 
-/**
- * A scene render for the current theme (`<name>-light.webp` / `<name>-dark.webp`, made by
- * scripts/capture-tiles.mjs), quietly falling back to a hatched placeholder if it's missing.
- */
-function Media({ name, alt, className }: { name: string; alt: string; className?: string }) {
-  const theme = useTheme((s) => s.theme)
-  const src = `${MEDIA}/${name}-${theme}.webp`
-  const [failed, setFailed] = useState<string | null>(null)
-  if (failed === src)
-    return (
-      <div
-        className={`${className ?? ''} bg-[var(--color-stage)]`}
-        style={{ backgroundImage: 'repeating-linear-gradient(135deg, color-mix(in srgb, var(--color-accent) 10%, transparent) 0 2px, transparent 2px 16px)' }}
-        aria-label={alt}
-      />
-    )
-  return <img src={src} alt={alt} loading="lazy" decoding="async" className={className} onError={() => setFailed(src)} />
-}
 
 function Gauge({ label, value, unit, fill }: HeroReadout) {
   return (
@@ -331,35 +258,6 @@ function Hero({ copy }: { copy: (typeof COPY)[keyof typeof COPY] }) {
   )
 }
 
-function ModuleTile({ m, academic, big }: { m: ModuleDef; academic: boolean; big: boolean }) {
-  const live = m.scenes.filter((s) => s.load)
-  const featured = FEATURED[m.id] ?? live[0]?.id
-  const exam = m.scenes.filter((s) => s.exam).length
-  return (
-    <Link
-      to={`/m/${m.id}/${featured}`}
-      className={`group relative block overflow-hidden rounded-3xl border border-line bg-[var(--color-stage)] ${big ? 'h-[380px] lg:col-span-6' : 'h-[300px] lg:col-span-4'} sm:col-span-1`}
-    >
-      <Media name={`modules/${m.id}`} alt={`${m.title}: interactive 3D cutaway`} className="absolute inset-0 h-full w-full object-cover transition-transform duration-700 group-hover:scale-[1.04]" />
-      <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-[var(--color-stage)] via-[color-mix(in_srgb,var(--color-stage)_80%,transparent)] to-transparent p-6 pt-24">
-        <div className="flex items-center gap-2 text-[12px] font-medium text-accent">
-          {m.scenes.length} scenes
-          {academic && exam > 0 ? <span className="text-warn">· {exam} often examined</span> : null}
-        </div>
-        <h3 className={`mt-1.5 font-semibold tracking-[-0.02em] text-ink ${big ? 'text-[28px]' : 'text-[21px]'}`}>{m.title}</h3>
-        <p className={`mt-1 text-[13.5px] leading-relaxed text-mute ${big ? 'line-clamp-2 max-w-[480px]' : 'line-clamp-1'}`}>{m.blurb}</p>
-        {academic ? (
-          <div className="mt-3 max-w-[260px]">
-            <ModuleProgress moduleId={m.id} />
-          </div>
-        ) : null}
-      </div>
-      <span className="absolute right-5 top-5 grid h-9 w-9 place-items-center rounded-full bg-[var(--color-scrim)] text-ink opacity-0 backdrop-blur-md transition-opacity group-hover:opacity-100" aria-hidden>
-        <Icon.chevron width={16} height={16} />
-      </span>
-    </Link>
-  )
-}
 
 function FeatureIcon({ name }: { name: string }) {
   const I = Icon[name as keyof typeof Icon] ?? Icon.target
@@ -444,14 +342,10 @@ export function Landing() {
   const setAudience = useAudience((s) => s.setAudience)
   const copy = academic ? COPY.academic : COPY.professional
   const total = READY.reduce((n, m) => n + m.scenes.length, 0)
-  const [discipline, setDiscipline] = useState('all')
   const [scrolled, setScrolled] = useState(false)
 
-  const activeDiscipline = DISCIPLINES.find((d) => d.id === discipline) ?? DISCIPLINES[0]
-  const filteredModules =
-    activeDiscipline.modules.length === 0
-      ? READY
-      : activeDiscipline.modules.map((id) => READY.find((m) => m.id === id)).filter((m): m is ModuleDef => !!m)
+  // the home page shows a few; the Labs page has them all
+  const teaser = ALL_ORDER.map((id) => READY.find((m) => m.id === id)).filter((m): m is ModuleDef => !!m).slice(0, 8)
 
   return (
     <div className="h-full overflow-y-auto bg-bg text-ink selection:bg-accent/25" onScroll={(e) => setScrolled(e.currentTarget.scrollTop > 24)}>
@@ -467,49 +361,15 @@ export function Landing() {
             <h2 className="text-[30px] font-semibold tracking-[-0.03em] sm:text-[38px]">Every system and rig, in 3D</h2>
             <p className="mt-1.5 text-[15px] text-mute">From the combustion chamber to the test bench, each one opens straight into something working.</p>
           </div>
-          <div className="flex max-w-full gap-1 overflow-x-auto rounded-full border border-line bg-panel p-1 [scrollbar-width:none]" role="group" aria-label="Filter systems">
-            {DISCIPLINES.map((d) => (
-              <button
-                key={d.id}
-                onClick={() => setDiscipline(d.id)}
-                aria-pressed={discipline === d.id}
-                className={`shrink-0 whitespace-nowrap rounded-full px-3.5 py-1.5 text-[12.5px] font-medium transition-colors ${discipline === d.id ? 'bg-ink text-bg' : 'text-mute hover:text-ink'}`}
-              >
-                {d.label}
-              </button>
-            ))}
-          </div>
+          <Link to="/labs" className="inline-flex items-center gap-1.5 rounded-full border border-line-2 bg-panel px-4 py-2 text-[13px] font-medium text-ink transition-colors hover:border-accent/50 hover:text-accent">
+            See all {READY.length} systems and {total} rigs <Icon.chevron width={14} height={14} />
+          </Link>
         </div>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-12">
-          {filteredModules.map((m, i) => {
-            const bigCount = [0, 4, 2][filteredModules.length % 3] ?? 2
-            return <ModuleTile key={m.id} m={m} academic={academic} big={i < bigCount} />
-          })}
+          {teaser.map((m, i) => (
+            <ModuleTile key={m.id} m={m} academic={academic} big={i < 2} />
+          ))}
         </div>
-        {discipline === 'all' ? (
-          <div className="mt-6">
-            <h3 className="mb-3 text-[13px] font-medium text-dim">In preview — early builds</h3>
-            <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              {MODULES.filter((m) => SOON.has(m.id)).map((m) => {
-                const first = m.scenes.find((s) => s.id === FEATURED[m.id]) ?? m.scenes.find((s) => s.load) ?? m.scenes[0]
-                return (
-                  <li key={m.id}>
-                    <Link
-                      to={first ? `/m/${m.id}/${first.id}` : '#'}
-                      className="block h-full rounded-2xl border border-dashed border-line-2 px-5 py-4 transition-colors hover:border-accent/50 hover:bg-panel/60"
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-[15px] font-semibold tracking-[-0.01em] text-ink/85">{m.title}</span>
-                        <span className="font-mono text-[11px] text-dim">{m.scenes.length} scenes →</span>
-                      </div>
-                      <p className="mt-1 line-clamp-2 text-[12.5px] leading-relaxed text-dim">{m.blurb}</p>
-                    </Link>
-                  </li>
-                )
-              })}
-            </ul>
-          </div>
-        ) : null}
       </section>
 
       <section className="mx-auto grid max-w-[1360px] gap-4 px-5 pt-20 sm:grid-cols-2 sm:px-10 lg:grid-cols-4">
