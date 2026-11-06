@@ -10,6 +10,7 @@ import {
   noteSceneSpecSchema,
   noteShapeSchema,
   noteChartSchema,
+  noteAnnotationSchema,
   type NoteCalculationSpec,
   type NoteParameterSpec,
   type NotePartSpec,
@@ -42,6 +43,12 @@ function sanitizeGeneratedSpec(raw: Record<string, unknown>, fallbackTitle: stri
         ? (candidate.calculations as NoteCalculationSpec[])
         : [],
       parts: candidate.parts as NotePartSpec[],
+      // loads, reactions and dimensions drawn as arrows; each checked on its own
+      annotations: (Array.isArray(candidate.annotations) ? candidate.annotations : [])
+        .map((a) => noteAnnotationSchema.safeParse(a))
+        .filter((r) => r.success)
+        .map((r) => r.data)
+        .slice(0, 16),
       // graphs: each one checked on its own, so a bad chart never costs the model
       charts: (Array.isArray(candidate.charts) ? candidate.charts : [])
         .map((c) => noteChartSchema.safeParse(c))

@@ -155,7 +155,12 @@ export interface NoteAnnotationSpec {
   id: string
   kind: 'force' | 'moment' | 'dimension' | 'label'
   label: string
+  /** fixed text for the value (prefer `magnitude`, which follows the sliders) */
   value?: string
+  /** the size of the force or moment, as an expression of the model's values (e.g. "P"), shown live */
+  magnitude?: DimExpr
+  unit?: string
+  /** force: the arrow's tail (from) and the point it acts on (to). moment: the centre (from) and a point along its axis (to). */
   from: Vec3Expr
   to?: Vec3Expr
   color?: string
@@ -657,6 +662,8 @@ export const noteAnnotationSchema = z.object({
   kind: z.enum(['force', 'moment', 'dimension', 'label']),
   label: z.string().min(1).max(120),
   value: z.string().max(80).optional(),
+  magnitude: dimExprSchema.optional(),
+  unit: z.string().max(20).optional(),
   from: vec3ExprSchema,
   to: vec3ExprSchema.optional(),
   color: z.string().max(32).optional(),

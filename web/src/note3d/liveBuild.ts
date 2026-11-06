@@ -111,6 +111,7 @@ export function readProgress(text: string): LiveProgress {
       parameters,
       calculations,
       charts: completedItems(text, 'charts'),
+      annotations: completedItems(text, 'annotations'),
       parts,
     },
   }
