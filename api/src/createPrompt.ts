@@ -103,4 +103,5 @@ Return ONLY this JSON:
 }
 When changing the current model, keep everything the user did not ask to change and set "isNewMachine": false.
 When the student asks a question about the current model instead of asking for a change ("why is the tappet there?", "what does this part do?"), answer it in "explanation" in plain words (2 to 5 sentences, using the model's real numbers), set "isQuestion": true, and leave "spec" out.
+When a photo or drawing comes with a change to the current model, it is the reference for that change: match the parts, proportions and features it shows, and keep the rest of the model.
 The conversation so far, when given, is context: "it", "that part" and "bigger" refer to it.`

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent, type KeyboardEvent, type ReactNode } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useSim } from '@/core/sim'
 import type { SceneDef } from '@/modules/types'
@@ -28,6 +28,7 @@ interface Turn {
   prompt: string
   response: string
   kind?: 'build' | 'answer' | 'error'
+  photoUrl?: string
 }
 
 type Tab = 'calculations' | 'dimensions' | 'parts'
@@ -138,6 +139,9 @@ export default function ModelLab() {
   const [turns, setTurns] = useState<Turn[]>([])
   const [live, setLive] = useState<{ prompt: string; photoUrl?: string; isNew: boolean; progress: LiveProgress | null } | null>(null)
   const [input, setInput] = useState('')
+  /** a photo attached to the next message */
+  const [attached, setAttached] = useState<{ name: string; url: string } | null>(null)
+  const attachRef = useRef<HTMLInputElement>(null)
   const [tab, setTab] = useState<Tab>('calculations')
   const [mobilePane, setMobilePane] = useState<'chat' | 'engineering'>('chat')
   const [matchedCatalog, setMatchedCatalog] = useState<CatalogSceneMatch | null>(null)
@@ -280,15 +284,16 @@ export default function ModelLab() {
   /* ----------------------------------------------------------------- the conversation */
 
   const send = async (text: string, withPhoto?: { name: string; url: string }) => {
-    const prompt = text.trim()
+    const prompt = text.trim() || (withPhoto ? (spec ? 'Change the model to match this photo' : 'Build what this photo shows') : '')
     if (!prompt || live) return
     if (!signedIn) {
       toast('Sign in to build and change models. They are built by Solidify’s AI, which needs an account.', { tone: 'warn', action: { label: 'Sign in', run: () => useAuth.getState().openDialog() } })
       return
     }
-    const isNew = !spec || !!withPhoto
-    const asked = withPhoto ? `From a photo: ${withPhoto.name}${text && text !== withPhoto.name ? ` (${text})` : ''}` : prompt
+    const isNew = !spec
+    const asked = withPhoto && !text.trim() ? (isNew ? `From a photo: ${withPhoto.name}` : 'Change it to match this photo') : prompt
     setInput('')
+    setAttached(null)
     setLive({ prompt: asked, photoUrl: withPhoto?.url, isNew, progress: null })
     builtHereRef.current = true
     liveAssembly.active = true
@@ -302,13 +307,13 @@ export default function ModelLab() {
         ac.signal,
       )
       if (res.isQuestion) {
-        const next = [{ id: `t-${Date.now()}`, prompt: asked, response: res.explanation, kind: 'answer' as const }, ...turns]
+        const next = [{ id: `t-${Date.now()}`, prompt: asked, response: res.explanation, kind: 'answer' as const, photoUrl: withPhoto?.url }, ...turns]
         setTurns(next)
         if (creationIdRef.current) void updateCreation(creationIdRef.current, { history: savedHistory(next) }).catch(() => {})
         return
       }
       const asNew = isNew || res.isNewMachine || !creationIdRef.current
-      const next = [{ id: `t-${Date.now()}`, prompt: asked, response: res.explanation, kind: 'build' as const }, ...(asNew ? [] : turns)]
+      const next = [{ id: `t-${Date.now()}`, prompt: asked, response: res.explanation, kind: 'build' as const, photoUrl: withPhoto?.url }, ...(asNew ? [] : turns)]
       const p = Object.fromEntries(res.spec.parameters.map((x) => [x.id, x.value]))
       setTurns(next)
       setSpec(res.spec)
@@ -327,7 +332,7 @@ export default function ModelLab() {
           : e instanceof ApiError
             ? e.message
             : 'That didn’t work. Please try again.'
-      setTurns((list) => [{ id: `t-${Date.now()}`, prompt: asked, response: message, kind: 'error' }, ...list])
+      setTurns((list) => [{ id: `t-${Date.now()}`, prompt: asked, response: message, kind: 'error', photoUrl: withPhoto?.url }, ...list])
     } finally {
       setLive(null)
       window.setTimeout(() => {
@@ -384,7 +389,17 @@ export default function ModelLab() {
 
   const submit = (e?: FormEvent) => {
     e?.preventDefault()
-    void send(input)
+    void send(input, attached ?? undefined)
+  }
+
+  const attach = (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    if (file.size > 8_000_000) return toast('That photo is too large. Please use one under 8 MB.', { tone: 'warn' })
+    const reader = new FileReader()
+    reader.onload = () => typeof reader.result === 'string' && setAttached({ name: file.name, url: reader.result })
+    reader.readAsDataURL(file)
   }
   const onKey = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -522,7 +537,10 @@ export default function ModelLab() {
             ) : null}
             {messages.map((m) => (
               <div key={m.id} className="space-y-2">
-                <div className="ml-6 rounded-2xl rounded-br-md bg-ink px-3.5 py-2.5 text-[13px] leading-snug text-bg">{m.prompt}</div>
+                <div className="ml-6 rounded-2xl rounded-br-md bg-ink px-3.5 py-2.5 text-[13px] leading-snug text-bg">
+                  {m.photoUrl ? <img src={m.photoUrl} alt="Your photo" className="mb-2 max-h-40 rounded-lg bg-white object-contain" /> : null}
+                  {m.prompt}
+                </div>
                 <div className={`mr-6 rounded-2xl rounded-bl-md border px-3.5 py-2.5 text-[13px] leading-relaxed ${m.kind === 'error' ? 'border-warn/50 bg-warn/5 text-ink' : 'border-line bg-panel text-ink'}`}>
                   {m.kind === 'answer' ? <p className="mb-1 text-[11px] font-medium uppercase tracking-wider text-accent">Answer</p> : null}
                   {m.response}
@@ -536,7 +554,10 @@ export default function ModelLab() {
             ))}
             {live ? (
               <div className="space-y-2">
-                <div className="ml-6 rounded-2xl rounded-br-md bg-ink px-3.5 py-2.5 text-[13px] leading-snug text-bg">{live.prompt}</div>
+                <div className="ml-6 rounded-2xl rounded-br-md bg-ink px-3.5 py-2.5 text-[13px] leading-snug text-bg">
+                  {live.photoUrl ? <img src={live.photoUrl} alt="Your photo" className="mb-2 max-h-40 rounded-lg bg-white object-contain" /> : null}
+                  {live.prompt}
+                </div>
                 <div className="mr-6 rounded-2xl rounded-bl-md border border-accent/40 bg-panel px-3.5 py-3">
                   <LiveReply progress={live.progress} isNew={live.isNew} photo={!!live.photoUrl} />
                 </div>
@@ -555,7 +576,20 @@ export default function ModelLab() {
                 ))}
               </div>
             ) : null}
+            {attached ? (
+              <div className="mb-2 flex items-center gap-2 rounded-2xl border border-line-2 bg-panel p-1.5 pr-2">
+                <img src={attached.url} alt="" className="h-10 w-10 rounded-lg bg-white object-cover" />
+                <span className="min-w-0 flex-1 truncate text-[12px] text-mute">{spec ? 'Photo for this change' : 'Build from this photo'} · {attached.name}</span>
+                <button type="button" aria-label="Remove the photo" onClick={() => setAttached(null)} className="rounded-full p-1 text-dim hover:text-ink">
+                  <Icon.close width={13} height={13} />
+                </button>
+              </div>
+            ) : null}
+            <input ref={attachRef} type="file" accept="image/*" onChange={attach} className="hidden" />
             <form onSubmit={submit} className="flex items-end gap-2 rounded-2xl border border-line-2 bg-panel p-1.5 focus-within:border-accent">
+              <button type="button" aria-label="Attach a photo" title="Attach a photo or drawing" disabled={!!live} onClick={() => attachRef.current?.click()} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-mute transition-colors hover:bg-panel-2 hover:text-ink disabled:opacity-40">
+                <Icon.camera width={17} height={17} />
+              </button>
               <textarea
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
@@ -563,11 +597,11 @@ export default function ModelLab() {
                 rows={2}
                 maxLength={2000}
                 disabled={!!live}
-                placeholder={spec ? 'Ask for a change, or ask a question…' : 'Describe a machine…'}
+                placeholder={attached ? (spec ? 'What should change? (optional)' : 'Anything to add? (optional)') : spec ? 'Ask for a change, or ask a question…' : 'Describe a machine…'}
                 aria-label="Message"
                 className="max-h-40 min-h-[44px] flex-1 resize-none bg-transparent px-2 py-1.5 text-[13.5px] text-ink placeholder:text-dim focus:outline-none disabled:opacity-60"
               />
-              <button type="submit" disabled={!!live || !input.trim()} aria-label="Send" className={`${primaryBtn} h-9 w-9 shrink-0 !p-0`}>
+              <button type="submit" disabled={!!live || (!input.trim() && !attached)} aria-label="Send" className={`${primaryBtn} h-9 w-9 shrink-0 !p-0`}>
                 <Icon.chevron width={16} height={16} className="-rotate-90" />
               </button>
             </form>
