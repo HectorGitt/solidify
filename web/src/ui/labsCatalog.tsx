@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { MODULES } from '@/modules/catalog'
 import type { ModuleDef } from '@/modules/types'
 import { ModuleProgress } from '@/study/ui/badges'
-import { Icon } from './icons'
+import { RigEquations, RigReadings, rigFacts } from './rigFacts'
 import { useTheme } from './theme'
 
 /* the labs catalogue: shared by the home page and the Labs page */
@@ -88,28 +88,63 @@ export function ModuleTile({ m, academic, big }: { m: ModuleDef; academic: boole
   const live = m.scenes.filter((s) => s.load)
   const featured = FEATURED[m.id] ?? live[0]?.id
   const exam = m.scenes.filter((s) => s.exam).length
+  // on hover, the rigs inside replace the blurb (their pictures and names, each opening its rig)
+  const strip = [...live.filter((s) => s.id === featured), ...live.filter((s) => s.id !== featured)].slice(0, big ? 4 : 3)
+  // the rig whose figures show: the featured one, or the one under the pointer in the strip
+  const [focusId, setFocusId] = useState(featured)
+  const focus = live.find((s) => s.id === focusId) ?? live.find((s) => s.id === featured)
+  const facts = focus ? rigFacts(m.id, focus.id) : null
   return (
-    <Link
-      to={`/m/${m.id}/${featured}`}
-      className={`group relative block overflow-hidden rounded-3xl border border-line bg-[var(--color-stage)] ${big ? 'h-[380px] lg:col-span-6' : 'h-[300px] lg:col-span-4'} sm:col-span-1`}
-    >
-      <Media name={`modules/${m.id}`} alt={`${m.title}: interactive 3D cutaway`} className="absolute inset-0 h-full w-full object-cover transition-transform duration-700 group-hover:scale-[1.04]" />
-      <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-[var(--color-stage)] via-[color-mix(in_srgb,var(--color-stage)_80%,transparent)] to-transparent p-6 pt-24">
+    <div className={`group relative overflow-hidden rounded-3xl border border-line bg-[var(--color-stage)] ${big ? 'h-[380px] lg:col-span-6' : 'h-[300px] lg:col-span-4'} sm:col-span-1`}>
+      <Link to={`/m/${m.id}/${featured}`} aria-label={`${m.title}: open`} className="absolute inset-0">
+        <Media name={`modules/${m.id}`} alt={`${m.title}: interactive 3D cutaway`} className="absolute inset-0 h-full w-full object-cover transition-transform duration-700 group-hover:scale-[1.04]" />
+      </Link>
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-[var(--color-stage)] via-[color-mix(in_srgb,var(--color-stage)_80%,transparent)] to-transparent p-6 pt-24">
         <div className="flex items-center gap-2 text-[12px] font-medium text-accent">
-          {m.scenes.length} scenes
+          {live.length} rigs
           {academic && exam > 0 ? <span className="text-warn">· {exam} often examined</span> : null}
         </div>
         <h3 className={`mt-1.5 font-semibold tracking-[-0.02em] text-ink ${big ? 'text-[28px]' : 'text-[21px]'}`}>{m.title}</h3>
-        <p className={`mt-1 text-[13.5px] leading-relaxed text-mute ${big ? 'line-clamp-2 max-w-[480px]' : 'line-clamp-1'}`}>{m.blurb}</p>
+        <p className={`mt-1 text-[13.5px] leading-relaxed text-mute [@media(hover:hover)]:group-hover:hidden ${big ? 'line-clamp-2 max-w-[480px]' : 'line-clamp-1'}`}>{m.blurb}</p>
+        {facts?.readings.length ? (
+          <div className="mt-3 [@media(hover:hover)]:group-hover:hidden">
+            <RigReadings readings={facts.readings} max={big ? 3 : 2} />
+          </div>
+        ) : null}
+        {focus ? (
+          <div className="mt-2 hidden [@media(hover:hover)]:group-hover:block">
+            <div className="truncate text-[12px] text-mute">
+              <span className="font-medium text-ink">{focus.title}</span>
+              {facts?.readings.length ? ` · ${facts.readings.slice(0, 2).map((r) => `${r.label} ${r.value}${r.unit ? ` ${r.unit}` : ''}`).join(' · ')}` : ` · ${focus.summary}`}
+            </div>
+            {big && facts?.equations[0] ? (
+              <div className="mt-1">
+                <RigEquations equations={facts.equations} max={1} />
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+        <ul className="pointer-events-auto mt-2 hidden gap-2 [@media(hover:hover)]:group-hover:flex [@media(hover:hover)]:group-focus-within:flex">
+          {strip.map((s) => (
+            <li key={s.id} className="min-w-0 flex-1">
+              <Link to={`/m/${m.id}/${s.id}`} title={s.summary} onMouseEnter={() => setFocusId(s.id)} onFocus={() => setFocusId(s.id)} className="block rounded-xl border border-line-2 bg-[var(--color-scrim)] p-1.5 backdrop-blur-md transition-colors hover:border-accent/60">
+                <span className="relative block aspect-[16/10] overflow-hidden rounded-lg bg-[var(--color-stage)]">
+                  <Media name={`scenes/${m.id}--${s.id}`} alt="" className="absolute inset-0 h-full w-full object-cover" />
+                </span>
+                <span className="mt-1 block truncate px-0.5 text-[11.5px] font-medium text-ink">{s.title}</span>
+              </Link>
+            </li>
+          ))}
+        </ul>
         {academic ? (
           <div className="mt-3 max-w-[260px]">
             <ModuleProgress moduleId={m.id} />
           </div>
         ) : null}
       </div>
-      <span className="absolute right-5 top-5 grid h-9 w-9 place-items-center rounded-full bg-[var(--color-scrim)] text-ink opacity-0 backdrop-blur-md transition-opacity group-hover:opacity-100" aria-hidden>
-        <Icon.chevron width={16} height={16} />
-      </span>
-    </Link>
+      <Link to="/labs" className="absolute right-5 top-5 rounded-full bg-[var(--color-scrim)] px-3 py-1.5 text-[11.5px] font-medium text-ink opacity-0 backdrop-blur-md transition-opacity group-hover:opacity-100 focus:opacity-100">
+        All {live.length} rigs
+      </Link>
+    </div>
   )
 }

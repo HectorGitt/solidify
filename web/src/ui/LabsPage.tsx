@@ -7,10 +7,42 @@ import { Pills, StudyShell } from '@/study/ui/StudyShell'
 import { useAcademic } from './audience'
 import { Icon } from './icons'
 import { ALL_ORDER, DISCIPLINES, FEATURED, Media, READY, SOON } from './labsCatalog'
+import { RigEquations, RigReadings, rigFacts } from './rigFacts'
 
 const ordered = ALL_ORDER.map((id) => READY.find((m) => m.id === id)).filter((m): m is ModuleDef => !!m)
 const live = (m: ModuleDef) => m.scenes.filter((s) => s.load)
 const sceneLink = (m: ModuleDef, s: SceneEntry) => `/m/${m.id}/${s.id}`
+
+/** a rig's own picture (public/media/scenes, made by scripts/capture-tiles.mjs) */
+function RigThumb({ m, s, className = '' }: { m: ModuleDef; s: SceneEntry; className?: string }) {
+  return (
+    <span className={`relative block shrink-0 overflow-hidden rounded-lg bg-[var(--color-stage)] ${className}`}>
+      <Media name={`scenes/${m.id}--${s.id}`} alt="" className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.06]" />
+    </span>
+  )
+}
+
+/** on hover (pointer devices), what a rig shows: its summary, its own readings and its first equations */
+function RigPeek({ m, s }: { m: ModuleDef; s: SceneEntry }) {
+  const facts = rigFacts(m.id, s.id)
+  return (
+    <div className="pointer-events-none absolute inset-x-0 top-full z-30 hidden pt-1 [@media(hover:hover)]:group-hover/rig:block">
+      <div className="rounded-2xl border border-line-2 bg-panel p-4 shadow-2xl">
+        <p className="text-[12.5px] leading-snug text-mute">{s.summary}</p>
+        {facts?.readings.length ? (
+          <div className="mt-3">
+            <RigReadings readings={facts.readings} max={3} />
+          </div>
+        ) : null}
+        {facts?.equations.length ? (
+          <div className="mt-3 border-t border-line pt-3">
+            <RigEquations equations={facts.equations} max={2} />
+          </div>
+        ) : null}
+      </div>
+    </div>
+  )
+}
 
 /** a system: its picture, what it covers, and every rig in it */
 function SystemCard({ m, academic }: { m: ModuleDef; academic: boolean }) {
@@ -19,8 +51,8 @@ function SystemCard({ m, academic }: { m: ModuleDef; academic: boolean }) {
   const shown = all ? rigs : rigs.slice(0, 5)
   const featured = rigs.find((s) => s.id === FEATURED[m.id]) ?? rigs[0]
   return (
-    <article className="flex flex-col overflow-hidden rounded-3xl border border-line bg-panel">
-      <Link to={featured ? sceneLink(m, featured) : '#'} className="group relative block aspect-[16/9] overflow-hidden bg-[var(--color-stage)]">
+    <article className="flex flex-col rounded-3xl border border-line bg-panel">
+      <Link to={featured ? sceneLink(m, featured) : '#'} className="group relative block aspect-[16/9] overflow-hidden rounded-t-3xl bg-[var(--color-stage)]">
         <Media name={`modules/${m.id}`} alt={`${m.title}: interactive 3D cutaway`} className="absolute inset-0 h-full w-full object-cover transition-transform duration-700 group-hover:scale-[1.04]" />
       </Link>
       <div className="flex flex-1 flex-col p-5">
@@ -36,12 +68,16 @@ function SystemCard({ m, academic }: { m: ModuleDef; academic: boolean }) {
         ) : null}
         <ul className="mt-3 divide-y divide-line border-t border-line">
           {shown.map((s) => (
-            <li key={s.id}>
-              <Link to={sceneLink(m, s)} className="group flex items-center gap-2 py-2 text-[13px] text-ink/90 hover:text-accent">
-                <span className="min-w-0 flex-1 truncate">{s.title}</span>
+            <li key={s.id} className="group/rig relative">
+              <Link to={sceneLink(m, s)} className="group flex items-center gap-3 py-2">
+                <RigThumb m={m} s={s} className="h-10 w-16" />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-[13px] text-ink/90 group-hover:text-accent">{s.title}</span>
+                  <span className="block truncate text-[11.5px] text-dim">{s.summary}</span>
+                </span>
                 {academic && s.exam ? <span className="shrink-0 text-[11px] text-warn">often examined</span> : null}
-                <Icon.chevron width={13} height={13} className="shrink-0 text-dim group-hover:text-accent" />
               </Link>
+              <RigPeek m={m} s={s} />
             </li>
           ))}
         </ul>
@@ -84,12 +120,18 @@ function Results({ query, systems, academic }: { query: string; systems: ModuleD
             {hits.map((s) => (
               <li key={s.id}>
                 <Link to={sceneLink(m, s)} className="group flex items-start gap-3 px-4 py-3 hover:bg-panel-2">
+                  <RigThumb m={m} s={s} className="h-16 w-28" />
                   <div className="min-w-0 flex-1">
                     <div className="text-[14px] font-medium text-ink group-hover:text-accent">
                       {s.title}
                       {academic && s.exam ? <span className="ml-2 text-[11px] font-normal text-warn">often examined</span> : null}
                     </div>
                     <p className="mt-0.5 line-clamp-2 text-[12.5px] leading-snug text-mute">{s.summary}</p>
+                    {rigFacts(m.id, s.id)?.readings.length ? (
+                      <div className="mt-2">
+                        <RigReadings readings={rigFacts(m.id, s.id)!.readings} max={3} />
+                      </div>
+                    ) : null}
                   </div>
                   <Icon.chevron width={14} height={14} className="mt-1 shrink-0 text-dim group-hover:text-accent" />
                 </Link>
