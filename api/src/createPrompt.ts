@@ -79,7 +79,7 @@ GEOMETRY RULES
    The anchor (usually the base, the frame or the main shaft) has a position, normally [0, 0, 0], and a rotation if it is not upright.
    Mounts (target = another part's id; Solidify works the exact position and rotation out from the parts' real sizes, and keeps them together when the sliders move):
    - { "kind": "coaxial", "target": "shaft", "at": 0.25, "offset": 0 }: on the target's axis, turned to share it. at runs from the low end (0) to the high end (1) of the target, default 0.5 (the middle); offset adds metres along the axis. For a gear, pulley, bearing, collar or wheel on a shaft, and for a shaft through a gear's bore (target = the gear).
-   - { "kind": "mesh", "target": "pinion", "side": "+y" }: a gear meshing with the target gear; axes parallel, centres exactly the sum of the pitch radii apart (same module), on the side given (default up).
+   - { "kind": "mesh", "target": "pinion", "side": "+y" }: a gear meshing with the target gear; axes parallel, centres exactly the sum of the pitch radii apart (same module), on the side given (default up), turned "angle" degrees about the target's axis from that side if given.
    - { "kind": "against", "target": "base", "face": "+y" }: touching that face of the target, centred on it (+y = sitting on top, -y = hanging under, +x = against its right side).
    - { "kind": "centered", "target": "gearset" }: the same centre as the target (a housing or guard round what it covers).
    - { "kind": "slider", "target": "crankshaft", "throw": "r", "rod": "l", "angle": 30 }: a piston or crosshead driven by the crank: on the line from the crank's centre (direction default up), placed by r cos θ + √(l² − r² sin² θ). Use the crank radius and rod length parameters.
@@ -88,6 +88,7 @@ GEOMETRY RULES
    Choosing the relation:
    - Bearings, bushes, collars, end caps, seals, pulleys, flywheels, sprockets, cams, impellers and discs on a shaft: coaxial with the shaft (or crankshaft), at 0 or 1 for its ends (or a fraction for a point between). Never centered, never by coordinates: a flywheel placed by coordinates ends up tilted through the casing.
    - Gears in mesh: mesh. A shaft carrying a gear: coaxial with that gear (or the gear coaxial with the shaft).
+   - Planetary sets: the sun on its shaft (coaxial); each planet meshes with the sun, "angle" 0, 120 and 240 (for three) so they sit evenly round it; the carrier coaxial with the sun, carrying the planet pins; the ring gear (a tube, or a gear with a bore) coaxial with the sun, its inner radius = sun pitch radius + 2 × planet pitch radius. Never place planets by coordinates.
    - Something resting on, bolted to or hanging from another part: against, with the face it touches.
    - centered only for a housing, cover, guard or casing round what it encloses.
    - Pistons and crossheads: slider; connecting rods: link. Do not position a linkage by coordinates. Every connecting rod is a link from the crank to the piston it drives, and that piston is a slider on the same crank (a two-cylinder machine has two of each, at their own angles).
