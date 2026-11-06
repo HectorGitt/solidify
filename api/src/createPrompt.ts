@@ -82,7 +82,15 @@ GEOMETRY RULES
    - { "kind": "mesh", "target": "pinion", "side": "+y" }: a gear meshing with the target gear; axes parallel, centres exactly the sum of the pitch radii apart (same module), on the side given (default up).
    - { "kind": "against", "target": "base", "face": "+y" }: touching that face of the target, centred on it (+y = sitting on top, -y = hanging under, +x = against its right side).
    - { "kind": "centered", "target": "gearset" }: the same centre as the target (a housing or guard round what it covers).
+   - { "kind": "slider", "target": "crankshaft", "throw": "r", "rod": "l", "angle": 30 }: a piston or crosshead driven by the crank: on the line from the crank's centre (direction default up), placed by r cos θ + √(l² − r² sin² θ). Use the crank radius and rod length parameters.
+   - { "kind": "link", "target": "crankshaft", "to": "piston", "throw": "r", "angle": 30 }: a connecting rod (or any link) from the crank pin to the centre of the part it drives; same throw and angle as the slider.
    - Any mount may add "shift": [dx, dy, dz] in metres for a small move that no relation describes.
+   Choosing the relation:
+   - Bearings, bushes, collars, end caps, seals and pulleys on a shaft: coaxial with the shaft, at 0 or 1 for its ends (or a fraction for a point between). Never centered.
+   - Gears in mesh: mesh. A shaft carrying a gear: coaxial with that gear (or the gear coaxial with the shaft).
+   - Something resting on, bolted to or hanging from another part: against, with the face it touches.
+   - centered only for a housing, cover, guard or casing round what it encloses.
+   - Pistons and crossheads: slider; connecting rods: link. Do not position a linkage by coordinates.
    Chains are fine: base, then a bearing against the base, then a shaft coaxial with the bearing, then a gear coaxial on the shaft, then a gear meshing with it, then the output shaft coaxial with that gear.
    - Only an anchor needs coordinates; never guess a position that a mount can give.
    - Meshing gears turn opposite ways, speeds in the ratio z2 : z1.
@@ -94,10 +102,11 @@ GEOMETRY RULES
    - Charts, whenever the subject has a diagram or a curve (bending moment and shear force diagrams, deflection, stress along a member, pump or fan curves, torque and power against speed, efficiency): 1 to 3 charts { id, title, x: { label, unit, from, to }, y: { label, unit }, series: [{ id, label, formula }] }. Each series formula is in x (the position or variable along the x axis, in x's unit) plus parameter and calculation ids, using the same functions; use mac() or step() for loads and supports partway along a member. x.from and x.to may be expressions (e.g. "0" to "L").
    - A diagram or graph is ALWAYS a chart, never 3D shapes: do not build bending moment, shear force or any other plot out of boxes, plates or extrusions in the model.
 
-7. Annotations (arrows and dimensions drawn in the view): { id, kind, label, magnitude?, unit?, from, to, value? }
-   - kind "force": an arrow from its tail (from) to the point the force acts on (to), about 0.08 to 0.15 m long, e.g. a downward point load at the beam tip: from [L, 0.14, 0], to [L, 0.02, 0] (as expressions).
-   - kind "moment": a curved arrow; from is its centre, to a point along its axis (e.g. a torque about the shaft axis).
-   - kind "dimension": a dashed line between two points, with the size in value or magnitude.
+7. Annotations (arrows and dimensions drawn in the view): { id, kind, label, magnitude?, unit?, anchor, direction?, length?, value? }
+   - Attach every annotation to a part with "anchor": { "part": "<part id>", "at": "+y" | "-y" | "+x" | "-x" | "+z" | "-z" | "center" | "start" | "end", "along"?: 0..1 }, so it follows the part wherever Solidify places it. Give from / to only when there is no part to attach to.
+   - kind "force": an arrow that ends on the anchor point and acts along "direction" (default "-y", down); "length" in metres (default 0.12). A load on top of a beam: anchor { part: "beam", at: "+y", along: 0.5 }, direction "-y". A support reaction: anchor { part: "support", at: "-y" }, direction "+y". A load at a beam's free end: anchor { part: "beam", at: "end" }.
+   - kind "moment": a curved arrow about the anchored part's axis at the anchor point (a torque on a shaft: anchor { part: "shaft", at: "end" }).
+   - kind "dimension": anchored to a part, it spans that part's length (a beam's span), with the size in magnitude.
    - magnitude is an expression of parameter or calculation ids (e.g. "P", "R_A", "T") so the arrow's value follows the sliders; unit is its unit (N, kN, N·m). Label is the symbol (P, R_A, T).
    - Give every load and every support reaction an arrow; the student reads the free-body diagram from them.
 
