@@ -104,6 +104,8 @@ export function buildStatic() {
       const l = gearLever({ length: 0.24, knobR: 0.018 })
       return merge(l.stick, l.knob)
     })(),
+    // the shift cover: the cast lid the lever towers stand on (left whole when the casing is cut open)
+    shiftCover: boxFrom([-0.115, 0.15, 0.11], [0.125, 0.162, 0.74]),
     tower: xform(axial([[0.025, 0], [0.045, 0], [0.032, 0.045], [0.025, 0.045]], 28), mat4.rx(-PI / 2)),
     /** for tests */
     rangeL: RANGE_L,

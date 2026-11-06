@@ -7,7 +7,7 @@ import { MF16Panel } from './Panel'
 import { MF16Scene3D } from './Scene3D'
 
 type V3 = [number, number, number]
-const home = { position: [1.3, 0.5, 1.15] as V3, target: [0, -0.1, 0.45] as V3 }
+const home = { position: [1.75, 0.72, 1.62] as V3, target: [0, 0.03, 0.5] as V3 }
 const at = (z: number, y = -0.07, d = 0.55) => ({ position: [d, 0.18, z + d * 0.8] as V3, target: [0, y, z] as V3 })
 
 const scene: SceneDef = {

@@ -346,6 +346,8 @@ export function MF16Scene3D() {
         </Part>
 
         <Part id="levers" name="Gear, range and shuttle levers" role="moving" material="paintBlack" info={INFO.levers} cites={C.fig} explode={[0, 0.15, 0]}>
+          {/* the levers stand on the shift cover, which stays whole when the casing is cut open */}
+          <PartMesh geometry={g.shiftCover} material="castIron" />
           {(
             [
               [R.gearLever, 0.42, 0, 'plastic'],
@@ -353,7 +355,7 @@ export function MF16Scene3D() {
               [R.shuttleLever, 0.17, -0.07, 'paintYellow'],
             ] as const
           ).map(([ref, z, x], i) => (
-            <group key={i} position={[x, 0.15, z]}>
+            <group key={i} position={[x, 0.162, z]}>
               <PartMesh geometry={g.tower} material="castIron" />
               <group ref={ref} position={[0, 0.04, 0]}>
                 <PartMesh geometry={g.lever} />
