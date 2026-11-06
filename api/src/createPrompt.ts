@@ -74,12 +74,19 @@ GEOMETRY RULES
    - hexBolt: { kind: "hexBolt", d, h } (hexagon-head bolt, thread diameter d, shank length h below the head)
    Every shape may also have op ("add" default, "subtract", "intersect" against the shapes before it), position, rotation, and radialCount with radialRadius for a circular pattern about Y.
    Any other kind is invalid. Build anything else from these: a plate is a box, a washer is a tube, a pin is a cylinder, a hole is a subtracted cylinder.
-4. Layout: lay the model out like an engineering assembly drawing, not a pile of parts
-   - Pick one main axis (usually the main shaft, along X) and line the parts up on it. Shafts pass through the bores of what they carry; gears, pulleys and cams sit on their shafts.
-   - Work every position out from the sizes, so parts touch instead of floating: a part sitting on another is offset by half of each one's height; a gear on a shaft is at the shaft's position.
-   - Meshing gears: put their axes parallel and their centres exactly m * (z1 + z2) / 2 apart (same module m), and make their speeds opposite in sign and in the ratio z2 : z1.
+4. Layout: ASSEMBLE BY RELATION, not by coordinates
+   Solidify places parts for you from how they connect: give every part except ONE anchor part a "mount", and leave its "position" out.
+   The anchor (usually the base, the frame or the main shaft) has a position, normally [0, 0, 0], and a rotation if it is not upright.
+   Mounts (target = another part's id; Solidify works the exact position and rotation out from the parts' real sizes, and keeps them together when the sliders move):
+   - { "kind": "coaxial", "target": "shaft", "at": 0.25, "offset": 0 }: on the target's axis, turned to share it. at runs from the low end (0) to the high end (1) of the target, default 0.5 (the middle); offset adds metres along the axis. For a gear, pulley, bearing, collar or wheel on a shaft, and for a shaft through a gear's bore (target = the gear).
+   - { "kind": "mesh", "target": "pinion", "side": "+y" }: a gear meshing with the target gear; axes parallel, centres exactly the sum of the pitch radii apart (same module), on the side given (default up).
+   - { "kind": "against", "target": "base", "face": "+y" }: touching that face of the target, centred on it (+y = sitting on top, -y = hanging under, +x = against its right side).
+   - { "kind": "centered", "target": "gearset" }: the same centre as the target (a housing or guard round what it covers).
+   - Any mount may add "shift": [dx, dy, dz] in metres for a small move that no relation describes.
+   Chains are fine: base, then a bearing against the base, then a shaft coaxial with the bearing, then a gear coaxial on the shaft, then a gear meshing with it, then the output shaft coaxial with that gear.
+   - Only an anchor needs coordinates; never guess a position that a mount can give.
+   - Meshing gears turn opposite ways, speeds in the ratio z2 : z1.
    - Engines and slider-cranks: crankshaft along X at the bottom, cylinder vertical above it; the connecting rod joins the crank pin to the piston pin; the camshaft is parallel to the crankshaft, driven by timing gears with a 2 : 1 ratio.
-   - Keep everything inside the housing when there is one, and centre the whole assembly on [0, 0, 0].
 5. Materials (the "material" of each part): ${MATERIALS.join(', ')}.
 6. Parameters and calculations
    - 3 to 7 parameters: { id, label, symbol, value, min, max, step, unit }. Use their ids in shape fields as expressions (e.g. "rOuter": "D / 2", "teeth": "z1", "speed": "rpm / 60") so moving a slider reshapes the model.
@@ -117,7 +124,7 @@ Return ONLY this JSON:
     "calculations": [...],
     "charts": [...],
     "annotations": [...],
-    "parts": [{ "id", "name", "material", "role", "cut", "position", "explode", "motion"?, "info", "shapes": [...] }]
+    "parts": [{ "id", "name", "material", "role", "cut", "mount" (or "position" for the anchor only), "rotation"?, "explode", "motion"?, "info", "shapes": [...] }]
   }
 }
 When changing the current model, keep everything the user did not ask to change and set "isNewMachine": false.
