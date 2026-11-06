@@ -186,6 +186,64 @@ export interface EvaluatedCalculation {
   limitValue?: number
 }
 
+/**
+ * A graph worked out live from the model's sizes and results: a bending moment or shear force diagram,
+ * stress along a member, a pump or engine curve. Each series is a formula in `x` (plus parameter and
+ * calculation ids), sampled from `x.from` to `x.to`.
+ */
+export interface NoteChartSpec {
+  id: string
+  title: string
+  x: {
+    label: string
+    unit: string
+    from: DimExpr
+    to: DimExpr
+  }
+  y: {
+    label: string
+    unit: string
+  }
+  series: { id: string; label: string; formula: string }[]
+  /** how many points to draw (default 80; more for sharp steps) */
+  samples?: number
+}
+
+export interface EvaluatedChart {
+  spec: NoteChartSpec
+  xs: number[]
+  series: { id: string; label: string; ys: number[]; max: { x: number; y: number }; min: { x: number; y: number } }[]
+  yMin: number
+  yMax: number
+}
+
+/** samples each series of a chart over its x range, from the model's live values */
+export function evaluateChart(chart: NoteChartSpec, scope: Record<string, number>): EvaluatedChart | null {
+  const from = evalDim(chart.x.from, scope, 0)
+  const to = evalDim(chart.x.to, scope, 1)
+  if (!Number.isFinite(from) || !Number.isFinite(to) || to === from) return null
+  const n = Math.max(8, Math.min(400, Math.round(chart.samples ?? 120)))
+  const xs = Array.from({ length: n + 1 }, (_, i) => from + ((to - from) * i) / n)
+  let yMin = 0
+  let yMax = 0
+  const series = chart.series.slice(0, 4).map((sr) => {
+    const ys = xs.map((x) => {
+      const v = evalDim(sr.formula, { ...scope, x }, 0)
+      return Number.isFinite(v) ? v : 0
+    })
+    let max = { x: xs[0], y: ys[0] }
+    let min = { x: xs[0], y: ys[0] }
+    ys.forEach((y, i) => {
+      if (y > max.y) max = { x: xs[i], y }
+      if (y < min.y) min = { x: xs[i], y }
+    })
+    yMin = Math.min(yMin, min.y)
+    yMax = Math.max(yMax, max.y)
+    return { id: sr.id, label: sr.label, ys, max, min }
+  })
+  return { spec: chart, xs, series, yMin, yMax }
+}
+
 export interface NoteSceneSpec {
   id: string
   title: string
@@ -202,6 +260,8 @@ export interface NoteSceneSpec {
   parts: NotePartSpec[]
   annotations?: NoteAnnotationSpec[]
   calculations?: NoteCalculationSpec[]
+  /** graphs worked out live: bending moment and shear force diagrams, curves */
+  charts?: NoteChartSpec[]
   showProjectionPlanes?: 'none' | 'first-angle' | 'third-angle'
   recommendedCut?: {
     enabled: boolean
@@ -416,6 +476,20 @@ export function evalDim(
               return Math.min(...(args.length ? args : [0]))
             case 'max':
               return Math.max(...(args.length ? args : [0]))
+            // Heaviside step: 1 from v = 0 on, else 0 (a load or support partway along a member)
+            case 'step':
+              return (args[0] ?? 0) >= 0 ? 1 : 0
+            // Macaulay bracket <v>^n: 0 while v < 0, v^n after (beam deflection and moment by singularity functions)
+            case 'mac': {
+              const v = args[0] ?? 0
+              return v <= 0 ? 0 : Math.pow(v, args[1] ?? 1)
+            }
+            case 'exp':
+              return Math.exp(args[0] ?? 0)
+            case 'log':
+              return (args[0] ?? 0) > 0 ? Math.log(args[0] ?? 1) : 0
+            case 'atan':
+              return Math.atan(args[0] ?? 0)
             default:
               return args[0] ?? 0
           }
@@ -605,6 +679,15 @@ export const noteCalculationSchema = z.object({
     .optional(),
 })
 
+export const noteChartSchema = z.object({
+  id: z.string().min(1).max(60),
+  title: z.string().min(1).max(120),
+  x: z.object({ label: z.string().max(60), unit: z.string().max(20), from: dimExprSchema, to: dimExprSchema }),
+  y: z.object({ label: z.string().max(60), unit: z.string().max(20) }),
+  series: z.array(z.object({ id: z.string().min(1).max(60), label: z.string().max(60), formula: z.string().min(1).max(300) })).min(1).max(4),
+  samples: z.number().int().min(8).max(400).optional(),
+})
+
 export const noteSceneSpecSchema = z.object({
   id: z.string().min(1).max(80),
   title: z.string().min(1).max(160),
@@ -622,6 +705,7 @@ export const noteSceneSpecSchema = z.object({
   parts: z.array(notePartSchema).min(1).max(32),
   annotations: z.array(noteAnnotationSchema).max(24).optional(),
   calculations: z.array(noteCalculationSchema).max(20).optional(),
+  charts: z.array(noteChartSchema).max(6).optional(),
   showProjectionPlanes: z.enum(['none', 'first-angle', 'third-angle']).optional(),
   recommendedCut: z
     .object({

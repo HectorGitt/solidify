@@ -110,6 +110,7 @@ export function readProgress(text: string): LiveProgress {
       recommendedCut: completedObject(text, 'recommendedCut'),
       parameters,
       calculations,
+      charts: completedItems(text, 'charts'),
       parts,
     },
   }

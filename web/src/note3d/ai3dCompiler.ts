@@ -9,6 +9,7 @@ import {
   ALLOWED_MATERIALS,
   noteSceneSpecSchema,
   noteShapeSchema,
+  noteChartSchema,
   type NoteCalculationSpec,
   type NoteParameterSpec,
   type NotePartSpec,
@@ -41,6 +42,12 @@ function sanitizeGeneratedSpec(raw: Record<string, unknown>, fallbackTitle: stri
         ? (candidate.calculations as NoteCalculationSpec[])
         : [],
       parts: candidate.parts as NotePartSpec[],
+      // graphs: each one checked on its own, so a bad chart never costs the model
+      charts: (Array.isArray(candidate.charts) ? candidate.charts : [])
+        .map((c) => noteChartSchema.safeParse(c))
+        .filter((r) => r.success)
+        .map((r) => r.data)
+        .slice(0, 6),
     }
 
     // keep only shapes the builder can make, and only parts that still have a shape (children included)
