@@ -16,10 +16,10 @@ import { topicsFor } from './topics'
  */
 const API = process.env.EVAL_API ?? ''
 const TOKEN = process.env.EVAL_TOKEN ?? ''
-const LIMIT = Number(process.env.EVAL_LIMIT ?? EVAL_CASES.length)
+const LIMIT = Number(process.env.EVAL_LIMIT || EVAL_CASES.length)
 const DRY = process.env.EVAL_DRY === '1'
-const DRAFTS = Number(process.env.EVAL_DRAFTS ?? 3)
-const DRAFT_MIN = Number(process.env.EVAL_DRAFT_MIN ?? 85)
+const DRAFTS = Number(process.env.EVAL_DRAFTS || 3)
+const DRAFT_MIN = Number(process.env.EVAL_DRAFT_MIN || 85)
 
 /** runs `work` over `items` three at a time: quick enough for a nightly job, gentle on the model's rate limits */
 async function pool<T>(items: T[], work: (item: T) => Promise<void>) {
