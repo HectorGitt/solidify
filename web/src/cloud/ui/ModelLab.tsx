@@ -71,6 +71,16 @@ function liveStage(p: LiveProgress | null) {
   return 0
 }
 
+/** the student's side of a turn: their words, with a small thumbnail of a photo they sent */
+function UserBubble({ text, photoUrl }: { text: string; photoUrl?: string }) {
+  return (
+    <div className="ml-6 flex items-center gap-2.5 rounded-2xl rounded-br-md bg-ink px-3 py-2.5 text-[13px] leading-snug text-bg">
+      {photoUrl ? <img src={photoUrl} alt="Your photo" className="h-10 w-10 shrink-0 rounded-lg object-cover ring-1 ring-bg/20" /> : null}
+      <span className="min-w-0">{text}</span>
+    </div>
+  )
+}
+
 /** the assistant's side of a turn that is still being written */
 function LiveReply({ progress, isNew, photo }: { progress: LiveProgress | null; isNew: boolean; photo: boolean }) {
   const stage = liveStage(progress)
@@ -105,13 +115,10 @@ function LiveReply({ progress, isNew, photo }: { progress: LiveProgress | null; 
         </div>
       ) : null}
       {progress?.calculations.length ? (
-        <ul className="space-y-0.5 text-[12px] text-mute">
-          {progress.calculations.map((c) => (
-            <li key={c.id} className="bp-fade flex items-center gap-1.5">
-              <Icon.check width={12} height={12} className="text-accent" /> {c.label ?? c.id}
-            </li>
-          ))}
-        </ul>
+        <p className="bp-fade flex items-center gap-1.5 text-[12px] text-mute">
+          <Icon.check width={12} height={12} className="text-accent" />
+          Worked out {progress.calculations.length} {progress.calculations.length === 1 ? 'formula' : 'formulas'}
+        </p>
       ) : null}
       {progress?.parts.length ? (
         <p className="bp-fade text-[12px] text-mute">
@@ -512,7 +519,7 @@ export default function ModelLab() {
           </button>
         )}
         <span className="text-[12px] text-dim">
-          {live ? 'Building…' : creationId ? (saveState === 'saving' ? 'Saving…' : saveState === 'error' ? 'Not saved: check your connection' : 'Saved') : ''}
+          {live ? (live.progress?.title || spec ? 'Building…' : '') : creationId ? (saveState === 'saving' ? 'Saving…' : saveState === 'error' ? 'Not saved: check your connection' : 'Saved') : ''}
         </span>
         <div className="ml-auto flex items-center gap-2">
           {spec && matchedCatalog && loadedCatalogScene && !live ? (
@@ -537,10 +544,7 @@ export default function ModelLab() {
             ) : null}
             {messages.map((m) => (
               <div key={m.id} className="space-y-2">
-                <div className="ml-6 rounded-2xl rounded-br-md bg-ink px-3.5 py-2.5 text-[13px] leading-snug text-bg">
-                  {m.photoUrl ? <img src={m.photoUrl} alt="Your photo" className="mb-2 max-h-40 rounded-lg bg-white object-contain" /> : null}
-                  {m.prompt}
-                </div>
+                <UserBubble text={m.prompt} photoUrl={m.photoUrl} />
                 <div className={`mr-6 rounded-2xl rounded-bl-md border px-3.5 py-2.5 text-[13px] leading-relaxed ${m.kind === 'error' ? 'border-warn/50 bg-warn/5 text-ink' : 'border-line bg-panel text-ink'}`}>
                   {m.kind === 'answer' ? <p className="mb-1 text-[11px] font-medium uppercase tracking-wider text-accent">Answer</p> : null}
                   {m.response}
@@ -554,13 +558,13 @@ export default function ModelLab() {
             ))}
             {live ? (
               <div className="space-y-2">
-                <div className="ml-6 rounded-2xl rounded-br-md bg-ink px-3.5 py-2.5 text-[13px] leading-snug text-bg">
-                  {live.photoUrl ? <img src={live.photoUrl} alt="Your photo" className="mb-2 max-h-40 rounded-lg bg-white object-contain" /> : null}
-                  {live.prompt}
-                </div>
-                <div className="mr-6 rounded-2xl rounded-bl-md border border-accent/40 bg-panel px-3.5 py-3">
-                  <LiveReply progress={live.progress} isNew={live.isNew} photo={!!live.photoUrl} />
-                </div>
+                <UserBubble text={live.prompt} photoUrl={live.photoUrl} />
+                {/* while the build screen tells the story, the chat does not repeat it */}
+                {firstBuild ? null : (
+                  <div className="mr-6 rounded-2xl rounded-bl-md border border-accent/40 bg-panel px-3.5 py-3">
+                    <LiveReply progress={live.progress} isNew={live.isNew} photo={!!live.photoUrl} />
+                  </div>
+                )}
               </div>
             ) : null}
             <div ref={chatEndRef} />
