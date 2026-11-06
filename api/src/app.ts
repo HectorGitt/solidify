@@ -7,7 +7,7 @@ import type { AuthUser, Verifier } from './auth.js'
 import type { Db } from './db.js'
 import { MAX_ENTRIES, emptyProgress, entryCount, mergeProgress, progressSchema, type Progress } from './progress.js'
 import { SYSTEM_PROMPT, buildTurns, tutorRequest, type TutorModel } from './tutor.js'
-import { FakeNoteVision, ModelReplyError, create3dRequest, noteAnalyzeRequest, noteRefineRequest, readCreateReply, type NoteVisionModel } from './note3d.js'
+import { FakeNoteVision, ModelReplyError, create3dRequest, noteAnalyzeRequest, noteRefineRequest, readCreateReply, type Create3dRequest, type ModelUsage, type NoteVisionModel } from './note3d.js'
 
 export interface Config {
   /** browser origins allowed to call the API */
@@ -22,6 +22,8 @@ export interface Config {
   adminEmails: string[]
   /** shared secret for the nightly test run (at least 24 characters); unset = no nightly runs */
   evalToken?: string
+  /** the model's list price in US dollars per million tokens, to turn token counts into cost on the admin page */
+  modelPrice?: { inputPerM: number; outputPerM: number }
   now?: () => number
 }
 
@@ -272,6 +274,23 @@ export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision
     if (usage.count > limit) throw fail(429, `You've reached today's limit of ${limit} ${what}. It resets at midnight UTC.`)
     return limit - usage.count
   }
+  /*
+   * What each kind of AI action really costs, counted by day without names: the numbers credit prices are
+   * set from. A question is only known to be one once the model has answered.
+   */
+  const actionOf = (req: Create3dRequest, isQuestion?: boolean) => (req.photoBase64 ? 'photo' : !req.currentSpec ? 'build' : isQuestion ? 'question' : 'edit')
+  const recordUsage = async (action: string, u?: ModelUsage) => {
+    if (!u) return
+    try {
+      await db.transact<Record<string, number>>(`aiUsage/${day(now())}`, (prev) => {
+        const p = prev ?? {}
+        return { ...p, [`${action}_n`]: (p[`${action}_n`] ?? 0) + 1, [`${action}_in`]: (p[`${action}_in`] ?? 0) + u.input, [`${action}_out`]: (p[`${action}_out`] ?? 0) + u.output }
+      })
+    } catch (e) {
+      console.error('recording usage', e) // never fail a student's build over the bookkeeping
+    }
+  }
+
   /** a model call, with an unusable reply turned into a clear error instead of a crash */
   const model = async <T>(call: () => Promise<T>) => {
     try {
@@ -302,7 +321,8 @@ export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision
     const u = requireUser(c)
     const req = await body(c, create3dRequest)
     const remaining = await spend(u.uid, 'createUsage', config.createDailyLimit ?? 15, '3D builds')
-    const out = await model(() => noteVision.createOrEdit3D(req))
+    const { usage, ...out } = await model(() => noteVision.createOrEdit3D(req))
+    await recordUsage(actionOf(req, out.isQuestion), usage)
     return c.json({ ...out, remaining })
   })
 
@@ -320,12 +340,15 @@ export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision
       stream.onAbort(() => ac.abort())
       await stream.writeSSE({ event: 'meta', data: JSON.stringify({ remaining }) })
       let text = ''
+      let usage: ModelUsage | undefined
       try {
-        for await (const t of noteVision.streamCreate3D(req, ac.signal)) {
+        for await (const t of noteVision.streamCreate3D(req, ac.signal, (u) => (usage = u))) {
           text += t
           await stream.writeSSE({ event: 'delta', data: JSON.stringify({ text: t }) })
         }
-        await stream.writeSSE({ event: 'done', data: JSON.stringify(readCreateReply(text, req)) })
+        const reply = readCreateReply(text, req)
+        await recordUsage(actionOf(req, reply.isQuestion), usage)
+        await stream.writeSSE({ event: 'done', data: JSON.stringify(reply) })
       } catch (e) {
         if (ac.signal.aborted) return
         const incomplete = e instanceof ModelReplyError
@@ -350,6 +373,8 @@ export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision
   app.post('/v1/evals/build', async (c) => {
     requireEval(c)
     const req = await body(c, create3dRequest)
+    // a night takes about 33; the cap keeps a leaked token from running up the bill
+    await spend('nightly', 'evalUsage', 200, 'test builds')
     const t0 = now()
     const out = await model(() => noteVision.createOrEdit3D(req))
     return c.json({ ...out, ms: now() - t0 })
@@ -368,10 +393,18 @@ export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision
           seconds: z.number().min(0).max(3600),
           checks: z.array(evalCheck).max(24),
           error: z.string().max(300).optional(),
+          tokensIn: z.number().int().min(0).optional(),
+          tokensOut: z.number().int().min(0).optional(),
         }),
       )
       .max(80),
-    summary: z.object({ score: z.number().min(0).max(100), passed: z.number().int().min(0), total: z.number().int().min(0) }),
+    summary: z.object({
+      score: z.number().min(0).max(100),
+      passed: z.number().int().min(0),
+      total: z.number().int().min(0),
+      tokensIn: z.number().int().min(0).optional(),
+      tokensOut: z.number().int().min(0).optional(),
+    }),
   })
 
   /** a night's results */
@@ -387,7 +420,15 @@ export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision
     requireAdmin(c)
     const rows = await db.list<z.infer<typeof evalRun>>('evalRuns')
     const runs = rows.map((r) => r.data).sort((a, b) => b.runAt - a.runAt)
-    return c.json({ runs: runs.slice(0, 90).map(({ runAt, label, summary }) => ({ runAt, label, summary })), latest: runs[0] ?? null })
+    return c.json({ runs: runs.slice(0, 90).map(({ runAt, label, summary }) => ({ runAt, label, summary })), latest: runs[0] ?? null, price: config.modelPrice ?? null })
+  })
+
+  /** the last 30 days of AI actions by kind (count and tokens), and the model's price if configured */
+  app.get('/v1/ai-usage', async (c) => {
+    requireAdmin(c)
+    const days = Array.from({ length: 30 }, (_, i) => day(now() - i * 86_400_000)).reverse()
+    const rows = await Promise.all(days.map(async (d) => ({ day: d, ...((await db.get<Record<string, number>>(`aiUsage/${d}`)) ?? {}) })))
+    return c.json({ days: rows, price: config.modelPrice ?? null })
   })
 
   /* what students do with the models: counted by day and kind, with no one's identity; a thumbs-down keeps its note */

@@ -27,6 +27,8 @@ const app = createApp({
     tutorDailyLimit: Number(env('TUTOR_DAILY_LIMIT', '40')),
     adminEmails: list(env('ADMIN_EMAILS', 'ola@solidify.studio,admin@solidify.studio')),
     evalToken: process.env.EVAL_TOKEN,
+    // e.g. MODEL_PRICE=0.30,2.50 (input, output: US dollars per million tokens)
+    modelPrice: process.env.MODEL_PRICE ? (([i, o]) => ({ inputPerM: i, outputPerM: o }))(process.env.MODEL_PRICE.split(',').map(Number)) : undefined,
   },
 })
 

@@ -36,8 +36,17 @@ export interface NoteVisionModel {
   refineSpec(req: NoteRefineRequest): Promise<{ spec: Record<string, unknown> }>
   createOrEdit3D(req: Create3dRequest): Promise<CreateReply>
   /** the same answer as it is written, as raw JSON text; read the whole of it with `readCreateReply` */
-  streamCreate3D(req: Create3dRequest, signal?: AbortSignal): AsyncIterable<string>
+  streamCreate3D(req: Create3dRequest, signal?: AbortSignal, onUsage?: (u: ModelUsage) => void): AsyncIterable<string>
 }
+
+/** tokens a model call used: what it was sent, and what it wrote (thinking included, as it is billed) */
+export interface ModelUsage {
+  input: number
+  output: number
+}
+
+const usageOf = (m?: { promptTokenCount?: number; candidatesTokenCount?: number; thoughtsTokenCount?: number }): ModelUsage | undefined =>
+  m ? { input: m.promptTokenCount ?? 0, output: (m.candidatesTokenCount ?? 0) + (m.thoughtsTokenCount ?? 0) } : undefined
 
 export interface CreateReply {
   spec: Record<string, unknown>
@@ -46,6 +55,7 @@ export interface CreateReply {
   /** the student asked a question: `explanation` answers it and the model is unchanged */
   isQuestion?: boolean
   labMatch?: { moduleId: string; sceneId: string }
+  usage?: ModelUsage
 }
 
 /** what Gemini is sent for a build, change or question */
@@ -165,15 +175,18 @@ export class GeminiNoteVision implements NoteVisionModel {
 
   async createOrEdit3D(req: Create3dRequest) {
     const res = await this.ai.models.generateContent({ model: this.model, contents: [{ role: 'user', parts: createParts(req) }], config: this.createConfig() })
-    return readCreateReply(res.text ?? '', req)
+    return { ...readCreateReply(res.text ?? '', req), usage: usageOf(res.usageMetadata) }
   }
 
-  async *streamCreate3D(req: Create3dRequest, signal?: AbortSignal) {
+  async *streamCreate3D(req: Create3dRequest, signal?: AbortSignal, onUsage?: (u: ModelUsage) => void) {
     const res = await this.ai.models.generateContentStream({ model: this.model, contents: [{ role: 'user', parts: createParts(req) }], config: this.createConfig(signal) })
+    let usage: ModelUsage | undefined
     for await (const chunk of res) {
+      usage = usageOf(chunk.usageMetadata) ?? usage
       const t = chunk.text
       if (t) yield t
     }
+    if (usage) onUsage?.(usage)
   }
 }
 
@@ -220,12 +233,19 @@ export class FakeNoteVision implements NoteVisionModel {
     }
   }
 
-  async createOrEdit3D(req: Create3dRequest) {
-    return readCreateReply(JSON.stringify(this.fakeReply(req)), req)
+  /** a stand-in token count: the photo costs the most, then the current model sent back, then the words */
+  private fakeUsage(req: Create3dRequest, text: string): ModelUsage {
+    return { input: 1000 + (req.photoBase64 ? 1500 : 0) + (req.currentSpec ? JSON.stringify(req.currentSpec).length : 0), output: text.length }
   }
 
-  async *streamCreate3D(req: Create3dRequest) {
+  async createOrEdit3D(req: Create3dRequest) {
+    const text = JSON.stringify(this.fakeReply(req))
+    return { ...readCreateReply(text, req), usage: this.fakeUsage(req, text) }
+  }
+
+  async *streamCreate3D(req: Create3dRequest, _signal?: AbortSignal, onUsage?: (u: ModelUsage) => void) {
     const text = JSON.stringify(this.fakeReply(req))
     for (let i = 0; i < text.length; i += 60) yield text.slice(i, i + 60)
+    onUsage?.(this.fakeUsage(req, text))
   }
 }

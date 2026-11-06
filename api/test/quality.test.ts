@@ -106,3 +106,31 @@ describe('the model library and its review queue', () => {
     expect(((await (await req('GET', '/v1/me', undefined, asUser('sam'))).json()) as { isAdmin?: boolean }).isAdmin).toBeUndefined()
   })
 })
+
+describe('what AI actions cost', () => {
+  const boss = { Authorization: 'Bearer user:boss:Boss' }
+
+  it('counts tokens by kind of action (a build, an edit, a question, a photo), without names', async () => {
+    await req('POST', '/v1/create-3d', { prompt: 'a gear pump' }, asUser('a'))
+    await (await req('POST', '/v1/create-3d/stream', { prompt: 'make it bigger', currentSpec: { title: 'Pump', parts: [] } }, asUser('b'))).text()
+    await (await req('POST', '/v1/create-3d/stream', { prompt: 'why two gears?', currentSpec: { title: 'Pump', parts: [] } }, asUser('c'))).text()
+    await req('POST', '/v1/create-3d', { prompt: 'this', photoBase64: 'data:image/jpeg;base64,/9j/AAAA' }, asUser('d'))
+    expect((await req('GET', '/v1/ai-usage', undefined, asUser('a'))).status).toBe(403)
+    const got = (await (await req('GET', '/v1/ai-usage', undefined, boss)).json()) as { days: Record<string, number | string>[] }
+    const today = got.days.at(-1)!
+    expect(today).toMatchObject({ day: '2026-11-07', build_n: 1, edit_n: 1, question_n: 1, photo_n: 1 })
+    expect(Number(today.photo_in)).toBeGreaterThan(Number(today.build_in))
+    expect(Number(today.build_out)).toBeGreaterThan(0)
+    expect(JSON.stringify(got)).not.toMatch(/"(a|b|c|d)"/)
+  })
+
+  it('returns the tokens a test build used, and stops test builds at 200 a day', async () => {
+    const first = (await (await req('POST', '/v1/evals/build', { prompt: 'a shaft' }, { 'x-eval-token': TOKEN })).json()) as { usage: { input: number; output: number } }
+    expect(first.usage.input).toBeGreaterThan(0)
+    for (let i = 1; i < 200; i++) expect((await req('POST', '/v1/evals/build', { prompt: 'a shaft' }, { 'x-eval-token': TOKEN })).status).toBe(200)
+    expect((await req('POST', '/v1/evals/build', { prompt: 'a shaft' }, { 'x-eval-token': TOKEN })).status).toBe(429)
+    // test builds are not counted as student actions
+    const got = (await (await req('GET', '/v1/ai-usage', undefined, boss)).json()) as { days: Record<string, unknown>[] }
+    expect(got.days.at(-1)!.build_n).toBeUndefined()
+  })
+})
