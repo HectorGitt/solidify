@@ -7,6 +7,7 @@ import type { CatalogSceneMatch } from '@/note3d/createCatalog'
 import type { LiveProgress } from '@/note3d/liveBuild'
 import { createSceneDefFromSpec, liveAssembly } from '@/note3d/NoteSceneRenderer'
 import { ChartView, fmtNum } from '@/note3d/ChartView'
+import { findPart } from '@/note3d/partInfo'
 import { ALLOWED_MATERIALS, evaluateCalculations, evaluateChart, type EvaluatedCalculation, type EvaluatedChart, type NoteParameterSpec, type NotePartSpec, type NoteSceneSpec, type NoteShapeKind } from '@/note3d/schema'
 import { MATERIALS, type MaterialKey } from '@/render/materials'
 import { requestSnapshot } from '@/render/snapshot'
@@ -22,6 +23,7 @@ import { useAuth } from '../auth'
 import { getCreation, saveNewCreation, updateCreation } from '../creations'
 import { clearPendingBuild, peekPendingBuild } from '../pendingBuild'
 import { ghostBtn, inputCls, primaryBtn } from './Modal'
+import { PartInspector } from './PartInspector'
 import { WorkspaceBodySkeleton } from '@/ui/Skeleton'
 
 /** one turn of the conversation about a model (saved newest first, shown oldest first) */
@@ -374,6 +376,7 @@ export default function ModelLab() {
     useView.getState().setExplode(0)
     useView.getState().setXray(false)
     setTab(spec.charts?.length ? 'graphs' : 'calculations')
+    useView.getState().select(null)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [spec?.id])
 
@@ -690,6 +693,11 @@ export default function ModelLab() {
   const shownParams = useMemo(() => (preview ? Object.fromEntries(preview.parameters.map((p) => [p.id, p.value])) : params), [preview, params])
   const { results: calcResults, scope: calcScope } = useMemo(() => evaluateCalculations(shownSpec?.calculations, shownParams), [shownSpec?.calculations, shownParams])
   const charts = useMemo(() => (shownSpec?.charts ?? []).map((ch) => evaluateChart(ch, calcScope)).filter((ch): ch is EvaluatedChart => !!ch), [shownSpec?.charts, calcScope])
+  const selectedPart = useMemo(() => (viewMode === 'parametric' ? findPart(shownSpec, selectedId) : null), [shownSpec, selectedId, viewMode])
+  // on a phone, choosing a part brings its details up under the model
+  useEffect(() => {
+    if (selectedPart) setMobilePane('engineering')
+  }, [selectedPart?.id])
   const calcUnits = useMemo(() => Object.fromEntries((shownSpec?.calculations ?? []).map((c) => [c.id, c.unit])), [shownSpec?.calculations])
   const parametricScene = useMemo(() => (shownSpec ? createSceneDefFromSpec(shownSpec, shownParams) : null), [shownSpec, shownParams])
   const scene = viewMode === 'catalog' && loadedCatalogScene && !live ? loadedCatalogScene : parametricScene
@@ -888,6 +896,11 @@ export default function ModelLab() {
                     </div>
                   </div>
                 ) : null}
+                {spec && !live && !selectedPart && viewMode === 'parametric' ? (
+                  <div className="pointer-events-none absolute bottom-3 right-3 z-20 rounded-full border border-line bg-panel/90 px-3 py-1 text-[11.5px] text-mute shadow-sm backdrop-blur">
+                    Click a part to inspect it
+                  </div>
+                ) : null}
                 {photo && !live ? (
                   <div className="absolute bottom-3 left-3 z-20 flex items-center gap-2 rounded-2xl border border-line bg-panel/95 p-1.5 pr-3 shadow-lg backdrop-blur">
                     <img src={photo.url} alt={`Reference: ${photo.name}`} className="h-12 w-12 rounded-lg bg-white object-contain" />
@@ -938,7 +951,32 @@ export default function ModelLab() {
 
         {/* the engineering */}
         <aside className={`${mobilePane === 'engineering' && !blank ? 'flex' : 'hidden'} order-3 min-h-[360px] flex-col border-line lg:flex lg:min-h-0 lg:border-l`}>
-          {viewMode === 'catalog' && loadedCatalogScene?.Panel && !live ? (
+          {selectedPart && shownSpec ? (
+            <>
+              <div className="flex items-center gap-2 border-b border-line p-2">
+                <button type="button" onClick={() => useView.getState().select(null)} className="inline-flex items-center gap-1 rounded-full px-2.5 py-1.5 text-[12.5px] font-medium text-mute hover:bg-panel-2 hover:text-ink">
+                  <Icon.back width={14} height={14} /> All details
+                </button>
+                <span className="ml-auto pr-2 text-[11.5px] text-dim">Part</span>
+              </div>
+              <div className="min-h-0 flex-1 overflow-y-auto p-4">
+                <PartInspector
+                  spec={shownSpec}
+                  part={selectedPart}
+                  scope={calcScope}
+                  calcResults={calcResults}
+                  editable={!!spec && !live}
+                  onParam={(id, v) => setParams((prev) => ({ ...prev, [id]: v }))}
+                  onMaterial={(m) => setMaterial(selectedPart.id, m)}
+                  onRemove={() => {
+                    removePart(selectedPart.id)
+                    useView.getState().select(null)
+                  }}
+                  onAsk={(q) => void send(q)}
+                />
+              </div>
+            </>
+          ) : viewMode === 'catalog' && loadedCatalogScene?.Panel && !live ? (
             <div className="flex-1 overflow-y-auto p-4">
               <loadedCatalogScene.Panel />
             </div>
