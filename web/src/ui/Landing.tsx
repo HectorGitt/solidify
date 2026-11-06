@@ -14,6 +14,7 @@ import { Stage, type StageFrame } from './Stage'
 import { SiteHeader } from '@/ui/SiteHeader'
 import { SiteFooter } from './SiteFooter'
 import { ALL_ORDER, MEDIA, Media, ModuleTile, READY } from './labsCatalog'
+import { BuildYourOwn, RigOfTheDay } from './HomeSections'
 
 
 /**
@@ -371,6 +372,10 @@ export function Landing() {
           ))}
         </div>
       </section>
+
+      <RigOfTheDay />
+
+      <BuildYourOwn />
 
       <section className="mx-auto grid max-w-[1360px] gap-4 px-5 pt-20 sm:grid-cols-2 sm:px-10 lg:grid-cols-4">
         <Stat value={total} label="interactive 3D scenes" />
