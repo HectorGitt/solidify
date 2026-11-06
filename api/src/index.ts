@@ -3,6 +3,7 @@ import { createApp } from './app.js'
 import { FirebaseVerifier, FirestoreDb } from './firestore.js'
 import { GeminiTutor } from './tutor.js'
 import { GeminiNoteVision } from './note3d.js'
+import { listPrice } from './prices.js'
 
 const env = (k: string, d?: string) => {
   const v = process.env[k] ?? d
@@ -40,7 +41,8 @@ const app = createApp({
         }
       : undefined,
     // e.g. MODEL_PRICE=0.30,2.50 (input, output: US dollars per million tokens)
-    modelPrice: process.env.MODEL_PRICE ? (([i, o]) => ({ inputPerM: i, outputPerM: o }))(process.env.MODEL_PRICE.split(',').map(Number)) : undefined,
+    // MODEL_PRICE=in,out overrides Google's list price for the model (built in for gemini-3.8-flash, changing on its dates)
+    modelPrice: process.env.MODEL_PRICE ? (([i, o]) => ({ inputPerM: i, outputPerM: o }))(process.env.MODEL_PRICE.split(',').map(Number)) : (t: number) => listPrice(env('GEMINI_MODEL', 'gemini-3.8-flash'), t),
   },
 })
 

@@ -23,7 +23,7 @@ export interface Config {
   /** shared secret for the nightly test run (at least 24 characters); unset = no nightly runs */
   evalToken?: string
   /** the model's list price in US dollars per million tokens, to turn token counts into cost on the admin page */
-  modelPrice?: { inputPerM: number; outputPerM: number }
+  modelPrice?: { inputPerM: number; outputPerM: number } | ((t: number) => { inputPerM: number; outputPerM: number } | undefined)
   /** starts the nightly test workflow on GitHub now (unset = the admin page cannot start runs) */
   dispatchRun?: (inputs: { limit?: string; drafts?: string }) => Promise<void>
   now?: () => number
@@ -447,7 +447,7 @@ export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision
   type QualitySettings = z.infer<typeof settingsSchema>
   const DEFAULT_SETTINGS: QualitySettings = { paused: false, draftsPerNight: 3, draftMin: 85, price: null }
   const getSettings = async (): Promise<QualitySettings> => ({ ...DEFAULT_SETTINGS, ...((await db.get<QualitySettings>('settings/quality')) ?? {}) })
-  const priceNow = async () => (await getSettings()).price ?? config.modelPrice ?? null
+  const priceNow = async () => (await getSettings()).price ?? (typeof config.modelPrice === 'function' ? config.modelPrice(now()) : config.modelPrice) ?? null
   const topicItem = z.object({ topic: z.string().trim().min(1).max(60), prompt: z.string().trim().min(3).max(400) })
   /** null = the built-in list in the runner */
   const getTopics = async () => (await db.get<{ items: z.infer<typeof topicItem>[] }>('settings/topics'))?.items ?? null
