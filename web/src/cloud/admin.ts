@@ -109,3 +109,45 @@ export const getWaitlist = () => api<{ count: number; entries: WaitlistEntry[] }
 /** the published library: anyone may read it */
 export const listLibrary = () => api<{ items: LibraryCard[] }>('/v1/library')
 export const getLibraryItem = (id: string) => api<LibraryItem>(`/v1/library/${encodeURIComponent(id)}`)
+
+/* the admin's controls */
+
+export interface QualitySettings {
+  paused: boolean
+  draftsPerNight: number
+  draftMin: number
+  price: ModelPrice | null
+}
+
+export interface TopicItem {
+  topic: string
+  prompt: string
+}
+
+/** what a build returns: the model, its explanation, and the tokens it used */
+export interface BuildReply {
+  spec: Record<string, unknown>
+  explanation: string
+  isQuestion?: boolean
+  usage?: { input: number; output: number }
+  ms: number
+}
+
+export const getAdminSettings = () => api<{ settings: QualitySettings; topics: TopicItem[] | null; canRunTests: boolean }>('/v1/admin/settings')
+export const saveSettings = (patch: Partial<QualitySettings>) => api<{ settings: QualitySettings }>('/v1/admin/settings', { method: 'PUT', body: patch })
+export const saveTopics = (items: TopicItem[]) => api<{ topics: TopicItem[] }>('/v1/admin/topics', { method: 'PUT', body: { items } })
+export const resetTopics = () => api<{ topics: null }>('/v1/admin/topics', { method: 'DELETE' })
+export const adminBuild = (req: { prompt: string; currentSpec?: Record<string, unknown>; history?: { prompt: string; response: string }[] }) => api<BuildReply>('/v1/admin/build', { method: 'POST', body: req })
+export const runTestsNow = (r: { limit?: number; drafts?: number }) => api<{ ok: true }>('/v1/admin/run-tests', { method: 'POST', body: r })
+
+export interface DraftFields {
+  title: string
+  prompt: string
+  topic?: string
+  spec: Record<string, unknown>
+  explanation?: string
+  score: number
+  checks?: EvalCheck[]
+}
+export const addDraft = (d: DraftFields) => api<{ id: string }>('/v1/library/drafts', { method: 'POST', body: d })
+export const updateDraft = (id: string, patch: Partial<DraftFields>) => api<LibraryDraft>(`/v1/library/drafts/${encodeURIComponent(id)}`, { method: 'PUT', body: patch })

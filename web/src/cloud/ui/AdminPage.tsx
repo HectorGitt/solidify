@@ -1,5 +1,8 @@
-import { useCallback, useEffect, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
+import { EVAL_CASES } from '@/evals/cases'
+import { scoreBuild } from '@/evals/score'
+import { DRAFT_TOPICS, type DraftTopic } from '@/evals/topics'
 import { Pills, StudyShell } from '@/study/ui/StudyShell'
 import { ListSkeleton } from '@/ui/Skeleton'
 import { toast } from '@/ui/toast'
@@ -8,8 +11,19 @@ import { useAuth } from '../auth'
 import { saveNewCreation } from '../creations'
 import { useProfile } from '../profile'
 import {
+  addDraft,
+  adminBuild,
   approveDraft,
   costOf,
+  getAdminSettings,
+  resetTopics,
+  runTestsNow,
+  saveSettings,
+  saveTopics,
+  updateDraft,
+  type BuildReply,
+  type EvalCheck,
+  type QualitySettings,
   getAiUsage,
   getDrafts,
   getEvals,
@@ -27,7 +41,32 @@ import {
 } from '../admin'
 import { ghostBtn, inputCls, primaryBtn } from './Modal'
 
-type Tab = 'quality' | 'review' | 'feedback' | 'waitlist'
+type Tab = 'quality' | 'review' | 'feedback' | 'waitlist' | 'settings'
+
+const REPO_ACTIONS = 'https://github.com/HectorGitt/solidify/actions/workflows/nightly-evals.yml'
+
+/** scores a build made from the admin page with the nightly run's own checks */
+function scoreReply(prompt: string, reply: BuildReply, caseId?: string) {
+  const c = EVAL_CASES.find((x) => x.id === caseId) ?? { id: 'draft', prompt }
+  return scoreBuild(c, reply as unknown as Record<string, unknown>, reply.ms / 1000)
+}
+
+function FailedChecks({ checks }: { checks: EvalCheck[] }) {
+  const failed = checks.filter((x) => !x.ok)
+  if (!failed.length) return <p className="text-[11.5px] text-accent">All checks passed.</p>
+  return (
+    <ul className="space-y-0.5 text-[11.5px] text-warn">
+      {failed.map((x) => (
+        <li key={x.name}>
+          ✗ {x.name}
+          {x.detail ? <span className="text-ink/75">: {x.detail}</span> : null}
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+const BUILD_NOTE = 'Building… about a minute'
 
 const date = (t: number) => new Date(t).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })
 const dateTime = (t: number) => new Date(t).toLocaleString(undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
@@ -131,6 +170,17 @@ function Usage({ days, notes }: { days: EventDay[]; notes: EventNote[] }) {
 
 function LatestRun({ run }: { run: EvalRun }) {
   const [open, setOpen] = useState<string | null>(null)
+  const [retest, setRetest] = useState<Record<string, { busy: boolean; score?: number; checks?: EvalCheck[]; error?: string }>>({})
+  const runRetest = async (id: string, prompt: string) => {
+    setRetest((r) => ({ ...r, [id]: { busy: true } }))
+    try {
+      const reply = await adminBuild({ prompt })
+      const { score, checks } = scoreReply(prompt, reply, id)
+      setRetest((r) => ({ ...r, [id]: { busy: false, score, checks } }))
+    } catch (e) {
+      setRetest((r) => ({ ...r, [id]: { busy: false, error: e instanceof ApiError ? e.message : 'The build failed.' } }))
+    }
+  }
   const cases = [...run.cases].sort((a, b) => a.score - b.score)
   return (
     <section className={`${card} p-5`}>
@@ -152,14 +202,24 @@ function LatestRun({ run }: { run: EvalRun }) {
                 <span className="w-10 shrink-0 text-right text-[11.5px] tabular-nums text-dim">{c.seconds}s</span>
               </button>
               {isOpen ? (
-                <ul className="mb-3 ml-12 space-y-1 text-[12.5px]">
-                  {c.checks.map((x) => (
-                    <li key={x.name} className={x.ok ? 'text-mute' : 'text-warn'}>
-                      {x.ok ? '✓' : '✗'} {x.name}
-                      {!x.ok && x.detail ? <span className="text-ink/80">: {x.detail}</span> : null}
-                    </li>
-                  ))}
-                </ul>
+                <div className="mb-3 ml-12 space-y-2">
+                  <ul className="space-y-1 text-[12.5px]">
+                    {c.checks.map((x) => (
+                      <li key={x.name} className={x.ok ? 'text-mute' : 'text-warn'}>
+                        {x.ok ? '✓' : '✗'} {x.name}
+                        {!x.ok && x.detail ? <span className="text-ink/80">: {x.detail}</span> : null}
+                      </li>
+                    ))}
+                  </ul>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button type="button" disabled={retest[c.id]?.busy} onClick={() => void runRetest(c.id, c.prompt)} className={`${smallBtn} border border-line-2 text-ink/90 hover:border-ink/40`}>
+                      {retest[c.id]?.busy ? BUILD_NOTE : 'Re-test this case'}
+                    </button>
+                    {retest[c.id]?.score !== undefined ? <span className={`text-[13px] font-semibold tabular-nums ${scoreTone(retest[c.id]!.score!)}`}>Now {retest[c.id]!.score}</span> : null}
+                    {retest[c.id]?.error ? <span className="text-[12px] text-warn">{retest[c.id]!.error}</span> : null}
+                  </div>
+                  {retest[c.id]?.checks ? <FailedChecks checks={retest[c.id]!.checks!} /> : null}
+                </div>
               ) : null}
             </li>
           )
@@ -206,7 +266,7 @@ function AiCostTable({ days, price }: { days: Record<string, number | string>[];
       <h2 className="text-[15px] font-semibold">What AI actions cost</h2>
       <p className="mt-1 text-[12.5px] text-mute">
         Students’ real use over the last 30 days, averaged per action (nightly tests not included).{' '}
-        {price ? `At $${price.inputPerM} in and $${price.outputPerM} out per million tokens: ${usd(totalCost)} in all.` : 'Set MODEL_PRICE on the API (dollars per million tokens, in then out, e.g. 0.30,2.50) to see costs in dollars.'}
+        {price ? `At $${price.inputPerM} in and $${price.outputPerM} out per million tokens: ${usd(totalCost)} in all.` : 'Set the model’s price in Settings to see costs in dollars.'}
       </p>
       <div className="mt-3 overflow-x-auto">
         <table className="w-full min-w-[520px] text-left text-[12.5px]">
@@ -244,6 +304,53 @@ function AiCostTable({ days, price }: { days: Record<string, number | string>[];
   )
 }
 
+/** starts the nightly run now, through GitHub */
+function RunNow({ onStarted }: { onStarted: () => void }) {
+  const admin = useLoad(getAdminSettings)
+  const [limit, setLimit] = useState('3')
+  const [drafts, setDrafts] = useState('')
+  const [busy, setBusy] = useState(false)
+  const can = admin.data?.canRunTests
+  const start = async () => {
+    setBusy(true)
+    try {
+      await runTestsNow({ limit: limit ? Number(limit) : undefined, drafts: drafts === '' ? undefined : Number(drafts) })
+      toast('Run started. Results appear here when it finishes (a few minutes for 3 cases, about half an hour for all 30).')
+      onStarted()
+    } catch (e) {
+      toast(e instanceof ApiError ? e.message : 'Couldn’t start the run.', { tone: 'warn' })
+    } finally {
+      setBusy(false)
+    }
+  }
+  const num = 'w-20 rounded-lg border border-line-2 bg-panel-2 px-2.5 py-1.5 text-[13px] text-ink outline-none focus:border-accent/60'
+  return (
+    <section className={`${card} flex flex-wrap items-end gap-x-4 gap-y-3 p-5`}>
+      <div className="min-w-48 flex-1">
+        <h2 className="text-[15px] font-semibold">Run the tests now</h2>
+        <p className="mt-1 text-[12.5px] text-mute">
+          {admin.data && !can ? (
+            <>Starting runs from here needs GITHUB_DISPATCH_TOKEN on the API. Until then, use Run workflow on <a className="text-accent hover:underline" href={REPO_ACTIONS} target="_blank" rel="noreferrer">GitHub</a>.</>
+          ) : (
+            'Each case and each draft is one build. Few cases is cheap; leave it blank for all 30.'
+          )}
+        </p>
+      </div>
+      <label className="text-[11.5px] text-dim">
+        Cases
+        <input value={limit} onChange={(e) => setLimit(e.target.value.replace(/\D/g, ''))} placeholder="all" inputMode="numeric" className={`${num} mt-1 block`} />
+      </label>
+      <label className="text-[11.5px] text-dim">
+        Drafts
+        <input value={drafts} onChange={(e) => setDrafts(e.target.value.replace(/\D/g, ''))} placeholder="setting" inputMode="numeric" className={`${num} mt-1 block`} />
+      </label>
+      <button type="button" disabled={busy || !can} onClick={() => void start()} className={`${primaryBtn} px-4 py-2 text-[13px]`}>
+        {busy ? 'Starting…' : 'Start run'}
+      </button>
+    </section>
+  )
+}
+
 function Quality() {
   const evals = useLoad(getEvals)
   const events = useLoad(getEventSummary)
@@ -252,6 +359,7 @@ function Quality() {
   const delta = last && prev ? last.summary.score - prev.summary.score : null
   return (
     <div className="space-y-5">
+      <RunNow onStarted={() => undefined} />
       <Loading error={evals.error} onRetry={evals.reload}>
         {evals.data ? (
           last ? (
@@ -275,7 +383,7 @@ function Quality() {
               {evals.data.latest ? <LatestRun run={evals.data.latest} /> : null}
             </>
           ) : (
-            <Empty>No test runs yet. The first one runs tonight, or start one from the repository’s Actions tab (Nightly model tests, Run workflow).</Empty>
+            <Empty>No test runs yet. The first one runs tonight, or start one above.</Empty>
           )
         ) : null}
       </Loading>
@@ -289,11 +397,33 @@ function Quality() {
 
 /* ------------------------------------------------------------------ review queue */
 
-function DraftCard({ d, onDone }: { d: LibraryDraft; onDone: (approved: boolean) => void }) {
+function DraftCard({ d, onDone, onChanged }: { d: LibraryDraft; onDone: (approved: boolean) => void; onChanged: (d: LibraryDraft) => void }) {
   const navigate = useNavigate()
   const [title, setTitle] = useState(d.title)
-  const [busy, setBusy] = useState<null | 'open' | 'approve' | 'reject'>(null)
-  const failed = (d.checks ?? []).filter((c) => !c.ok)
+  const [busy, setBusy] = useState<null | 'open' | 'approve' | 'reject' | 'fix' | 'rebuild'>(null)
+  const [fixing, setFixing] = useState(false)
+  const [note, setNote] = useState('')
+
+  /** a change asked of Gemini (or a fresh build), scored again and saved over the draft */
+  const remake = async (kind: 'fix' | 'rebuild') => {
+    setBusy(kind)
+    try {
+      const reply =
+        kind === 'fix'
+          ? await adminBuild({ prompt: note.trim(), currentSpec: d.spec, history: d.explanation ? [{ prompt: d.prompt, response: d.explanation.slice(0, 2000) }] : [] })
+          : await adminBuild({ prompt: d.prompt })
+      const { score, checks } = scoreReply(d.prompt, reply)
+      const updated = await updateDraft(d.id, { spec: reply.spec, explanation: reply.explanation.slice(0, 4000), score, checks })
+      onChanged(updated)
+      setFixing(false)
+      setNote('')
+      toast(`${kind === 'fix' ? 'Fixed' : 'Rebuilt'}: now scores ${score}.`)
+    } catch (e) {
+      toast(e instanceof ApiError ? e.message : 'The build failed. Please try again.', { tone: 'warn' })
+    } finally {
+      setBusy(null)
+    }
+  }
 
   const act = async (kind: 'open' | 'approve' | 'reject') => {
     setBusy(kind)
@@ -330,14 +460,41 @@ function DraftCard({ d, onDone }: { d: LibraryDraft; onDone: (approved: boolean)
       <p className="text-[12.5px] leading-snug text-mute">{d.prompt}</p>
       <p className="text-[11.5px] text-dim">
         {d.parts} parts · drafted {dateTime(d.createdAt)}
-        {failed.length ? <span className="text-warn"> · {failed.map((f) => f.name).join(', ')} failed</span> : null}
       </p>
+      {d.checks ? <FailedChecks checks={d.checks} /> : null}
+      {fixing ? (
+        <form
+          className="flex flex-col gap-2"
+          onSubmit={(e) => {
+            e.preventDefault()
+            if (note.trim()) void remake('fix')
+          }}
+        >
+          <textarea autoFocus value={note} onChange={(e) => setNote(e.target.value)} rows={2} maxLength={1500} placeholder="What’s wrong, e.g. “the connecting rods don’t reach the crank and the flywheel is tilted”" className={`${inputCls} text-[12.5px]`} />
+          <div className="flex gap-2">
+            <button type="submit" disabled={!!busy || !note.trim()} className={`${smallBtn} bg-ink text-bg hover:opacity-90`}>
+              {busy === 'fix' ? BUILD_NOTE : 'Ask Gemini to fix it'}
+            </button>
+            <button type="button" disabled={!!busy} onClick={() => setFixing(false)} className={`${smallBtn} text-mute hover:text-ink`}>
+              Cancel
+            </button>
+          </div>
+        </form>
+      ) : null}
       <div className="mt-auto flex flex-wrap gap-2 pt-1">
         <button type="button" disabled={!!busy} onClick={() => void act('open')} className={`${smallBtn} border border-line-2 text-ink/90 hover:border-ink/40`}>
           {busy === 'open' ? 'Opening…' : 'Open in 3D'}
         </button>
         <button type="button" disabled={!!busy} onClick={() => void act('approve')} className={`${smallBtn} bg-accent text-accent-ink hover:opacity-90`}>
           {busy === 'approve' ? 'Publishing…' : 'Approve'}
+        </button>
+        {fixing ? null : (
+          <button type="button" disabled={!!busy} onClick={() => setFixing(true)} className={`${smallBtn} border border-line-2 text-ink/90 hover:border-ink/40`}>
+            Fix…
+          </button>
+        )}
+        <button type="button" disabled={!!busy} onClick={() => void remake('rebuild')} className={`${smallBtn} border border-line-2 text-ink/90 hover:border-ink/40`}>
+          {busy === 'rebuild' ? BUILD_NOTE : 'Rebuild'}
         </button>
         <button type="button" disabled={!!busy} onClick={() => void act('reject')} className={`${smallBtn} ml-auto text-mute hover:bg-panel-2 hover:text-warn`}>
           {busy === 'reject' ? 'Rejecting…' : 'Reject'}
@@ -347,25 +504,215 @@ function DraftCard({ d, onDone }: { d: LibraryDraft; onDone: (approved: boolean)
   )
 }
 
+/** a draft from any prompt, built and scored now, and added to the queue whatever it scores */
+function NewDraft({ onAdded }: { onAdded: () => void }) {
+  const [prompt, setPrompt] = useState('')
+  const [topic, setTopic] = useState('')
+  const [busy, setBusy] = useState(false)
+  const build = async (e: FormEvent) => {
+    e.preventDefault()
+    const p = prompt.trim()
+    if (!p) return
+    setBusy(true)
+    try {
+      const reply = await adminBuild({ prompt: p })
+      const { score, checks } = scoreReply(p, reply)
+      const title = typeof reply.spec.title === 'string' && reply.spec.title.trim() ? reply.spec.title.trim().slice(0, 120) : p.slice(0, 120)
+      await addDraft({ title, prompt: p, topic: topic.trim() || undefined, spec: reply.spec, explanation: reply.explanation.slice(0, 4000), score, checks })
+      toast(`Drafted “${title}”: scores ${score}.`)
+      setPrompt('')
+      onAdded()
+    } catch (err) {
+      toast(err instanceof ApiError ? err.message : 'The build failed. Please try again.', { tone: 'warn' })
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <form onSubmit={build} className={`${card} mb-4 flex flex-wrap items-end gap-3 p-4`}>
+      <label className="min-w-60 flex-[3] text-[11.5px] text-dim">
+        Draft a model
+        <input value={prompt} onChange={(e) => setPrompt(e.target.value)} maxLength={400} placeholder="e.g. A worm gear reducer, 30 : 1, on a cast-iron base" className={`${inputCls} mt-1`} />
+      </label>
+      <label className="min-w-36 flex-1 text-[11.5px] text-dim">
+        Topic (optional)
+        <input value={topic} onChange={(e) => setTopic(e.target.value)} maxLength={60} placeholder="Gears and drives" className={`${inputCls} mt-1`} />
+      </label>
+      <button type="submit" disabled={busy || !prompt.trim()} className={`${primaryBtn} px-4 py-2.5 text-[13px]`}>
+        {busy ? BUILD_NOTE : 'Build and score'}
+      </button>
+    </form>
+  )
+}
+
 function Review() {
   const { data, setData, error, reload } = useLoad(getDrafts)
   return (
+    <>
+      <NewDraft onAdded={reload} />
+      <Loading error={error} onRetry={reload}>
+        {data ? (
+          data.drafts.length ? (
+            <>
+              <p className="mb-3 text-[12.5px] text-mute">
+                Scored by the same checks as the test set. Approved models appear on the Create page for everyone; open one first to look round it (it opens as a private copy in your models), or ask Gemini to fix what’s wrong.
+              </p>
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                {data.drafts.map((d) => (
+                  <DraftCard
+                    key={d.id}
+                    d={d}
+                    onDone={() => setData({ drafts: data.drafts.filter((x) => x.id !== d.id) })}
+                    onChanged={(u) => setData({ drafts: data.drafts.map((x) => (x.id === d.id ? { ...x, ...u } : x)) })}
+                  />
+                ))}
+              </div>
+            </>
+          ) : (
+            <Empty>Nothing waiting. Each night’s run drafts new models from the topic list and queues the ones that reach the minimum score in Settings.</Empty>
+          )
+        ) : null}
+      </Loading>
+    </>
+  )
+}
+
+/* ------------------------------------------------------------------ settings */
+
+/** topics as text: a "# Topic" line, then one request per line */
+const topicsToText = (items: DraftTopic[]) => {
+  const out: string[] = []
+  let last = ''
+  for (const t of items) {
+    if (t.topic !== last) out.push(`${out.length ? '\n' : ''}# ${t.topic}`)
+    last = t.topic
+    out.push(t.prompt)
+  }
+  return out.join('\n')
+}
+const textToTopics = (text: string): DraftTopic[] => {
+  let topic = 'General'
+  const items: DraftTopic[] = []
+  for (const raw of text.split('\n')) {
+    const line = raw.trim()
+    if (!line) continue
+    if (line.startsWith('#')) topic = line.replace(/^#+\s*/, '').slice(0, 60) || 'General'
+    else if (line.length >= 3) items.push({ topic, prompt: line.slice(0, 400) })
+  }
+  return items
+}
+
+function Settings() {
+  const { data, setData, error, reload } = useLoad(getAdminSettings)
+  const [form, setForm] = useState<QualitySettings | null>(null)
+  const [topicText, setTopicText] = useState<string | null>(null)
+  const [busy, setBusy] = useState<null | 'settings' | 'topics'>(null)
+  useEffect(() => {
+    if (!data) return
+    setForm(data.settings)
+    setTopicText(topicsToText(data.topics ?? DRAFT_TOPICS))
+  }, [data])
+
+  const save = async () => {
+    if (!form) return
+    setBusy('settings')
+    try {
+      const { settings } = await saveSettings(form)
+      setForm(settings)
+      toast('Settings saved.')
+    } catch (e) {
+      toast(e instanceof ApiError ? e.message : 'Couldn’t save the settings.', { tone: 'warn' })
+    } finally {
+      setBusy(null)
+    }
+  }
+  const saveList = async (reset: boolean) => {
+    setBusy('topics')
+    try {
+      if (reset) {
+        await resetTopics()
+        setTopicText(topicsToText(DRAFT_TOPICS))
+        if (data) setData({ ...data, topics: null })
+        toast('Back to the built-in topic list.')
+      } else {
+        const items = textToTopics(topicText ?? '')
+        if (!items.length) throw new Error('Add at least one request.')
+        const { topics } = await saveTopics(items)
+        if (data) setData({ ...data, topics })
+        toast(`Saved ${items.length} topics.`)
+      }
+    } catch (e) {
+      toast(e instanceof Error ? e.message : 'Couldn’t save the topics.', { tone: 'warn' })
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  const num = `${inputCls} mt-1 w-28`
+  const set = (patch: Partial<QualitySettings>) => setForm((f) => (f ? { ...f, ...patch } : f))
+  return (
     <Loading error={error} onRetry={reload}>
-      {data ? (
-        data.drafts.length ? (
-          <>
-            <p className="mb-3 text-[12.5px] text-mute">
-              Drafted overnight and scored by the same checks as the test set. Approved models appear on the Create page for everyone; open one first to look round it (it opens as a private copy in your models).
-            </p>
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-              {data.drafts.map((d) => (
-                <DraftCard key={d.id} d={d} onDone={() => setData({ drafts: data.drafts.filter((x) => x.id !== d.id) })} />
-              ))}
+      {data && form ? (
+        <div className="space-y-5">
+          <section className={`${card} space-y-4 p-5`}>
+            <h2 className="text-[15px] font-semibold">Nightly run</h2>
+            <label className="flex items-center justify-between gap-4 text-[13px]">
+              <span>
+                Pause the nightly run
+                <span className="block text-[11.5px] text-dim">Skips the scheduled run, for when credit is low. A run started by hand still goes.</span>
+              </span>
+              <button type="button" role="switch" aria-checked={form.paused} onClick={() => set({ paused: !form.paused })} className={`relative h-[20px] w-9 shrink-0 rounded-full transition-colors ${form.paused ? 'bg-warn' : 'bg-line-2'}`}>
+                <span className={`absolute top-[3px] h-[14px] w-[14px] rounded-full bg-ink transition-all ${form.paused ? 'left-[19px]' : 'left-[3px]'}`} />
+              </button>
+            </label>
+            <div className="flex flex-wrap gap-5">
+              <label className="text-[12px] text-mute">
+                Drafts per night
+                <input type="number" min={0} max={20} value={form.draftsPerNight} onChange={(e) => set({ draftsPerNight: Math.max(0, Math.min(20, Math.round(Number(e.target.value) || 0))) })} className={num} />
+              </label>
+              <label className="text-[12px] text-mute">
+                Minimum score for the queue
+                <input type="number" min={0} max={100} value={form.draftMin} onChange={(e) => set({ draftMin: Math.max(0, Math.min(100, Number(e.target.value) || 0)) })} className={num} />
+              </label>
             </div>
-          </>
-        ) : (
-          <Empty>Nothing waiting. The nightly run drafts three new models and queues the ones that score 85 or more.</Empty>
-        )
+            <h2 className="pt-2 text-[15px] font-semibold">Model price</h2>
+            <p className="text-[12px] text-mute">US dollars per million tokens, from Google’s price list for the model the API uses. Gemini 3.8 Flash is 0.75 in and 3.75 out until 31 December 2026, then 1.50 and 7.50.</p>
+            <div className="flex flex-wrap items-end gap-5">
+              <label className="text-[12px] text-mute">
+                Input
+                <input type="number" min={0} step={0.01} value={form.price?.inputPerM ?? ''} placeholder="–" onChange={(e) => set({ price: e.target.value === '' ? null : { inputPerM: Number(e.target.value), outputPerM: form.price?.outputPerM ?? 0 } })} className={num} />
+              </label>
+              <label className="text-[12px] text-mute">
+                Output
+                <input type="number" min={0} step={0.01} value={form.price?.outputPerM ?? ''} placeholder="–" onChange={(e) => set({ price: e.target.value === '' ? null : { inputPerM: form.price?.inputPerM ?? 0, outputPerM: Number(e.target.value) } })} className={num} />
+              </label>
+            </div>
+            <button type="button" disabled={busy === 'settings'} onClick={() => void save()} className={primaryBtn}>
+              {busy === 'settings' ? 'Saving…' : 'Save settings'}
+            </button>
+          </section>
+
+          <section className={`${card} space-y-3 p-5`}>
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <h2 className="text-[15px] font-semibold">Topics to draft</h2>
+              <span className="text-[11.5px] text-dim">{data.topics ? `Your list · ${data.topics.length}` : `Built-in list · ${DRAFT_TOPICS.length}`}</span>
+            </div>
+            <p className="text-[12px] text-mute">
+              One request per line, under a <code className="rounded bg-panel-3 px-1">#&nbsp;Topic</code> heading. Each night drafts the next few in turn, so the whole list comes round.
+            </p>
+            <textarea value={topicText ?? ''} onChange={(e) => setTopicText(e.target.value)} rows={16} spellCheck={false} className={`${inputCls} font-mono text-[12px] leading-relaxed`} />
+            <div className="flex flex-wrap gap-2">
+              <button type="button" disabled={!!busy} onClick={() => void saveList(false)} className={primaryBtn}>
+                {busy === 'topics' ? 'Saving…' : 'Save topics'}
+              </button>
+              {data.topics ? (
+                <button type="button" disabled={!!busy} onClick={() => void saveList(true)} className={ghostBtn}>
+                  Use the built-in list
+                </button>
+              ) : null}
+            </div>
+          </section>
+        </div>
       ) : null}
     </Loading>
   )
@@ -466,6 +813,7 @@ const TABS: { value: Tab; label: string }[] = [
   { value: 'review', label: 'Review queue' },
   { value: 'feedback', label: 'Feedback' },
   { value: 'waitlist', label: 'Waitlist' },
+  { value: 'settings', label: 'Settings' },
 ]
 
 /** for the team: how good the builds are each night, models waiting for review, and what people have sent in */
@@ -492,7 +840,7 @@ export default function AdminPage() {
         <div className="mb-5">
           <Pills label="Section" value={tab} onChange={(t) => setParams(t === 'quality' ? {} : { tab: t }, { replace: true })} options={TABS} />
         </div>
-        {tab === 'quality' ? <Quality /> : tab === 'review' ? <Review /> : tab === 'feedback' ? <Feedback /> : <Waitlist />}
+        {tab === 'quality' ? <Quality /> : tab === 'review' ? <Review /> : tab === 'feedback' ? <Feedback /> : tab === 'waitlist' ? <Waitlist /> : <Settings />}
       </>
     )
 
