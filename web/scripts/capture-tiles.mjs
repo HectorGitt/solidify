@@ -20,7 +20,7 @@ const [SW, SH] = (process.env.SHOT_SIZE || '').split('x').map(Number)
 const WIDTH = SW || 1280
 const HEIGHT = SH || 800
 // saved smaller than captured: tiles never show wider than ~700 px, so 1024 keeps them sharp on 2x screens
-const SAVE_WIDTH = SW || 1024
+const SAVE_WIDTH = Number(process.env.SHOT_SAVE_WIDTH) || SW || 1024
 const QUALITY = 0.78
 const OUT = path.resolve('public/media')
 

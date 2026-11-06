@@ -60,5 +60,17 @@ export default function ShotPage() {
     return () => clearTimeout(t)
   }, [scene, pending])
 
-  return <div className="relative h-full w-full bg-bg">{scene ? <Stage key={scene.id} scene={scene} smooth={false} pageScroll={!!frame} frame={frame} cover={false} /> : null}</div>
+  // ?panel=1 also renders the scene's controls panel (off to the side, unseen in the shot) so
+  // scripts/harvest-rig-facts.mjs can read its live readouts and working
+  const withPanel = query.get('panel') === '1'
+  return (
+    <div className="relative h-full w-full bg-bg">
+      {scene ? <Stage key={scene.id} scene={scene} smooth={false} pageScroll={!!frame} frame={frame} cover={false} /> : null}
+      {scene?.Panel && withPanel ? (
+        <div data-shot-panel className="absolute left-[200vw] top-0 w-[380px]">
+          <scene.Panel />
+        </div>
+      ) : null}
+    </div>
+  )
 }
