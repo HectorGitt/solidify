@@ -315,7 +315,9 @@ export function GearboxScene3D() {
         </Part>
 
         <Part id="levers" name="Gear & range levers" role="moving" material="paintBlack" info={INFO.lever} cites={C.layout} explode={[0, 0.15, 0]}>
-          <group position={[0, 0.13, 0.2]}>
+          {/* the levers stand on the shift cover, which stays whole when the casing is cut open */}
+          <PartMesh geometry={g.shiftCover} material="castIron" />
+          <group position={[0, 0.142, 0.2]}>
             <PartMesh geometry={g.tower} rotation={[-PI / 2, 0, 0]} material="castIron" />
             <group ref={mainLever} position={[0, 0.05, 0]}>
               <PartMesh geometry={g.lever.ball} material="steel" />
@@ -323,7 +325,7 @@ export function GearboxScene3D() {
               <PartMesh geometry={g.lever.knob} material="plastic" />
             </group>
           </group>
-          <group position={[0.07, 0.13, 0.46]}>
+          <group position={[0.07, 0.142, 0.46]}>
             <PartMesh geometry={g.tower} rotation={[-PI / 2, 0, 0]} material="castIron" />
             <group ref={rangeLever} position={[0, 0.05, 0]} scale={[0.8, 0.7, 0.8]}>
               <PartMesh geometry={g.lever.ball} material="steel" />

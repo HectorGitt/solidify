@@ -84,6 +84,8 @@ export function buildStatic() {
       ],
       32,
     ),
+    // the shift cover: the cast lid the lever towers stand on (left whole when the casing is cut open)
+    shiftCover: boxFrom([-0.045, 0.13, 0.13], [0.115, 0.142, 0.53]),
     lever: lv,
     gate: xform(box(0.09, 0.006, 0.07), mat4.t(0, 0.06, 0)),
   }
