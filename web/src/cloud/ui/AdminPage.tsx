@@ -45,6 +45,7 @@ import {
   type WaitlistEntry,
 } from '../admin'
 import { ghostBtn, inputCls, primaryBtn } from './Modal'
+import { ThumbnailMaker } from './ThumbnailMaker'
 
 type Tab = 'quality' | 'review' | 'library' | 'feedback' | 'waitlist' | 'settings'
 
@@ -546,8 +547,8 @@ function DraftCard({ d, onDone, onChanged }: { d: LibraryDraft; onDone: (approve
           ? await adminBuild({ prompt: note.trim(), currentSpec: d.spec, history: d.explanation ? [{ prompt: d.prompt, response: d.explanation.slice(0, 2000) }] : [] })
           : await adminBuild({ prompt: d.prompt })
       const { score, checks, spec } = scoreReply(d.prompt, reply)
-      const updated = await updateDraft(d.id, { spec, explanation: reply.explanation.slice(0, 4000), score, checks })
-      onChanged(updated)
+      const updated = await updateDraft(d.id, { thumbnail: undefined, spec, explanation: reply.explanation.slice(0, 4000), score, checks })
+      onChanged({ ...updated, thumbnail: undefined })
       setFixing(false)
       setNote('')
       toast(`${kind === 'fix' ? 'Fixed' : 'Rebuilt'}: now scores ${score}.`)
@@ -579,7 +580,10 @@ function DraftCard({ d, onDone, onChanged }: { d: LibraryDraft; onDone: (approve
   }
 
   return (
-    <article className={`${card} flex flex-col gap-3 p-4`}>
+    <article className={`${card} flex flex-col gap-3 overflow-hidden p-4`}>
+      <div className="relative -mx-4 -mt-4 mb-1 aspect-[16/10] overflow-hidden rounded-t-2xl bg-[var(--color-stage)]">
+        {d.thumbnail ? <img src={d.thumbnail} alt="" className="h-full w-full object-cover" /> : <span className="absolute inset-0 grid place-items-center text-[11.5px] text-dim">Drawing a picture…</span>}
+      </div>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           {d.topic ? <div className="text-[11.5px] uppercase tracking-wide text-dim">{d.topic}</div> : null}
@@ -680,8 +684,26 @@ function NewDraft({ onAdded }: { onAdded: () => void }) {
 
 function Review() {
   const { data, setData, error, reload } = useLoad(getDrafts)
+  // drafts without a picture get one drawn, one at a time (each uses the page's one 3D view)
+  const tried = useRef(new Set<string>())
+  const [, bump] = useState(0)
+  const missing = data?.drafts.find((d) => !d.thumbnail && !tried.current.has(`${d.id}:${d.score}:${d.parts}`))
   return (
     <>
+      {missing ? (
+        <ThumbnailMaker
+          key={`${missing.id}:${missing.score}:${missing.parts}`}
+          spec={missing.spec}
+          prompt={missing.prompt}
+          onDone={(url) => {
+            tried.current.add(`${missing.id}:${missing.score}:${missing.parts}`)
+            bump((n) => n + 1)
+            if (!url) return
+            setData((cur) => (cur ? { drafts: cur.drafts.map((x) => (x.id === missing.id ? { ...x, thumbnail: url } : x)) } : cur))
+            void updateDraft(missing.id, { thumbnail: url }).catch(() => {})
+          }}
+        />
+      ) : null}
       <NewDraft onAdded={reload} />
       <Loading error={error} onRetry={reload}>
         {data ? (
@@ -745,7 +767,8 @@ function LibraryRow({ item, onChanged, onRemoved }: { item: LibraryCard; onChang
   }
 
   return (
-    <li className="grid gap-3 px-4 py-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
+    <li className="grid gap-3 px-4 py-3 md:grid-cols-[7rem_minmax(0,1fr)_auto] md:items-center">
+      <div className="hidden aspect-[16/10] overflow-hidden rounded-lg bg-[var(--color-stage)] md:block">{item.thumbnail ? <img src={item.thumbnail} alt="" className="h-full w-full object-cover" /> : null}</div>
       <div className="grid min-w-0 gap-2 sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
         <input aria-label="Title" value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120} className={`${inputCls} py-1.5! font-semibold`} />
         <input aria-label="Topic" value={topic} onChange={(e) => setTopic(e.target.value)} maxLength={60} placeholder="Topic" className={`${inputCls} py-1.5!`} />
@@ -783,8 +806,34 @@ function LibraryRow({ item, onChanged, onRemoved }: { item: LibraryCard; onChang
 
 function Library() {
   const { data, setData, error, reload } = useLoad(listLibrary)
+  // published before pictures were kept: draw them, one at a time
+  const tried = useRef(new Set<string>())
+  const [drawing, setDrawing] = useState<{ id: string; spec: Record<string, unknown>; prompt: string } | null>(null)
+  useEffect(() => {
+    if (drawing || !data) return
+    const item = data.items.find((x) => !x.thumbnail && !tried.current.has(x.id))
+    if (!item) return
+    tried.current.add(item.id)
+    getLibraryItem(item.id)
+      .then((full) => setDrawing({ id: item.id, spec: full.spec, prompt: full.prompt }))
+      .catch(() => setDrawing(null))
+  }, [data, drawing])
   return (
     <Loading error={error} onRetry={reload}>
+      {drawing ? (
+        <ThumbnailMaker
+          key={drawing.id}
+          spec={drawing.spec}
+          prompt={drawing.prompt}
+          onDone={(url) => {
+            const id = drawing.id
+            setDrawing(null)
+            if (!url) return
+            setData((cur) => (cur ? { items: cur.items.map((x) => (x.id === id ? { ...x, thumbnail: url } : x)) } : cur))
+            void updateLibraryItem(id, { thumbnail: url }).catch(() => {})
+          }}
+        />
+      ) : null}
       {data ? (
         data.items.length ? (
           <>

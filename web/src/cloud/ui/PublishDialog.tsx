@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { requestSnapshot } from '@/render/snapshot'
 import { scoreBuild } from '@/evals/score'
 import { toast } from '@/ui/toast'
 import { ApiError } from '../api'
@@ -13,6 +14,11 @@ export function PublishDialog({ open, onClose, spec, prompt, explanation }: { op
   const [title, setTitle] = useState(typeof spec.title === 'string' ? spec.title : '')
   const [topic, setTopic] = useState('')
   const [busy, setBusy] = useState<null | 'publish' | 'queue'>(null)
+  // the card's picture: the workspace's view as it is now
+  const [thumbnail, setThumbnail] = useState<string | null>(null)
+  useEffect(() => {
+    void requestSnapshot({ width: 480 }).then(setThumbnail)
+  }, [])
   const { score, checks } = useMemo(() => scoreBuild({ id: 'draft', prompt }, { spec, explanation }, 0), [spec, prompt, explanation])
   const failed = checks.filter((c) => !c.ok && c.name !== 'under two minutes')
 
@@ -21,7 +27,7 @@ export function PublishDialog({ open, onClose, spec, prompt, explanation }: { op
     if (!t) return
     setBusy(kind)
     try {
-      const fields = { title: t.slice(0, 120), prompt: prompt.slice(0, 2000) || t, topic: topic.trim() || undefined, spec, explanation: explanation?.slice(0, 4000), score, checks }
+      const fields = { title: t.slice(0, 120), prompt: prompt.slice(0, 2000) || t, topic: topic.trim() || undefined, spec, explanation: explanation?.slice(0, 4000), score, checks, ...(thumbnail ? { thumbnail } : {}) }
       if (kind === 'publish') await publishModel(fields)
       else await addDraft(fields)
       toast(kind === 'publish' ? `Published “${t}” to the library.` : `“${t}” is in the review queue.`)
