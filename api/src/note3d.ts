@@ -25,6 +25,8 @@ export const create3dRequest = z.object({
   prompt: z.string().trim().min(1).max(2000),
   currentSpec: z.record(z.string(), z.unknown()).optional(),
   photoBase64: z.string().max(12_000_000).optional(),
+  /** the conversation about this model so far, oldest first */
+  history: z.array(z.object({ prompt: z.string().max(2000), response: z.string().max(2000) })).max(12).optional(),
 })
 
 export type Create3dRequest = z.infer<typeof create3dRequest>
@@ -32,11 +34,40 @@ export type Create3dRequest = z.infer<typeof create3dRequest>
 export interface NoteVisionModel {
   analyzePage(req: NoteAnalyzeRequest): Promise<{ figures: unknown[] }>
   refineSpec(req: NoteRefineRequest): Promise<{ spec: Record<string, unknown> }>
-  createOrEdit3D(req: Create3dRequest): Promise<{
-    spec: Record<string, unknown>
-    explanation: string
-    isNewMachine: boolean
-  }>
+  createOrEdit3D(req: Create3dRequest): Promise<CreateReply>
+  /** the same answer as it is written, as raw JSON text; read the whole of it with `readCreateReply` */
+  streamCreate3D(req: Create3dRequest, signal?: AbortSignal): AsyncIterable<string>
+}
+
+export interface CreateReply {
+  spec: Record<string, unknown>
+  explanation: string
+  isNewMachine: boolean
+  /** the student asked a question: `explanation` answers it and the model is unchanged */
+  isQuestion?: boolean
+  labMatch?: { moduleId: string; sceneId: string }
+}
+
+/** what Gemini is sent for a build, change or question */
+export function createParts(req: Create3dRequest): Part[] {
+  const chat = req.history?.length ? `Conversation so far (oldest first):\n${req.history.map((h) => `Student: ${h.prompt}\nSolidify: ${h.response}`).join('\n')}\n\n` : ''
+  const text = req.currentSpec
+    ? `${chat}Student: "${req.prompt}"\nCurrent NoteSceneSpec:\n${JSON.stringify(req.currentSpec)}`
+    : `Build a complete 3D NoteSceneSpec for: "${req.prompt}"`
+  return [...imagePart(req.photoBase64), { text }]
+}
+
+/** reads Gemini's whole reply into a build result (throws ModelReplyError when it is unusable) */
+export function readCreateReply(text: string, req: Create3dRequest): CreateReply {
+  const parsed = parseModelJson<{ spec?: Record<string, unknown>; explanation?: string; isNewMachine?: boolean; isQuestion?: boolean; labMatch?: unknown }>(text)
+  const isQuestion = parsed.isQuestion === true && !!req.currentSpec
+  return {
+    spec: isQuestion ? (req.currentSpec ?? {}) : (parsed.spec ?? req.currentSpec ?? {}),
+    explanation: parsed.explanation ?? 'Compiled 3D assembly.',
+    isNewMachine: isQuestion ? false : (parsed.isNewMachine ?? true),
+    isQuestion: isQuestion || undefined,
+    labMatch: toLabMatch(parsed.labMatch),
+  }
 }
 
 /** The model's reply wasn't usable JSON (most often cut off at the length limit). */
@@ -128,18 +159,20 @@ export class GeminiNoteVision implements NoteVisionModel {
     return { spec: parsed.spec ?? req.currentSpec }
   }
 
+  private createConfig(signal?: AbortSignal) {
+    return { systemInstruction: CREATE_3D_PROMPT, responseMimeType: 'application/json', temperature: 0.25, maxOutputTokens: 32768, abortSignal: signal }
+  }
+
   async createOrEdit3D(req: Create3dRequest) {
-    const parsed = await this.json<{ spec?: Record<string, unknown>; explanation?: string; isNewMachine?: boolean; labMatch?: unknown }>(
-      CREATE_3D_PROMPT,
-      [...imagePart(req.photoBase64), { text: req.currentSpec ? `User prompt: "${req.prompt}"\nCurrent NoteSceneSpec:\n${JSON.stringify(req.currentSpec)}` : `Build a complete 3D NoteSceneSpec for: "${req.prompt}"` }],
-      32768,
-      0.25,
-    )
-    return {
-      spec: parsed.spec ?? req.currentSpec ?? {},
-      explanation: parsed.explanation ?? 'Compiled 3D assembly.',
-      isNewMachine: parsed.isNewMachine ?? true,
-      labMatch: toLabMatch(parsed.labMatch),
+    const res = await this.ai.models.generateContent({ model: this.model, contents: [{ role: 'user', parts: createParts(req) }], config: this.createConfig() })
+    return readCreateReply(res.text ?? '', req)
+  }
+
+  async *streamCreate3D(req: Create3dRequest, signal?: AbortSignal) {
+    const res = await this.ai.models.generateContentStream({ model: this.model, contents: [{ role: 'user', parts: createParts(req) }], config: this.createConfig(signal) })
+    for await (const chunk of res) {
+      const t = chunk.text
+      if (t) yield t
     }
   }
 }
@@ -167,11 +200,32 @@ export class FakeNoteVision implements NoteVisionModel {
     return { spec: { ...req.currentSpec, refinedWith: req.instruction } }
   }
 
-  async createOrEdit3D(req: Create3dRequest) {
+  /** a small working model: a shaft with a gear, so tests can build, change and stream it */
+  fakeReply(req: Create3dRequest) {
+    if (req.currentSpec && /\?$/.test(req.prompt)) return { explanation: `About your question: ${req.prompt}`, isQuestion: true }
     return {
-      spec: req.currentSpec ?? { id: 'fake-3d', title: req.prompt, units: 'mm', parameters: [], parts: [] },
       explanation: `Built ${req.prompt}`,
-      isNewMachine: true,
+      isNewMachine: !req.currentSpec,
+      spec: {
+        id: 'fake-3d',
+        title: req.prompt,
+        units: 'mm',
+        parameters: [{ id: 'D', label: 'Shaft diameter', symbol: 'd', value: 30, min: 10, max: 60, step: 1, unit: 'mm' }],
+        calculations: [{ id: 'area', label: 'Shaft area', symbol: 'A', formula: 'pi * D^2 / 4', unit: 'mm²', latex: 'A = \\pi d^2 / 4' }],
+        parts: [
+          { id: 'shaft', name: 'Shaft', material: 'steel', role: 'moving', shapes: [{ kind: 'cylinder', r: 'D / 2000', h: 0.3 }] },
+          { id: 'gear', name: 'Gear', material: 'steel', role: 'moving', shapes: [{ kind: 'gear', teeth: 24, module: 0.004, h: 0.03 }] },
+        ],
+      },
     }
+  }
+
+  async createOrEdit3D(req: Create3dRequest) {
+    return readCreateReply(JSON.stringify(this.fakeReply(req)), req)
+  }
+
+  async *streamCreate3D(req: Create3dRequest) {
+    const text = JSON.stringify(this.fakeReply(req))
+    for (let i = 0; i < text.length; i += 60) yield text.slice(i, i + 60)
   }
 }

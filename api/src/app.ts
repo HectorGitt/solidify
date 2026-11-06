@@ -7,7 +7,7 @@ import type { AuthUser, Verifier } from './auth.js'
 import type { Db } from './db.js'
 import { MAX_ENTRIES, emptyProgress, entryCount, mergeProgress, progressSchema, type Progress } from './progress.js'
 import { SYSTEM_PROMPT, buildTurns, tutorRequest, type TutorModel } from './tutor.js'
-import { FakeNoteVision, ModelReplyError, create3dRequest, noteAnalyzeRequest, noteRefineRequest, type NoteVisionModel } from './note3d.js'
+import { FakeNoteVision, ModelReplyError, create3dRequest, noteAnalyzeRequest, noteRefineRequest, readCreateReply, type NoteVisionModel } from './note3d.js'
 
 export interface Config {
   /** browser origins allowed to call the API */
@@ -295,6 +295,35 @@ export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision
     const remaining = await spend(u.uid, 'createUsage', config.createDailyLimit ?? 15, '3D builds')
     const out = await model(() => noteVision.createOrEdit3D(req))
     return c.json({ ...out, remaining })
+  })
+
+  /**
+   * The same build as /v1/create-3d, streamed: `delta` events carry Gemini's JSON as it is written (so the
+   * app can show parameters, formulas and parts as they arrive), then `done` carries the finished result.
+   * A question about the current model counts against the same allowance.
+   */
+  app.post('/v1/create-3d/stream', async (c) => {
+    const u = requireUser(c)
+    const req = await body(c, create3dRequest)
+    const remaining = await spend(u.uid, 'createUsage', config.createDailyLimit ?? 15, '3D builds')
+    return streamSSE(c, async (stream) => {
+      const ac = new AbortController()
+      stream.onAbort(() => ac.abort())
+      await stream.writeSSE({ event: 'meta', data: JSON.stringify({ remaining }) })
+      let text = ''
+      try {
+        for await (const t of noteVision.streamCreate3D(req, ac.signal)) {
+          text += t
+          await stream.writeSSE({ event: 'delta', data: JSON.stringify({ text: t }) })
+        }
+        await stream.writeSSE({ event: 'done', data: JSON.stringify(readCreateReply(text, req)) })
+      } catch (e) {
+        if (ac.signal.aborted) return
+        const incomplete = e instanceof ModelReplyError
+        if (!incomplete) console.error('create-3d stream', e)
+        await stream.writeSSE({ event: 'error', data: JSON.stringify({ error: incomplete ? 'The model gave an incomplete answer. Please try again.' : 'Solidify couldn’t build that just now. Please try again.' }) })
+      }
+    })
   })
 
   /* ------------------------------------------------------------------ creation lab */

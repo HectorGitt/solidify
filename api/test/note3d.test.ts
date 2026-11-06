@@ -92,3 +92,47 @@ describe('lab model matches', () => {
     expect(toLabMatch(42)).toBeUndefined()
   })
 })
+
+describe('streamed builds', () => {
+  const events = async (res: Response) =>
+    (await res.text())
+      .split('\n\n')
+      .filter(Boolean)
+      .map((block) => ({ event: /event: (\w+)/.exec(block)?.[1], data: JSON.parse(/data: (.*)/.exec(block)?.[1] ?? '{}') }))
+
+  it('needs sign-in and spends the build allowance', async () => {
+    expect((await post('/v1/create-3d/stream', { prompt: 'a shaft' }, null)).status).toBe(401)
+    expect((await post('/v1/create-3d/stream', { prompt: 'a shaft' })).status).toBe(200)
+    expect((await post('/v1/create-3d/stream', { prompt: 'a shaft' })).status).toBe(200)
+    expect((await post('/v1/create-3d/stream', { prompt: 'a shaft' })).status).toBe(429)
+  })
+
+  it('streams the JSON as it is written, then the finished model', async () => {
+    const evs = await events(await post('/v1/create-3d/stream', { prompt: 'a shaft with a gear' }))
+    expect(evs[0]).toEqual({ event: 'meta', data: { remaining: 1 } })
+    const deltas = evs.filter((e) => e.event === 'delta')
+    expect(deltas.length).toBeGreaterThan(3)
+    const done = evs.at(-1)!
+    expect(done.event).toBe('done')
+    expect(JSON.parse(deltas.map((d) => d.data.text).join('')).spec.parts).toHaveLength(2)
+    expect(done.data.spec.parts.map((p: { id: string }) => p.id)).toEqual(['shaft', 'gear'])
+    expect(done.data.isNewMachine).toBe(true)
+  })
+
+  it('answers a question about the current model without changing it', async () => {
+    const currentSpec = { title: 'Shaft', parts: [{ id: 'shaft' }] }
+    const evs = await events(await post('/v1/create-3d/stream', { prompt: 'why is the gear there?', currentSpec, history: [{ prompt: 'a shaft', response: 'Built a shaft' }] }))
+    const done = evs.at(-1)!
+    expect(done.data.isQuestion).toBe(true)
+    expect(done.data.spec).toEqual(currentSpec)
+    expect(done.data.explanation).toMatch(/why is the gear there/)
+  })
+
+  it('reports an incomplete answer as an error event', async () => {
+    vision.streamCreate3D = async function* () {
+      yield '{"spec": {"parts": ['
+    }
+    const evs = await events(await post('/v1/create-3d/stream', { prompt: 'a shaft' }))
+    expect(evs.at(-1)).toEqual({ event: 'error', data: { error: 'The model gave an incomplete answer. Please try again.' } })
+  })
+})

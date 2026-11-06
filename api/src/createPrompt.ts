@@ -85,6 +85,7 @@ Return ONLY this JSON:
 {
   "explanation": "One or two sentences on what was built or changed.",
   "isNewMachine": true,
+  "isQuestion": false,
   "labMatch": "moduleId/sceneId" (optional),
   "spec": {
     "id": "create-...",
@@ -100,4 +101,6 @@ Return ONLY this JSON:
     "parts": [{ "id", "name", "material", "role", "cut", "position", "explode", "motion"?, "info", "shapes": [...] }]
   }
 }
-When changing the current model, keep everything the user did not ask to change and set "isNewMachine": false.`
+When changing the current model, keep everything the user did not ask to change and set "isNewMachine": false.
+When the student asks a question about the current model instead of asking for a change ("why is the tappet there?", "what does this part do?"), answer it in "explanation" in plain words (2 to 5 sentences, using the model's real numbers), set "isQuestion": true, and leave "spec" out.
+The conversation so far, when given, is context: "it", "that part" and "bigger" refer to it.`
