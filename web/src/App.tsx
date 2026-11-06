@@ -6,6 +6,7 @@ import { Viewer } from './ui/Viewer'
 import { PartSearch } from './ui/PartSearch'
 import { Toaster } from './ui/toast'
 import { ErrorBoundary } from './ui/ErrorBoundary'
+import { startUpdateWatch } from './ui/appUpdate'
 import { useAuth } from './cloud/auth'
 import { startProfile } from './cloud/profile'
 import { startSync } from './cloud/sync'
@@ -39,6 +40,7 @@ export default function App() {
     useAuth.getState().init()
     startProfile()
     startSync()
+    startUpdateWatch()
   }, [])
   return (
     <HashRouter>
