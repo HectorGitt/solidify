@@ -9,6 +9,8 @@ import { saveNewCreation } from '../creations'
 import { useProfile } from '../profile'
 import {
   approveDraft,
+  costOf,
+  getAiUsage,
   getDrafts,
   getEvals,
   getEventSummary,
@@ -20,6 +22,7 @@ import {
   type EventNote,
   type FeedbackItem,
   type LibraryDraft,
+  type ModelPrice,
   type WaitlistEntry,
 } from '../admin'
 import { ghostBtn, inputCls, primaryBtn } from './Modal'
@@ -61,6 +64,9 @@ function Loading({ error, onRetry, children }: { error: string | null; onRetry: 
 function Empty({ children }: { children: ReactNode }) {
   return <section className="rounded-2xl border border-dashed border-line-2 bg-panel px-6 py-12 text-center text-[13.5px] text-mute">{children}</section>
 }
+
+const usd = (v: number | null) => (v === null ? '' : v < 0.01 ? `$${v.toFixed(4)}` : `$${v.toFixed(v < 1 ? 3 : 2)}`)
+const tokens = (n: number) => (n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `${Math.round(n / 1e3)}k` : String(Math.round(n)))
 
 const scoreTone = (s: number) => (s >= 90 ? 'text-accent' : s >= 70 ? 'text-ink' : 'text-warn')
 
@@ -163,6 +169,81 @@ function LatestRun({ run }: { run: EvalRun }) {
   )
 }
 
+const ACTIONS: [string, string, string][] = [
+  ['build', 'New model from words', 'the full prompt in, a whole model out'],
+  ['photo', 'New model from a photo', 'as above, plus the image'],
+  ['edit', 'Change to a model', 'the current model goes back in'],
+  ['question', 'Question about a model', 'the model in, a short answer out'],
+]
+
+/** output tokens cost roughly 8 times input; used for the relative weights when no price is set */
+const OUT_WEIGHT = 8
+
+/** what each kind of action really costs: the numbers to set credit prices from */
+function AiCost() {
+  const { data, error, reload } = useLoad(getAiUsage)
+  return (
+    <Loading error={error} onRetry={reload}>
+      {data ? <AiCostTable days={data.days} price={data.price} /> : null}
+    </Loading>
+  )
+}
+
+function AiCostTable({ days, price }: { days: Record<string, number | string>[]; price: ModelPrice | null }) {
+  const sum = (k: string) => days.reduce((n, d) => n + (Number(d[k]) || 0), 0)
+  const rows = ACTIONS.map(([k, label, note]) => {
+    const n = sum(`${k}_n`)
+    const inT = sum(`${k}_in`)
+    const outT = sum(`${k}_out`)
+    const avgIn = n ? inT / n : 0
+    const avgOut = n ? outT / n : 0
+    return { k, label, note, n, avgIn, avgOut, each: costOf(price, avgIn, avgOut), weight: avgIn + avgOut * OUT_WEIGHT, total: costOf(price, inT, outT) }
+  })
+  const cheapest = Math.min(...rows.filter((r) => r.n).map((r) => r.weight))
+  const totalCost = rows.reduce((n, r) => n + (r.total ?? 0), 0)
+  return (
+    <section className={`${card} p-5`}>
+      <h2 className="text-[15px] font-semibold">What AI actions cost</h2>
+      <p className="mt-1 text-[12.5px] text-mute">
+        Students’ real use over the last 30 days, averaged per action (nightly tests not included).{' '}
+        {price ? `At $${price.inputPerM} in and $${price.outputPerM} out per million tokens: ${usd(totalCost)} in all.` : 'Set MODEL_PRICE on the API (dollars per million tokens, in then out, e.g. 0.30,2.50) to see costs in dollars.'}
+      </p>
+      <div className="mt-3 overflow-x-auto">
+        <table className="w-full min-w-[520px] text-left text-[12.5px]">
+          <thead className="text-[11.5px] text-dim">
+            <tr className="border-b border-line">
+              <th className="py-2 font-medium">Action</th>
+              <th className="py-2 text-right font-medium">Count</th>
+              <th className="py-2 text-right font-medium">Tokens in</th>
+              <th className="py-2 text-right font-medium">Tokens out</th>
+              <th className="py-2 text-right font-medium">Cost each</th>
+              <th className="py-2 text-right font-medium" title="How many of the cheapest action this one is worth: a starting point for credit prices">
+                Relative
+              </th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-line tabular-nums">
+            {rows.map((r) => (
+              <tr key={r.k}>
+                <td className="py-2">
+                  <div className="text-ink">{r.label}</div>
+                  <div className="text-[11px] text-dim">{r.note}</div>
+                </td>
+                <td className="py-2 text-right">{r.n}</td>
+                <td className="py-2 text-right">{r.n ? tokens(r.avgIn) : '–'}</td>
+                <td className="py-2 text-right">{r.n ? tokens(r.avgOut) : '–'}</td>
+                <td className="py-2 text-right">{r.n && r.each !== null ? usd(r.each) : '–'}</td>
+                <td className="py-2 text-right">{r.n && Number.isFinite(cheapest) ? `${(r.weight / cheapest).toFixed(1)}×` : '–'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="mt-2 text-[11.5px] text-dim">“Relative” weighs output tokens at {OUT_WEIGHT} times input, as they are roughly priced.</p>
+    </section>
+  )
+}
+
 function Quality() {
   const evals = useLoad(getEvals)
   const events = useLoad(getEventSummary)
@@ -181,6 +262,7 @@ function Quality() {
                   <div className={`text-[44px] font-semibold leading-none tabular-nums ${scoreTone(last.summary.score)}`}>{last.summary.score}</div>
                   <div className="mt-2 text-[12.5px] text-mute">
                     {last.summary.passed} of {last.summary.total} builds perfect
+                    {last.summary.tokensIn ? ` · ${tokens(last.summary.tokensIn)} tokens in, ${tokens(last.summary.tokensOut ?? 0)} out${evals.data.price ? ` (${usd(costOf(evals.data.price, last.summary.tokensIn, last.summary.tokensOut ?? 0))})` : ''}` : ''}
                     {delta !== null ? <span className={delta >= 0 ? ' text-accent' : ' text-warn'}>{` · ${delta >= 0 ? '+' : ''}${delta} on the night before`}</span> : null}
                   </div>
                   <div className="mt-1 text-[11.5px] text-dim">{dateTime(last.runAt)}</div>
@@ -197,6 +279,7 @@ function Quality() {
           )
         ) : null}
       </Loading>
+      <AiCost />
       <Loading error={events.error} onRetry={events.reload}>
         {events.data ? <Usage days={events.data.days} notes={events.data.notes} /> : null}
       </Loading>

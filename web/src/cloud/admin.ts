@@ -12,13 +12,23 @@ export interface EvalSummary {
   score: number
   passed: number
   total: number
+  tokensIn?: number
+  tokensOut?: number
 }
+
+/** the model's list price, US dollars per million tokens (set on the API as MODEL_PRICE) */
+export interface ModelPrice {
+  inputPerM: number
+  outputPerM: number
+}
+
+export const costOf = (p: ModelPrice | null, input: number, output: number) => (p ? (input * p.inputPerM + output * p.outputPerM) / 1e6 : null)
 
 export interface EvalRun {
   runAt: number
   label?: string
   summary: EvalSummary
-  cases: { id: string; prompt: string; score: number; seconds: number; checks: EvalCheck[]; error?: string }[]
+  cases: { id: string; prompt: string; score: number; seconds: number; checks: EvalCheck[]; error?: string; tokensIn?: number; tokensOut?: number }[]
 }
 
 export interface EventDay {
@@ -85,7 +95,9 @@ export interface WaitlistEntry {
   createdAt: number
 }
 
-export const getEvals = () => api<{ runs: Omit<EvalRun, 'cases'>[]; latest: EvalRun | null }>('/v1/evals')
+export const getEvals = () => api<{ runs: Omit<EvalRun, 'cases'>[]; latest: EvalRun | null; price: ModelPrice | null }>('/v1/evals')
+/** per day: `<action>_n` actions, `<action>_in` and `<action>_out` tokens, for build, edit, question and photo */
+export const getAiUsage = () => api<{ days: ({ day: string } & Record<string, number | string>)[]; price: ModelPrice | null }>('/v1/ai-usage')
 export const getEventSummary = () => api<{ days: EventDay[]; notes: EventNote[] }>('/v1/events/summary')
 export const getDrafts = () => api<{ drafts: LibraryDraft[] }>('/v1/library/drafts')
 export const approveDraft = (id: string, title?: string) => api<{ ok: true }>(`/v1/library/drafts/${encodeURIComponent(id)}/approve`, { method: 'POST', body: title ? { title } : {} })
