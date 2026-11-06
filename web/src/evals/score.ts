@@ -11,7 +11,7 @@ export interface EvalCheck {
 }
 
 /** test equipment that should only appear when a test rig is asked for */
-const RIG = /dial|gauge|indicator|extensometer|load cell|test bed|machine bed|test frame|grip|hanger|dead ?weight/i
+const RIG = /dial|gauge(?! ?(mark|length))|indicator|extensometer|load cell|test bed|machine bed|test frame|grip|hanger|dead ?weight/i
 
 /** a known answer may come back in other units (kN·m as N·m, mm as m): accept it at any power of a thousand */
 const matches = (got: number, want: number, tol: number) => [1e-6, 1e-3, 1, 1e3, 1e6].some((k) => Math.abs(got * k - want) <= Math.abs(want) * tol)
