@@ -49,6 +49,8 @@ function sanitizeGeneratedSpec(raw: Record<string, unknown>, fallbackTitle: stri
         .map((a) => noteAnnotationSchema.safeParse(a))
         .filter((r) => r.success)
         .map((r) => r.data)
+        // an arrow needs a part to attach to or a place of its own
+        .filter((a) => a.anchor || a.from)
         .slice(0, 16),
       // graphs: each one checked on its own, so a bad chart never costs the model
       charts: (Array.isArray(candidate.charts) ? candidate.charts : [])

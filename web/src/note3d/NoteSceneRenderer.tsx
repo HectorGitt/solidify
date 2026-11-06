@@ -8,7 +8,7 @@ import type { SceneDef } from '@/modules/types'
 import { MATERIALS, type MaterialKey } from '@/render/materials'
 import { Part, PartMesh } from '@/render/Part'
 import { useView } from '@/render/view'
-import { resolveAssembly, type Placement } from './assembly'
+import { resolveAnnotation, resolveAssembly, type Placement } from './assembly'
 import { buildPartGeometry } from './builder'
 import {
   evalDim,
@@ -432,6 +432,15 @@ export function NoteSceneViewport({
   const scope = useMemo(() => evaluateCalculations(spec.calculations, params).scope, [spec.calculations, params])
   // parts mounted by relation: placed from the other parts' real geometry each time the sizes change
   const assembly = useMemo(() => resolveAssembly(spec, scope), [spec, scope])
+  // arrows and dimensions attached to a part go where the assembly put that part
+  const annotations = useMemo(
+    () =>
+      (spec.annotations ?? []).map((a) => {
+        const at = resolveAnnotation(a, assembly.frames, scope)
+        return at ? { ...a, from: at.from, to: at.to } : a
+      }),
+    [spec.annotations, assembly, scope],
+  )
   const projMode = projectionOverride ?? spec.showProjectionPlanes ?? 'none'
   const extent = spec.extent ?? 0.35
 
@@ -442,7 +451,7 @@ export function NoteSceneViewport({
         {spec.parts.map((part) => (
           <LocalPartNode key={part.id} part={part} params={params} clipPlane={clipPlane} placed={part.mount ? assembly.placements.get(part.id) : undefined} />
         ))}
-        {spec.annotations?.map((ann) => (
+        {annotations.map((ann) => (
           <Annotation3D key={ann.id} ann={ann} params={scope} />
         ))}
         {projMode !== 'none' && <OrthographicGlassPlanes extent={extent} mode={projMode} />}
