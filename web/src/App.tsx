@@ -5,6 +5,7 @@ import { Landing } from './ui/Landing'
 import { Viewer } from './ui/Viewer'
 import { PartSearch } from './ui/PartSearch'
 import { Toaster } from './ui/toast'
+import { ErrorBoundary } from './ui/ErrorBoundary'
 import { useAuth } from './cloud/auth'
 import { startProfile } from './cloud/profile'
 import { startSync } from './cloud/sync'
@@ -44,6 +45,7 @@ export default function App() {
       <ReportDialog />
       <SalesDialog />
       <Toaster />
+      <ErrorBoundary label="page">
       <Routes>
         <Route path="/" element={<Landing />} />
         <Route path="/about" element={<About />} />
@@ -65,6 +67,7 @@ export default function App() {
         <Route path="/m/:moduleId/:sceneId" element={<Viewer />} />
         <Route path="*" element={<Landing />} />
       </Routes>
+      </ErrorBoundary>
     </HashRouter>
   )
 }

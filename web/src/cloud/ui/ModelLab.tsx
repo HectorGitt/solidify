@@ -27,6 +27,7 @@ import { clearPendingBuild, peekPendingBuild } from '../pendingBuild'
 import { ghostBtn, inputCls, primaryBtn } from './Modal'
 import { PartInspector } from './PartInspector'
 import { WorkspaceBodySkeleton } from '@/ui/Skeleton'
+import { ErrorBoundary } from '@/ui/ErrorBoundary'
 
 /** one turn of the conversation about a model (saved newest first, shown oldest first) */
 interface Turn {
@@ -973,7 +974,9 @@ export default function ModelLab() {
                 </div>
               ) : null}
               <div className="relative min-h-0 flex-1">
+                <ErrorBoundary label="3D model" resetKey={scene}>
                 <Stage scene={scene} cover={!live && !builtHereRef.current} viewKey={viewMode === 'catalog' && loadedCatalogScene && !live ? undefined : viewKey} />
+                </ErrorBoundary>
                 {live ? (
                   <div className="pointer-events-none absolute left-1/2 top-3 z-30 -translate-x-1/2">
                     <div className="flex items-center gap-2 rounded-full border border-line bg-panel/95 px-3.5 py-1.5 text-[12.5px] text-ink shadow-lg backdrop-blur">
@@ -1040,6 +1043,7 @@ export default function ModelLab() {
 
         {/* the engineering */}
         <aside className={`${mobilePane === 'engineering' && !blank ? 'flex' : 'hidden'} order-3 min-h-[360px] flex-col border-line lg:flex lg:min-h-0 lg:border-l`}>
+          <ErrorBoundary label="engineering panel" resetKey={shownSpec}>
           {selectedPart && shownSpec ? (
             <>
               <div className="flex items-center gap-2 border-b border-line p-2">
@@ -1249,6 +1253,7 @@ export default function ModelLab() {
               </div>
             </>
           )}
+        </ErrorBoundary>
         </aside>
       </div>
     </div>
