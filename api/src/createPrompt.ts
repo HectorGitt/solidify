@@ -75,7 +75,9 @@ GEOMETRY RULES
 5. Materials (the "material" of each part): ${MATERIALS.join(', ')}.
 6. Parameters and calculations
    - 3 to 7 parameters: { id, label, symbol, value, min, max, step, unit }. Use their ids in shape fields as expressions (e.g. "rOuter": "D / 2", "teeth": "z1", "speed": "rpm / 60") so moving a slider reshapes the model.
-   - 2 to 6 calculations: { id, label, symbol, formula, unit, latex, limit? }. Formulas use parameter ids, earlier calculation ids, pi, sqrt, sin, cos and ^. limit is { kind: "max"|"min", value, label }.
+   - 2 to 6 calculations: { id, label, symbol, formula, unit, latex, limit? }. Formulas use parameter ids, earlier calculation ids, pi, sqrt, sin, cos, tan, atan, exp, log, abs, min, max, step(v) (1 when v >= 0, else 0), mac(v, n) (the Macaulay bracket <v>^n, 0 while v < 0) and ^. limit is { kind: "max"|"min", value, label }.
+   - Charts, whenever the subject has a diagram or a curve (bending moment and shear force diagrams, deflection, stress along a member, pump or fan curves, torque and power against speed, efficiency): 1 to 3 charts { id, title, x: { label, unit, from, to }, y: { label, unit }, series: [{ id, label, formula }] }. Each series formula is in x (the position or variable along the x axis, in x's unit) plus parameter and calculation ids, using the same functions; use mac() or step() for loads and supports partway along a member. x.from and x.to may be expressions (e.g. "0" to "L").
+   - A diagram or graph is ALWAYS a chart, never 3D shapes: do not build bending moment, shear force or any other plot out of boxes, plates or extrusions in the model.
 
 7. Lab models: Solidify already has detailed, working models of these machines (id: title):
 ${labPromptText()}
@@ -98,6 +100,7 @@ Return ONLY this JSON:
     "recommendedCut": { "enabled": true, "normal": [0, 0, 1], "pos": 0.01 },
     "parameters": [...],
     "calculations": [...],
+    "charts": [...],
     "parts": [{ "id", "name", "material", "role", "cut", "position", "explode", "motion"?, "info", "shapes": [...] }]
   }
 }
