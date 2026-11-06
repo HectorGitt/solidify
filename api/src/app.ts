@@ -554,6 +554,8 @@ export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision
     explanation: z.string().max(4000).optional(),
     score: z.number().min(0).max(100),
     checks: z.array(evalCheck).max(24).optional(),
+    /** a small JPEG of the model for its card */
+    thumbnail: z.string().max(150_000).regex(/^data:image\/(jpeg|webp|png);base64,/).optional(),
   })
   type LibraryDoc = z.infer<typeof libraryInput> & { [k: string]: unknown; parts: number; createdAt: number; publishedAt?: number }
   const libraryId = (id: string) => {
@@ -650,7 +652,7 @@ export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision
     const id = libraryId(c.req.param('id'))
     const item = await db.get<LibraryDoc>(`library/${id}`)
     if (!item) throw fail(404, 'Not found.')
-    const patch = await body(c, z.object({ title: libraryInput.shape.title, topic: z.string().trim().max(60) }).partial())
+    const patch = await body(c, z.object({ title: libraryInput.shape.title, topic: z.string().trim().max(60), thumbnail: libraryInput.shape.thumbnail }).partial())
     await db.set(`library/${id}`, { ...item, ...patch })
     return c.json({ ok: true })
   })

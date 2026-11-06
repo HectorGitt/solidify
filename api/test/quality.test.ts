@@ -187,3 +187,17 @@ describe('publishing straight to the library', () => {
     expect(lib.items[0]).toMatchObject({ id, title: 'External gear pump', topic: 'Fluids', parts: 2 })
   })
 })
+
+describe('library pictures', () => {
+  const boss = { Authorization: 'Bearer user:boss:Boss' }
+  const pic = 'data:image/jpeg;base64,/9j/AAAA'
+  it('keep a draft’s picture through approval, show it on the card, and let an admin add one later', async () => {
+    const { id } = (await (await req('POST', '/v1/library/drafts', { title: 'Pump', prompt: 'A pump', spec: { parts: [] }, score: 90 }, { 'x-eval-token': TOKEN })).json()) as { id: string }
+    expect((await req('PUT', `/v1/library/drafts/${id}`, { thumbnail: pic }, boss)).status).toBe(200)
+    await req('POST', `/v1/library/drafts/${id}/approve`, {}, boss)
+    const card = ((await (await req('GET', '/v1/library')).json()) as { items: { thumbnail?: string }[] }).items[0]
+    expect(card.thumbnail).toBe(pic)
+    expect((await req('PUT', `/v1/library/${id}`, { thumbnail: 'javascript:alert(1)' }, boss)).status).toBe(400)
+    expect((await req('PUT', `/v1/library/${id}`, { thumbnail: pic }, boss)).status).toBe(200)
+  })
+})
