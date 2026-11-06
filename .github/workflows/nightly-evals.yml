@@ -12,9 +12,8 @@ on:
         description: 'Build only the first n test cases (blank for all 30)'
         required: false
       drafts:
-        description: 'New library models to draft'
+        description: 'New library models to draft (blank for the admin page setting)'
         required: false
-        default: '3'
 
 jobs:
   evals:
@@ -36,5 +35,5 @@ jobs:
           EVAL_API: https://solidify-api-6b27sr35hq-ew.a.run.app
           EVAL_TOKEN: ${{ secrets.EVAL_TOKEN }}
           EVAL_LIMIT: ${{ inputs.limit }}
-          EVAL_DRAFTS: ${{ inputs.drafts || '3' }}
+          EVAL_DRAFTS: ${{ inputs.drafts }}
           EVAL_LABEL: ${{ github.event_name == 'schedule' && 'nightly' || 'manual' }}

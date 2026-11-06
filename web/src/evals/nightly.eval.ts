@@ -1,7 +1,7 @@
 import { it } from 'vitest'
 import { EVAL_CASES } from './cases'
 import { scoreBuild, type EvalCheck } from './score'
-import { topicsFor } from './topics'
+import { DRAFT_TOPICS, topicsFor, type DraftTopic } from './topics'
 
 /**
  * The nightly test run: builds every case through the live API (the same Gemini prompt students get),
@@ -10,16 +10,34 @@ import { topicsFor } from './topics'
  *   EVAL_TOKEN  the API's EVAL_TOKEN
  *   EVAL_LIMIT  build only the first n cases (a cheap trial)
  *   EVAL_DRY=1  score and print, but do not post
- *   EVAL_DRAFTS how many new library models to draft tonight (default 3); those scoring EVAL_DRAFT_MIN
- *               (default 85) or more go to the review queue
+ *   EVAL_DRAFTS how many new library models to draft tonight; those scoring EVAL_DRAFT_MIN or more go to
+ *               the review queue. Both default to the admin page's settings (3 and 85 until changed there),
+ *               which also hold the topic list and can pause the scheduled run (EVAL_LABEL=nightly).
  * Run: npx vitest run --config vitest.eval.config.ts
  */
 const API = process.env.EVAL_API ?? ''
 const TOKEN = process.env.EVAL_TOKEN ?? ''
 const LIMIT = Number(process.env.EVAL_LIMIT || EVAL_CASES.length)
 const DRY = process.env.EVAL_DRY === '1'
-const DRAFTS = Number(process.env.EVAL_DRAFTS || 3)
-const DRAFT_MIN = Number(process.env.EVAL_DRAFT_MIN || 85)
+
+interface NightSettings {
+  paused: boolean
+  draftsPerNight: number
+  draftMin: number
+}
+
+/** the admin page's settings; the built-in defaults if the API can't say */
+async function nightSettings(): Promise<{ settings: NightSettings; topics: DraftTopic[] }> {
+  const fallback = { settings: { paused: false, draftsPerNight: 3, draftMin: 85 }, topics: DRAFT_TOPICS }
+  try {
+    const res = await fetch(`${API}/v1/evals/settings`, { headers: { 'x-eval-token': TOKEN } })
+    if (!res.ok) return fallback
+    const got = (await res.json()) as { settings: NightSettings; topics: DraftTopic[] | null }
+    return { settings: got.settings, topics: got.topics?.length ? got.topics : DRAFT_TOPICS }
+  } catch {
+    return fallback
+  }
+}
 
 /** runs `work` over `items` three at a time: quick enough for a nightly job, gentle on the model's rate limits */
 async function pool<T>(items: T[], work: (item: T) => Promise<void>) {
@@ -59,6 +77,13 @@ async function buildOne(prompt: string): Promise<{ reply: Record<string, unknown
 
 it('nightly test run', { timeout: 60 * 60_000 }, async () => {
   if (!API || !TOKEN) throw new Error('Set EVAL_API and EVAL_TOKEN.')
+  const { settings, topics: topicList } = await nightSettings()
+  if (settings.paused && process.env.EVAL_LABEL === 'nightly') {
+    console.log('Nightly runs are paused on the admin page.')
+    return
+  }
+  const DRAFTS = process.env.EVAL_DRAFTS ? Number(process.env.EVAL_DRAFTS) : settings.draftsPerNight
+  const DRAFT_MIN = process.env.EVAL_DRAFT_MIN ? Number(process.env.EVAL_DRAFT_MIN) : settings.draftMin
   const cases = EVAL_CASES.slice(0, LIMIT)
   const results: CaseResult[] = []
   await pool(cases, async (c) => {
@@ -85,7 +110,7 @@ it('nightly test run', { timeout: 60 * 60_000 }, async () => {
   if (!DRY) await post('/v1/evals/runs', { runAt: Date.now(), label: process.env.EVAL_LABEL, cases: results, summary })
 
   // new models for the library: built and scored the same way, and only the good ones queued for review
-  const topics = topicsFor(Math.floor(Date.now() / 86_400_000), DRAFTS)
+  const topics = topicsFor(Math.floor(Date.now() / 86_400_000), DRAFTS, topicList)
   if (topics.length) console.log(`\ndrafting ${topics.length} new models`)
   await pool(topics, async (t) => {
     try {

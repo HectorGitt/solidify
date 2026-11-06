@@ -71,7 +71,7 @@ export const DRAFT_TOPICS: DraftTopic[] = [
 ]
 
 /** tonight's topics: the next `n` in turn, so the whole list comes round every few weeks */
-export function topicsFor(dayNumber: number, n: number): DraftTopic[] {
-  if (!n) return []
-  return Array.from({ length: Math.min(n, DRAFT_TOPICS.length) }, (_, i) => DRAFT_TOPICS[(dayNumber * n + i) % DRAFT_TOPICS.length])
+export function topicsFor(dayNumber: number, n: number, list: DraftTopic[] = DRAFT_TOPICS): DraftTopic[] {
+  if (!n || !list.length) return []
+  return Array.from({ length: Math.min(n, list.length) }, (_, i) => list[(dayNumber * n + i) % list.length])
 }
