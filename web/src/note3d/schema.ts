@@ -146,7 +146,8 @@ export interface NoteMotionSpec {
  */
 export type NoteMountSpec =
   | { kind: 'coaxial'; target: string; at?: DimExpr; offset?: DimExpr; shift?: Vec3Expr }
-  | { kind: 'mesh'; target: string; side?: AxisDir; shift?: Vec3Expr }
+  /** beside the target gear (on `side`, or turned `angle` degrees about its axis from there: planets at 0, 120, 240) */
+  | { kind: 'mesh'; target: string; side?: AxisDir; angle?: DimExpr; shift?: Vec3Expr }
   | { kind: 'against'; target: string; face: AxisDir; shift?: Vec3Expr }
   | { kind: 'centered'; target: string; shift?: Vec3Expr }
   /** a piston or slider driven by a crank: on the line from the crank's centre (along `direction`, default up),
@@ -607,7 +608,7 @@ const vec3ExprSchema = z.tuple([dimExprSchema, dimExprSchema, dimExprSchema])
 const axisDirSchema = z.enum(['+x', '-x', '+y', '-y', '+z', '-z'])
 export const noteMountSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('coaxial'), target: z.string().min(1).max(80), at: dimExprSchema.optional(), offset: dimExprSchema.optional(), shift: vec3ExprSchema.optional() }),
-  z.object({ kind: z.literal('mesh'), target: z.string().min(1).max(80), side: axisDirSchema.optional(), shift: vec3ExprSchema.optional() }),
+  z.object({ kind: z.literal('mesh'), target: z.string().min(1).max(80), side: axisDirSchema.optional(), angle: dimExprSchema.optional(), shift: vec3ExprSchema.optional() }),
   z.object({ kind: z.literal('against'), target: z.string().min(1).max(80), face: axisDirSchema, shift: vec3ExprSchema.optional() }),
   z.object({ kind: z.literal('centered'), target: z.string().min(1).max(80), shift: vec3ExprSchema.optional() }),
   z.object({ kind: z.literal('slider'), target: z.string().min(1).max(80), throw: dimExprSchema, rod: dimExprSchema, angle: dimExprSchema.optional(), direction: axisDirSchema.optional(), shift: vec3ExprSchema.optional() }),

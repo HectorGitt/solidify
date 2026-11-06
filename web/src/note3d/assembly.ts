@@ -43,6 +43,8 @@ interface LocalInfo {
   length: number
   /** the axis comes from a round shape or a gear, not just the longest side */
   round: boolean
+  /** a ring, tube or bored part: others sit inside it by design (a ring gear round its planets) */
+  hollow: boolean
   /** gear pitch radius (or pulley radius), 0 when it has none */
   pitchR: number
 }
@@ -81,7 +83,8 @@ function localInfo(part: NotePartSpec, scope: Record<string, number>): LocalInfo
     : pulley
       ? evalDim(pulley.rOuter ?? pulley.r, scope, 0.06)
       : 0
-  const info = { box, center: box.getCenter(new THREE.Vector3()), axis, round: !!lead, length, pitchR }
+  const hollow = lead?.kind === 'tube' || part.shapes.some((s) => s.op === 'subtract' && ROUND.has(s.kind)) || /\b(ring gear|annulus|ring)\b/i.test(part.name)
+  const info = { box, center: box.getCenter(new THREE.Vector3()), axis, round: !!lead, hollow, length, pitchR }
   if (cache.size > 200) cache.clear()
   cache.set(key, info)
   return info
@@ -176,6 +179,9 @@ export function resolveAssembly(
       side = side.clone().addScaledVector(tAxis, -side.dot(tAxis))
       if (side.lengthSq() < 1e-6) side = new THREE.Vector3(1, 0, 0).addScaledVector(tAxis, -tAxis.x)
       side.normalize()
+      // turned about the target's axis: planets round a sun at 0, 120 and 240 degrees
+      const turn = evalDim(m.angle, scope, 0)
+      if (turn) side.applyAxisAngle(tAxis, (turn * Math.PI) / 180)
       // no gear data: fall back to the parts' sizes across the axis
       const radial = (i: LocalInfo) => i.pitchR || Math.max(...i.box.getSize(new THREE.Vector3()).toArray()) / 2
       point = tCenter.clone().addScaledVector(side, radial(si) + radial(ti))
@@ -273,7 +279,7 @@ export function resolveAssembly(
       if (!touching) issues.push({ partId: p.id, kind: 'floating', message: `${p.name} is floating: it does not touch any other part` })
       if (p.role === 'housing') continue
       for (const o of boxes) {
-        if (o.p === p || o.p.role === 'housing' || related(p, o.p) || sameAxis(p.id, o.p.id)) continue
+        if (o.p === p || o.p.role === 'housing' || related(p, o.p) || sameAxis(p.id, o.p.id) || localInfo(o.p, scope).hollow) continue
         const overlap = box.clone().intersect(o.box)
         if (overlap.isEmpty()) continue
         if (vol(overlap) / vol(box) > 0.6 && vol(box) < vol(o.box)) {

@@ -136,3 +136,32 @@ describe('parts on one axis', () => {
     expect(resolveAssembly({ parts }, {}).issues.map((i) => i.kind)).not.toContain('buried')
   })
 })
+
+describe('planetary gear sets', () => {
+  const gear = (teeth: number) => [{ kind: 'gear', teeth, module: 0.003, faceWidth: 0.02 }]
+  const spec = {
+    title: 'Planetary set',
+    parameters: [],
+    calculations: [],
+    parts: [
+      { id: 'sun', name: 'Sun gear', position: [0, 0, 0], shapes: gear(20) },
+      { id: 'p1', name: 'Planet 1', mount: { kind: 'mesh', target: 'sun', angle: 0 }, shapes: gear(16) },
+      { id: 'p2', name: 'Planet 2', mount: { kind: 'mesh', target: 'sun', angle: 120 }, shapes: gear(16) },
+      { id: 'p3', name: 'Planet 3', mount: { kind: 'mesh', target: 'sun', angle: 240 }, shapes: gear(16) },
+      // ring: pitch radius of sun + 2 planets = (20 + 32) × 3 mm / 2 = 78 mm, drawn as a tube round them
+      { id: 'ring', name: 'Ring gear', mount: { kind: 'coaxial', target: 'sun' }, shapes: [{ kind: 'tube', rOuter: 0.09, rInner: 0.078, h: 0.02 }] },
+    ],
+  } as unknown as Parameters<typeof resolveAssembly>[0]
+
+  it('spaces the planets evenly round the sun at the meshing distance, inside the ring, with nothing flagged', () => {
+    const { placements, issues } = resolveAssembly(spec, {})
+    const at = (id: string) => new THREE.Vector3(...placements.get(id)!.position)
+    const d = (0.003 * 20) / 2 + (0.003 * 16) / 2
+    for (const id of ['p1', 'p2', 'p3']) expect(at(id).length()).toBeCloseTo(d, 4)
+    // 120 degrees apart: equal distances between each pair
+    const gap = (a: string, b: string) => at(a).distanceTo(at(b))
+    expect(gap('p1', 'p2')).toBeCloseTo(gap('p2', 'p3'), 4)
+    expect(gap('p2', 'p3')).toBeCloseTo(gap('p3', 'p1'), 4)
+    expect(issues).toEqual([])
+  })
+})
