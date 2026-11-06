@@ -6,7 +6,8 @@ import { previewSpec, streamOrEdit3DScene } from '@/note3d/ai3dCompiler'
 import type { CatalogSceneMatch } from '@/note3d/createCatalog'
 import type { LiveProgress } from '@/note3d/liveBuild'
 import { createSceneDefFromSpec, liveAssembly } from '@/note3d/NoteSceneRenderer'
-import { ALLOWED_MATERIALS, evaluateCalculations, type NotePartSpec, type NoteSceneSpec, type NoteShapeKind } from '@/note3d/schema'
+import { ChartView, fmtNum } from '@/note3d/ChartView'
+import { ALLOWED_MATERIALS, evaluateCalculations, evaluateChart, type EvaluatedCalculation, type EvaluatedChart, type NoteParameterSpec, type NotePartSpec, type NoteSceneSpec, type NoteShapeKind } from '@/note3d/schema'
 import { MATERIALS, type MaterialKey } from '@/render/materials'
 import { requestSnapshot } from '@/render/snapshot'
 import { useView } from '@/render/view'
@@ -31,7 +32,7 @@ interface Turn {
   photoUrl?: string
 }
 
-type Tab = 'calculations' | 'dimensions' | 'parts'
+type Tab = 'graphs' | 'calculations' | 'dimensions' | 'parts'
 
 const SUGGESTIONS = ['Make it 25% larger', 'Change the housing to aluminium', 'Add a cooling fan', 'What does each part do?', 'Why is it designed this way?']
 const NEW_STEPS = ['Reading your description', 'Choosing the sizes', 'Working out the engineering', 'Placing the parts']
@@ -157,6 +158,89 @@ function StartPanel({ onBuild, signedIn }: { onBuild: (text: string, photo?: { n
           .
         </p>
       </div>
+    </div>
+  )
+}
+
+const IDENT = /[A-Za-z_][A-Za-z0-9_]*/g
+const FUNCS = new Set(['pi', 'PI', 'sqrt', 'sin', 'cos', 'tan', 'atan', 'exp', 'log', 'abs', 'min', 'max', 'step', 'mac'])
+
+function CalcCard({
+  result,
+  scope,
+  parameters,
+  units,
+  disabled,
+  onParam,
+  onExplain,
+}: {
+  result: EvaluatedCalculation
+  scope: Record<string, number>
+  parameters: NoteParameterSpec[]
+  /** unit of each earlier calculation, by id */
+  units: Record<string, string>
+  disabled: boolean
+  onParam: (id: string, v: number) => void
+  onExplain: (label: string) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const { spec: c, formatted, status } = result
+  const used = [...new Set(c.formula.match(IDENT) ?? [])].filter((id) => !FUNCS.has(id))
+  const inputs = parameters.filter((p) => used.includes(p.id))
+  const fromResults = used.filter((id) => units[id] !== undefined && !inputs.some((p) => p.id === id))
+  // the formula with the numbers it used, e.g. "4.5 × 0.32"
+  const worked = c.formula
+    .replace(IDENT, (id) => (FUNCS.has(id) ? id : scope[id] !== undefined ? fmtNum(scope[id]) : id))
+    .replace(/\*/g, ' × ')
+    .replace(/\s+/g, ' ')
+  return (
+    <div className={`bp-fade rounded-2xl border transition-colors ${status === 'warn' ? 'border-warn/50 bg-warn/5' : open ? 'border-ink/30' : 'border-line-2'}`}>
+      <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} className="w-full p-3 text-left">
+        <div className="flex items-baseline justify-between gap-3">
+          <span className="text-[12.5px] text-mute">{c.label}</span>
+          <span className="font-mono text-[16px] font-semibold text-ink">
+            {formatted} <span className="text-[12px] font-normal text-mute">{c.unit}</span>
+          </span>
+        </div>
+        {status === 'warn' && c.limit ? <p className="mt-1 text-[11.5px] text-warn">Over the limit: {c.limit.label ?? 'check this value'}</p> : null}
+        {c.latex ? (
+          <div className="mt-1.5 overflow-x-auto text-[11.5px] text-mute">
+            <Tex tex={c.latex} />
+          </div>
+        ) : null}
+      </button>
+      {open ? (
+        <div className="space-y-3 border-t border-line px-3 pb-3 pt-2.5">
+          <p className="font-mono text-[11.5px] leading-relaxed text-mute">
+            = {worked} = <span className="text-ink">{formatted}</span> {c.unit}
+          </p>
+          {inputs.map((p) => {
+            const v = scope[p.id] ?? p.value
+            return (
+              <label key={p.id} className="block">
+                <div className="mb-0.5 flex items-baseline justify-between gap-2 text-[12px]">
+                  <span className="text-ink">{p.label}</span>
+                  <span className="font-mono text-mute">{fmt(v, p.unit)}</span>
+                </div>
+                <input type="range" min={p.min} max={p.max} step={p.step} value={v} disabled={disabled} onChange={(e) => onParam(p.id, parseFloat(e.target.value))} className="slider w-full" />
+              </label>
+            )
+          })}
+          {fromResults.length ? (
+            <div className="flex flex-wrap gap-1">
+              <span className="text-[11.5px] text-dim">Uses</span>
+              {fromResults.map((id) => (
+                <span key={id} className="rounded-full border border-line-2 px-2 py-0.5 font-mono text-[11px] text-mute">
+                  {id} = {fmtNum(scope[id])} {units[id]}
+                </span>
+              ))}
+            </div>
+          ) : null}
+          <button type="button" disabled={disabled} onClick={() => onExplain(c.label)} className="inline-flex items-center gap-1.5 text-[12px] font-medium text-accent hover:underline disabled:opacity-50">
+            <Icon.tour width={13} height={13} /> Explain this
+          </button>
+        </div>
+      ) : null}
     </div>
   )
 }
@@ -288,6 +372,7 @@ export default function ModelLab() {
     } else useView.getState().setCut({ enabled: false, planes: [{ normal: [0, 0, 1], pos: 0 }] })
     useView.getState().setExplode(0)
     useView.getState().setXray(false)
+    setTab(spec.charts?.length ? 'graphs' : 'calculations')
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [spec?.id])
 
@@ -602,7 +687,9 @@ export default function ModelLab() {
   const preview = useMemo(() => (live?.progress ? previewSpec(live.progress) : null), [live?.progress])
   const shownSpec = preview ?? spec
   const shownParams = useMemo(() => (preview ? Object.fromEntries(preview.parameters.map((p) => [p.id, p.value])) : params), [preview, params])
-  const { results: calcResults } = useMemo(() => evaluateCalculations(shownSpec?.calculations, shownParams), [shownSpec?.calculations, shownParams])
+  const { results: calcResults, scope: calcScope } = useMemo(() => evaluateCalculations(shownSpec?.calculations, shownParams), [shownSpec?.calculations, shownParams])
+  const charts = useMemo(() => (shownSpec?.charts ?? []).map((ch) => evaluateChart(ch, calcScope)).filter((ch): ch is EvaluatedChart => !!ch), [shownSpec?.charts, calcScope])
+  const calcUnits = useMemo(() => Object.fromEntries((shownSpec?.calculations ?? []).map((c) => [c.id, c.unit])), [shownSpec?.calculations])
   const parametricScene = useMemo(() => (shownSpec ? createSceneDefFromSpec(shownSpec, shownParams) : null), [shownSpec, shownParams])
   const scene = viewMode === 'catalog' && loadedCatalogScene && !live ? loadedCatalogScene : parametricScene
   const extent = scene?.extent ?? 0.45
@@ -847,6 +934,7 @@ export default function ModelLab() {
               <div className="flex gap-1 border-b border-line p-2" role="tablist" aria-label="Model details">
                 {(
                   [
+                    ...(charts.length ? [['graphs', 'Graphs'] as const] : []),
                     ['calculations', `Calculations`],
                     ['dimensions', 'Dimensions'],
                     ['parts', `Parts (${shownSpec.parts.length})`],
@@ -859,25 +947,33 @@ export default function ModelLab() {
               </div>
 
               <div className="min-h-0 flex-1 overflow-y-auto p-4">
-                {tab === 'calculations' ? (
+                {tab === 'graphs' && charts.length ? (
+                  <div className="space-y-3">
+                    {charts.map((ch) => (
+                      <ChartView key={ch.spec.id} chart={ch} />
+                    ))}
+                    <p className="text-[11.5px] text-dim">Graphs redraw as you change the sizes. Hover or tap a graph to read any point.</p>
+                  </div>
+                ) : null}
+                {tab === 'calculations' || (tab === 'graphs' && !charts.length) ? (
                   calcResults.length ? (
                     <div className="space-y-2">
-                      {calcResults.map(({ spec: c, formatted, status }) => (
-                        <div key={c.id} className={`bp-fade rounded-2xl border p-3 ${status === 'warn' ? 'border-warn/50 bg-warn/5' : 'border-line-2'}`}>
-                          <div className="flex items-baseline justify-between gap-3">
-                            <span className="text-[12.5px] text-mute">{c.label}</span>
-                            <span className="font-mono text-[16px] font-semibold text-ink">
-                              {formatted} <span className="text-[12px] font-normal text-mute">{c.unit}</span>
-                            </span>
-                          </div>
-                          {status === 'warn' && c.limit ? <p className="mt-1 text-[11.5px] text-warn">Over the limit: {c.limit.label ?? 'check this value'}</p> : null}
-                          {c.latex ? (
-                            <div className="mt-1.5 overflow-x-auto text-[11.5px] text-mute">
-                              <Tex tex={c.latex} />
-                            </div>
-                          ) : null}
-                        </div>
+                      {calcResults.map((r) => (
+                        <CalcCard
+                          key={r.spec.id}
+                          result={r}
+                          scope={calcScope}
+                          parameters={shownSpec.parameters}
+                          units={calcUnits}
+                          disabled={!!live}
+                          onParam={(id, v) => {
+                            setViewMode('parametric')
+                            setParams((prev) => ({ ...prev, [id]: v }))
+                          }}
+                          onExplain={(label) => void send(`Explain how the ${label.toLowerCase()} is worked out, step by step with this model's numbers.`)}
+                        />
                       ))}
+                      <p className="pt-1 text-[11.5px] text-dim">Open a result to see the numbers it used and change its inputs.</p>
                     </div>
                   ) : (
                     <p className="text-[13px] text-mute">{live ? 'Working out the engineering…' : 'This model has no calculations yet. Ask for some in the chat.'}</p>
