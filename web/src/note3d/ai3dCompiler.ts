@@ -1,5 +1,6 @@
-import { ApiError, api } from '@/cloud/api'
+import { ApiError, api, stream } from '@/cloud/api'
 import { findModule } from '@/modules/catalog'
+import { readProgress, type LiveProgress } from './liveBuild'
 import {
   type BuildOrRefineResult,
   matchCatalogSceneFromPrompt,
@@ -119,13 +120,71 @@ export async function generateOrEdit3DScene(
   photoDataUrl?: string,
 ): Promise<BuildOrRefineResult & { source: 'gemini' }> {
   const { labMatch, ...res } = await callBackendCreate3D(prompt, currentSpec, photoDataUrl)
-  // the AI names the lab model it saw (works for photos too); keywords in the request are the fallback
-  const mod = labMatch ? findModule(labMatch.moduleId) : undefined
-  const scene = mod?.scenes.find((sc) => sc.id === labMatch?.sceneId && sc.load)
-  const lab = mod && scene ? { module: mod, scene } : res.isNewMachine ? matchCatalogSceneFromPrompt(prompt) : null
   return {
     ...res,
-    matchedCatalogScene: lab,
+    matchedCatalogScene: labFor(labMatch, prompt, res.isNewMachine),
     source: 'gemini',
   }
+}
+
+/** the lab model the AI named, or one the request's words point to */
+function labFor(labMatch: { moduleId: string; sceneId: string } | undefined, prompt: string, isNewMachine: boolean) {
+  const mod = labMatch ? findModule(labMatch.moduleId) : undefined
+  const scene = mod?.scenes.find((sc) => sc.id === labMatch?.sceneId && sc.load)
+  return mod && scene ? { module: mod, scene } : isNewMachine ? matchCatalogSceneFromPrompt(prompt) : null
+}
+
+/** what has arrived so far, as a spec the viewer can show (null until the first part is complete) */
+export function previewSpec(progress: LiveProgress): NoteSceneSpec | null {
+  if (!progress.parts.length) return null
+  const spec = sanitizeGeneratedSpec({ spec: progress.draft }, progress.title ?? 'Building')
+  // a fixed id, so the view does not reset as each part lands
+  return spec ? { ...spec, id: 'live-build' } : null
+}
+
+export interface LiveResult extends BuildOrRefineResult {
+  /** the student asked a question: the model is unchanged and `explanation` is the answer */
+  isQuestion: boolean
+}
+
+/**
+ * Builds, changes or answers a question about a model with Solidify's API, streamed: `onProgress` hears
+ * about each size, formula and part as Gemini writes it. Problems are thrown for the page to show.
+ */
+export async function streamOrEdit3DScene(
+  req: { prompt: string; currentSpec?: NoteSceneSpec; photoDataUrl?: string; history?: { prompt: string; response: string }[] },
+  onProgress: (p: LiveProgress) => void,
+  signal?: AbortSignal,
+): Promise<LiveResult> {
+  let text = ''
+  let lastChars = -1
+  for await (const ev of stream('/v1/create-3d/stream', { prompt: req.prompt, currentSpec: req.currentSpec, photoBase64: req.photoDataUrl, history: req.history?.slice(-12) }, signal)) {
+    const data = JSON.parse(ev.data || '{}') as Record<string, unknown>
+    if (ev.event === 'delta' && typeof data.text === 'string') {
+      text += data.text
+      // re-read only when a list item may have closed
+      if (text.length - lastChars > 40 || /[}\]]/.test(data.text)) {
+        lastChars = text.length
+        onProgress(readProgress(text))
+      }
+    } else if (ev.event === 'error') {
+      throw new ApiError(typeof data.error === 'string' ? data.error : 'Solidify couldn’t build that just now. Please try again.', 502)
+    } else if (ev.event === 'done') {
+      const reply = data as { spec?: Record<string, unknown>; explanation?: string; isNewMachine?: boolean; isQuestion?: boolean; labMatch?: { moduleId: string; sceneId: string } }
+      if (reply.isQuestion && req.currentSpec) {
+        return { spec: req.currentSpec, explanation: reply.explanation ?? '', isNewMachine: false, isQuestion: true, matchedCatalogScene: null }
+      }
+      const spec = sanitizeGeneratedSpec(reply as Record<string, unknown>, req.prompt)
+      if (!spec) throw new ApiError('The model gave an incomplete answer. Try again, or describe it a little differently.', 502)
+      const isNewMachine = reply.isNewMachine ?? true
+      return {
+        spec,
+        explanation: reply.explanation || `Built “${spec.title}” with ${spec.parts.length} parts.`,
+        isNewMachine,
+        isQuestion: false,
+        matchedCatalogScene: labFor(reply.labMatch, req.prompt, isNewMachine),
+      }
+    }
+  }
+  throw new ApiError('The connection closed before the model was finished. Please try again.', 0)
 }
