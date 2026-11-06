@@ -191,13 +191,20 @@ export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision
 
   app.get('/health', (c) => c.json({ ok: true }))
 
+  const isAdmin = (u: { email?: string | null }) => !!u.email && config.adminEmails.includes(u.email.toLowerCase())
+  const requireAdmin = (c: Context<Env>) => {
+    const u = requireUser(c)
+    if (!isAdmin(u)) throw fail(403, 'Admins only.')
+    return u
+  }
+
   /* ------------------------------------------------------------------ account */
 
   app.get('/v1/me', async (c) => {
     const u = requireUser(c)
     const p = await profile(u)
     const classes = await db.list<{ name: string; role: Role }>(`users/${u.uid}/classes`)
-    return c.json({ uid: u.uid, ...p, classes: classes.map((r) => ({ id: r.id, ...r.data })) })
+    return c.json({ uid: u.uid, ...p, isAdmin: isAdmin(u) || undefined, classes: classes.map((r) => ({ id: r.id, ...r.data })) })
   })
 
   app.patch('/v1/me', async (c) => {
@@ -410,6 +417,86 @@ export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision
     const counts = await Promise.all(days.map(async (d) => ({ day: d, ...((await db.get<Record<string, number>>(`eventCounts/${d}`)) ?? {}) })))
     const notes = (await db.list<{ kind: string; subject: string; detail: string; day: string }>('eventNotes')).slice(-40).reverse().map((r) => r.data)
     return c.json({ days: counts, notes })
+  })
+
+  /* ------------------------------------------------------------------ model library */
+
+  /*
+   * Models anyone can open from Create in 3D. The nightly run drafts a few (it builds requests from its topic
+   * list and keeps the ones that score well); an admin approves or rejects each draft before anyone sees it.
+   */
+  const libraryInput = z.object({
+    title: z.string().trim().min(1).max(120),
+    prompt: z.string().trim().max(2000),
+    topic: z.string().trim().max(60).optional(),
+    spec: z.record(z.string().max(60), z.unknown()),
+    explanation: z.string().max(4000).optional(),
+    score: z.number().min(0).max(100),
+    checks: z.array(evalCheck).max(24).optional(),
+  })
+  type LibraryDoc = z.infer<typeof libraryInput> & { [k: string]: unknown; parts: number; createdAt: number; publishedAt?: number }
+  const libraryId = (id: string) => {
+    if (!/^[a-z0-9]{6,20}$/.test(id)) throw fail(404, 'Not found.')
+    return id
+  }
+  const libraryCard = ({ spec, checks: _c, explanation: _e, ...rest }: LibraryDoc, id: string) => {
+    void _c
+    void _e
+    void spec
+    return { id, ...rest }
+  }
+
+  app.post('/v1/library/drafts', async (c) => {
+    requireEval(c)
+    const d = await body(c, libraryInput)
+    if (JSON.stringify(d.spec).length > 300_000) throw fail(413, 'This model is too large to save.')
+    const id = randomId()
+    await db.set(`libraryDrafts/${id}`, { ...d, parts: Array.isArray(d.spec.parts) ? d.spec.parts.length : 0, createdAt: now() })
+    return c.json({ id }, 201)
+  })
+
+  /** the review queue, newest first, in full so the reviewer can open each one */
+  app.get('/v1/library/drafts', async (c) => {
+    requireAdmin(c)
+    const rows = await db.list<LibraryDoc>('libraryDrafts', { limit: 200 })
+    return c.json({ drafts: rows.map((r) => ({ id: r.id, ...r.data })).sort((a, b) => b.createdAt - a.createdAt) })
+  })
+
+  app.post('/v1/library/drafts/:id/approve', async (c) => {
+    requireAdmin(c)
+    const id = libraryId(c.req.param('id'))
+    const draft = await db.get<LibraryDoc>(`libraryDrafts/${id}`)
+    if (!draft) throw fail(404, 'Draft not found.')
+    const patch = await body(c, z.object({ title: libraryInput.shape.title.optional() }))
+    await db.set(`library/${id}`, { ...draft, ...(patch.title ? { title: patch.title } : {}), publishedAt: now() })
+    await db.delete(`libraryDrafts/${id}`)
+    return c.json({ ok: true })
+  })
+
+  app.delete('/v1/library/drafts/:id', async (c) => {
+    requireAdmin(c)
+    await db.delete(`libraryDrafts/${libraryId(c.req.param('id'))}`)
+    return c.json({ ok: true })
+  })
+
+  /** the published models: cards only, anyone may read */
+  app.get('/v1/library', async (c) => {
+    const rows = await db.list<LibraryDoc>('library', { limit: 500 })
+    return c.json({ items: rows.map((r) => libraryCard(r.data, r.id)).sort((a, b) => (b.publishedAt ?? 0) - (a.publishedAt ?? 0)) })
+  })
+
+  app.get('/v1/library/:id', async (c) => {
+    const item = await db.get<LibraryDoc>(`library/${libraryId(c.req.param('id'))}`)
+    if (!item) throw fail(404, 'Not found.')
+    const { checks: _c, ...rest } = item
+    void _c
+    return c.json({ id: c.req.param('id'), ...rest })
+  })
+
+  app.delete('/v1/library/:id', async (c) => {
+    requireAdmin(c)
+    await db.delete(`library/${libraryId(c.req.param('id'))}`)
+    return c.json({ ok: true })
   })
 
   /* ------------------------------------------------------------------ creation lab */
@@ -825,11 +912,6 @@ export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision
     return c.json({ ok: true }, 201)
   })
 
-  const requireAdmin = (c: Context<Env>) => {
-    const u = requireUser(c)
-    if (!u.email || !config.adminEmails.includes(u.email.toLowerCase())) throw fail(403, 'Admins only.')
-    return u
-  }
 
   app.get('/v1/waitlist', async (c) => {
     requireAdmin(c)
@@ -879,8 +961,7 @@ export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision
   })
 
   app.get('/v1/feedback', async (c) => {
-    const u = requireUser(c)
-    if (!u.email || !config.adminEmails.includes(u.email.toLowerCase())) throw fail(403, 'Admins only.')
+    requireAdmin(c)
     const rows = await db.list(`feedback`, { limit: 500 })
     return c.json({ feedback: rows.map((r) => ({ id: r.id, ...r.data })).reverse() })
   })

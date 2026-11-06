@@ -65,3 +65,44 @@ describe('feedback events', () => {
     expect((await req('GET', '/v1/events/summary', undefined, asUser('sam'))).status).toBe(403)
   })
 })
+
+describe('the model library and its review queue', () => {
+  const boss = { Authorization: 'Bearer user:boss:Boss' }
+  const draft = { title: 'Worm gear set', prompt: 'A worm and worm wheel, 30 : 1', topic: 'gears', spec: { title: 'Worm gear set', parts: [{ id: 'worm' }, { id: 'wheel' }] }, score: 92, checks: [{ name: 'layout', ok: true }] }
+
+  it('takes drafts only from the nightly run, shows them only to admins, and publishes only what an admin approves', async () => {
+    expect((await req('POST', '/v1/library/drafts', draft)).status).toBe(401)
+    const { id } = (await (await req('POST', '/v1/library/drafts', draft, { 'x-eval-token': TOKEN })).json()) as { id: string }
+    expect((await req('GET', '/v1/library/drafts', undefined, asUser('sam'))).status).toBe(403)
+    const queue = (await (await req('GET', '/v1/library/drafts', undefined, boss)).json()) as { drafts: { id: string; parts: number; spec: unknown }[] }
+    expect(queue.drafts).toHaveLength(1)
+    expect(queue.drafts[0]).toMatchObject({ id, parts: 2 })
+    expect(((await (await req('GET', '/v1/library')).json()) as { items: unknown[] }).items).toEqual([])
+
+    expect((await req('POST', `/v1/library/drafts/${id}/approve`, {}, asUser('sam'))).status).toBe(403)
+    expect((await req('POST', `/v1/library/drafts/${id}/approve`, { title: 'Worm and wheel, 30 : 1' }, boss)).status).toBe(200)
+    const lib = (await (await req('GET', '/v1/library')).json()) as { items: Record<string, unknown>[] }
+    expect(lib.items).toHaveLength(1)
+    expect(lib.items[0]).toMatchObject({ id, title: 'Worm and wheel, 30 : 1', parts: 2 })
+    expect(lib.items[0].spec).toBeUndefined()
+    const full = (await (await req('GET', `/v1/library/${id}`)).json()) as { spec: { parts: unknown[] } }
+    expect(full.spec.parts).toHaveLength(2)
+    expect(((await (await req('GET', '/v1/library/drafts', undefined, boss)).json()) as { drafts: unknown[] }).drafts).toEqual([])
+  })
+
+  it('drops a rejected draft, and lets an admin take a model down', async () => {
+    const { id } = (await (await req('POST', '/v1/library/drafts', draft, { 'x-eval-token': TOKEN })).json()) as { id: string }
+    expect((await req('DELETE', `/v1/library/drafts/${id}`, undefined, boss)).status).toBe(200)
+    expect(((await (await req('GET', '/v1/library/drafts', undefined, boss)).json()) as { drafts: unknown[] }).drafts).toEqual([])
+    const second = (await (await req('POST', '/v1/library/drafts', draft, { 'x-eval-token': TOKEN })).json()) as { id: string }
+    await req('POST', `/v1/library/drafts/${second.id}/approve`, {}, boss)
+    expect((await req('DELETE', `/v1/library/${second.id}`, undefined, asUser('sam'))).status).toBe(403)
+    expect((await req('DELETE', `/v1/library/${second.id}`, undefined, boss)).status).toBe(200)
+    expect((await req('GET', `/v1/library/${second.id}`)).status).toBe(404)
+  })
+
+  it('tells the account whether it is an admin', async () => {
+    expect(((await (await req('GET', '/v1/me', undefined, boss)).json()) as { isAdmin?: boolean }).isAdmin).toBe(true)
+    expect(((await (await req('GET', '/v1/me', undefined, asUser('sam'))).json()) as { isAdmin?: boolean }).isAdmin).toBeUndefined()
+  })
+})
