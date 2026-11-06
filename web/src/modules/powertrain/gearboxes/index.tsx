@@ -7,7 +7,7 @@ import { GearboxPanel } from './Panel'
 import { GearboxScene3D } from './Scene3D'
 
 type V3 = [number, number, number]
-const home = { position: [1.05, 0.42, 0.95] as V3, target: [0, -0.06, 0.34] as V3 }
+const home = { position: [1.5, 0.64, 1.42] as V3, target: [0, 0.05, 0.42] as V3 }
 const near = (z: number) => ({ position: [0.5, 0.18, z + 0.32] as V3, target: [0, -0.06, z] as V3 })
 
 const scene: SceneDef = {
