@@ -54,3 +54,74 @@ describe('assembly by relation', () => {
     expect(kinds).not.toContain('pinion:buried')
   })
 })
+
+describe('linkages and attached arrows', () => {
+  const crank: NotePartSpec = { id: 'crank', name: 'Crankshaft', shapes: [{ kind: 'cylinder', r: 0.02, h: 0.2, rotation: alongX }] }
+  const piston = (angle: number): NotePartSpec => ({ id: 'piston', name: 'Piston', mount: { kind: 'slider', target: 'crank', throw: 0.04, rod: 0.15, angle }, shapes: [{ kind: 'cylinder', r: 0.04, h: 0.05 }] })
+  const rod = (angle: number): NotePartSpec => ({ id: 'rod', name: 'Connecting rod', mount: { kind: 'link', target: 'crank', to: 'piston', throw: 0.04, angle }, shapes: [{ kind: 'box', sx: 0.02, sy: 0.15, sz: 0.02 }] })
+
+  it('places a piston by the slider-crank formula and runs the rod from crank pin to piston', () => {
+    expect(resolveAssembly({ parts: [crank, piston(0)] }, {}).placements.get('piston')!.position[1]).toBeCloseTo(0.19, 5) // r + l at top dead centre
+    const { placements, issues } = resolveAssembly({ parts: [crank, piston(90), rod(90)] }, {})
+    const y = Math.sqrt(0.15 ** 2 - 0.04 ** 2)
+    expect(placements.get('piston')!.position[1]).toBeCloseTo(y, 5)
+    // crank pin a quarter turn round: 40 mm out along z; the rod's middle is halfway to the piston, its long side along that line
+    const r = placements.get('rod')!
+    expect(r.position[1]).toBeCloseTo(y / 2, 5)
+    expect(r.position[2]).toBeCloseTo(0.02, 5)
+    const along = new THREE.Vector3(0, 1, 0).applyEuler(new THREE.Euler(...r.rotation, 'XYZ'))
+    const line = new THREE.Vector3(0, y, -0.04).normalize()
+    expect(Math.abs(along.dot(line))).toBeCloseTo(1, 5)
+    expect(issues).toEqual([])
+  })
+
+  it('attaches a load arrow to a face and a span dimension to the part, wherever it ends up', async () => {
+    const { resolveAnnotation } = await import('./assembly')
+    const parts: NotePartSpec[] = [
+      { id: 'support', name: 'Support', shapes: [{ kind: 'box', sx: 0.05, sy: 0.05, sz: 0.05 }] },
+      { id: 'beam', name: 'Beam', mount: { kind: 'against', target: 'support', face: '+y' }, shapes: [{ kind: 'box', sx: 0.4, sy: 0.04, sz: 0.03 }] },
+    ]
+    const { frames } = resolveAssembly({ parts }, {})
+    const load = resolveAnnotation({ id: 'P', kind: 'force', label: 'P', from: [0, 0, 0], anchor: { part: 'beam', at: '+y' }, direction: '-y', length: 0.1 }, frames, {})!
+    // the beam sits on the 50 mm support, so its top face is at 25 + 40 = 65 mm; the arrow ends there, from 100 mm above
+    expect(load.to[1]).toBeCloseTo(0.065, 5)
+    expect(load.from[1]).toBeCloseTo(0.165, 5)
+    const span = resolveAnnotation({ id: 'L', kind: 'dimension', label: 'L', from: [0, 0, 0], anchor: { part: 'beam' } }, frames, {})!
+    expect(span.from[0]).toBeCloseTo(-0.2, 5)
+    expect(span.to[0]).toBeCloseTo(0.2, 5)
+    expect(span.from[1]).toBeLessThan(0.025) // drawn below the beam
+    const tip = resolveAnnotation({ id: 'R', kind: 'force', label: 'R', from: [0, 0, 0], anchor: { part: 'beam', at: 'end' }, direction: '+y' }, frames, {})!
+    expect(tip.to[0]).toBeCloseTo(0.2, 5)
+  })
+})
+
+describe('a face and a point along the part together', () => {
+  it('puts "on top, at the far end" on the top face at the far end', async () => {
+    const { resolveAnnotation } = await import('./assembly')
+    const { frames } = resolveAssembly({ parts: [{ id: 'beam', name: 'Beam', shapes: [{ kind: 'box', sx: 0.4, sy: 0.04, sz: 0.03 }] }] }, {})
+    const p = resolveAnnotation({ id: 'P', kind: 'force', label: 'P', from: [0, 0, 0], anchor: { part: 'beam', at: '+y', along: 1 } }, frames, {})!
+    expect(p.to[0]).toBeCloseTo(0.2, 5)
+    expect(p.to[1]).toBeCloseTo(0.02, 5)
+  })
+})
+
+describe('a dog-bone connecting rod', () => {
+  it('lines up by its length, not by the round eyes that point across it', () => {
+    const crank: NotePartSpec = { id: 'crank', name: 'Crankshaft', shapes: [{ kind: 'cylinder', r: 0.02, h: 0.2, rotation: alongX }] }
+    const piston: NotePartSpec = { id: 'piston', name: 'Piston', mount: { kind: 'slider', target: 'crank', throw: 0.04, rod: 0.15, angle: 0 }, shapes: [{ kind: 'cylinder', r: 0.04, h: 0.05 }] }
+    const rod: NotePartSpec = {
+      id: 'rod', name: 'Rod', mount: { kind: 'link', target: 'crank', to: 'piston', throw: 0.04, angle: 0 },
+      shapes: [
+        { kind: 'cylinder', r: 0.012, h: 0.02, position: [0, -0.075, 0], rotation: [Math.PI / 2, 0, 0] },
+        { kind: 'cylinder', r: 0.008, h: 0.02, position: [0, 0.075, 0], rotation: [Math.PI / 2, 0, 0] },
+        { kind: 'box', sx: 0.012, sy: 0.15, sz: 0.01 },
+      ],
+    }
+    const r = resolveAssembly({ parts: [crank, piston, rod] }, {}).placements.get('rod')!
+    // at top dead centre the rod stands straight up, from the pin 40 mm above the crank to the piston 190 mm above it
+    const along = new THREE.Vector3(0, 1, 0).applyEuler(new THREE.Euler(...r.rotation, 'XYZ'))
+    expect(Math.abs(along.y)).toBeCloseTo(1, 5)
+    // its bounding box is centred on the line (the eyes differ in size, so that is 2 mm off the middle)
+    expect(r.position[1]).toBeCloseTo((0.04 + 0.19) / 2, 2)
+  })
+})

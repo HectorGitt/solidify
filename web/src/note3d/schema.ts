@@ -149,6 +149,12 @@ export type NoteMountSpec =
   | { kind: 'mesh'; target: string; side?: AxisDir; shift?: Vec3Expr }
   | { kind: 'against'; target: string; face: AxisDir; shift?: Vec3Expr }
   | { kind: 'centered'; target: string; shift?: Vec3Expr }
+  /** a piston or slider driven by a crank: on the line from the crank's centre (along `direction`, default up),
+   *  at r cos θ + √(l² − r² sin² θ) from it, for crank radius `throw`, rod length `rod` and crank angle
+   *  `angle` (degrees from top dead centre) */
+  | { kind: 'slider'; target: string; throw: DimExpr; rod: DimExpr; angle?: DimExpr; direction?: AxisDir; shift?: Vec3Expr }
+  /** a link (a connecting rod) from the crank pin of `target` to the centre of `to`, its long side along the line */
+  | { kind: 'link'; target: string; to: string; throw: DimExpr; angle?: DimExpr; direction?: AxisDir; shift?: Vec3Expr }
 
 export type AxisDir = '+x' | '-x' | '+y' | '-y' | '+z' | '-z'
 
@@ -181,8 +187,17 @@ export interface NoteAnnotationSpec {
   /** the size of the force or moment, as an expression of the model's values (e.g. "P"), shown live */
   magnitude?: DimExpr
   unit?: string
+  /**
+   * Attached to a part, so it stays with the part wherever the assembly puts it: `at` is the point on the part
+   * (`center`, a face such as `+y` for the top, or `start` / `end` of its axis; `along` 0..1 picks a point
+   * along the axis). A force's arrow ends on that point and acts along `direction` (default -y, downward),
+   * `length` metres long; a moment turns about the part's axis there; a dimension spans the part's length.
+   */
+  anchor?: { part: string; at?: AxisDir | 'center' | 'start' | 'end'; along?: DimExpr }
+  direction?: AxisDir
+  length?: DimExpr
   /** force: the arrow's tail (from) and the point it acts on (to). moment: the centre (from) and a point along its axis (to). */
-  from: Vec3Expr
+  from?: Vec3Expr
   to?: Vec3Expr
   color?: string
 }
@@ -595,6 +610,8 @@ export const noteMountSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('mesh'), target: z.string().min(1).max(80), side: axisDirSchema.optional(), shift: vec3ExprSchema.optional() }),
   z.object({ kind: z.literal('against'), target: z.string().min(1).max(80), face: axisDirSchema, shift: vec3ExprSchema.optional() }),
   z.object({ kind: z.literal('centered'), target: z.string().min(1).max(80), shift: vec3ExprSchema.optional() }),
+  z.object({ kind: z.literal('slider'), target: z.string().min(1).max(80), throw: dimExprSchema, rod: dimExprSchema, angle: dimExprSchema.optional(), direction: axisDirSchema.optional(), shift: vec3ExprSchema.optional() }),
+  z.object({ kind: z.literal('link'), target: z.string().min(1).max(80), to: z.string().min(1).max(80), throw: dimExprSchema, angle: dimExprSchema.optional(), direction: axisDirSchema.optional(), shift: vec3ExprSchema.optional() }),
 ])
 
 export const noteParameterSchema = z.object({
@@ -693,7 +710,10 @@ export const noteAnnotationSchema = z.object({
   value: z.string().max(80).optional(),
   magnitude: dimExprSchema.optional(),
   unit: z.string().max(20).optional(),
-  from: vec3ExprSchema,
+  anchor: z.object({ part: z.string().min(1).max(80), at: z.enum(['+x', '-x', '+y', '-y', '+z', '-z', 'center', 'start', 'end']).optional(), along: dimExprSchema.optional() }).optional(),
+  direction: z.enum(['+x', '-x', '+y', '-y', '+z', '-z']).optional(),
+  length: dimExprSchema.optional(),
+  from: vec3ExprSchema.optional(),
   to: vec3ExprSchema.optional(),
   color: z.string().max(32).optional(),
 })
