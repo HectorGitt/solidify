@@ -1,9 +1,8 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
-import { useSim } from '@/core/sim'
 import { MODULES } from '@/modules/catalog'
 import type { ModuleDef, SceneDef } from '@/modules/types'
-import { DEFAULT_CUT_PRESETS, useView } from '@/render/view'
+import { useView } from '@/render/view'
 import { useAcademic, useAudience } from './audience'
 import { SUPPORT_EMAIL } from '@/cloud/config'
 import { useReport } from '@/cloud/ui/ReportDialog'
@@ -15,6 +14,7 @@ import { SiteHeader } from '@/ui/SiteHeader'
 import { SiteFooter } from './SiteFooter'
 import { ALL_ORDER, MEDIA, Media, ModuleTile, READY } from './labsCatalog'
 import { BuildYourOwn, RigOfTheDay } from './HomeSections'
+import { applySceneView, useHomeStage } from './homeStage'
 
 
 /**
@@ -139,13 +139,7 @@ function Hero({ copy }: { copy: (typeof COPY)[keyof typeof COPY] }) {
       })
       .then((def) => {
         if (!alive) return
-        const v = useView.getState()
-        v.resetView()
-        v.setPresets(def.cutPresets ?? DEFAULT_CUT_PRESETS)
-        v.applyPreset(def.defaultPreset ?? (def.cutPresets ?? DEFAULT_CUT_PRESETS)[0].id)
-        if (def.defaultPreset === undefined) v.setCut({ enabled: false })
-        useSim.setState({ playing: true, timeScale: def.timeScale ?? 1 / 40, time: 0 })
-        def.reset?.()
+        applySceneView(def)
         setScene(def)
       })
       .catch(() => {
@@ -155,6 +149,13 @@ function Hero({ copy }: { copy: (typeof COPY)[keyof typeof COPY] }) {
       alive = false
     }
   }, [heroIdx, live3D, hero.moduleId, hero.sceneId])
+
+  // the rig of the day borrows the live view while it is on screen; back here, the hero's scene is set up again
+  const owner = useHomeStage((s) => s.owner)
+  useEffect(() => {
+    if (owner === 'hero' && scene) applySceneView(scene)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [owner])
 
   const chip = (on: boolean) =>
     `rounded-full px-3 py-1.5 text-[12px] font-medium transition-colors ${on ? 'bg-ink text-bg' : 'text-mute hover:bg-ink/[0.06] hover:text-ink'}`
@@ -166,8 +167,10 @@ function Hero({ copy }: { copy: (typeof COPY)[keyof typeof COPY] }) {
       <div className="absolute inset-0 [&_canvas]:!touch-pan-y pointer-coarse:[&_*]:!pointer-events-none">
         {/* the current scene stays up while the next one's code loads; then the new scene builds
             under a frosted veil, so switching never blanks the hero */}
-        {live3D && scene ? (
+        {live3D && scene && owner === 'hero' ? (
           <Stage key={scene.id} scene={scene} pageScroll frame={shownFrame} veil />
+        ) : live3D && scene ? (
+          <div className="h-full bg-[var(--color-stage)]" />
         ) : live3D ? (
           <Loader size={52} className="h-full bg-[var(--color-stage)] lg:pl-[40%]" />
         ) : (
