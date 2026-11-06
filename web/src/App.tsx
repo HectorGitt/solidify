@@ -28,6 +28,7 @@ const ModelLab = lazy(() => import('./cloud/ui/ModelLab'))
 const ReadPage = lazy(() => import('./note3d/ReadPage'))
 const PaperPage = lazy(() => import('./cloud/ui/PaperPage'))
 const AdminPage = lazy(() => import('./cloud/ui/AdminPage'))
+const LibraryPage = lazy(() => import('./cloud/ui/LibraryPage'))
 // dev only: bare scenes for scripts/capture-tiles.mjs
 const ShotPage = import.meta.env.DEV ? lazy(() => import('./ui/ShotPage')) : null
 const page = (el: ReactNode, fallback: ReactNode = <PageSkeleton />) => <Suspense fallback={fallback}>{el}</Suspense>
@@ -62,6 +63,7 @@ export default function App() {
         <Route path="/create/:id" element={page(<ModelLab />, <WorkspaceSkeleton />)} />
         <Route path="/read" element={page(<ReadPage />)} />
         <Route path="/admin" element={page(<AdminPage />)} />
+        <Route path="/library" element={page(<LibraryPage />)} />
         {ShotPage ? <Route path="/shot/:moduleId/:sceneId" element={page(<ShotPage />)} /> : null}
         <Route path="/m/:moduleId" element={<Viewer />} />
         <Route path="/m/:moduleId/:sceneId" element={<Viewer />} />

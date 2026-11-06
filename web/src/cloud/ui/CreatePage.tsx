@@ -11,8 +11,10 @@ import { toast } from '@/ui/toast'
 import { api, ApiError } from '../api'
 import { useAuth } from '../auth'
 import { SUPPORT_EMAIL } from '../config'
-import { getLibraryItem, listLibrary, type LibraryCard } from '../admin'
-import { listCreations, saveNewCreation, type CreationSummary } from '../creations'
+import { listLibrary, type LibraryCard } from '../admin'
+import { useOpenLibrary } from '../library'
+import { LibraryCardView } from './LibraryCardView'
+import { listCreations, type CreationSummary } from '../creations'
 import { setPendingBuild } from '../pendingBuild'
 import { Field, Notice, ghostBtn, inputCls, primaryBtn } from './Modal'
 
@@ -215,8 +217,7 @@ export default function CreatePage() {
   const [sampleScene, setSampleScene] = useState<SceneDef | null>(null)
   const [recent, setRecent] = useState<CreationSummary[]>([])
   const [library, setLibrary] = useState<LibraryCard[]>([])
-  const [showAll, setShowAll] = useState(false)
-  const [opening, setOpening] = useState<string | null>(null)
+  const { opening, open: openLibrary } = useOpenLibrary()
 
   const cut = useView((s) => s.cut)
   const explode = useView((s) => s.explode)
@@ -252,20 +253,6 @@ export default function CreatePage() {
       .then((r) => setLibrary(r.items))
       .catch(() => {})
   }, [])
-
-  /** a library model opens as the student's own copy, so they can change it like anything they built */
-  const openLibrary = async (item: LibraryCard) => {
-    if (!signedIn) return needSignIn()
-    setOpening(item.id)
-    try {
-      const full = await getLibraryItem(item.id)
-      const { id } = await saveNewCreation({ title: full.title, prompt: full.prompt, spec: full.spec, history: full.explanation ? [{ prompt: full.prompt, response: full.explanation.slice(0, 2000) }] : [] })
-      navigate(`/create/${id}`)
-    } catch (e) {
-      toast(e instanceof ApiError ? e.message : 'Couldn’t open that model. Please try again.', { tone: 'warn' })
-      setOpening(null)
-    }
-  }
 
   const needSignIn = () => {
     toast('Sign in to build your own model, change a sample or build from a photo. Models are built by Solidify’s AI, which needs an account.', { tone: 'warn', action: { label: 'Sign in', run: () => useAuth.getState().openDialog() } })
@@ -353,26 +340,13 @@ export default function CreatePage() {
               <h2 className="text-[15px] font-semibold text-ink">From the library</h2>
               <p className="mt-0.5 text-[12.5px] text-mute">Models built by Solidify and checked by the team. Open one to get your own copy to change.</p>
             </div>
-            {library.length > 8 ? (
-              <button type="button" onClick={() => setShowAll((v) => !v)} className="text-[12.5px] text-mute hover:text-ink">
-                {showAll ? 'Show fewer' : `Show all ${library.length}`}
-              </button>
-            ) : null}
+            <Link to="/library" className="text-[12.5px] text-mute hover:text-ink">
+              {library.length > 8 ? `See all ${library.length}` : 'Open the library'}
+            </Link>
           </div>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            {(showAll ? library : library.slice(0, 8)).map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                disabled={!!opening}
-                onClick={() => void openLibrary(item)}
-                className="group flex flex-col rounded-2xl border border-line bg-panel p-4 text-left transition-colors hover:border-line-2 disabled:opacity-60"
-              >
-                {item.topic ? <span className="text-[11px] uppercase tracking-wide text-dim">{item.topic}</span> : null}
-                <span className="mt-1 text-[13.5px] font-semibold text-ink group-hover:underline">{item.title}</span>
-                <span className="mt-1 line-clamp-2 text-[12px] leading-snug text-mute">{item.prompt}</span>
-                <span className="mt-auto pt-3 text-[11.5px] text-dim">{opening === item.id ? 'Opening…' : `${item.parts} parts`}</span>
-              </button>
+            {library.slice(0, 8).map((item) => (
+              <LibraryCardView key={item.id} item={item} opening={opening === item.id} onOpen={() => void openLibrary(item)} />
             ))}
           </div>
         </section>

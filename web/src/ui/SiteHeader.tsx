@@ -16,6 +16,7 @@ interface NavItem {
 const MAIN: NavItem[] = [
   { to: '/', label: 'Labs' },
   { to: '/create', label: 'Create in 3D' },
+  { to: '/library', label: 'Library' },
   { to: '/read', label: 'Read notes in 3D' },
   { to: '/challenges', label: 'Challenges' },
 ]
