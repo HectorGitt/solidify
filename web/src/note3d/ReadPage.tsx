@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
+import { cleanCut } from './sanitize'
 import { Link } from 'react-router-dom'
 import { findModule } from '@/modules/catalog'
 import type { SceneDef } from '@/modules/types'
@@ -36,7 +37,7 @@ function ExpandedFigureModal({
   useEffect(() => {
     useView.getState().resetView()
     if (figure.visualization.kind === 'procedural' && figure.visualization.spec.recommendedCut) {
-      const rc = figure.visualization.spec.recommendedCut
+      const rc = cleanCut(figure.visualization.spec.recommendedCut)
       useView.getState().setCut({
         enabled: rc.enabled,
         planes: [{ normal: rc.normal, pos: rc.pos }],

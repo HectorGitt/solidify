@@ -16,6 +16,16 @@ import {
  * with nothing to draw dropped, bad relations, charts and arrows left out one by one. No app or network
  * code, so the nightly test run can use it as it is.
  */
+/** a section plane as Gemini wrote it, or the default (cut through Z) if any part of it is missing or not a number */
+export function cleanCut(raw: unknown): NonNullable<NoteSceneSpec['recommendedCut']> {
+  const fallback = { enabled: true, normal: [0, 0, 1] as [number, number, number], pos: 0 }
+  if (!raw || typeof raw !== 'object') return fallback
+  const c = raw as { enabled?: unknown; normal?: unknown; pos?: unknown }
+  const n = Array.isArray(c.normal) && c.normal.length === 3 && c.normal.every((v) => typeof v === 'number' && Number.isFinite(v)) ? (c.normal as [number, number, number]) : null
+  if (!n || Math.hypot(...n) < 1e-6) return { ...fallback, enabled: c.enabled !== false }
+  return { enabled: c.enabled !== false, normal: n, pos: typeof c.pos === 'number' && Number.isFinite(c.pos) ? c.pos : 0 }
+}
+
 export function sanitizeGeneratedSpec(raw: Record<string, unknown>, fallbackTitle: string): NoteSceneSpec | null {
   try {
     const candidate = (raw.spec ?? raw) as Record<string, unknown>
@@ -33,10 +43,7 @@ export function sanitizeGeneratedSpec(raw: Record<string, unknown>, fallbackTitl
         candidate.camera && typeof candidate.camera === 'object'
           ? (candidate.camera as NoteSceneSpec['camera'])
           : { position: [0.52, 0.38, 0.58], target: [0, 0, 0] },
-      recommendedCut:
-        candidate.recommendedCut && typeof candidate.recommendedCut === 'object'
-          ? (candidate.recommendedCut as NoteSceneSpec['recommendedCut'])
-          : { enabled: true, normal: [0, 0, 1], pos: 0 },
+      recommendedCut: cleanCut(candidate.recommendedCut),
       parameters: Array.isArray(candidate.parameters) ? (candidate.parameters as NoteParameterSpec[]) : [],
       calculations: Array.isArray(candidate.calculations)
         ? (candidate.calculations as NoteCalculationSpec[])

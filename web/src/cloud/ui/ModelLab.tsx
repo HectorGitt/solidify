@@ -8,6 +8,7 @@ import type { LiveProgress } from '@/note3d/liveBuild'
 import { liveAssembly, useLiveSceneDef } from '@/note3d/NoteSceneRenderer'
 import { ChartView, fmtNum } from '@/note3d/ChartView'
 import { resolveAssembly } from '@/note3d/assembly'
+import { cleanCut } from '@/note3d/sanitize'
 import { findPart } from '@/note3d/partInfo'
 import { ALLOWED_MATERIALS, evaluateCalculations, evaluateChart, type EvaluatedCalculation, type EvaluatedChart, type NoteParameterSpec, type NotePartSpec, type NoteSceneSpec, type NoteShapeKind } from '@/note3d/schema'
 import { MATERIALS, type MaterialKey } from '@/render/materials'
@@ -425,7 +426,8 @@ export default function ModelLab() {
   // a freshly built model opens with its recommended section, and nothing else switched on
   useEffect(() => {
     if (!spec) return
-    const rec = spec.recommendedCut
+    // saved models may hold a section plane written before it was checked
+    const rec = spec.recommendedCut ? cleanCut(spec.recommendedCut) : undefined
     if (rec) {
       setCutAxis(Math.abs(rec.normal[0]) > 0.5 ? 'x' : Math.abs(rec.normal[1]) > 0.5 ? 'y' : 'z')
       setCutPos(rec.pos)
