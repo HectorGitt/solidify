@@ -46,7 +46,8 @@ GEOMETRY RULES
    - A machine has 3 to 8 parts. A single component (a nut, a bolt, a bracket, a shaft) has 1 or 2 parts; do not invent extra pieces.
    - Casings, bodies, guards, hoppers and frames: role "housing", cut: true.
    - Shafts, gears, rotors, pistons, blades, cams and links: role "moving", cut: false, with motion { kind: "rotate"|"translate"|"oscillate", axis: "x"|"y"|"z", speed, amplitude? }. A part that does not move in use has no motion.
-   - Every part has explode: [dx, dy, dz] (0.06 to 0.18 m along its natural direction of removal) and info: { summary, role }.
+   - Every part has explode: [dx, dy, dz] (0.06 to 0.18 m along its natural direction of removal) and info: { summary, role }: summary says what the part is, role is one sentence on the engineering job it does in this machine (not a word like "moving").
+   - Write each part's main sizes in terms of the parameters (e.g. "sx": "L", "r": "d / 2"), so the student can resize it; give a part that does not move no motion and role "static" or "housing".
 3. Shapes: each part has a "shapes" array. Use ONLY these kinds, with these fields:
    - box: { kind: "box", sx, sy, sz }
    - cylinder: { kind: "cylinder", r, h } (or rTop and rBot for a taper)
