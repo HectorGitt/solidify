@@ -22,6 +22,7 @@ import { toast } from '@/ui/toast'
 import { ApiError } from '../api'
 import { useAuth } from '../auth'
 import { getCreation, saveNewCreation, updateCreation } from '../creations'
+import { logEvent } from '../events'
 import { clearPendingBuild, peekPendingBuild } from '../pendingBuild'
 import { ghostBtn, inputCls, primaryBtn } from './Modal'
 import { PartInspector } from './PartInspector'
@@ -255,6 +256,57 @@ function UserBubble({ text, photoUrl }: { text: string; photoUrl?: string }) {
     <div className="ml-6 flex items-center gap-2.5 rounded-2xl rounded-br-md bg-ink px-3 py-2.5 text-[13px] leading-snug text-bg">
       {photoUrl ? <img src={photoUrl} alt="Your photo" className="h-10 w-10 shrink-0 rounded-lg object-cover ring-1 ring-bg/20" /> : null}
       <span className="min-w-0">{text}</span>
+    </div>
+  )
+}
+
+/** layout problems already counted in this visit */
+const flaggedLayouts = new Set<string>()
+
+/** turns rated in this visit, so a re-render (or opening the same model again) does not ask twice */
+const rated = new Map<string, 'up' | 'down'>()
+
+/** thumbs up or down on a reply; a thumbs down asks, optionally, what was wrong */
+function Rating({ turnId, subject, prompt }: { turnId: string; subject: string; prompt: string }) {
+  const [value, setValue] = useState(rated.get(turnId) ?? null)
+  const [asking, setAsking] = useState(false)
+  const [note, setNote] = useState('')
+  const rate = (v: 'up' | 'down', detail?: string) => {
+    rated.set(turnId, v)
+    setValue(v)
+    logEvent(v === 'up' ? 'rating-up' : 'rating-down', subject, detail)
+  }
+  if (asking)
+    return (
+      <form
+        className="mt-2 flex items-center gap-1.5"
+        onSubmit={(e) => {
+          e.preventDefault()
+          setAsking(false)
+          rate('down', `${note.trim() || 'no note'} · asked: ${prompt}`)
+        }}
+      >
+        <input autoFocus value={note} onChange={(e) => setNote(e.target.value)} maxLength={200} placeholder="What was wrong? (optional)" aria-label="What was wrong" className={`${inputCls} py-1! text-[12px]`} />
+        <button type="submit" className="shrink-0 rounded-full px-2.5 py-1 text-[12px] font-medium text-accent hover:bg-panel-2">
+          Send
+        </button>
+      </form>
+    )
+  const btn = 'grid h-6 w-6 place-items-center rounded-full transition-colors disabled:cursor-default'
+  return (
+    <div className="mt-1.5 flex items-center gap-0.5 text-dim">
+      {value ? (
+        <span className="text-[11.5px]">{value === 'up' ? 'Thanks!' : 'Thanks, we’ll look into it.'}</span>
+      ) : (
+        <>
+          <button type="button" title="Good reply" aria-label="Good reply" onClick={() => rate('up')} className={`${btn} hover:bg-panel-2 hover:text-accent`}>
+            <Icon.thumbUp width={13} height={13} />
+          </button>
+          <button type="button" title="Something’s wrong" aria-label="Something’s wrong" onClick={() => setAsking(true)} className={`${btn} hover:bg-panel-2 hover:text-warn`}>
+            <Icon.thumbDown width={13} height={13} />
+          </button>
+        </>
+      )}
     </div>
   )
 }
@@ -698,6 +750,13 @@ export default function ModelLab() {
   const layoutIssues = useMemo(() => (spec && !live && viewMode === 'parametric' ? resolveAssembly(spec, calcScope).issues : []), [spec, live, viewMode, calcScope])
   const [layoutDismissed, setLayoutDismissed] = useState('')
   const layoutKey = layoutIssues.map((i) => i.message).join('|')
+  // each layout problem a student is shown is counted once, so the team sees which kinds of model go wrong
+  useEffect(() => {
+    if (!layoutKey || flaggedLayouts.has(layoutKey)) return
+    flaggedLayouts.add(layoutKey)
+    logEvent('layout-issue', spec?.title, layoutIssues.slice(0, 3).map((i) => i.message).join('; '))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [layoutKey])
   const selectedPart = useMemo(() => (viewMode === 'parametric' ? findPart(shownSpec, selectedId) : null), [shownSpec, selectedId, viewMode])
   // on a phone, choosing a part brings its details up under the model
   useEffect(() => {
@@ -780,6 +839,8 @@ export default function ModelLab() {
                     <button type="button" onClick={() => void send(m.prompt)} className="mt-2 block text-[12px] font-medium text-accent hover:underline">
                       Try again
                     </button>
+                  ) : signedIn ? (
+                    <Rating turnId={`${creationId ?? 'new'}:${m.id}`} subject={spec?.title ?? 'Model'} prompt={m.prompt} />
                   ) : null}
                 </div>
               </div>
@@ -898,7 +959,10 @@ export default function ModelLab() {
                   </span>
                   <button
                     type="button"
-                    onClick={() => void send(`Fix the layout so every part sits where it belongs, using mounts (coaxial, mesh, against, centered) rather than coordinates. The problems: ${layoutIssues.map((i) => i.message).join('; ')}.`)}
+                    onClick={() => {
+                      logEvent('fix-layout', spec?.title, layoutIssues.slice(0, 3).map((i) => i.message).join('; '))
+                      void send(`Fix the layout so every part sits where it belongs, using mounts (coaxial, mesh, against, centered) rather than coordinates. The problems: ${layoutIssues.map((i) => i.message).join('; ')}.`)
+                    }}
                     className={`${primaryBtn} px-3.5 py-1 text-[12px]`}
                   >
                     Fix the layout

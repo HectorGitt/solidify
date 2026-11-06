@@ -211,4 +211,14 @@ export const Icon = {
       <rect x="9" y="9" width="6" height="6" rx="1" />
     </svg>
   ),
+  thumbUp: (p: SVGProps<SVGSVGElement>) => (
+    <svg {...base(p)}>
+      <path d="M7 11v9H4a1 1 0 0 1-1-1v-7a1 1 0 0 1 1-1h3zM7 11l4-7.5a2 2 0 0 1 2.7 1.9L13 10h5.4a2 2 0 0 1 2 2.4l-1.4 6A2 2 0 0 1 17 20H7" />
+    </svg>
+  ),
+  thumbDown: (p: SVGProps<SVGSVGElement>) => (
+    <svg {...base(p)}>
+      <path d="M17 13V4h3a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1h-3zM17 13l-4 7.5a2 2 0 0 1-2.7-1.9L11 14H5.6a2 2 0 0 1-2-2.4l1.4-6A2 2 0 0 1 7 4h10" />
+    </svg>
+  ),
 }

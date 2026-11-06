@@ -8,6 +8,7 @@ import { useAuth } from '../auth'
 import { deleteCreation, getCreation, listCreations, saveNewCreation, updateCreation, type CreationSummary } from '../creations'
 import { ghostBtn, inputCls, primaryBtn } from './Modal'
 import { ModelCardSkeleton } from '@/ui/Skeleton'
+import { logEvent } from '../events'
 
 const when = (t: number) => {
   const mins = Math.round((Date.now() - t) / 60000)
@@ -59,6 +60,7 @@ function CreationCard({ item, onRenamed, onDuplicated, onDeleted }: { item: Crea
     setBusy(true)
     try {
       await deleteCreation(item.id)
+      logEvent('delete', item.title)
       onDeleted()
     } catch {
       toast('Couldn’t delete it. Please try again.', { tone: 'warn' })
