@@ -157,7 +157,7 @@ export default function CreationLabPage() {
       title="My models"
       lead="Everything you build in Create in 3D is saved here. Open one to keep changing it: sliders, materials, parts, or ask for a change."
       right={
-        <Link to="/create" className={primaryBtn}>
+        <Link to="/create/new" className={primaryBtn}>
           Build a new model
         </Link>
       }
@@ -191,7 +191,7 @@ export default function CreationLabPage() {
           <Icon.build width={30} height={30} className="text-dim" />
           <h2 className="text-[16px] font-semibold text-ink">No models yet</h2>
           <p className="max-w-md text-[13px] text-mute">Describe a machine or upload a photo in Create in 3D. Every model you build is kept here.</p>
-          <button type="button" className={primaryBtn} onClick={() => navigate('/create')}>
+          <button type="button" className={primaryBtn} onClick={() => navigate('/create/new')}>
             Build your first model
           </button>
         </section>

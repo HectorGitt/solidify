@@ -71,6 +71,96 @@ function liveStage(p: LiveProgress | null) {
   return 0
 }
 
+const EXAMPLES = [
+  { label: 'Spur gear reducer', prompt: 'A single-stage spur gear reducer, 3 : 1, for a 15 kW motor at 1450 rpm' },
+  { label: 'Centrifugal pump', prompt: 'A single-stage centrifugal water pump with volute casing and closed impeller at 2900 rpm' },
+  { label: 'Hydraulic cylinder', prompt: 'A double-acting hydraulic cylinder, 80 mm bore, 400 mm stroke, at 160 bar' },
+  { label: 'Belt drive', prompt: 'A V-belt drive between a 150 mm and a 400 mm pulley on two shafts with bearings' },
+  { label: 'Screw jack', prompt: 'A 5-tonne screw jack with Acme thread, nut, handle and base' },
+  { label: 'Bench vice', prompt: 'A cast-iron workshop bench vice with sliding jaw and Acme lead screw' },
+]
+
+/** a new workspace: what to build, from words, a photo or an example */
+function StartPanel({ onBuild, signedIn }: { onBuild: (text: string, photo?: { name: string; url: string }) => void; signedIn: boolean }) {
+  const [text, setText] = useState('')
+  const [photo, setPhoto] = useState<{ name: string; url: string } | null>(null)
+  const fileRef = useRef<HTMLInputElement>(null)
+  const pick = (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    if (file.size > 8_000_000) return toast('That photo is too large. Please use one under 8 MB.', { tone: 'warn' })
+    const reader = new FileReader()
+    reader.onload = () => typeof reader.result === 'string' && setPhoto({ name: file.name, url: reader.result })
+    reader.readAsDataURL(file)
+  }
+  const go = (e?: FormEvent) => {
+    e?.preventDefault()
+    if (text.trim() || photo) onBuild(text, photo ?? undefined)
+  }
+  return (
+    <div className="relative isolate flex flex-1 items-center justify-center overflow-y-auto px-5 py-10">
+      <div className="bp-grid pointer-events-none absolute inset-0 -z-10 opacity-70" aria-hidden />
+      <div className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(ellipse_at_center,transparent_30%,var(--color-bg)_95%)]" aria-hidden />
+      <div className="w-full max-w-xl">
+        <p className="text-[12px] font-medium uppercase tracking-[0.16em] text-accent">New model</p>
+        <h2 className="mt-1.5 text-[28px] font-semibold tracking-[-0.02em] text-ink">What should we build?</h2>
+        <p className="mt-1.5 text-[14px] leading-relaxed text-mute">Describe a machine or part, or attach a photo or drawing. Solidify builds it part by part in front of you.</p>
+        <form onSubmit={go} className="mt-5 rounded-3xl border border-line-2 bg-panel p-2 shadow-xl focus-within:border-accent">
+          {photo ? (
+            <div className="mb-2 flex items-center gap-2 rounded-2xl bg-panel-2 p-1.5 pr-2">
+              <img src={photo.url} alt="" className="h-10 w-10 rounded-lg bg-white object-cover" />
+              <span className="min-w-0 flex-1 truncate text-[12px] text-mute">Build from this photo · {photo.name}</span>
+              <button type="button" aria-label="Remove the photo" onClick={() => setPhoto(null)} className="rounded-full p-1 text-dim hover:text-ink">
+                <Icon.close width={13} height={13} />
+              </button>
+            </div>
+          ) : null}
+          <textarea
+            autoFocus
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault()
+                go()
+              }
+            }}
+            rows={3}
+            maxLength={2000}
+            placeholder={photo ? 'Anything to add? (optional)' : 'e.g. a two-stage gear reducer for a 15 kW motor at 1450 rpm'}
+            aria-label="Describe a machine"
+            className="w-full resize-none bg-transparent px-3 py-2 text-[15px] text-ink placeholder:text-dim field-bare focus:outline-none"
+          />
+          <input ref={fileRef} type="file" accept="image/*" onChange={pick} className="hidden" />
+          <div className="flex items-center justify-between gap-2 px-1 pb-1">
+            <button type="button" onClick={() => fileRef.current?.click()} className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[12.5px] font-medium text-mute transition-colors hover:bg-panel-2 hover:text-ink">
+              <Icon.camera width={16} height={16} /> Photo or drawing
+            </button>
+            <button type="submit" disabled={!text.trim() && !photo} className={`${primaryBtn} px-5 py-2`}>
+              {signedIn ? 'Build' : 'Sign in to build'}
+            </button>
+          </div>
+        </form>
+        <div className="mt-4 flex flex-wrap gap-1.5">
+          {EXAMPLES.map((x) => (
+            <button key={x.label} type="button" onClick={() => onBuild(x.prompt)} title={x.prompt} className="rounded-full border border-line-2 bg-panel/70 px-3 py-1 text-[12.5px] text-mute backdrop-blur transition-colors hover:border-ink/40 hover:text-ink">
+              {x.label}
+            </button>
+          ))}
+        </div>
+        <p className="mt-6 text-[12.5px] text-dim">
+          Or{' '}
+          <Link to="/create" className="text-mute underline-offset-2 hover:text-ink hover:underline">
+            explore the ready-made lab samples
+          </Link>
+          .
+        </p>
+      </div>
+    </div>
+  )
+}
+
 /** the student's side of a turn: their words, with a small thumbnail of a photo they sent */
 function UserBubble({ text, photoUrl }: { text: string; photoUrl?: string }) {
   return (
@@ -167,6 +257,8 @@ export default function ModelLab() {
   const startedRef = useRef(false)
   /** once a build has streamed here, the finished model replaces the preview without a loading cover */
   const builtHereRef = useRef(false)
+  /** the camera resets only for a new model or a different saved one, not as a build turns into the finished model */
+  const [viewKey, setViewKey] = useState(routeId ?? 'model')
   const abortRef = useRef<AbortController | null>(null)
   const chatEndRef = useRef<HTMLDivElement>(null)
 
@@ -303,6 +395,7 @@ export default function ModelLab() {
     setAttached(null)
     setLive({ prompt: asked, photoUrl: withPhoto?.url, isNew, progress: null })
     builtHereRef.current = true
+    if (isNew) setViewKey(`build-${Date.now()}`)
     // a model being assembled holds still: the scene is rebuilt as each part lands, which would restart
     // every moving part and make it jerk; motion resumes once the build is done
     const wasPlaying = useSim.getState().playing
@@ -354,14 +447,33 @@ export default function ModelLab() {
     }
   }
 
+  // /create/new after a saved model was open: start afresh
+  useEffect(() => {
+    if (routeId !== 'new' || !creationIdRef.current) return
+    abortRef.current?.abort()
+    creationIdRef.current = null
+    lastSavedRef.current = ''
+    startedRef.current = false
+    builtHereRef.current = false
+    setCreationId(null)
+    setSaveState('idle')
+    setSpec(null)
+    setParams({})
+    setTurns([])
+    setLive(null)
+    setPhoto(null)
+    setAttached(null)
+    setMatchedCatalog(null)
+    setViewMode('parametric')
+    setViewKey(`new-${Date.now()}`)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [routeId])
+
   // /create/new: start the build the Create page handed over (once, even under StrictMode)
   useEffect(() => {
     if (routeId !== 'new' || startedRef.current || authStatus === 'loading') return
     const pending = peekPendingBuild()
-    if (!pending) {
-      void navigate('/create', { replace: true })
-      return
-    }
+    if (!pending) return // the start panel asks what to build
     startedRef.current = true
     clearPendingBuild()
     void send(pending.prompt, pending.photo)
@@ -383,6 +495,7 @@ export default function ModelLab() {
         const p = { ...Object.fromEntries((loaded.parameters ?? []).map((x) => [x.id, x.value])), ...c.params }
         creationIdRef.current = routeId
         setCreationId(routeId)
+        setViewKey(routeId)
         lastSavedRef.current = JSON.stringify([loaded, p])
         setSpec(loaded)
         setParams(p)
@@ -494,6 +607,8 @@ export default function ModelLab() {
   const scene = viewMode === 'catalog' && loadedCatalogScene && !live ? loadedCatalogScene : parametricScene
   const extent = scene?.extent ?? 0.45
   const firstBuild = !!live && live.isNew && !preview
+  /** a new, empty workspace: the start panel takes the input */
+  const blank = routeId === 'new' && !spec && !live && !turns.length
   const messages = [...turns].reverse()
 
   return (
@@ -521,7 +636,7 @@ export default function ModelLab() {
             className="min-w-0 truncate text-left text-[15px] font-semibold text-ink enabled:hover:underline disabled:cursor-default"
             title={spec ? 'Rename' : undefined}
           >
-            {live?.progress?.title ?? spec?.title ?? (live ? 'Building…' : 'Model')}
+            {live?.progress?.title ?? spec?.title ?? (live ? 'Building…' : routeId === 'new' ? 'New model' : 'Model')}
           </button>
         )}
         <span className="text-[12px] text-dim">
@@ -533,19 +648,21 @@ export default function ModelLab() {
               {viewMode === 'parametric' ? `Open the lab model: ${matchedCatalog.scene.title}` : 'Back to your model'}
             </button>
           ) : null}
-          <Link to="/create" className={`${ghostBtn} px-4 py-1.5 text-[12.5px]`}>
-            New model
-          </Link>
+          {spec || live ? (
+            <Link to="/create/new" className={`${ghostBtn} px-4 py-1.5 text-[12.5px]`}>
+              New model
+            </Link>
+          ) : null}
         </div>
       </div>
 
-      <div className="grid min-h-0 flex-1 grid-rows-[minmax(380px,58vh)_auto] lg:grid-cols-[340px_minmax(0,1fr)_360px] lg:grid-rows-1">
+      <div className={`grid min-h-0 flex-1 ${blank ? 'grid-rows-1' : 'grid-rows-[minmax(380px,58vh)_auto]'} lg:grid-cols-[340px_minmax(0,1fr)_360px] lg:grid-rows-1`}>
         {/* the conversation */}
-        <aside className={`${mobilePane === 'chat' ? 'flex' : 'hidden'} order-2 min-h-[360px] flex-col border-line lg:order-1 lg:flex lg:min-h-0 lg:border-r`}>
+        <aside className={`${mobilePane === 'chat' && !blank ? 'flex' : 'hidden'} order-2 min-h-[360px] flex-col border-line lg:order-1 lg:flex lg:min-h-0 lg:border-r`}>
           <div className="flex-1 space-y-4 overflow-y-auto px-4 py-4">
             {!messages.length && !live ? (
               <p className="rounded-2xl border border-dashed border-line-2 p-4 text-[13px] leading-relaxed text-mute">
-                {routeId === 'new' ? 'Starting your build…' : 'Ask for a change, or ask a question about this model.'}
+                {blank ? 'Your conversation about the model appears here: ask for changes or ask questions once it is built.' : routeId === 'new' ? 'Starting your build…' : 'Ask for a change, or ask a question about this model.'}
               </p>
             ) : null}
             {messages.map((m) => (
@@ -576,7 +693,7 @@ export default function ModelLab() {
             <div ref={chatEndRef} />
           </div>
 
-          <div className="border-t border-line p-3">
+          <div className={`border-t border-line p-3 ${blank ? 'hidden' : ''}`}>
             {spec && !live ? (
               <div className="-mx-1 mb-2 flex gap-1.5 overflow-x-auto px-1 pb-0.5 scrollbar-none">
                 {SUGGESTIONS.map((s) => (
@@ -609,7 +726,7 @@ export default function ModelLab() {
                 disabled={!!live}
                 placeholder={attached ? (spec ? 'What should change? (optional)' : 'Anything to add? (optional)') : spec ? 'Ask for a change, or ask a question…' : 'Describe a machine…'}
                 aria-label="Message"
-                className="max-h-40 min-h-[44px] flex-1 resize-none bg-transparent px-2 py-1.5 text-[13.5px] text-ink placeholder:text-dim focus:outline-none disabled:opacity-60"
+                className="max-h-40 min-h-[44px] flex-1 resize-none bg-transparent px-2 py-1.5 text-[13.5px] text-ink placeholder:text-dim field-bare focus:outline-none disabled:opacity-60"
               />
               <button type="submit" disabled={!!live || (!input.trim() && !attached)} aria-label="Send" className={`${primaryBtn} h-9 w-9 shrink-0 !p-0`}>
                 <Icon.chevron width={16} height={16} className="-rotate-90" />
@@ -668,7 +785,7 @@ export default function ModelLab() {
                 </div>
               ) : null}
               <div className="relative min-h-0 flex-1">
-                <Stage scene={scene} cover={!live && !builtHereRef.current} />
+                <Stage scene={scene} cover={!live && !builtHereRef.current} viewKey={viewMode === 'catalog' && loadedCatalogScene && !live ? undefined : viewKey} />
                 {live ? (
                   <div className="pointer-events-none absolute left-1/2 top-3 z-30 -translate-x-1/2">
                     <div className="flex items-center gap-2 rounded-full border border-line bg-panel/95 px-3.5 py-1.5 text-[12.5px] text-ink shadow-lg backdrop-blur">
@@ -692,11 +809,18 @@ export default function ModelLab() {
               </div>
             </>
           ) : (
-            <div className="flex flex-1 items-center justify-center p-6 text-[13px] text-mute">{authStatus === 'loading' || routeId !== 'new' ? 'Opening your model…' : 'Nothing to show yet.'}</div>
+            routeId === 'new' ? (
+              <StartPanel
+                onBuild={(text, withPhoto) => void send(text, withPhoto)}
+                signedIn={signedIn}
+              />
+            ) : (
+              <div className="flex flex-1 items-center justify-center p-6 text-[13px] text-mute">Opening your model…</div>
+            )
           )}
 
           {/* phones: choose what sits under the model */}
-          <div className="flex gap-1 border-t border-line p-2 lg:hidden" role="tablist" aria-label="Panels">
+          <div className={`flex gap-1 border-t border-line p-2 lg:hidden ${blank ? 'hidden' : ''}`} role="tablist" aria-label="Panels">
             {(
               [
                 ['chat', 'Chat'],
@@ -711,13 +835,13 @@ export default function ModelLab() {
         </main>
 
         {/* the engineering */}
-        <aside className={`${mobilePane === 'engineering' ? 'flex' : 'hidden'} order-3 min-h-[360px] flex-col border-line lg:flex lg:min-h-0 lg:border-l`}>
+        <aside className={`${mobilePane === 'engineering' && !blank ? 'flex' : 'hidden'} order-3 min-h-[360px] flex-col border-line lg:flex lg:min-h-0 lg:border-l`}>
           {viewMode === 'catalog' && loadedCatalogScene?.Panel && !live ? (
             <div className="flex-1 overflow-y-auto p-4">
               <loadedCatalogScene.Panel />
             </div>
           ) : !shownSpec ? (
-            <p className="p-4 text-[13px] text-mute">{live ? 'Sizes and calculations appear here as they are worked out.' : ''}</p>
+            <p className="p-4 text-[13px] text-mute">{live ? 'Sizes and calculations appear here as they are worked out.' : blank ? 'Calculations, sizes and parts appear here once the model is built.' : ''}</p>
           ) : (
             <>
               <div className="flex gap-1 border-b border-line p-2" role="tablist" aria-label="Model details">

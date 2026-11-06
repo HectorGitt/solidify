@@ -75,6 +75,10 @@ body {
   outline: 2px solid var(--color-accent);
   outline-offset: 2px;
 }
+/* a text box whose surrounding panel already shows focus (its border turns accent) */
+.field-bare:focus-visible {
+  outline: none;
+}
 
 @media (prefers-reduced-motion: reduce) {
   *,
