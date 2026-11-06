@@ -27,6 +27,7 @@ import { logEvent } from '../events'
 import { useProfile } from '../profile'
 import { PublishDialog } from './PublishDialog'
 import { clearPendingBuild, peekPendingBuild } from '../pendingBuild'
+import { peekPreviewModel } from '../previewModel'
 import { ghostBtn, inputCls, primaryBtn } from './Modal'
 import { PartInspector } from './PartInspector'
 import { WorkspaceBodySkeleton } from '@/ui/Skeleton'
@@ -629,9 +630,28 @@ export default function ModelLab() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [routeId, authStatus])
 
+  // /create/preview shows a model without saving it (a draft under review, a library model)
+  const viewing = routeId === 'preview' ? peekPreviewModel() : null
+  useEffect(() => {
+    if (routeId !== 'preview') return
+    if (!viewing) {
+      navigate('/admin', { replace: true })
+      return
+    }
+    const loaded = viewing.spec as unknown as NoteSceneSpec
+    creationIdRef.current = null
+    setCreationId(null)
+    setViewKey(`preview-${Date.now()}`)
+    setSpec(loaded)
+    setParams(Object.fromEntries((loaded.parameters ?? []).map((x) => [x.id, x.value])))
+    setTurns(viewing.explanation ? [{ id: 'preview', prompt: viewing.prompt, response: viewing.explanation, kind: 'build' }] : [])
+    setSaveState('idle')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [routeId])
+
   // /create/:id opens a saved model
   useEffect(() => {
-    if (!routeId || routeId === 'new' || routeId === creationIdRef.current) return
+    if (!routeId || routeId === 'new' || routeId === 'preview' || routeId === creationIdRef.current) return
     if (authStatus !== 'signed-in') {
       if (authStatus === 'signed-out') toast('Sign in to open your saved models.', { tone: 'warn', action: { label: 'Sign in', run: () => useAuth.getState().openDialog() } })
       return
@@ -778,7 +798,7 @@ export default function ModelLab() {
   /** a new, empty workspace: the start panel takes the input */
   const blank = routeId === 'new' && !spec && !live && !turns.length
   /** a saved model is being fetched */
-  const opening = routeId !== 'new' && !spec && !live && authStatus !== 'signed-out'
+  const opening = routeId !== 'new' && routeId !== 'preview' && !spec && !live && authStatus !== 'signed-out'
   const messages = [...turns].reverse()
 
   return (
@@ -796,8 +816,8 @@ export default function ModelLab() {
 
       {/* the model's own bar */}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-line px-4 py-2 sm:px-6">
-        <Link to="/create/lab" className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-[12.5px] text-mute hover:bg-panel-2 hover:text-ink">
-          <Icon.back width={14} height={14} /> My models
+        <Link to={viewing ? viewing.backTo : '/create/lab'} className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-[12.5px] text-mute hover:bg-panel-2 hover:text-ink">
+          <Icon.back width={14} height={14} /> {viewing ? 'Back' : 'My models'}
         </Link>
         <span className="h-4 w-px bg-line" />
         {renaming && spec ? (
@@ -819,7 +839,7 @@ export default function ModelLab() {
           </button>
         )}
         <span className="text-[12px] text-dim">
-          {live ? (live.progress?.title || spec ? 'Building…' : '') : creationId ? (saveState === 'saving' ? 'Saving…' : saveState === 'error' ? 'Not saved: check your connection' : 'Saved') : ''}
+          {live ? (live.progress?.title || spec ? 'Building…' : '') : routeId === 'preview' && !creationId ? 'Preview, not saved' : creationId ? (saveState === 'saving' ? 'Saving…' : saveState === 'error' ? 'Not saved: check your connection' : 'Saved') : ''}
         </span>
         <div className="ml-auto flex items-center gap-2">
           {spec && matchedCatalog && loadedCatalogScene && !live ? (

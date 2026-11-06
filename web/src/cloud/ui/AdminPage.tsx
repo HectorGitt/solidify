@@ -8,7 +8,7 @@ import { ListSkeleton } from '@/ui/Skeleton'
 import { toast } from '@/ui/toast'
 import { ApiError, download } from '../api'
 import { useAuth } from '../auth'
-import { saveNewCreation } from '../creations'
+import { setPreviewModel } from '../previewModel'
 import { useProfile } from '../profile'
 import {
   addDraft,
@@ -560,9 +560,9 @@ function DraftCard({ d, onDone, onChanged }: { d: LibraryDraft; onDone: (approve
     setBusy(kind)
     try {
       if (kind === 'open') {
-        // a private copy in My models, to look round it in the full workspace before deciding
-        const { id } = await saveNewCreation({ title: `Review: ${d.title}`.slice(0, 120), prompt: d.prompt, spec: d.spec, history: d.explanation ? [{ prompt: d.prompt, response: d.explanation.slice(0, 2000) }] : [] })
-        navigate(`/create/${id}`)
+        // the full workspace, as a preview: nothing is saved to My models
+        setPreviewModel({ title: d.title, prompt: d.prompt, spec: d.spec, explanation: d.explanation, backTo: '/admin?tab=review' })
+        navigate('/create/preview')
         return
       }
       if (kind === 'approve') await approveDraft(d.id, title.trim() && title.trim() !== d.title ? title.trim() : undefined)
@@ -686,7 +686,7 @@ function Review() {
           data.drafts.length ? (
             <>
               <p className="mb-3 text-[12.5px] text-mute">
-                Scored by the same checks as the test set. Approved models appear on the Create page for everyone; open one first to look round it (it opens as a private copy in your models), or ask Gemini to fix what’s wrong.
+                Scored by the same checks as the test set. Approved models appear on the Create page for everyone; open one first to look round it in the workspace (a preview: nothing is saved), or ask Gemini to fix what’s wrong.
               </p>
               <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                 {data.drafts.map((d) => (
@@ -727,8 +727,8 @@ function LibraryRow({ item, onChanged, onRemoved }: { item: LibraryCard; onChang
         toast('Saved.')
       } else if (kind === 'open') {
         const full = await getLibraryItem(item.id)
-        const { id } = await saveNewCreation({ title: `Library: ${full.title}`.slice(0, 120), prompt: full.prompt, spec: full.spec, history: full.explanation ? [{ prompt: full.prompt, response: full.explanation.slice(0, 2000) }] : [] })
-        navigate(`/create/${id}`)
+        setPreviewModel({ title: full.title, prompt: full.prompt, spec: full.spec, explanation: full.explanation, backTo: '/admin?tab=library' })
+        navigate('/create/preview')
         return
       } else {
         await unpublish(item.id)
