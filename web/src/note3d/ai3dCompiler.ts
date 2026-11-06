@@ -11,6 +11,7 @@ import {
   noteShapeSchema,
   noteChartSchema,
   noteAnnotationSchema,
+  noteMountSchema,
   type NoteCalculationSpec,
   type NoteParameterSpec,
   type NotePartSpec,
@@ -66,6 +67,8 @@ function sanitizeGeneratedSpec(raw: Record<string, unknown>, fallbackTitle: stri
           ...pt,
           shapes: (Array.isArray(pt.shapes) ? pt.shapes : []).filter((sh) => !!sh && kinds.has((sh as { kind?: string }).kind ?? '')),
           children: pt.children ? usable(pt.children) : undefined,
+          // a relation that is not well formed is dropped; the part falls back to its position
+          mount: pt.mount && noteMountSchema.safeParse(pt.mount).success ? pt.mount : undefined,
         }))
         .filter((pt) => pt.shapes.length > 0 || (pt.children?.length ?? 0) > 0)
     spec.parts = usable(spec.parts)

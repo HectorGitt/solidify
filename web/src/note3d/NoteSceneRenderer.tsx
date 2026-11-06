@@ -8,6 +8,7 @@ import type { SceneDef } from '@/modules/types'
 import { MATERIALS, type MaterialKey } from '@/render/materials'
 import { Part, PartMesh } from '@/render/Part'
 import { useView } from '@/render/view'
+import { resolveAssembly, type Placement } from './assembly'
 import { buildPartGeometry } from './builder'
 import {
   evalDim,
@@ -44,10 +45,13 @@ function LocalPartNode({
   part,
   params,
   clipPlane,
+  placed,
 }: {
   part: NotePartSpec
   params: Record<string, number>
   clipPlane: THREE.Plane | null
+  /** where the assembly solver put it, when it is mounted by relation */
+  placed?: Placement
 }) {
   const inline = useContext(InlineViewCtx)
   const motionRef = useRef<THREE.Group>(null)
@@ -67,8 +71,8 @@ function LocalPartNode({
       (bb.min.z + bb.max.z) * 0.5,
     ]
   }, [geometry])
-  const basePos = useMemo(() => evalVec3(part.position, params, [0, 0, 0]), [part.position, params])
-  const baseRot = useMemo(() => evalVec3(part.rotation, params, [0, 0, 0]), [part.rotation, params])
+  const basePos = useMemo(() => placed?.position ?? evalVec3(part.position, params, [0, 0, 0]), [placed, part.position, params])
+  const baseRot = useMemo(() => placed?.rotation ?? evalVec3(part.rotation, params, [0, 0, 0]), [placed, part.rotation, params])
 
   useFrame((_, dt) => {
     // dropping into place: falls from above with a small overshoot, and grows to full size
@@ -426,6 +430,8 @@ export function NoteSceneViewport({
 
   // annotation values may be calculated results (a reaction, a torque), not only slider values
   const scope = useMemo(() => evaluateCalculations(spec.calculations, params).scope, [spec.calculations, params])
+  // parts mounted by relation: placed from the other parts' real geometry each time the sizes change
+  const assembly = useMemo(() => resolveAssembly(spec, scope), [spec, scope])
   const projMode = projectionOverride ?? spec.showProjectionPlanes ?? 'none'
   const extent = spec.extent ?? 0.35
 
@@ -434,7 +440,7 @@ export function NoteSceneViewport({
       <LocalClippingEnabler />
       <group>
         {spec.parts.map((part) => (
-          <LocalPartNode key={part.id} part={part} params={params} clipPlane={clipPlane} />
+          <LocalPartNode key={part.id} part={part} params={params} clipPlane={clipPlane} placed={part.mount ? assembly.placements.get(part.id) : undefined} />
         ))}
         {spec.annotations?.map((ann) => (
           <Annotation3D key={ann.id} ann={ann} params={scope} />

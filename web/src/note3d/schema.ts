@@ -133,6 +133,25 @@ export interface NoteMotionSpec {
   phase?: number
 }
 
+/**
+ * Where a part goes, said as a relation to another part instead of coordinates; the assembly solver works
+ * out the position (and, for coaxial and mesh, the rotation) from the parts' real geometry.
+ * - coaxial: on the target's axis (a gear on a shaft, a shaft through a bore, a bearing on a journal);
+ *   `at` = how far along the target, 0 = one end, 1 = the other (default 0.5); `offset` = metres more along it
+ * - mesh: a gear meshing with the target gear: axes parallel, centres the sum of the pitch radii apart,
+ *   on the `side` given (default: up, or +z when the axis is vertical)
+ * - against: touching the target's `face` (+y = sitting on top of it), centred on that face
+ * - centered: the same centre as the target (a housing round its gears)
+ * `shift` moves the result a little more, in metres, in world axes.
+ */
+export type NoteMountSpec =
+  | { kind: 'coaxial'; target: string; at?: DimExpr; offset?: DimExpr; shift?: Vec3Expr }
+  | { kind: 'mesh'; target: string; side?: AxisDir; shift?: Vec3Expr }
+  | { kind: 'against'; target: string; face: AxisDir; shift?: Vec3Expr }
+  | { kind: 'centered'; target: string; shift?: Vec3Expr }
+
+export type AxisDir = '+x' | '-x' | '+y' | '-y' | '+z' | '-z'
+
 export interface NotePartSpec {
   id: string
   name: string
@@ -147,6 +166,8 @@ export interface NotePartSpec {
     role?: string
   }
   motion?: NoteMotionSpec
+  /** placed by relation to another part (wins over `position`) */
+  mount?: NoteMountSpec
   shapes: NoteShapeSpec[]
   children?: NotePartSpec[]
 }
@@ -568,6 +589,13 @@ export function evaluateCalculations(
 
 const dimExprSchema = z.union([z.number(), z.string().max(120)])
 const vec3ExprSchema = z.tuple([dimExprSchema, dimExprSchema, dimExprSchema])
+const axisDirSchema = z.enum(['+x', '-x', '+y', '-y', '+z', '-z'])
+export const noteMountSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('coaxial'), target: z.string().min(1).max(80), at: dimExprSchema.optional(), offset: dimExprSchema.optional(), shift: vec3ExprSchema.optional() }),
+  z.object({ kind: z.literal('mesh'), target: z.string().min(1).max(80), side: axisDirSchema.optional(), shift: vec3ExprSchema.optional() }),
+  z.object({ kind: z.literal('against'), target: z.string().min(1).max(80), face: axisDirSchema, shift: vec3ExprSchema.optional() }),
+  z.object({ kind: z.literal('centered'), target: z.string().min(1).max(80), shift: vec3ExprSchema.optional() }),
+])
 
 export const noteParameterSchema = z.object({
   id: z.string().min(1).max(60),
@@ -652,6 +680,7 @@ export const notePartSchema: z.ZodType<NotePartSpec> = z.lazy(() =>
         phase: z.number().optional(),
       })
       .optional(),
+    mount: noteMountSchema.optional(),
     shapes: z.array(noteShapeSchema).min(1).max(32),
     children: z.array(notePartSchema).max(24).optional(),
   }),
