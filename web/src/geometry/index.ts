@@ -1,5 +1,6 @@
 import * as THREE from 'three'
 import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
+import './quietBvh'
 import { ADDITION, Brush, Evaluator, INTERSECTION, SUBTRACTION } from 'three-bvh-csg'
 
 /**
