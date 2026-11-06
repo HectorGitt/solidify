@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ChangeEvent, type FormEvent, type ReactNode } from 'react'
+import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useSim } from '@/core/sim'
 import { findModule } from '@/modules/catalog'
@@ -210,11 +210,9 @@ function Tool({ on, onClick, children, title }: { on?: boolean; onClick: () => v
 export default function CreatePage() {
   const navigate = useNavigate()
   const signedIn = useAuth((s) => s.status) === 'signed-in'
-  const [promptInput, setPromptInput] = useState('')
   const [sampleId, setSampleId] = useState<string>(SAMPLES[0].sceneId)
   const [sampleScene, setSampleScene] = useState<SceneDef | null>(null)
   const [recent, setRecent] = useState<CreationSummary[]>([])
-  const photoInputRef = useRef<HTMLInputElement>(null)
 
   const cut = useView((s) => s.cut)
   const explode = useView((s) => s.explode)
@@ -255,57 +253,21 @@ export default function CreatePage() {
     navigate('/create/new')
   }
 
-  const handlePromptSubmit = (e?: FormEvent) => {
-    e?.preventDefault()
-    const text = promptInput.trim()
-    if (text) start(text)
-  }
-
-  const handlePhotoUpload = (e: ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    e.target.value = ''
-    if (!file) return
-    const reader = new FileReader()
-    reader.onload = () => {
-      const url = typeof reader.result === 'string' ? reader.result : ''
-      start(promptInput.trim() || file.name.replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' '), { name: file.name, url })
-    }
-    reader.readAsDataURL(file)
-  }
-
   return (
     <StudyShell
       title="Create in 3D"
       lead="Describe a machine or upload a photo. Solidify builds it part by part in front of you, as a 3D model you can cut open, take apart, run and change by chatting."
       right={
-        <Link to="/create/lab" className={ghostBtn}>
-          My models
-        </Link>
+        <div className="flex flex-wrap gap-2">
+          <Link to="/create/lab" className={ghostBtn}>
+            My models
+          </Link>
+          <Link to="/create/new" className={primaryBtn}>
+            Build a new model
+          </Link>
+        </div>
       }
     >
-      {/* describe, or start from a photo */}
-      <section className="mb-5 rounded-3xl border border-line bg-panel p-4">
-        <form onSubmit={handlePromptSubmit} className="flex flex-col gap-2 sm:flex-row">
-          <input
-            value={promptInput}
-            onChange={(e) => setPromptInput(e.target.value)}
-            placeholder="Describe a machine, e.g. a two-stage gear reducer for a 15 kW motor…"
-            aria-label="Describe a machine"
-            maxLength={2000}
-            className="min-w-0 flex-1 rounded-2xl border border-line-2 bg-bg px-4 py-3 text-[14px] text-ink placeholder:text-dim focus:border-accent focus:outline-none"
-          />
-          <input ref={photoInputRef} type="file" accept="image/*" onChange={handlePhotoUpload} className="hidden" />
-          <div className="flex gap-2">
-            <button type="button" onClick={() => (signedIn ? photoInputRef.current?.click() : needSignIn())} className={`${ghostBtn} rounded-2xl px-4`} title="Build from a photo or drawing">
-              From a photo
-            </button>
-            <button type="submit" disabled={!promptInput.trim()} className={`${primaryBtn} rounded-2xl px-5`}>
-              Build
-            </button>
-          </div>
-        </form>
-      </section>
-
       {recent.length ? (
         <section className="mb-5">
           <div className="mb-2 flex items-baseline justify-between">
