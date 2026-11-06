@@ -51,7 +51,9 @@ type Tab = 'quality' | 'review' | 'library' | 'feedback' | 'waitlist' | 'setting
 /** scores a build made from the admin page with the nightly run's own checks */
 function scoreReply(prompt: string, reply: BuildReply, caseId?: string) {
   const c = EVAL_CASES.find((x) => x.id === caseId) ?? { id: 'draft', prompt }
-  return scoreBuild(c, reply as unknown as Record<string, unknown>, reply.ms / 1000)
+  const { score, checks, spec } = scoreBuild(c, reply as unknown as Record<string, unknown>, reply.ms / 1000)
+  // drafts keep the cleaned model, as the app builds it, not Gemini's raw answer
+  return { score, checks, spec: (spec ?? reply.spec) as unknown as Record<string, unknown> }
 }
 
 function FailedChecks({ checks }: { checks: EvalCheck[] }) {
@@ -370,11 +372,11 @@ function RunNow({ onFinished }: { onFinished: () => void }) {
           update(i, { state: 'building' })
           try {
             const reply = await adminBuild({ prompt: r.prompt })
-            const { score, checks } = scoreReply(r.prompt, reply, r.kind === 'case' ? r.id : undefined)
+            const { score, checks, spec } = scoreReply(r.prompt, reply, r.kind === 'case' ? r.id : undefined)
             let queued = false
             if (r.kind === 'draft' && score >= (settings?.draftMin ?? 85)) {
-              const title = typeof reply.spec.title === 'string' && reply.spec.title.trim() ? reply.spec.title.trim().slice(0, 120) : r.prompt.slice(0, 120)
-              await addDraft({ title, prompt: r.prompt, topic: r.topic, spec: reply.spec, explanation: reply.explanation.slice(0, 4000), score, checks })
+              const title = typeof spec.title === 'string' && spec.title.trim() ? spec.title.trim().slice(0, 120) : r.prompt.slice(0, 120)
+              await addDraft({ title, prompt: r.prompt, topic: r.topic, spec, explanation: reply.explanation.slice(0, 4000), score, checks })
               queued = true
             }
             update(i, { state: 'done', score, checks, seconds: Math.round(reply.ms / 1000), queued, tokensIn: reply.usage?.input, tokensOut: reply.usage?.output })
@@ -543,8 +545,8 @@ function DraftCard({ d, onDone, onChanged }: { d: LibraryDraft; onDone: (approve
         kind === 'fix'
           ? await adminBuild({ prompt: note.trim(), currentSpec: d.spec, history: d.explanation ? [{ prompt: d.prompt, response: d.explanation.slice(0, 2000) }] : [] })
           : await adminBuild({ prompt: d.prompt })
-      const { score, checks } = scoreReply(d.prompt, reply)
-      const updated = await updateDraft(d.id, { spec: reply.spec, explanation: reply.explanation.slice(0, 4000), score, checks })
+      const { score, checks, spec } = scoreReply(d.prompt, reply)
+      const updated = await updateDraft(d.id, { spec, explanation: reply.explanation.slice(0, 4000), score, checks })
       onChanged(updated)
       setFixing(false)
       setNote('')
@@ -647,9 +649,9 @@ function NewDraft({ onAdded }: { onAdded: () => void }) {
     setBusy(true)
     try {
       const reply = await adminBuild({ prompt: p })
-      const { score, checks } = scoreReply(p, reply)
-      const title = typeof reply.spec.title === 'string' && reply.spec.title.trim() ? reply.spec.title.trim().slice(0, 120) : p.slice(0, 120)
-      await addDraft({ title, prompt: p, topic: topic.trim() || undefined, spec: reply.spec, explanation: reply.explanation.slice(0, 4000), score, checks })
+      const { score, checks, spec } = scoreReply(p, reply)
+      const title = typeof spec.title === 'string' && spec.title.trim() ? spec.title.trim().slice(0, 120) : p.slice(0, 120)
+      await addDraft({ title, prompt: p, topic: topic.trim() || undefined, spec, explanation: reply.explanation.slice(0, 4000), score, checks })
       toast(`Drafted “${title}”: scores ${score}.`)
       setPrompt('')
       onAdded()

@@ -122,8 +122,9 @@ it('nightly test run', { timeout: 60 * 60_000 }, async () => {
   await pool(topics, async (t) => {
     try {
       const { reply, seconds } = await buildOne(t.prompt)
-      const { score, checks } = scoreBuild({ id: 'draft', prompt: t.prompt }, reply, seconds)
-      const spec = reply.spec as Record<string, unknown> | undefined
+      const { score, checks, spec: clean } = scoreBuild({ id: 'draft', prompt: t.prompt }, reply, seconds)
+      // the cleaned model, as the app would build it, not Gemini's raw answer
+      const spec = clean as unknown as Record<string, unknown> | null
       const queued = score >= DRAFT_MIN && !!spec
       console.log(`${String(score).padStart(3)}  ${queued ? 'queued ' : 'dropped'}  ${t.prompt}`)
       if (queued && !DRY) {

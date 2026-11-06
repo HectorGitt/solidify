@@ -8,7 +8,7 @@ import type { LiveProgress } from '@/note3d/liveBuild'
 import { liveAssembly, useLiveSceneDef } from '@/note3d/NoteSceneRenderer'
 import { ChartView, fmtNum } from '@/note3d/ChartView'
 import { resolveAssembly } from '@/note3d/assembly'
-import { cleanCut } from '@/note3d/sanitize'
+import { cleanCut, sanitizeGeneratedSpec } from '@/note3d/sanitize'
 import { findPart } from '@/note3d/partInfo'
 import { ALLOWED_MATERIALS, evaluateCalculations, evaluateChart, type EvaluatedCalculation, type EvaluatedChart, type NoteParameterSpec, type NotePartSpec, type NoteSceneSpec, type NoteShapeKind } from '@/note3d/schema'
 import { MATERIALS, type MaterialKey } from '@/render/materials'
@@ -638,7 +638,8 @@ export default function ModelLab() {
       navigate('/admin', { replace: true })
       return
     }
-    const loaded = viewing.spec as unknown as NoteSceneSpec
+    // drafts made before they were cleaned on saving: clean on the way in, so a bad field cannot crash the view
+    const loaded = sanitizeGeneratedSpec({ spec: viewing.spec }, viewing.prompt) ?? (viewing.spec as unknown as NoteSceneSpec)
     creationIdRef.current = null
     setCreationId(null)
     setViewKey(`preview-${Date.now()}`)

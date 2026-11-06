@@ -5,6 +5,7 @@ import { ApiError } from './api'
 import { getLibraryItem, type LibraryCard } from './admin'
 import { useAuth } from './auth'
 import { saveNewCreation } from './creations'
+import { sanitizeGeneratedSpec } from '@/note3d/sanitize'
 
 /**
  * Opening a library model: it becomes the student's own copy in My models (so they can change it like
@@ -22,7 +23,8 @@ export function useOpenLibrary() {
     setOpening(item.id)
     try {
       const full = await getLibraryItem(item.id)
-      const { id } = await saveNewCreation({ title: full.title, prompt: full.prompt, spec: full.spec, history: full.explanation ? [{ prompt: full.prompt, response: full.explanation.slice(0, 2000) }] : [] })
+      const spec = (sanitizeGeneratedSpec({ spec: full.spec }, full.prompt) as unknown as Record<string, unknown> | null) ?? full.spec
+      const { id } = await saveNewCreation({ title: full.title, prompt: full.prompt, spec, thumbnail: full.thumbnail, history: full.explanation ? [{ prompt: full.prompt, response: full.explanation.slice(0, 2000) }] : [] })
       navigate(`/create/${id}`)
     } catch (e) {
       toast(e instanceof ApiError ? e.message : 'Couldn’t open that model. Please try again.', { tone: 'warn' })

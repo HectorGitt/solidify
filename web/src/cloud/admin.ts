@@ -54,6 +54,7 @@ export interface LibraryDraft {
   checks?: EvalCheck[]
   parts: number
   createdAt: number
+  thumbnail?: string
 }
 
 export interface LibraryCard {
@@ -65,6 +66,7 @@ export interface LibraryCard {
   parts: number
   createdAt: number
   publishedAt?: number
+  thumbnail?: string
 }
 
 export interface LibraryItem extends LibraryCard {
@@ -149,9 +151,10 @@ export interface DraftFields {
   explanation?: string
   score: number
   checks?: EvalCheck[]
+  thumbnail?: string
 }
 export const addDraft = (d: DraftFields) => api<{ id: string }>('/v1/library/drafts', { method: 'POST', body: d })
 export const updateDraft = (id: string, patch: Partial<DraftFields>) => api<LibraryDraft>(`/v1/library/drafts/${encodeURIComponent(id)}`, { method: 'PUT', body: patch })
 
 export const publishModel = (d: DraftFields) => api<{ id: string }>('/v1/library', { method: 'POST', body: d })
-export const updateLibraryItem = (id: string, patch: { title?: string; topic?: string }) => api<{ ok: true }>(`/v1/library/${encodeURIComponent(id)}`, { method: 'PUT', body: patch })
+export const updateLibraryItem = (id: string, patch: { title?: string; topic?: string; thumbnail?: string }) => api<{ ok: true }>(`/v1/library/${encodeURIComponent(id)}`, { method: 'PUT', body: patch })

@@ -80,12 +80,12 @@ export function overlappingLabels(spec: NoteSceneSpec, frames: Map<string, PartF
  * cleans it, laid out by the assembly solver, and its calculations and charts worked out from the default
  * sizes. Score = the share of checks that pass, 0 to 100.
  */
-export function scoreBuild(c: EvalCase, reply: Record<string, unknown>, seconds: number): { score: number; checks: EvalCheck[] } {
+export function scoreBuild(c: EvalCase, reply: Record<string, unknown>, seconds: number): { score: number; checks: EvalCheck[]; spec: NoteSceneSpec | null } {
   const checks: EvalCheck[] = []
   const add = (name: string, ok: boolean, detail?: string) => checks.push({ name, ok, ...(detail ? { detail: detail.slice(0, 300) } : {}) })
   const spec: NoteSceneSpec | null = sanitizeGeneratedSpec(reply, c.prompt)
   add('builds', !!spec, spec ? undefined : 'the answer could not be turned into a model')
-  if (!spec) return { score: 0, checks }
+  if (!spec) return { score: 0, checks, spec: null }
 
   const params = Object.fromEntries(spec.parameters.map((p) => [p.id, p.value]))
   const { results, scope } = evaluateCalculations(spec.calculations, params)
@@ -134,5 +134,5 @@ export function scoreBuild(c: EvalCase, reply: Record<string, unknown>, seconds:
   add('under two minutes', seconds <= 120, `${Math.round(seconds)} s`)
 
   const passed = checks.filter((x) => x.ok).length
-  return { score: Math.round((100 * passed) / checks.length), checks }
+  return { score: Math.round((100 * passed) / checks.length), checks, spec }
 }
