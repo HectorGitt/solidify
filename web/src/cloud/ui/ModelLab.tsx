@@ -303,8 +303,13 @@ export default function ModelLab() {
     setAttached(null)
     setLive({ prompt: asked, photoUrl: withPhoto?.url, isNew, progress: null })
     builtHereRef.current = true
+    // a model being assembled holds still: the scene is rebuilt as each part lands, which would restart
+    // every moving part and make it jerk; motion resumes once the build is done
+    const wasPlaying = useSim.getState().playing
+    useSim.getState().setPlaying(false)
     liveAssembly.active = true
     liveAssembly.landed = new Set(isNew ? [] : (spec?.parts ?? []).map((p) => p.id))
+    liveAssembly.dropping = new Map()
     const ac = new AbortController()
     abortRef.current = ac
     try {
@@ -342,6 +347,7 @@ export default function ModelLab() {
       setTurns((list) => [{ id: `t-${Date.now()}`, prompt: asked, response: message, kind: 'error', photoUrl: withPhoto?.url }, ...list])
     } finally {
       setLive(null)
+      if (wasPlaying) useSim.getState().setPlaying(true)
       window.setTimeout(() => {
         liveAssembly.active = false
       }, 900)

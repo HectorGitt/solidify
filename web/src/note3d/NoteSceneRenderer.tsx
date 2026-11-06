@@ -36,7 +36,7 @@ const InlineViewCtx = createContext<InlineViewConfig | null>(null)
  * A live build: while it is on, a part that has not landed yet drops into place when it first appears
  * (the scene is rebuilt as each part arrives, so parts that already landed are remembered here).
  */
-export const liveAssembly = { active: false, landed: new Set<string>() }
+export const liveAssembly = { active: false, landed: new Set<string>(), dropping: new Map<string, number>() }
 
 function LocalPartNode({
   part,
@@ -50,7 +50,8 @@ function LocalPartNode({
   const inline = useContext(InlineViewCtx)
   const motionRef = useRef<THREE.Group>(null)
   const dropRef = useRef<THREE.Group>(null)
-  const drop = useRef(liveAssembly.active && !liveAssembly.landed.has(part.id) ? 0 : 1)
+  // a part still dropping when the scene is rebuilt carries on from where it was, rather than starting again
+  const drop = useRef(liveAssembly.active && !liveAssembly.landed.has(part.id) ? (liveAssembly.dropping.get(part.id) ?? 0) : 1)
   const timeRef = useRef(0)
 
   const geometry = useMemo(() => buildPartGeometry(part.shapes, params), [part.shapes, params])
@@ -72,6 +73,7 @@ function LocalPartNode({
     const d = dropRef.current
     if (d && drop.current < 1) {
       drop.current = Math.min(1, drop.current + dt / 0.6)
+      liveAssembly.dropping.set(part.id, drop.current)
       const t = drop.current
       const e = 1 + 2.2 * Math.pow(t - 1, 3) + 1.2 * Math.pow(t - 1, 2)
       d.position.y = (1 - e) * 0.16
@@ -107,7 +109,7 @@ function LocalPartNode({
   const matKey: MaterialKey = part.material && part.material in MATERIALS ? part.material : 'steel'
 
   return (
-    <group ref={dropRef} position={[0, drop.current < 1 ? 0.16 : 0, 0]} scale={drop.current < 1 ? 0.72 : 1}>
+    <group ref={dropRef} position={[0, drop.current < 1 ? 0.16 * (1 - drop.current) : 0, 0]} scale={drop.current < 1 ? 0.72 + 0.28 * drop.current : 1}>
     <Part
       id={part.id}
       name={part.name}
