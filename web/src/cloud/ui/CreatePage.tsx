@@ -1,44 +1,22 @@
-import { useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent, type ReactNode } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { useEffect, useRef, useState, type ChangeEvent, type FormEvent, type ReactNode } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
 import { useSim } from '@/core/sim'
 import { findModule } from '@/modules/catalog'
 import type { SceneDef } from '@/modules/types'
-import { generateOrEdit3DScene } from '@/note3d/ai3dCompiler'
-import type { CatalogSceneMatch } from '@/note3d/createCatalog'
-import { createSceneDefFromSpec } from '@/note3d/NoteSceneRenderer'
-import { ALLOWED_MATERIALS, evaluateCalculations, type NotePartSpec, type NoteSceneSpec, type NoteShapeKind } from '@/note3d/schema'
-import { MATERIALS, type MaterialKey } from '@/render/materials'
-import { requestSnapshot } from '@/render/snapshot'
 import { useView } from '@/render/view'
 import { StudyShell } from '@/study/ui/StudyShell'
+import { Loader } from '@/ui/Loader'
 import { Stage } from '@/ui/Stage'
-import { BuildScreen } from '@/ui/BuildScreen'
-import { Icon } from '@/ui/icons'
 import { toast } from '@/ui/toast'
-import { Tex } from '@/ui/Tex'
 import { api, ApiError } from '../api'
 import { useAuth } from '../auth'
 import { SUPPORT_EMAIL } from '../config'
-import { getCreation, saveNewCreation, updateCreation } from '../creations'
+import { listCreations, type CreationSummary } from '../creations'
+import { setPendingBuild } from '../pendingBuild'
 import { Field, Notice, ghostBtn, inputCls, primaryBtn } from './Modal'
 
 type Role = 'student' | 'teacher' | 'engineer' | 'other'
 type Interest = 'describe' | 'photo' | 'customize' | 'chat' | 'classroom'
-
-/** edits to suggest once there is a model; each goes to the AI like anything typed */
-const QUICK_EDITS = ['Add a cooling fan', 'Change the housing to aluminium', 'Make it 25% larger', 'Show the fasteners']
-
-const NEW_STEPS = ['Reading your description', 'Choosing the parts and materials', 'Sizing every part', 'Working out the engineering', 'Assembling the 3D model']
-const PHOTO_STEPS = ['Studying your photo', 'Recognising the parts', 'Estimating the sizes', 'Working out the engineering', 'Assembling the 3D model']
-const EDIT_STEPS = ['Reading your change', 'Updating the parts', 'Re-checking the engineering', 'Rebuilding the model']
-const BUILD_TIPS = [
-  'Once it’s built, drag the sliders in Dimensions to resize it.',
-  'Section cuts the model open so you can see inside.',
-  'Take apart spreads the parts out so each one is easy to see.',
-  'Ask for changes in plain words, like “make the shaft 40 mm longer”.',
-  'Every model you build is saved in My models.',
-  'Calculations update live as you change the sizes.',
-]
 
 /** samples: the app's own lab rigs, open to everyone. Building or changing a model uses the AI and needs sign-in. */
 const SAMPLES = [
@@ -210,14 +188,6 @@ function WaitlistForm() {
   )
 }
 
-interface HistoryItem {
-  id: string
-  prompt: string
-  response: string
-}
-
-type Tab = 'calculations' | 'dimensions' | 'parts'
-
 /** a toolbar toggle in the app's own style */
 function Tool({ on, onClick, children, title }: { on?: boolean; onClick: () => void; children: ReactNode; title?: string }) {
   return (
@@ -226,259 +196,69 @@ function Tool({ on, onClick, children, title }: { on?: boolean; onClick: () => v
       onClick={onClick}
       title={title}
       aria-pressed={on}
-      className={`rounded-full px-3 py-1 text-[12px] font-medium transition-colors ${on ? 'bg-ink text-bg' : 'text-mute hover:bg-panel-2 hover:text-ink'}`}
+      className={`whitespace-nowrap rounded-full px-3 py-1 text-[12px] font-medium transition-colors ${on ? 'bg-ink text-bg' : 'text-mute hover:bg-panel-2 hover:text-ink'}`}
     >
       {children}
     </button>
   )
 }
 
-const selectCls = 'rounded-lg border border-line-2 bg-bg px-2 py-1 text-[12px] text-ink focus:border-accent focus:outline-none'
-
+/**
+ * Create in 3D: the starting point. Describe a machine or upload a photo and the model workspace opens and
+ * builds it live; the samples are the app's own lab rigs, open to everyone; recent models are one click away.
+ */
 export default function CreatePage() {
-  const [spec, setSpec] = useState<NoteSceneSpec | null>(null)
-  const [params, setParams] = useState<Record<string, number>>({})
-  const [promptInput, setPromptInput] = useState('')
-  const [uploadedPhoto, setUploadedPhoto] = useState<{ name: string; url: string } | null>(null)
-  const [isGenerating, setIsGenerating] = useState(false)
-  /** what is being built right now, for the build screen */
-  const [building, setBuilding] = useState<{ prompt: string; photoUrl?: string; kind: 'new' | 'photo' | 'edit' } | null>(null)
-  const [matchedCatalog, setMatchedCatalog] = useState<CatalogSceneMatch | null>(null)
-  const [loadedCatalogScene, setLoadedCatalogScene] = useState<SceneDef | null>(null)
-  const [viewMode, setViewMode] = useState<'parametric' | 'catalog'>('parametric')
-  const [tab, setTab] = useState<Tab>('calculations')
-
-  const [showAddPart, setShowAddPart] = useState(false)
-  const [newPartName, setNewPartName] = useState('New part')
-  const [newPartKind, setNewPartKind] = useState<NoteShapeKind>('gear')
-  const [newPartMaterial, setNewPartMaterial] = useState<MaterialKey>('steel')
-  const [newPartMotion, setNewPartMotion] = useState<'none' | 'rotate' | 'translate'>('rotate')
-
-  const [history, setHistory] = useState<HistoryItem[]>([])
-
-  // the saved model this page is working on (Creation Lab), if any
-  const { id: routeId } = useParams()
   const navigate = useNavigate()
-  const [creationId, setCreationId] = useState<string | null>(null)
-  const creationIdRef = useRef<string | null>(null)
-  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
-  /** what was last written, so only real changes are saved */
-  const lastSavedRef = useRef('')
+  const signedIn = useAuth((s) => s.status) === 'signed-in'
+  const [promptInput, setPromptInput] = useState('')
+  const [sampleId, setSampleId] = useState<string>(SAMPLES[0].sceneId)
+  const [sampleScene, setSampleScene] = useState<SceneDef | null>(null)
+  const [recent, setRecent] = useState<CreationSummary[]>([])
+  const photoInputRef = useRef<HTMLInputElement>(null)
 
   const cut = useView((s) => s.cut)
   const explode = useView((s) => s.explode)
   const xray = useView((s) => s.xray)
   const labels = useView((s) => s.labels)
-  const caliperMode = useView((s) => s.caliperMode)
   const playing = useSim((s) => s.playing)
-  const timeScale = useSim((s) => s.timeScale)
-  const signedIn = useAuth((s) => s.status) === 'signed-in'
+  const sample = SAMPLES.find((x) => x.sceneId === sampleId) ?? SAMPLES[0]
 
-  const [cutAxis, setCutAxis] = useState<'x' | 'y' | 'z'>('z')
-  const [cutPos, setCutPos] = useState(0.02)
-  const photoInputRef = useRef<HTMLInputElement>(null)
-  const promptRef = useRef<HTMLInputElement>(null)
-
-  // each new model opens with its recommended section, and nothing else switched on
-  useEffect(() => {
-    const rec = spec?.recommendedCut
-    if (rec) {
-      setCutAxis(Math.abs(rec.normal[0]) > 0.5 ? 'x' : Math.abs(rec.normal[1]) > 0.5 ? 'y' : 'z')
-      setCutPos(rec.pos)
-      useView.getState().setCut({ enabled: rec.enabled, planes: [{ normal: rec.normal, pos: rec.pos }] })
-    } else {
-      useView.getState().setCut({ enabled: false, planes: [{ normal: [0, 0, 1], pos: 0 }] })
-    }
-    useView.getState().setExplode(0)
-    useView.getState().setXray(false)
-    useView.getState().setLabels(false)
-  }, [spec?.id])
-
+  // the chosen sample's lab rig
   useEffect(() => {
     let cancelled = false
-    if (!matchedCatalog?.scene.load) {
-      setLoadedCatalogScene(null)
-      return
-    }
-    matchedCatalog.scene
-      .load()
-      .then((mod) => !cancelled && setLoadedCatalogScene(mod.default))
-      .catch(() => !cancelled && setLoadedCatalogScene(null))
+    setSampleScene(null)
+    const scene = findModule(sample.moduleId)?.scenes.find((sc) => sc.id === sample.sceneId)
+    scene
+      ?.load?.()
+      .then((m) => !cancelled && setSampleScene(m.default))
+      .catch(() => {})
     return () => {
       cancelled = true
     }
-  }, [matchedCatalog])
+  }, [sample.moduleId, sample.sceneId])
 
-  const applyCutPlane = (enabled: boolean, axis: 'x' | 'y' | 'z', pos: number) => {
-    const normal: [number, number, number] = axis === 'x' ? [1, 0, 0] : axis === 'y' ? [0, 1, 0] : [0, 0, 1]
-    useView.getState().setCut({ enabled, planes: [{ normal, pos }] })
-  }
-
-
-  /** a failed build says why: not signed in, out of builds for today, or something else */
-  const showError = (e: unknown) => {
-    if (e instanceof ApiError && e.status === 401)
-      toast('Sign in to build a model. Every model is built by Solidify’s AI, which needs an account.', { tone: 'warn', action: { label: 'Sign in', run: () => useAuth.getState().openDialog() } })
-    else toast(e instanceof ApiError ? e.message : 'That build didn’t work. Please try again.', { tone: 'warn' })
-  }
+  useEffect(() => {
+    if (!signedIn) return setRecent([])
+    listCreations()
+      .then((r) => setRecent(r.items.slice(0, 4)))
+      .catch(() => {})
+  }, [signedIn])
 
   const needSignIn = () => {
     toast('Sign in to build your own model, change a sample or build from a photo. Models are built by Solidify’s AI, which needs an account.', { tone: 'warn', action: { label: 'Sign in', run: () => useAuth.getState().openDialog() } })
   }
 
-  const [sampleId, setSampleId] = useState<string | null>(null)
-  const sample = SAMPLES.find((x) => x.sceneId === sampleId) ?? null
-
-  /** a sample opens its lab rig right away; nothing is built */
-  const openSample = (x: (typeof SAMPLES)[number]) => {
-    const mod = findModule(x.moduleId)
-    const scene = mod?.scenes.find((sc) => sc.id === x.sceneId)
-    if (!mod || !scene) return
-    setSpec(null)
-    setUploadedPhoto(null)
-    setSampleId(x.sceneId)
-    creationIdRef.current = null
-    setCreationId(null)
-    setSaveState('idle')
-    setHistory([])
-    if (routeId) navigate('/create', { replace: true })
-    setMatchedCatalog({ module: mod, scene })
-    setViewMode('catalog')
-  }
-
-  // the page opens on the first sample, so there is always something to turn and cut open
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => {
-    if (!routeId) openSample(SAMPLES[0])
-  }, [])
-
-  const authStatus = useAuth((s) => s.status)
-
-  /** a picture of the model for its card, taken once the new geometry has settled */
-  const saveThumbnail = (id: string) => {
-    window.setTimeout(() => {
-      void requestSnapshot().then((thumbnail) => {
-        if (thumbnail && creationIdRef.current === id) void updateCreation(id, { thumbnail }).catch(() => {})
-      })
-    }, 1600)
-  }
-
-  /** saves a build: a new machine becomes a new saved model, a change updates the open one */
-  const persist = async (next: { spec: NoteSceneSpec; params: Record<string, number>; history: HistoryItem[]; prompt: string; fromPhoto: boolean }, asNew: boolean) => {
-    const payload = {
-      title: next.spec.title.slice(0, 120) || 'Untitled model',
-      spec: next.spec as unknown as Record<string, unknown>,
-      params: next.params,
-      history: next.history.slice(0, 30).map(({ prompt, response }) => ({ prompt: prompt.slice(0, 2000), response: response.slice(0, 2000) })),
-    }
-    lastSavedRef.current = JSON.stringify([next.spec, next.params])
-    setSaveState('saving')
-    try {
-      let id = creationIdRef.current
-      if (asNew || !id) {
-        id = (await saveNewCreation({ ...payload, prompt: next.prompt.slice(0, 2000), fromPhoto: next.fromPhoto })).id
-        creationIdRef.current = id
-        setCreationId(id)
-        navigate(`/create/${id}`, { replace: true })
-      } else {
-        await updateCreation(id, payload)
-      }
-      setSaveState('saved')
-      saveThumbnail(id)
-    } catch (e) {
-      setSaveState('error')
-      if (e instanceof ApiError && e.status === 409) toast(e.message, { tone: 'warn', action: { label: 'My models', run: () => navigate('/create/lab') } })
-    }
-  }
-
-  // opening /create/:id loads that saved model (once signed in)
-  useEffect(() => {
-    if (!routeId || routeId === creationIdRef.current) return
-    if (authStatus !== 'signed-in') {
-      if (authStatus === 'signed-out') toast('Sign in to open your saved models.', { tone: 'warn', action: { label: 'Sign in', run: () => useAuth.getState().openDialog() } })
-      return
-    }
-    let cancelled = false
-    getCreation(routeId)
-      .then((c) => {
-        if (cancelled) return
-        const loaded = c.spec as unknown as NoteSceneSpec
-        const p = { ...Object.fromEntries((loaded.parameters ?? []).map((x) => [x.id, x.value])), ...c.params }
-        creationIdRef.current = routeId
-        setCreationId(routeId)
-        lastSavedRef.current = JSON.stringify([loaded, p])
-        setSpec(loaded)
-        setParams(p)
-        setHistory(c.history.map((h, i) => ({ id: `saved-${i}`, ...h })))
-        setSampleId(null)
-        setMatchedCatalog(null)
-        setViewMode('parametric')
-        setSaveState('saved')
-      })
-      .catch((e) => {
-        if (cancelled) return
-        toast(e instanceof ApiError && e.status === 404 ? 'That saved model no longer exists.' : 'Couldn’t open that saved model.', { tone: 'warn' })
-        navigate('/create', { replace: true })
-        openSample(SAMPLES[0])
-      })
-    return () => {
-      cancelled = true
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [routeId, authStatus])
-
-  // changes made by hand (sliders, materials, parts) save a moment after the last one
-  useEffect(() => {
-    const id = creationIdRef.current
-    if (!id || !spec) return
-    const snapshot = JSON.stringify([spec, params])
-    if (snapshot === lastSavedRef.current) return
-    setSaveState('saving')
-    const t = window.setTimeout(() => {
-      lastSavedRef.current = snapshot
-      updateCreation(id, { spec: spec as unknown as Record<string, unknown>, params, title: spec.title.slice(0, 120) || 'Untitled model' })
-        .then(() => {
-          setSaveState('saved')
-          saveThumbnail(id)
-        })
-        .catch(() => setSaveState('error'))
-    }, 1500)
-    return () => window.clearTimeout(t)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [spec, params])
-
-  const build = async (text: string, photo?: { name: string; url: string }) => {
+  /** hands the build to the model workspace, which builds it live */
+  const start = (prompt: string, photo?: { name: string; url: string }) => {
     if (!signedIn) return needSignIn()
-    setIsGenerating(true)
-    setBuilding({ prompt: text, photoUrl: photo?.url, kind: photo ? 'photo' : spec && !sample ? 'edit' : 'new' })
-    try {
-      const res = await generateOrEdit3DScene(text, photo ? undefined : (spec ?? undefined), photo?.url)
-      setSpec(res.spec)
-      setSampleId(null)
-      setParams(Object.fromEntries(res.spec.parameters.map((p) => [p.id, p.value])))
-      if (res.isNewMachine || photo || sample) {
-        setMatchedCatalog(res.matchedCatalogScene)
-        setViewMode('parametric')
-      }
-      if (photo) setUploadedPhoto(photo)
-      const asked = photo ? `From a photo: ${photo.name}${text ? ` (${text})` : ''}` : text
-      const asNew = res.isNewMachine || !!photo || !!sample || !creationIdRef.current
-      const nextHistory = [{ id: `h-${Date.now()}`, prompt: asked, response: res.explanation }, ...(asNew ? [] : history)]
-      setHistory(nextHistory.slice(0, 30))
-      setPromptInput('')
-      void persist({ spec: res.spec, params: Object.fromEntries(res.spec.parameters.map((p) => [p.id, p.value])), history: nextHistory, prompt: asked, fromPhoto: !!photo }, asNew)
-    } catch (e) {
-      showError(e)
-    } finally {
-      setIsGenerating(false)
-      setBuilding(null)
-    }
+    setPendingBuild({ prompt, photo })
+    navigate('/create/new')
   }
 
-  const handlePromptSubmit = (e?: FormEvent, custom?: string) => {
+  const handlePromptSubmit = (e?: FormEvent) => {
     e?.preventDefault()
-    const text = (custom ?? promptInput).trim()
-    if (text) void build(text)
+    const text = promptInput.trim()
+    if (text) start(text)
   }
 
   const handlePhotoUpload = (e: ChangeEvent<HTMLInputElement>) => {
@@ -488,411 +268,96 @@ export default function CreatePage() {
     const reader = new FileReader()
     reader.onload = () => {
       const url = typeof reader.result === 'string' ? reader.result : ''
-      void build(promptInput.trim() || file.name.replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' '), { name: file.name, url })
+      start(promptInput.trim() || file.name.replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' '), { name: file.name, url })
     }
     reader.readAsDataURL(file)
   }
 
-  const handleMaterialChange = (partId: string, nextMat: MaterialKey) => {
-    setSpec((prev) => {
-      if (!prev) return prev
-      const cloned = JSON.parse(JSON.stringify(prev)) as NoteSceneSpec
-      const walk = (list: NotePartSpec[]) => {
-        for (const pt of list) {
-          if (pt.id === partId) pt.material = nextMat
-          if (pt.children?.length) walk(pt.children)
-        }
-      }
-      walk(cloned.parts)
-      return cloned
-    })
-  }
-
-  const handleDeletePart = (partId: string) => {
-    setSpec((prev) => {
-      if (!prev || prev.parts.length <= 1) return prev
-      const cloned = JSON.parse(JSON.stringify(prev)) as NoteSceneSpec
-      cloned.parts = cloned.parts.filter((p) => p.id !== partId)
-      return cloned
-    })
-  }
-
-  const handleManualAddPart = (e: FormEvent) => {
-    e.preventDefault()
-    if (!spec) return
-    const housing = newPartKind === 'tube' || newPartKind === 'cone'
-    const newPart: NotePartSpec = {
-      id: `custom-part-${Date.now() % 10000}`,
-      name: newPartName.trim() || `Custom ${newPartKind}`,
-      material: newPartMaterial,
-      role: housing ? 'housing' : newPartMotion === 'none' ? 'static' : 'moving',
-      cut: housing,
-      position: [0, ((spec.parts.length % 3) - 1) * 0.08, 0.1],
-      explode: [0, 0.12, 0.12],
-      motion: newPartMotion === 'rotate' ? { kind: 'rotate', axis: 'y', speed: 2.2 } : newPartMotion === 'translate' ? { kind: 'translate', axis: 'y', speed: 1.2, amplitude: 0.03 } : undefined,
-      info: { summary: `Added ${newPartKind} (${MATERIALS[newPartMaterial].label}).` },
-      shapes:
-        newPartKind === 'gear'
-          ? [{ kind: 'gear', teeth: 24, module: 0.003, h: 0.028, rInner: 0.012 }]
-          : newPartKind === 'pulley'
-            ? [{ kind: 'pulley', rOuter: 0.075, rInner: 0.016, h: 0.032 }]
-            : newPartKind === 'spring'
-              ? [{ kind: 'spring', r: 0.04, wireRadius: 0.006, h: 0.1, turns: 6 }]
-              : newPartKind === 'tube'
-                ? [{ kind: 'tube', rOuter: 0.085, rInner: 0.068, h: 0.16 }]
-                : newPartKind === 'cone'
-                  ? [{ kind: 'cone', rTop: 0.09, rBot: 0.04, h: 0.12 }]
-                  : newPartKind === 'cylinder'
-                    ? [{ kind: 'cylinder', r: 0.035, h: 0.18 }]
-                    : [{ kind: 'box', sx: 0.14, sy: 0.06, sz: 0.1 }],
-    }
-    setSpec((prev) => (prev ? { ...(JSON.parse(JSON.stringify(prev)) as NoteSceneSpec), parts: [...prev.parts, newPart] } : prev))
-    setViewMode('parametric')
-    setShowAddPart(false)
-  }
-
-  const { results: calcResults } = useMemo(() => evaluateCalculations(spec?.calculations, params), [spec?.calculations, params])
-  const parametricSceneDef = useMemo(() => (spec ? createSceneDefFromSpec(spec, params) : null), [spec, params])
-  const activeSceneDef = viewMode === 'catalog' && loadedCatalogScene ? loadedCatalogScene : parametricSceneDef
-  const extent = activeSceneDef?.extent ?? 0.45
-  const latest = history[0]
-
   return (
     <StudyShell
       title="Create in 3D"
-      lead="Describe a machine or upload a photo, and get a 3D model you can cut open, take apart, animate and change, with the engineering worked out live."
+      lead="Describe a machine or upload a photo. Solidify builds it part by part in front of you, as a 3D model you can cut open, take apart, run and change by chatting."
       right={
         <Link to="/create/lab" className={ghostBtn}>
           My models
         </Link>
       }
     >
-      {/* describe, or start from an example */}
+      {/* describe, or start from a photo */}
       <section className="mb-5 rounded-3xl border border-line bg-panel p-4">
         <form onSubmit={handlePromptSubmit} className="flex flex-col gap-2 sm:flex-row">
           <input
-            ref={promptRef}
             value={promptInput}
             onChange={(e) => setPromptInput(e.target.value)}
-            placeholder="Describe a machine, or how to change this one…"
+            placeholder="Describe a machine, e.g. a two-stage gear reducer for a 15 kW motor…"
             aria-label="Describe a machine"
             maxLength={2000}
             className="min-w-0 flex-1 rounded-2xl border border-line-2 bg-bg px-4 py-3 text-[14px] text-ink placeholder:text-dim focus:border-accent focus:outline-none"
           />
           <input ref={photoInputRef} type="file" accept="image/*" onChange={handlePhotoUpload} className="hidden" />
           <div className="flex gap-2">
-            <button type="button" onClick={() => (signedIn ? photoInputRef.current?.click() : needSignIn())} disabled={isGenerating} className={`${ghostBtn} rounded-2xl px-4`} title="Build from a photo or drawing">
+            <button type="button" onClick={() => (signedIn ? photoInputRef.current?.click() : needSignIn())} className={`${ghostBtn} rounded-2xl px-4`} title="Build from a photo or drawing">
               From a photo
             </button>
-            <button type="submit" disabled={isGenerating || !promptInput.trim()} className={`${primaryBtn} rounded-2xl px-5`}>
-              {isGenerating ? 'Building…' : 'Build'}
+            <button type="submit" disabled={!promptInput.trim()} className={`${primaryBtn} rounded-2xl px-5`}>
+              Build
             </button>
           </div>
         </form>
+      </section>
 
-        <div className="mt-3 flex flex-wrap items-center gap-1.5 text-[12.5px]">
-          <span className="mr-1 text-dim">Try</span>
+      {recent.length ? (
+        <section className="mb-5">
+          <div className="mb-2 flex items-baseline justify-between">
+            <h2 className="text-[13px] font-semibold text-ink">Your recent models</h2>
+            <Link to="/create/lab" className="text-[12.5px] text-mute hover:text-ink">
+              See all
+            </Link>
+          </div>
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+            {recent.map((r) => (
+              <Link key={r.id} to={`/create/${r.id}`} className="group overflow-hidden rounded-2xl border border-line bg-panel transition-colors hover:border-line-2">
+                <div className="aspect-[4/3] bg-stage">{r.thumbnail ? <img src={r.thumbnail} alt="" className="h-full w-full object-cover" /> : null}</div>
+                <div className="truncate px-3 py-2 text-[12.5px] font-medium text-ink group-hover:underline">{r.title}</div>
+              </Link>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
+      {/* samples: real lab rigs */}
+      <section className="overflow-hidden rounded-3xl border border-line bg-panel">
+        <div className="flex flex-wrap items-center gap-1.5 border-b border-line px-4 py-3 text-[12.5px]">
+          <span className="mr-1 text-dim">Samples</span>
           {SAMPLES.map((x) => (
-            <button key={x.sceneId} type="button" aria-pressed={sampleId === x.sceneId} onClick={() => openSample(x)} disabled={isGenerating} className={`rounded-full border px-3 py-1 transition-colors disabled:opacity-50 ${sampleId === x.sceneId ? 'border-ink bg-ink text-bg' : 'border-line-2 text-mute hover:border-ink/40 hover:text-ink'}`}>
+            <button key={x.sceneId} type="button" aria-pressed={sampleId === x.sceneId} onClick={() => setSampleId(x.sceneId)} className={`rounded-full border px-3 py-1 transition-colors ${sampleId === x.sceneId ? 'border-ink bg-ink text-bg' : 'border-line-2 text-mute hover:border-ink/40 hover:text-ink'}`}>
               {x.label}
             </button>
           ))}
         </div>
-      </section>
-
-      {building && building.kind !== 'edit' ? (
-        <BuildScreen
-          title={building.kind === 'photo' ? 'Building from your photo' : 'Building your model'}
-          prompt={building.kind === 'photo' ? undefined : building.prompt}
-          photoUrl={building.photoUrl}
-          steps={building.kind === 'photo' ? PHOTO_STEPS : NEW_STEPS}
-          expectedSeconds={60}
-          tips={BUILD_TIPS}
-        />
-      ) : !activeSceneDef ? (
-        <section className="relative flex h-[420px] flex-col items-center justify-center gap-3 rounded-3xl border border-dashed border-line-2 bg-panel px-6 text-center">
-          {isGenerating || sample ? (
-            <p className="text-[14px] text-ink">{sample ? `Opening the ${sample.label.toLowerCase()}…` : 'Building the model… this can take up to a minute.'}</p>
-          ) : (
-            <>
-              <Icon.build width={30} height={30} className="text-dim" />
-              <h2 className="text-[16px] font-semibold text-ink">Your model appears here</h2>
-              <p className="max-w-md text-[13px] leading-relaxed text-mute">
-                Open a sample above, or describe a machine or build from a photo once you’re signed in. You can section it, take it apart, run it and change it by asking.
-              </p>
-              {!signedIn ? (
-                <button type="button" className={`${primaryBtn} mt-1`} onClick={() => useAuth.getState().openDialog()}>
-                  Sign in to build
-                </button>
-              ) : null}
-            </>
-          )}
-        </section>
-      ) : (
-      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_400px]">
-        {/* the model */}
-        <section className="flex min-w-0 flex-col overflow-hidden rounded-3xl border border-line bg-panel">
-          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-4 py-2.5">
-            <div className="min-w-0">
-              <h2 className="truncate text-[15px] font-semibold text-ink">{activeSceneDef.title}</h2>
-              {sample ? (
-                <p className="truncate text-[12px] text-mute">Ready-made lab rig, free to explore</p>
-              ) : (
-                <p className="truncate text-[12px] text-mute">
-                  {creationId ? (
-                    <Link to="/create/lab" className="hover:text-ink">
-                      {saveState === 'saving' ? 'Saving…' : saveState === 'error' ? 'Not saved: check your connection' : 'Saved to My models'}
-                    </Link>
-                  ) : null}
-                  {creationId && latest?.prompt ? ' · ' : null}
-                  {latest?.prompt ? `“${latest.prompt}”` : null}
-                </p>
-              )}
+        <div className="grid lg:grid-cols-[minmax(0,1fr)_380px]">
+          <div className="flex min-w-0 flex-col border-line lg:border-r">
+            <div className="flex items-center gap-1 overflow-x-auto border-b border-line px-3 py-1.5 scrollbar-none">
+              <Tool on={cut.enabled} onClick={() => useView.getState().setCut({ enabled: !cut.enabled })}>Section</Tool>
+              <Tool on={explode > 0.05} onClick={() => useView.getState().setExplode(explode > 0.05 ? 0 : 0.7)}>Take apart</Tool>
+              <Tool on={xray} onClick={() => useView.getState().setXray(!xray)}>X-ray</Tool>
+              <Tool on={labels} onClick={() => useView.getState().setLabels(!labels)}>Labels</Tool>
+              <span className="mx-1 h-4 w-px shrink-0 bg-line" />
+              <Tool onClick={() => useSim.getState().toggle()}>{playing ? 'Pause' : 'Play'}</Tool>
             </div>
-            {spec && matchedCatalog && loadedCatalogScene ? (
-              <button type="button" onClick={() => setViewMode((m) => (m === 'parametric' ? 'catalog' : 'parametric'))} className={`${ghostBtn} text-[12px]`}>
-                {viewMode === 'parametric' ? `Open the ${matchedCatalog.scene.title} lab` : 'Back to the model'}
-              </button>
-            ) : null}
-          </div>
-
-          <div className="flex flex-wrap items-center gap-1 border-b border-line px-3 py-1.5">
-            <Tool on={cut.enabled} onClick={() => applyCutPlane(!cut.enabled, cutAxis, cutPos)}>Section</Tool>
-            <Tool on={explode > 0.05} onClick={() => useView.getState().setExplode(explode > 0.05 ? 0 : 0.7)}>Take apart</Tool>
-            <Tool on={xray} onClick={() => useView.getState().setXray(!xray)}>X-ray</Tool>
-            <Tool on={labels} onClick={() => useView.getState().setLabels(!labels)}>Labels</Tool>
-            <Tool on={caliperMode} onClick={() => useView.getState().setCaliperMode(!caliperMode)} title="Click two points on the model to measure between them">Measure</Tool>
-            <span className="mx-1 h-4 w-px bg-line" />
-            <Tool onClick={() => useSim.getState().toggle()}>{playing ? 'Pause' : 'Play'}</Tool>
-            {[0.5, 1, 2].map((spd) => (
-              <Tool key={spd} on={Math.abs(timeScale - spd) < 0.05} onClick={() => useSim.getState().setTimeScale(spd)}>{spd}×</Tool>
-            ))}
-          </div>
-
-          {cut.enabled || explode > 0.05 ? (
-            <div className="flex flex-wrap items-center gap-x-5 gap-y-2 border-b border-line bg-panel-2/40 px-4 py-2 text-[12px] text-mute">
-              {cut.enabled ? (
-                <div className="flex min-w-[220px] flex-1 items-center gap-2" role="group" aria-label="Section plane">
-                  Section through
-                  {(['x', 'y', 'z'] as const).map((ax) => (
-                    <button key={ax} type="button" aria-label={`Section across ${ax}`} aria-pressed={cutAxis === ax} onClick={() => { setCutAxis(ax); applyCutPlane(true, ax, cutPos) }} className={`rounded px-1.5 font-mono uppercase ${cutAxis === ax ? 'bg-ink text-bg' : 'hover:text-ink'}`}>
-                      {ax}
-                    </button>
-                  ))}
-                  <input type="range" aria-label="Section position" min={-extent * 0.6} max={extent * 0.6} step={extent / 100} value={cutPos} onChange={(e) => { const v = parseFloat(e.target.value); setCutPos(v); applyCutPlane(true, cutAxis, v) }} className="slider flex-1" />
-                </div>
-              ) : null}
-              {explode > 0.05 ? (
-                <label className="flex min-w-[180px] flex-1 items-center gap-2">
-                  Apart
-                  <input type="range" aria-label="How far apart" min={0} max={1} step={0.02} value={explode} onChange={(e) => useView.getState().setExplode(parseFloat(e.target.value))} className="slider flex-1" />
-                </label>
-              ) : null}
+            <div className="relative h-[440px] sm:h-[500px]">
+              {sampleScene ? <Stage scene={sampleScene} /> : <Loader label={`Opening the ${sample.label.toLowerCase()}…`} className="h-full bg-stage" />}
             </div>
-          ) : null}
-
-          {spec && matchedCatalog && loadedCatalogScene && viewMode === 'parametric' && !isGenerating ? (
-            <div className="flex flex-wrap items-center gap-3 border-b border-line bg-accent/10 px-4 py-2.5 text-[13px]">
-              <Icon.build width={16} height={16} className="shrink-0 text-accent" />
-              <span className="min-w-0 flex-1 text-ink">
-                Solidify has a detailed, working lab model of this: <span className="font-semibold">{matchedCatalog.scene.title}</span>.
-              </span>
-              <button type="button" onClick={() => setViewMode('catalog')} className={`${primaryBtn} px-4 py-1.5 text-[12.5px]`}>
-                Open the lab model
-              </button>
-            </div>
-          ) : null}
-          <div className="relative h-[460px] w-full sm:h-[520px]">
-            <Stage scene={activeSceneDef} />
-            {building?.kind === 'edit' ? <BuildScreen variant="overlay" title="Changing your model" prompt={building.prompt} steps={EDIT_STEPS} expectedSeconds={45} /> : null}
-            {uploadedPhoto ? (
-              <div className="absolute bottom-3 left-3 z-20 flex items-center gap-2 rounded-2xl border border-line bg-panel/95 p-1.5 pr-3 shadow-lg backdrop-blur">
-                <img src={uploadedPhoto.url} alt={`Reference: ${uploadedPhoto.name}`} className="h-12 w-12 rounded-lg bg-white object-contain" />
-                <div className="text-[11.5px]">
-                  <div className="font-medium text-ink">Your photo</div>
-                  <button type="button" onClick={() => setUploadedPhoto(null)} className="text-mute hover:text-ink">Hide</button>
-                </div>
-              </div>
-            ) : null}
-          </div>
-
-          {sample && !isGenerating ? (
             <div className="flex flex-wrap items-center gap-2 border-t border-line px-4 py-2.5 text-[12.5px]">
-              <span className="flex-1 text-mute">{signedIn ? 'Want your own version? Solidify can build it from a description, then you can change anything.' : 'Sign in to build your own version, change this one, or build from a photo.'}</span>
-              <button type="button" onClick={() => (signedIn ? void build(sample.prompt) : needSignIn())} className={`${primaryBtn} px-4 py-1.5 text-[12.5px]`}>
+              <span className="flex-1 text-mute">{signedIn ? 'Want your own version? Solidify builds it part by part, then you can change anything by chatting.' : 'A ready-made lab rig, free to explore. Sign in to build your own version.'}</span>
+              <button type="button" onClick={() => start(sample.prompt)} className={`${primaryBtn} px-4 py-1.5 text-[12.5px]`}>
                 {signedIn ? 'Build my own version' : 'Sign in to customise'}
               </button>
             </div>
-          ) : null}
-          {spec && viewMode === 'parametric' && !isGenerating ? (
-            <div className="flex flex-wrap items-center gap-1.5 border-t border-line px-4 py-2.5 text-[12px]">
-              <span className="mr-1 text-dim">Change it</span>
-              {QUICK_EDITS.map((q) => (
-                <button key={q} type="button" onClick={() => handlePromptSubmit(undefined, q)} className="rounded-full border border-line-2 px-2.5 py-0.5 text-mute transition-colors hover:border-accent/40 hover:text-ink">
-                  {q}
-                </button>
-              ))}
-            </div>
-          ) : null}
-        </section>
-
-        {/* the engineering */}
-        <section className="flex min-w-0 flex-col rounded-3xl border border-line bg-panel">
-          {viewMode === 'catalog' && loadedCatalogScene?.Panel ? (
-            <div className="max-h-[680px] overflow-y-auto p-4">
-              <loadedCatalogScene.Panel />
-            </div>
-          ) : !spec ? (
-            <p className="p-4 text-[13px] text-mute">Readings for this sample appear here.</p>
-          ) : (
-            <>
-              <div className="flex gap-1 border-b border-line p-2" role="tablist" aria-label="Model details">
-                {(
-                  [
-                    ['calculations', 'Calculations'],
-                    ['dimensions', 'Dimensions'],
-                    ['parts', 'Parts'],
-                  ] as const
-                ).map(([id, label]) => (
-                  <button key={id} type="button" role="tab" aria-selected={tab === id} onClick={() => setTab(id)} className={`flex-1 rounded-full px-3 py-1.5 text-[12.5px] font-medium transition-colors ${tab === id ? 'bg-ink text-bg' : 'text-mute hover:text-ink'}`}>
-                    {label}
-                  </button>
-                ))}
-              </div>
-
-              <div className="max-h-[620px] flex-1 overflow-y-auto p-4">
-                {tab === 'calculations' ? (
-                  calcResults.length ? (
-                    <div className="space-y-2">
-                      {calcResults.map(({ spec: c, formatted, status }) => (
-                        <div key={c.id} className={`rounded-2xl border p-3 ${status === 'warn' ? 'border-warn/50 bg-warn/5' : 'border-line-2'}`}>
-                          <div className="flex items-baseline justify-between gap-3">
-                            <span className="text-[12.5px] text-mute">{c.label}</span>
-                            <span className="font-mono text-[16px] font-semibold text-ink">
-                              {formatted} <span className="text-[12px] font-normal text-mute">{c.unit}</span>
-                            </span>
-                          </div>
-                          {status === 'warn' && c.limit ? <p className="mt-1 text-[11.5px] text-warn">Over the limit: {c.limit.label ?? 'check this value'}</p> : null}
-                          {c.latex ? (
-                            <div className="mt-1.5 overflow-x-auto text-[11.5px] text-mute">
-                              <Tex tex={c.latex} />
-                            </div>
-                          ) : null}
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-[13px] text-mute">This model has no calculations yet.</p>
-                  )
-                ) : null}
-
-                {tab === 'dimensions' ? (
-                  <div className="space-y-3">
-                    {spec.parameters.map((p) => {
-                      const val = params[p.id] ?? p.value
-                      return (
-                        <label key={p.id} className="block">
-                          <div className="mb-1 flex items-baseline justify-between gap-2 text-[12.5px]">
-                            <span className="text-ink">{p.label}</span>
-                            <span className="font-mono text-mute">{p.unit === 'm' ? `${(val * 1000).toFixed(1)} mm` : `${Number(val.toPrecision(4))} ${p.unit}`}</span>
-                          </div>
-                          <input
-                            type="range"
-                            min={p.min}
-                            max={p.max}
-                            step={p.step}
-                            value={val}
-                            onChange={(e) => {
-                              setViewMode('parametric')
-                              setParams((prev) => ({ ...prev, [p.id]: parseFloat(e.target.value) }))
-                            }}
-                            className="slider w-full"
-                          />
-                        </label>
-                      )
-                    })}
-                    <button type="button" onClick={() => setParams(Object.fromEntries(spec.parameters.map((p) => [p.id, p.value])))} className={`${ghostBtn} text-[12px]`}>
-                      Reset dimensions
-                    </button>
-                  </div>
-                ) : null}
-
-                {tab === 'parts' ? (
-                  <div className="space-y-2">
-                    {spec.parts.map((pt) => (
-                      <div key={pt.id} className="flex items-center gap-2 rounded-2xl border border-line-2 px-3 py-2">
-                        <div className="min-w-0 flex-1">
-                          <div className="truncate text-[13px] font-medium text-ink">{pt.name}</div>
-                          {pt.info?.summary ? <div className="truncate text-[11.5px] text-mute">{pt.info.summary}</div> : null}
-                        </div>
-                        <select aria-label={`Material of ${pt.name}`} value={pt.material && pt.material in MATERIALS ? pt.material : 'steel'} onChange={(e) => { setViewMode('parametric'); handleMaterialChange(pt.id, e.target.value as MaterialKey) }} className={selectCls}>
-                          {ALLOWED_MATERIALS.slice(0, 26).map((mk) => (
-                            <option key={mk} value={mk}>{MATERIALS[mk].label}</option>
-                          ))}
-                        </select>
-                        {spec.parts.length > 1 ? (
-                          <button type="button" onClick={() => handleDeletePart(pt.id)} aria-label={`Remove ${pt.name}`} className="rounded-full px-2 text-[13px] text-dim hover:text-danger">×</button>
-                        ) : null}
-                      </div>
-                    ))}
-
-                    {showAddPart ? (
-                      <form onSubmit={handleManualAddPart} className="space-y-2 rounded-2xl border border-line-2 p-3">
-                        <input aria-label="Part name" value={newPartName} onChange={(e) => setNewPartName(e.target.value)} className={`${inputCls} w-full`} />
-                        <div className="grid grid-cols-3 gap-2">
-                          <select aria-label="Shape" value={newPartKind} onChange={(e) => setNewPartKind(e.target.value as NoteShapeKind)} className={selectCls}>
-                            <option value="gear">Spur gear</option>
-                            <option value="pulley">Pulley</option>
-                            <option value="spring">Spring</option>
-                            <option value="cylinder">Shaft</option>
-                            <option value="tube">Tube</option>
-                            <option value="cone">Cone</option>
-                            <option value="box">Block</option>
-                          </select>
-                          <select aria-label="Material" value={newPartMaterial} onChange={(e) => setNewPartMaterial(e.target.value as MaterialKey)} className={selectCls}>
-                            {ALLOWED_MATERIALS.slice(0, 26).map((mk) => (
-                              <option key={mk} value={mk}>{MATERIALS[mk].label}</option>
-                            ))}
-                          </select>
-                          <select aria-label="Motion" value={newPartMotion} onChange={(e) => setNewPartMotion(e.target.value as 'none' | 'rotate' | 'translate')} className={selectCls}>
-                            <option value="rotate">Turns</option>
-                            <option value="translate">Slides</option>
-                            <option value="none">Fixed</option>
-                          </select>
-                        </div>
-                        <div className="flex gap-2">
-                          <button type="submit" className={primaryBtn}>Add part</button>
-                          <button type="button" onClick={() => setShowAddPart(false)} className={ghostBtn}>Cancel</button>
-                        </div>
-                      </form>
-                    ) : (
-                      <div className="flex gap-2 pt-1">
-                        <button type="button" onClick={() => setShowAddPart(true)} className={`${ghostBtn} text-[12px]`}>Add a part</button>
-                        <button type="button" onClick={() => useView.getState().showAll()} className={`${ghostBtn} text-[12px]`}>Show hidden parts</button>
-                      </div>
-                    )}
-                  </div>
-                ) : null}
-              </div>
-
-              {history.length > 1 ? (
-                <details className="border-t border-line px-4 py-2.5 text-[12px]">
-                  <summary className="cursor-pointer text-mute">Earlier changes ({history.length - 1})</summary>
-                  <ul className="mt-2 space-y-2">
-                    {history.slice(1).map((h) => (
-                      <li key={h.id}>
-                        <div className="text-ink">“{h.prompt}”</div>
-                        <div className="text-mute">{h.response}</div>
-                      </li>
-                    ))}
-                  </ul>
-                </details>
-              ) : null}
-            </>
-          )}
-        </section>
-      </div>
-      )}
+          </div>
+          <div className="max-h-[560px] overflow-y-auto p-4">{sampleScene?.Panel ? <sampleScene.Panel /> : <p className="text-[13px] text-mute">Readings for this sample appear here.</p>}</div>
+        </div>
+      </section>
 
       <details className="mt-8 rounded-3xl border border-line p-4">
         <summary className="cursor-pointer text-[13.5px] font-medium text-ink">Using this with a class or a team?</summary>
