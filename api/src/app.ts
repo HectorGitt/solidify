@@ -1,3 +1,4 @@
+import { isBusy, retryBusy } from './retry.js'
 import { Hono, type Context } from 'hono'
 import { cors } from 'hono/cors'
 import { HTTPException } from 'hono/http-exception'
@@ -20,6 +21,8 @@ export interface Config {
   createDailyLimit?: number
   /** emails allowed to read the feedback queue */
   adminEmails: string[]
+  /** waits between retries when the model is busy (tests use zeros); default 2, 6 and 15 s */
+  retryWaits?: number[]
   /** shared secret for the nightly test run (at least 24 characters); unset = no nightly runs */
   evalToken?: string
   /** the model's list price in US dollars per million tokens, to turn token counts into cost on the admin page */
@@ -95,7 +98,8 @@ interface SubmissionDoc {
 
 type Env = { Variables: { user: AuthUser | null } }
 
-const fail = (status: 400 | 401 | 403 | 404 | 409 | 413 | 429 | 501 | 502, message: string) => new HTTPException(status, { message })
+const BUSY = 'Solidify’s model is busy right now. Please try again in a minute.'
+const fail = (status: 400 | 401 | 403 | 404 | 409 | 413 | 429 | 501 | 502 | 503, message: string) => new HTTPException(status, { message })
 
 /** Parse a JSON body against a schema, or answer 400 with the first problem. */
 async function body<T extends z.ZodType>(c: Context, schema: T): Promise<z.infer<T>> {
@@ -296,9 +300,11 @@ export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision
   /** a model call, with an unusable reply turned into a clear error instead of a crash */
   const model = async <T>(call: () => Promise<T>) => {
     try {
-      return await call()
+      // the model service turns calls away when it is overloaded: wait and try again before giving up
+      return await retryBusy(call, config.retryWaits)
     } catch (e) {
       if (e instanceof ModelReplyError) throw fail(502, 'The model gave an incomplete answer. Please try again.')
+      if (isBusy(e)) throw fail(503, BUSY)
       throw e
     }
   }
@@ -344,9 +350,19 @@ export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision
       let text = ''
       let usage: ModelUsage | undefined
       try {
-        for await (const t of noteVision.streamCreate3D(req, ac.signal, (u) => (usage = u))) {
-          text += t
-          await stream.writeSSE({ event: 'delta', data: JSON.stringify({ text: t }) })
+        // busy before the first word: wait and start again (once words have gone out, a retry would repeat them)
+        const waits = config.retryWaits ?? [2000, 6000, 15000]
+        for (let attempt = 0; ; attempt++) {
+          try {
+            for await (const t of noteVision.streamCreate3D(req, ac.signal, (u) => (usage = u))) {
+              text += t
+              await stream.writeSSE({ event: 'delta', data: JSON.stringify({ text: t }) })
+            }
+            break
+          } catch (e) {
+            if (text || attempt >= waits.length || !isBusy(e) || ac.signal.aborted) throw e
+            await new Promise((r) => setTimeout(r, waits[attempt]))
+          }
         }
         const reply = readCreateReply(text, req)
         await recordUsage(actionOf(req, reply.isQuestion), usage)
@@ -355,7 +371,7 @@ export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision
         if (ac.signal.aborted) return
         const incomplete = e instanceof ModelReplyError
         if (!incomplete) console.error('create-3d stream', e)
-        await stream.writeSSE({ event: 'error', data: JSON.stringify({ error: incomplete ? 'The model gave an incomplete answer. Please try again.' : 'Solidify couldn’t build that just now. Please try again.' }) })
+        await stream.writeSSE({ event: 'error', data: JSON.stringify({ error: incomplete ? 'The model gave an incomplete answer. Please try again.' : isBusy(e) ? BUSY : 'Solidify couldn’t build that just now. Please try again.' }) })
       }
     })
   })
