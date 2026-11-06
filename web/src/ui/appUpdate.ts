@@ -1,11 +1,12 @@
+import { create } from 'zustand'
 import { toast } from './toast'
 
 declare const __BUILD_ID__: string
 
 /**
  * After a deploy, a tab opened earlier still runs the old app, and the page files it asks for are gone.
- * This recognises that failure, reloads once to pick up the new version, and warns open tabs of a new
- * version before they hit it.
+ * This recognises that failure and tells the user before reloading into the new version (UpdateNotice shows
+ * it); open tabs are also told when a new version is live, before they hit it.
  */
 export function isUpdateError(e: unknown): boolean {
   const msg = e instanceof Error ? e.message : String(e)
@@ -13,37 +14,58 @@ export function isUpdateError(e: unknown): boolean {
 }
 
 const KEY = 'solidify.updateReload'
+/** seconds shown before the reload */
+export const RELOAD_IN = 3
 
-/** reloads to the new version, unless that was just tried (then the caller shows the update screen) */
-export function reloadForUpdate(): boolean {
-  let last = 0
+/** `due`: when the reload happens (null: waiting for the user, after a reload that did not help, or "Not now") */
+export const useAppUpdate = create<{ shown: boolean; due: number | null }>(() => ({ shown: false, due: null }))
+
+let timer: number | undefined
+
+const reloadedJustNow = () => {
   try {
-    last = Number(sessionStorage.getItem(KEY) ?? 0)
+    return Date.now() - Number(sessionStorage.getItem(KEY) ?? 0) < 30_000
   } catch {
-    /* storage blocked */
+    return false
   }
-  if (Date.now() - last < 30_000) return false
+}
+
+export function reloadNow() {
   try {
     sessionStorage.setItem(KEY, String(Date.now()))
   } catch {
     /* storage blocked: reload anyway */
   }
   window.location.reload()
-  return true
+}
+
+/** a page file from before the deploy failed: say so, then reload in a few seconds (once; a second time, wait for the user) */
+export function announceUpdate() {
+  if (useAppUpdate.getState().shown) return
+  if (reloadedJustNow()) {
+    useAppUpdate.setState({ shown: true, due: null })
+    return
+  }
+  useAppUpdate.setState({ shown: true, due: Date.now() + RELOAD_IN * 1000 })
+  timer = window.setTimeout(reloadNow, RELOAD_IN * 1000)
+}
+
+/** "Not now": keep the page as it is; the notice stays with its Reload button */
+export function postponeUpdate() {
+  window.clearTimeout(timer)
+  useAppUpdate.setState({ due: null })
 }
 
 let started = false
 let told = false
 
-/** from start-up: recover from missing page files, and check now and then for a newer deploy */
+/** from start-up: notice failed page files, and check now and then for a newer deploy */
 export function startUpdateWatch() {
   if (started || typeof window === 'undefined') return
   started = true
-  // Vite reports a page file that failed to preload here
-  window.addEventListener('vite:preloadError', (e) => {
-    e.preventDefault()
-    reloadForUpdate()
-  })
+  // Vite reports a page file that failed to load here; the import still fails, and the page's error
+  // screen says it is an update, but the notice (and its reload) starts straight away
+  window.addEventListener('vite:preloadError', () => announceUpdate())
   if (!import.meta.env.PROD || typeof __BUILD_ID__ !== 'string') return
   const check = async () => {
     if (told) return
@@ -53,7 +75,7 @@ export function startUpdateWatch() {
       const { build } = (await res.json()) as { build?: string }
       if (build && build !== __BUILD_ID__) {
         told = true
-        toast('A new version of Solidify is available.', { action: { label: 'Reload', run: () => window.location.reload() } })
+        toast('A new version of Solidify is available.', { action: { label: 'Reload', run: reloadNow } })
       }
     } catch {
       /* offline: try again later */

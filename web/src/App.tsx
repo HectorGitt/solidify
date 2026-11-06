@@ -7,6 +7,7 @@ import { PartSearch } from './ui/PartSearch'
 import { Toaster } from './ui/toast'
 import { ErrorBoundary } from './ui/ErrorBoundary'
 import { startUpdateWatch } from './ui/appUpdate'
+import { UpdateNotice } from './ui/UpdateNotice'
 import { useAuth } from './cloud/auth'
 import { startProfile } from './cloud/profile'
 import { startSync } from './cloud/sync'
@@ -49,6 +50,7 @@ export default function App() {
       <ReportDialog />
       <SalesDialog />
       <Toaster />
+      <UpdateNotice />
       <ErrorBoundary label="page">
       <Routes>
         <Route path="/" element={<Landing />} />

@@ -1,5 +1,5 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react'
-import { isUpdateError, reloadForUpdate } from './appUpdate'
+import { announceUpdate, isUpdateError } from './appUpdate'
 
 /**
  * Keeps one broken piece (a model that won't draw, a graph that won't plot) from blanking the whole page:
@@ -14,8 +14,11 @@ export class ErrorBoundary extends Component<{ children: ReactNode; label: strin
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
-    // a page file from before the latest deploy: reload into the new version (once)
-    if (isUpdateError(error) && reloadForUpdate()) return
+    // a page file from before the latest deploy: the update notice says so and reloads
+    if (isUpdateError(error)) {
+      announceUpdate()
+      return
+    }
     console.error(`[${this.props.label}]`, error, info.componentStack)
   }
 
@@ -30,10 +33,7 @@ export class ErrorBoundary extends Component<{ children: ReactNode; label: strin
       return (
         <div role="alert" className="flex h-full min-h-60 flex-col items-center justify-center gap-2 p-6 text-center">
           <p className="text-[15px] font-semibold text-ink">Solidify has been updated</p>
-          <p className="max-w-sm text-[13px] text-mute">This page is from the version before. Reload to get the new one; nothing you saved is lost.</p>
-          <button type="button" onClick={() => window.location.reload()} className="mt-2 rounded-full bg-accent px-5 py-2 text-[13px] font-semibold text-accent-ink hover:opacity-90">
-            Reload
-          </button>
+          <p className="max-w-sm text-[13px] text-mute">This page is from the version before. The notice below reloads it into the new one; nothing you saved is lost.</p>
         </div>
       )
     return (
