@@ -1,5 +1,5 @@
 import { Html, Line } from '@react-three/drei'
-import { useFrame, useThree } from '@react-three/fiber'
+import { useFrame, useThree, type ThreeEvent } from '@react-three/fiber'
 import { createContext, useContext, useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { useSim } from '@/core/sim'
@@ -125,13 +125,17 @@ function LocalPartNode({
         <PartMesh
           geometry={geometry}
           material={matKey}
-          onClick={(e) => {
-            if (inline?.onSelectPart) {
-              e.stopPropagation()
-              const isSelected = inline.selectedPartId === part.id
-              inline.onSelectPart(isSelected ? null : part)
-            }
-          }}
+          // the reader's inline figures pick parts themselves; everywhere else the mesh's own click selects the
+          // part (passing a handler here would replace that, and clicks would do nothing)
+          {...(inline?.onSelectPart
+            ? {
+                onClick: (e: ThreeEvent<MouseEvent>) => {
+                  e.stopPropagation()
+                  const isSelected = inline.selectedPartId === part.id
+                  inline.onSelectPart?.(isSelected ? null : part)
+                },
+              }
+            : {})}
         />
         {inline?.showLabels && (
           <Html position={labelPos} center zIndexRange={[15, 0]} className="pointer-events-none">
