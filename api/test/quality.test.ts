@@ -134,3 +134,44 @@ describe('what AI actions cost', () => {
     expect(got.days.at(-1)!.build_n).toBeUndefined()
   })
 })
+
+describe('the admin controls', () => {
+  const boss = { Authorization: 'Bearer user:boss:Boss' }
+  const draft = { title: 'Worm gear set', prompt: 'A worm and worm wheel', spec: { title: 'Worm', parts: [{ id: 'worm' }] }, score: 90 }
+
+  it('keeps settings and a topic list the nightly run reads, for admins only', async () => {
+    const first = (await (await req('GET', '/v1/admin/settings', undefined, boss)).json()) as { settings: Record<string, unknown>; topics: unknown; canRunTests: boolean }
+    expect(first).toMatchObject({ settings: { paused: false, draftsPerNight: 3, draftMin: 85, price: null }, topics: null, canRunTests: false })
+    expect((await req('PUT', '/v1/admin/settings', { paused: true }, asUser('sam'))).status).toBe(403)
+    expect((await req('PUT', '/v1/admin/settings', { paused: true, draftMin: 90, price: { inputPerM: 0.75, outputPerM: 3.75 } }, boss)).status).toBe(200)
+    expect((await req('PUT', '/v1/admin/settings', { draftsPerNight: 99 }, boss)).status).toBe(400)
+    await req('PUT', '/v1/admin/topics', { items: [{ topic: 'Gears', prompt: 'A worm gear reducer' }] }, boss)
+    const night = (await (await req('GET', '/v1/evals/settings', undefined, { 'x-eval-token': TOKEN })).json()) as { settings: Record<string, unknown>; topics: unknown[] }
+    expect(night.settings).toMatchObject({ paused: true, draftsPerNight: 3, draftMin: 90 })
+    expect(night.topics).toHaveLength(1)
+    // the price set here is the one the cost table uses
+    expect(((await (await req('GET', '/v1/ai-usage', undefined, boss)).json()) as { price: unknown }).price).toEqual({ inputPerM: 0.75, outputPerM: 3.75 })
+    await req('DELETE', '/v1/admin/topics', undefined, boss)
+    expect(((await (await req('GET', '/v1/evals/settings', undefined, { 'x-eval-token': TOKEN })).json()) as { topics: unknown }).topics).toBeNull()
+  })
+
+  it('builds for admins outside the allowance, and lets them add and change drafts', async () => {
+    expect((await req('POST', '/v1/admin/build', { prompt: 'a shaft' }, asUser('sam'))).status).toBe(403)
+    const built = (await (await req('POST', '/v1/admin/build', { prompt: 'a shaft' }, boss)).json()) as { spec: Record<string, unknown> }
+    expect(built.spec).toBeTruthy()
+    const { id } = (await (await req('POST', '/v1/library/drafts', draft, boss)).json()) as { id: string }
+    expect((await req('POST', '/v1/library/drafts', draft, asUser('sam'))).status).toBe(403)
+    expect((await req('PUT', `/v1/library/drafts/${id}`, { score: 95, spec: { title: 'Worm', parts: [{ id: 'a' }, { id: 'b' }, { id: 'c' }] } }, boss)).status).toBe(200)
+    const queue = (await (await req('GET', '/v1/library/drafts', undefined, boss)).json()) as { drafts: { score: number; parts: number; title: string }[] }
+    expect(queue.drafts[0]).toMatchObject({ score: 95, parts: 3, title: 'Worm gear set' })
+  })
+
+  it('starts a run through GitHub when set up, and says so when not', async () => {
+    expect((await req('POST', '/v1/admin/run-tests', { limit: 3 }, boss)).status).toBe(501)
+    const calls: unknown[] = []
+    const wired = createApp({ db: new MemoryDb(), verifier: new FakeVerifier(), tutor: new FakeTutor(), noteVision: new FakeNoteVision(), config: { allowedOrigins: [], tutorDailyLimit: 3, adminEmails: ['boss@example.test'], dispatchRun: async (i) => void calls.push(i) } })
+    const res = await wired.request('/v1/admin/run-tests', { method: 'POST', headers: { 'Content-Type': 'application/json', ...boss }, body: JSON.stringify({ limit: 3, drafts: 0 }) })
+    expect(res.status).toBe(202)
+    expect(calls).toEqual([{ limit: '3', drafts: '0' }])
+  })
+})

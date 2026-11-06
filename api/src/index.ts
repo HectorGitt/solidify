@@ -27,6 +27,18 @@ const app = createApp({
     tutorDailyLimit: Number(env('TUTOR_DAILY_LIMIT', '40')),
     adminEmails: list(env('ADMIN_EMAILS', 'ola@solidify.studio,admin@solidify.studio')),
     evalToken: process.env.EVAL_TOKEN,
+    // a fine-grained GitHub token with Actions read and write on this repository only
+    dispatchRun: process.env.GITHUB_DISPATCH_TOKEN
+      ? async (inputs) => {
+          const repo = env('GITHUB_REPO', 'HectorGitt/solidify')
+          const res = await fetch(`https://api.github.com/repos/${repo}/actions/workflows/nightly-evals.yml/dispatches`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${process.env.GITHUB_DISPATCH_TOKEN}`, Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28', 'User-Agent': 'solidify-api' },
+            body: JSON.stringify({ ref: 'main', inputs }),
+          })
+          if (!res.ok) throw new Error(`GitHub ${res.status}: ${(await res.text()).slice(0, 200)}`)
+        }
+      : undefined,
     // e.g. MODEL_PRICE=0.30,2.50 (input, output: US dollars per million tokens)
     modelPrice: process.env.MODEL_PRICE ? (([i, o]) => ({ inputPerM: i, outputPerM: o }))(process.env.MODEL_PRICE.split(',').map(Number)) : undefined,
   },

@@ -24,6 +24,8 @@ export interface Config {
   evalToken?: string
   /** the model's list price in US dollars per million tokens, to turn token counts into cost on the admin page */
   modelPrice?: { inputPerM: number; outputPerM: number }
+  /** starts the nightly test workflow on GitHub now (unset = the admin page cannot start runs) */
+  dispatchRun?: (inputs: { limit?: string; drafts?: string }) => Promise<void>
   now?: () => number
 }
 
@@ -93,7 +95,7 @@ interface SubmissionDoc {
 
 type Env = { Variables: { user: AuthUser | null } }
 
-const fail = (status: 400 | 401 | 403 | 404 | 409 | 413 | 429 | 502, message: string) => new HTTPException(status, { message })
+const fail = (status: 400 | 401 | 403 | 404 | 409 | 413 | 429 | 501 | 502, message: string) => new HTTPException(status, { message })
 
 /** Parse a JSON body against a schema, or answer 400 with the first problem. */
 async function body<T extends z.ZodType>(c: Context, schema: T): Promise<z.infer<T>> {
@@ -420,7 +422,7 @@ export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision
     requireAdmin(c)
     const rows = await db.list<z.infer<typeof evalRun>>('evalRuns')
     const runs = rows.map((r) => r.data).sort((a, b) => b.runAt - a.runAt)
-    return c.json({ runs: runs.slice(0, 90).map(({ runAt, label, summary }) => ({ runAt, label, summary })), latest: runs[0] ?? null, price: config.modelPrice ?? null })
+    return c.json({ runs: runs.slice(0, 90).map(({ runAt, label, summary }) => ({ runAt, label, summary })), latest: runs[0] ?? null, price: await priceNow() })
   })
 
   /** the last 30 days of AI actions by kind (count and tokens), and the model's price if configured */
@@ -428,7 +430,82 @@ export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision
     requireAdmin(c)
     const days = Array.from({ length: 30 }, (_, i) => day(now() - i * 86_400_000)).reverse()
     const rows = await Promise.all(days.map(async (d) => ({ day: d, ...((await db.get<Record<string, number>>(`aiUsage/${d}`)) ?? {}) })))
-    return c.json({ days: rows, price: config.modelPrice ?? null })
+    return c.json({ days: rows, price: await priceNow() })
+  })
+
+  /* the admin's controls: settings the nightly run follows, its topic list, builds on demand, and starting a run */
+  const priceSchema = z.object({ inputPerM: z.number().min(0).max(1000), outputPerM: z.number().min(0).max(1000) })
+  const settingsSchema = z.object({
+    /** the nightly schedule skips its run (a run started by hand still goes) */
+    paused: z.boolean(),
+    draftsPerNight: z.number().int().min(0).max(20),
+    /** the score a draft needs to reach the review queue */
+    draftMin: z.number().min(0).max(100),
+    /** overrides MODEL_PRICE */
+    price: priceSchema.nullable(),
+  })
+  type QualitySettings = z.infer<typeof settingsSchema>
+  const DEFAULT_SETTINGS: QualitySettings = { paused: false, draftsPerNight: 3, draftMin: 85, price: null }
+  const getSettings = async (): Promise<QualitySettings> => ({ ...DEFAULT_SETTINGS, ...((await db.get<QualitySettings>('settings/quality')) ?? {}) })
+  const priceNow = async () => (await getSettings()).price ?? config.modelPrice ?? null
+  const topicItem = z.object({ topic: z.string().trim().min(1).max(60), prompt: z.string().trim().min(3).max(400) })
+  /** null = the built-in list in the runner */
+  const getTopics = async () => (await db.get<{ items: z.infer<typeof topicItem>[] }>('settings/topics'))?.items ?? null
+
+  app.get('/v1/admin/settings', async (c) => {
+    requireAdmin(c)
+    return c.json({ settings: await getSettings(), topics: await getTopics(), canRunTests: !!config.dispatchRun })
+  })
+
+  app.put('/v1/admin/settings', async (c) => {
+    requireAdmin(c)
+    const patch = await body(c, settingsSchema.partial())
+    await db.set('settings/quality', { ...(await getSettings()), ...patch })
+    return c.json({ settings: await getSettings() })
+  })
+
+  app.put('/v1/admin/topics', async (c) => {
+    requireAdmin(c)
+    const { items } = await body(c, z.object({ items: z.array(topicItem).min(1).max(300) }))
+    await db.set('settings/topics', { items })
+    return c.json({ topics: items })
+  })
+
+  /** back to the built-in list */
+  app.delete('/v1/admin/topics', async (c) => {
+    requireAdmin(c)
+    await db.delete('settings/topics')
+    return c.json({ topics: null })
+  })
+
+  /** what the nightly run should do tonight */
+  app.get('/v1/evals/settings', async (c) => {
+    requireEval(c)
+    return c.json({ settings: await getSettings(), topics: await getTopics() })
+  })
+
+  /** one build for the admin page (a draft from a prompt, a fix, a rebuild, a re-test): outside the students' allowance and usage counts */
+  app.post('/v1/admin/build', async (c) => {
+    requireAdmin(c)
+    const req = await body(c, create3dRequest)
+    await spend('admin', 'adminBuildUsage', 100, 'admin builds')
+    const t0 = now()
+    const out = await model(() => noteVision.createOrEdit3D(req))
+    return c.json({ ...out, ms: now() - t0 })
+  })
+
+  /** starts the nightly test run now, through GitHub */
+  app.post('/v1/admin/run-tests', async (c) => {
+    requireAdmin(c)
+    const r = await body(c, z.object({ limit: z.number().int().min(1).max(100).optional(), drafts: z.number().int().min(0).max(20).optional() }))
+    if (!config.dispatchRun) throw fail(501, 'Starting runs from here is not set up: add GITHUB_DISPATCH_TOKEN to the API.')
+    try {
+      await config.dispatchRun({ ...(r.limit ? { limit: String(r.limit) } : {}), ...(r.drafts !== undefined ? { drafts: String(r.drafts) } : {}) })
+    } catch (e) {
+      console.error('dispatch', e)
+      throw fail(502, 'GitHub didn’t start the run. Check the token’s access to the repository.')
+    }
+    return c.json({ ok: true }, 202)
   })
 
   /* what students do with the models: counted by day and kind, with no one's identity; a thumbs-down keeps its note */
@@ -488,12 +565,26 @@ export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision
   }
 
   app.post('/v1/library/drafts', async (c) => {
-    requireEval(c)
+    if (c.req.header('x-eval-token')) requireEval(c)
+    else requireAdmin(c)
     const d = await body(c, libraryInput)
     if (JSON.stringify(d.spec).length > 300_000) throw fail(413, 'This model is too large to save.')
     const id = randomId()
     await db.set(`libraryDrafts/${id}`, { ...d, parts: Array.isArray(d.spec.parts) ? d.spec.parts.length : 0, createdAt: now() })
     return c.json({ id }, 201)
+  })
+
+  /** a draft changed from the admin page: fixed, rebuilt or retitled, with its new score */
+  app.put('/v1/library/drafts/:id', async (c) => {
+    requireAdmin(c)
+    const id = libraryId(c.req.param('id'))
+    const draft = await db.get<LibraryDoc>(`libraryDrafts/${id}`)
+    if (!draft) throw fail(404, 'Draft not found.')
+    const patch = await body(c, libraryInput.partial())
+    if (patch.spec && JSON.stringify(patch.spec).length > 300_000) throw fail(413, 'This model is too large to save.')
+    const next = { ...draft, ...patch, ...(patch.spec ? { parts: Array.isArray(patch.spec.parts) ? patch.spec.parts.length : 0 } : {}) }
+    await db.set(`libraryDrafts/${id}`, next)
+    return c.json({ id, ...next })
   })
 
   /** the review queue, newest first, in full so the reviewer can open each one */
