@@ -140,8 +140,8 @@ describe('the admin controls', () => {
   const draft = { title: 'Worm gear set', prompt: 'A worm and worm wheel', spec: { title: 'Worm', parts: [{ id: 'worm' }] }, score: 90 }
 
   it('keeps settings and a topic list the nightly run reads, for admins only', async () => {
-    const first = (await (await req('GET', '/v1/admin/settings', undefined, boss)).json()) as { settings: Record<string, unknown>; topics: unknown; canRunTests: boolean }
-    expect(first).toMatchObject({ settings: { paused: false, draftsPerNight: 3, draftMin: 85, price: null }, topics: null, canRunTests: false })
+    const first = (await (await req('GET', '/v1/admin/settings', undefined, boss)).json()) as { settings: Record<string, unknown>; topics: unknown }
+    expect(first).toMatchObject({ settings: { paused: false, draftsPerNight: 3, draftMin: 85, price: null }, topics: null })
     expect((await req('PUT', '/v1/admin/settings', { paused: true }, asUser('sam'))).status).toBe(403)
     expect((await req('PUT', '/v1/admin/settings', { paused: true, draftMin: 90, price: { inputPerM: 0.75, outputPerM: 3.75 } }, boss)).status).toBe(200)
     expect((await req('PUT', '/v1/admin/settings', { draftsPerNight: 99 }, boss)).status).toBe(400)
@@ -166,13 +166,12 @@ describe('the admin controls', () => {
     expect(queue.drafts[0]).toMatchObject({ score: 95, parts: 3, title: 'Worm gear set' })
   })
 
-  it('starts a run through GitHub when set up, and says so when not', async () => {
-    expect((await req('POST', '/v1/admin/run-tests', { limit: 3 }, boss)).status).toBe(501)
-    const calls: unknown[] = []
-    const wired = createApp({ db: new MemoryDb(), verifier: new FakeVerifier(), tutor: new FakeTutor(), noteVision: new FakeNoteVision(), config: { allowedOrigins: [], tutorDailyLimit: 3, adminEmails: ['boss@example.test'], dispatchRun: async (i) => void calls.push(i) } })
-    const res = await wired.request('/v1/admin/run-tests', { method: 'POST', headers: { 'Content-Type': 'application/json', ...boss }, body: JSON.stringify({ limit: 3, drafts: 0 }) })
-    expect(res.status).toBe(202)
-    expect(calls).toEqual([{ limit: '3', drafts: '0' }])
+  it('takes a run’s results from an admin as well as from the nightly token', async () => {
+    const run = { runAt: Date.UTC(2026, 10, 7, 12), label: 'manual', cases: [{ id: 'nut', prompt: 'An M20 nut', score: 100, seconds: 20, checks: [{ name: 'builds', ok: true }] }], summary: { score: 100, passed: 1, total: 1 } }
+    expect((await req('POST', '/v1/evals/runs', run, asUser('sam'))).status).toBe(403)
+    expect((await req('POST', '/v1/evals/runs', run, boss)).status).toBe(201)
+    const got = (await (await req('GET', '/v1/evals', undefined, boss)).json()) as { latest: { label: string } }
+    expect(got.latest.label).toBe('manual')
   })
 })
 

@@ -27,8 +27,6 @@ export interface Config {
   evalToken?: string
   /** the model's list price in US dollars per million tokens, to turn token counts into cost on the admin page */
   modelPrice?: { inputPerM: number; outputPerM: number } | ((t: number) => { inputPerM: number; outputPerM: number } | undefined)
-  /** starts the nightly test workflow on GitHub now (unset = the admin page cannot start runs) */
-  dispatchRun?: (inputs: { limit?: string; drafts?: string }) => Promise<void>
   now?: () => number
 }
 
@@ -99,7 +97,7 @@ interface SubmissionDoc {
 type Env = { Variables: { user: AuthUser | null } }
 
 const BUSY = 'Solidify’s model is busy right now. Please try again in a minute.'
-const fail = (status: 400 | 401 | 403 | 404 | 409 | 413 | 429 | 501 | 502 | 503, message: string) => new HTTPException(status, { message })
+const fail = (status: 400 | 401 | 403 | 404 | 409 | 413 | 429 | 502 | 503, message: string) => new HTTPException(status, { message })
 
 /** Parse a JSON body against a schema, or answer 400 with the first problem. */
 async function body<T extends z.ZodType>(c: Context, schema: T): Promise<z.infer<T>> {
@@ -426,8 +424,10 @@ export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision
   })
 
   /** a night's results */
+  /** a run's results: from the nightly job (token), or from a run an admin started on the admin page */
   app.post('/v1/evals/runs', async (c) => {
-    requireEval(c)
+    if (c.req.header('x-eval-token')) requireEval(c)
+    else requireAdmin(c)
     const run = await body(c, evalRun)
     await db.set(`evalRuns/${run.runAt}`, run)
     return c.json({ ok: true }, 201)
@@ -470,7 +470,7 @@ export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision
 
   app.get('/v1/admin/settings', async (c) => {
     requireAdmin(c)
-    return c.json({ settings: await getSettings(), topics: await getTopics(), canRunTests: !!config.dispatchRun })
+    return c.json({ settings: await getSettings(), topics: await getTopics() })
   })
 
   app.put('/v1/admin/settings', async (c) => {
@@ -510,19 +510,6 @@ export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision
     return c.json({ ...out, ms: now() - t0 })
   })
 
-  /** starts the nightly test run now, through GitHub */
-  app.post('/v1/admin/run-tests', async (c) => {
-    requireAdmin(c)
-    const r = await body(c, z.object({ limit: z.number().int().min(1).max(100).optional(), drafts: z.number().int().min(0).max(20).optional() }))
-    if (!config.dispatchRun) throw fail(501, 'Starting runs from here is not set up: add GITHUB_DISPATCH_TOKEN to the API.')
-    try {
-      await config.dispatchRun({ ...(r.limit ? { limit: String(r.limit) } : {}), ...(r.drafts !== undefined ? { drafts: String(r.drafts) } : {}) })
-    } catch (e) {
-      console.error('dispatch', e)
-      throw fail(502, 'GitHub didn’t start the run. Check the token’s access to the repository.')
-    }
-    return c.json({ ok: true }, 202)
-  })
 
   /* what students do with the models: counted by day and kind, with no one's identity; a thumbs-down keeps its note */
   const EVENT_KINDS = ['rating-up', 'rating-down', 'fix-layout', 'layout-issue', 'rebuild', 'delete'] as const
