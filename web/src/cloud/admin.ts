@@ -151,3 +151,6 @@ export interface DraftFields {
 }
 export const addDraft = (d: DraftFields) => api<{ id: string }>('/v1/library/drafts', { method: 'POST', body: d })
 export const updateDraft = (id: string, patch: Partial<DraftFields>) => api<LibraryDraft>(`/v1/library/drafts/${encodeURIComponent(id)}`, { method: 'PUT', body: patch })
+
+export const publishModel = (d: DraftFields) => api<{ id: string }>('/v1/library', { method: 'POST', body: d })
+export const updateLibraryItem = (id: string, patch: { title?: string; topic?: string }) => api<{ ok: true }>(`/v1/library/${encodeURIComponent(id)}`, { method: 'PUT', body: patch })

@@ -23,6 +23,8 @@ import { ApiError } from '../api'
 import { useAuth } from '../auth'
 import { getCreation, saveNewCreation, updateCreation } from '../creations'
 import { logEvent } from '../events'
+import { useProfile } from '../profile'
+import { PublishDialog } from './PublishDialog'
 import { clearPendingBuild, peekPendingBuild } from '../pendingBuild'
 import { ghostBtn, inputCls, primaryBtn } from './Modal'
 import { PartInspector } from './PartInspector'
@@ -371,6 +373,8 @@ export default function ModelLab() {
   const navigate = useNavigate()
   const authStatus = useAuth((s) => s.status)
   const signedIn = authStatus === 'signed-in'
+  const isAdmin = useProfile((s) => !!s.profile?.isAdmin)
+  const [publishing, setPublishing] = useState(false)
 
   const [spec, setSpec] = useState<NoteSceneSpec | null>(null)
   const [params, setParams] = useState<Record<string, number>>({})
@@ -778,6 +782,15 @@ export default function ModelLab() {
   return (
     <div className="flex h-full flex-col bg-bg text-ink">
       <SiteHeader width="max-w-none" />
+      {publishing && spec ? (
+        <PublishDialog
+          open
+          onClose={() => setPublishing(false)}
+          spec={spec as unknown as Record<string, unknown>}
+          prompt={turns.at(-1)?.prompt ?? spec.title}
+          explanation={turns.find((t) => t.kind !== 'error' && t.kind !== 'answer')?.response}
+        />
+      ) : null}
 
       {/* the model's own bar */}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-line px-4 py-2 sm:px-6">
@@ -810,6 +823,11 @@ export default function ModelLab() {
           {spec && matchedCatalog && loadedCatalogScene && !live ? (
             <button type="button" onClick={() => setViewMode((m) => (m === 'parametric' ? 'catalog' : 'parametric'))} className={`${viewMode === 'catalog' ? ghostBtn : primaryBtn} px-4 py-1.5 text-[12.5px]`}>
               {viewMode === 'parametric' ? `Open the lab model: ${matchedCatalog.scene.title}` : 'Back to your model'}
+            </button>
+          ) : null}
+          {isAdmin && spec && !live ? (
+            <button type="button" onClick={() => setPublishing(true)} className={`${ghostBtn} px-4 py-1.5 text-[12.5px]`}>
+              Publish
             </button>
           ) : null}
           {spec || live ? (

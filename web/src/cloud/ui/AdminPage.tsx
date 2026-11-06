@@ -16,6 +16,11 @@ import {
   approveDraft,
   costOf,
   getAdminSettings,
+  getLibraryItem,
+  listLibrary,
+  unpublish,
+  updateLibraryItem,
+  type LibraryCard,
   resetTopics,
   runTestsNow,
   saveSettings,
@@ -41,7 +46,7 @@ import {
 } from '../admin'
 import { ghostBtn, inputCls, primaryBtn } from './Modal'
 
-type Tab = 'quality' | 'review' | 'feedback' | 'waitlist' | 'settings'
+type Tab = 'quality' | 'review' | 'library' | 'feedback' | 'waitlist' | 'settings'
 
 const REPO_ACTIONS = 'https://github.com/HectorGitt/solidify/actions/workflows/nightly-evals.yml'
 
@@ -577,6 +582,106 @@ function Review() {
   )
 }
 
+/* ------------------------------------------------------------------ library */
+
+function LibraryRow({ item, onChanged, onRemoved }: { item: LibraryCard; onChanged: (patch: Partial<LibraryCard>) => void; onRemoved: () => void }) {
+  const navigate = useNavigate()
+  const [title, setTitle] = useState(item.title)
+  const [topic, setTopic] = useState(item.topic ?? '')
+  const [confirm, setConfirm] = useState(false)
+  const [busy, setBusy] = useState<null | 'save' | 'open' | 'remove'>(null)
+  const dirty = title.trim() !== item.title || topic.trim() !== (item.topic ?? '')
+
+  const run = async (kind: 'save' | 'open' | 'remove') => {
+    setBusy(kind)
+    try {
+      if (kind === 'save') {
+        await updateLibraryItem(item.id, { title: title.trim(), topic: topic.trim() })
+        onChanged({ title: title.trim(), topic: topic.trim() || undefined })
+        toast('Saved.')
+      } else if (kind === 'open') {
+        const full = await getLibraryItem(item.id)
+        const { id } = await saveNewCreation({ title: `Library: ${full.title}`.slice(0, 120), prompt: full.prompt, spec: full.spec, history: full.explanation ? [{ prompt: full.prompt, response: full.explanation.slice(0, 2000) }] : [] })
+        navigate(`/create/${id}`)
+        return
+      } else {
+        await unpublish(item.id)
+        toast(`“${item.title}” is no longer in the library.`)
+        onRemoved()
+        return
+      }
+    } catch (e) {
+      toast(e instanceof ApiError ? e.message : 'That didn’t work. Please try again.', { tone: 'warn' })
+    }
+    setBusy(null)
+  }
+
+  return (
+    <li className="grid gap-3 px-4 py-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
+      <div className="grid min-w-0 gap-2 sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+        <input aria-label="Title" value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120} className={`${inputCls} py-1.5! font-semibold`} />
+        <input aria-label="Topic" value={topic} onChange={(e) => setTopic(e.target.value)} maxLength={60} placeholder="Topic" className={`${inputCls} py-1.5!`} />
+        <p className="truncate text-[11.5px] text-dim sm:col-span-2">
+          {item.parts} parts · score {item.score} · published {item.publishedAt ? date(item.publishedAt) : '—'} · {item.prompt}
+        </p>
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        {dirty ? (
+          <button type="button" disabled={!!busy || !title.trim()} onClick={() => void run('save')} className={`${smallBtn} bg-ink text-bg hover:opacity-90`}>
+            {busy === 'save' ? 'Saving…' : 'Save'}
+          </button>
+        ) : null}
+        <button type="button" disabled={!!busy} onClick={() => void run('open')} className={`${smallBtn} border border-line-2 text-ink/90 hover:border-ink/40`}>
+          {busy === 'open' ? 'Opening…' : 'Open in 3D'}
+        </button>
+        {confirm ? (
+          <>
+            <button type="button" disabled={!!busy} onClick={() => void run('remove')} className={`${smallBtn} bg-warn/15 text-warn hover:bg-warn/25`}>
+              {busy === 'remove' ? 'Removing…' : 'Yes, unpublish'}
+            </button>
+            <button type="button" disabled={!!busy} onClick={() => setConfirm(false)} className={`${smallBtn} text-mute hover:text-ink`}>
+              Keep
+            </button>
+          </>
+        ) : (
+          <button type="button" disabled={!!busy} onClick={() => setConfirm(true)} className={`${smallBtn} text-mute hover:bg-panel-2 hover:text-warn`}>
+            Unpublish
+          </button>
+        )}
+      </div>
+    </li>
+  )
+}
+
+function Library() {
+  const { data, setData, error, reload } = useLoad(listLibrary)
+  return (
+    <Loading error={error} onRetry={reload}>
+      {data ? (
+        data.items.length ? (
+          <>
+            <p className="mb-3 text-[12.5px] text-mute">
+              {data.items.length} published, shown to everyone on the Create page, newest first. Unpublishing removes it from the page; students who already opened it keep their own copy.
+            </p>
+            <ul className={`${card} divide-y divide-line`}>
+              {data.items.map((item) => (
+                <LibraryRow
+                  key={item.id}
+                  item={item}
+                  onChanged={(patch) => setData({ items: data.items.map((x) => (x.id === item.id ? { ...x, ...patch } : x)) })}
+                  onRemoved={() => setData({ items: data.items.filter((x) => x.id !== item.id) })}
+                />
+              ))}
+            </ul>
+          </>
+        ) : (
+          <Empty>Nothing published yet. Approve a draft in the Review queue, or use Publish in the workspace on any model you build.</Empty>
+        )
+      ) : null}
+    </Loading>
+  )
+}
+
 /* ------------------------------------------------------------------ settings */
 
 /** topics as text: a "# Topic" line, then one request per line */
@@ -811,6 +916,7 @@ function Waitlist() {
 const TABS: { value: Tab; label: string }[] = [
   { value: 'quality', label: 'Quality' },
   { value: 'review', label: 'Review queue' },
+  { value: 'library', label: 'Library' },
   { value: 'feedback', label: 'Feedback' },
   { value: 'waitlist', label: 'Waitlist' },
   { value: 'settings', label: 'Settings' },
@@ -840,7 +946,7 @@ export default function AdminPage() {
         <div className="mb-5">
           <Pills label="Section" value={tab} onChange={(t) => setParams(t === 'quality' ? {} : { tab: t }, { replace: true })} options={TABS} />
         </div>
-        {tab === 'quality' ? <Quality /> : tab === 'review' ? <Review /> : tab === 'feedback' ? <Feedback /> : tab === 'waitlist' ? <Waitlist /> : <Settings />}
+        {tab === 'quality' ? <Quality /> : tab === 'review' ? <Review /> : tab === 'library' ? <Library /> : tab === 'feedback' ? <Feedback /> : tab === 'waitlist' ? <Waitlist /> : <Settings />}
       </>
     )
 
