@@ -41,6 +41,8 @@ interface LocalInfo {
   axis: THREE.Vector3
   /** extent along that axis */
   length: number
+  /** the axis comes from a round shape or a gear, not just the longest side */
+  round: boolean
   /** gear pitch radius (or pulley radius), 0 when it has none */
   pitchR: number
 }
@@ -79,7 +81,7 @@ function localInfo(part: NotePartSpec, scope: Record<string, number>): LocalInfo
     : pulley
       ? evalDim(pulley.rOuter ?? pulley.r, scope, 0.06)
       : 0
-  const info = { box, center: box.getCenter(new THREE.Vector3()), axis, length, pitchR }
+  const info = { box, center: box.getCenter(new THREE.Vector3()), axis, round: !!lead, length, pitchR }
   if (cache.size > 200) cache.clear()
   cache.set(key, info)
   return info
@@ -250,6 +252,20 @@ export function resolveAssembly(
     }
     const linked = (a: NotePartSpec, b: NotePartSpec) => (a.mount?.target === b.id && a.mount.kind !== 'against') || (a.mount?.kind === 'link' && a.mount.to === b.id)
     const related = (a: NotePartSpec, b: NotePartSpec) => linked(a, b) || linked(b, a)
+    // parts on one axis (a gear on its shaft, a bearing on its journal) overlap by design, however they were placed
+    const pos = new Map(spec.parts.map((p) => [p.id, done.get(p.id)!]))
+    const sameAxis = (a: string, b: string) => {
+      const A = localInfo(spec.parts.find((p) => p.id === a)!, scope)
+      const B = localInfo(spec.parts.find((p) => p.id === b)!, scope)
+      const pa = pos.get(a)!, pb = pos.get(b)!
+      const ax = A.axis.clone().applyQuaternion(pa.quat).normalize()
+      const bx = B.axis.clone().applyQuaternion(pb.quat).normalize()
+      if (!A.round || !B.round || Math.abs(ax.dot(bx)) < 0.995) return false
+      const ca = A.center.clone().applyQuaternion(pa.quat).add(pa.pos)
+      const cb = B.center.clone().applyQuaternion(pb.quat).add(pb.pos)
+      const d = cb.sub(ca)
+      return d.addScaledVector(ax, -d.dot(ax)).length() < 0.003
+    }
     for (const { p, box } of boxes) {
       const size = box.getSize(new THREE.Vector3()).length()
       const tol = 0.004 + size * 0.02
@@ -257,7 +273,7 @@ export function resolveAssembly(
       if (!touching) issues.push({ partId: p.id, kind: 'floating', message: `${p.name} is floating: it does not touch any other part` })
       if (p.role === 'housing') continue
       for (const o of boxes) {
-        if (o.p === p || o.p.role === 'housing' || related(p, o.p)) continue
+        if (o.p === p || o.p.role === 'housing' || related(p, o.p) || sameAxis(p.id, o.p.id)) continue
         const overlap = box.clone().intersect(o.box)
         if (overlap.isEmpty()) continue
         if (vol(overlap) / vol(box) > 0.6 && vol(box) < vol(o.box)) {

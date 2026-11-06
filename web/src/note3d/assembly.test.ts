@@ -125,3 +125,14 @@ describe('a dog-bone connecting rod', () => {
     expect(r.position[1]).toBeCloseTo((0.04 + 0.19) / 2, 2)
   })
 })
+
+describe('parts on one axis', () => {
+  it('does not call a gear on its shaft buried, however it was placed', () => {
+    const parts: NotePartSpec[] = [
+      { id: 'shaft', name: 'Countershaft', shapes: [{ kind: 'cylinder', r: 0.03, h: 0.3, rotation: alongX }] },
+      // placed by coordinates on the shaft's axis, not by a mount
+      { id: 'pinion', name: 'Pinion', position: [0.05, 0, 0], rotation: alongX, shapes: [{ kind: 'gear', teeth: 16, module: 0.004, h: 0.03 }] },
+    ]
+    expect(resolveAssembly({ parts }, {}).issues.map((i) => i.kind)).not.toContain('buried')
+  })
+})
