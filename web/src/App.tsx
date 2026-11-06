@@ -3,7 +3,6 @@ import { HashRouter, Route, Routes } from 'react-router-dom'
 import { About } from './ui/About'
 import { Landing } from './ui/Landing'
 import { Viewer } from './ui/Viewer'
-import { Loader } from './ui/Loader'
 import { PartSearch } from './ui/PartSearch'
 import { Toaster } from './ui/toast'
 import { useAuth } from './cloud/auth'
@@ -12,6 +11,7 @@ import { startSync } from './cloud/sync'
 import { ReportDialog } from './cloud/ui/ReportDialog'
 import { SignInDialog } from './cloud/ui/SignInDialog'
 import { SalesDialog } from './cloud/ui/SalesDialog'
+import { PageSkeleton, WorkspaceSkeleton } from './ui/Skeleton'
 
 // study pages (loaded on demand)
 const ExamPage = lazy(() => import('./study/ui/ExamPage'))
@@ -28,7 +28,7 @@ const ReadPage = lazy(() => import('./note3d/ReadPage'))
 const PaperPage = lazy(() => import('./cloud/ui/PaperPage'))
 // dev only: bare scenes for scripts/capture-tiles.mjs
 const ShotPage = import.meta.env.DEV ? lazy(() => import('./ui/ShotPage')) : null
-const page = (el: ReactNode) => <Suspense fallback={<Loader className="h-full bg-bg" />}>{el}</Suspense>
+const page = (el: ReactNode, fallback: ReactNode = <PageSkeleton />) => <Suspense fallback={fallback}>{el}</Suspense>
 
 export default function App() {
   useEffect(() => {
@@ -56,7 +56,7 @@ export default function App() {
         <Route path="/classes/:classId/papers/:paperId" element={page(<PaperPage />)} />
         <Route path="/create" element={page(<CreatePage />)} />
         <Route path="/create/lab" element={page(<CreationLabPage />)} />
-        <Route path="/create/:id" element={page(<ModelLab />)} />
+        <Route path="/create/:id" element={page(<ModelLab />, <WorkspaceSkeleton />)} />
         <Route path="/read" element={page(<ReadPage />)} />
         {ShotPage ? <Route path="/shot/:moduleId/:sceneId" element={page(<ShotPage />)} /> : null}
         <Route path="/m/:moduleId" element={<Viewer />} />

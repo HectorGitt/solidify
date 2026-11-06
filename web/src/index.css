@@ -394,3 +394,16 @@ input[type="range"].slider::-moz-range-thumb {
 @keyframes bp-fade-in {
   from { opacity: 0; transform: translateY(4px); }
 }
+
+/* skeleton placeholders: a soft sweep of light across the shape (still under reduced motion) */
+.skeleton {
+  background-color: var(--color-panel-2);
+  background-image: linear-gradient(100deg, transparent 20%, color-mix(in srgb, var(--color-ink) 6%, transparent) 50%, transparent 80%);
+  background-size: 220% 100%;
+  background-repeat: no-repeat;
+  animation: skeleton-sweep 1.6s ease-in-out infinite;
+}
+@keyframes skeleton-sweep {
+  from { background-position: 160% 0; }
+  to { background-position: -60% 0; }
+}

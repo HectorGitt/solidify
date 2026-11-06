@@ -22,6 +22,7 @@ import { useAuth } from '../auth'
 import { getCreation, saveNewCreation, updateCreation } from '../creations'
 import { clearPendingBuild, peekPendingBuild } from '../pendingBuild'
 import { ghostBtn, inputCls, primaryBtn } from './Modal'
+import { WorkspaceBodySkeleton } from '@/ui/Skeleton'
 
 /** one turn of the conversation about a model (saved newest first, shown oldest first) */
 interface Turn {
@@ -696,6 +697,8 @@ export default function ModelLab() {
   const firstBuild = !!live && live.isNew && !preview
   /** a new, empty workspace: the start panel takes the input */
   const blank = routeId === 'new' && !spec && !live && !turns.length
+  /** a saved model is being fetched */
+  const opening = routeId !== 'new' && !spec && !live && authStatus !== 'signed-out'
   const messages = [...turns].reverse()
 
   return (
@@ -743,7 +746,8 @@ export default function ModelLab() {
         </div>
       </div>
 
-      <div className={`grid min-h-0 flex-1 ${blank ? 'grid-rows-1' : 'grid-rows-[minmax(380px,58vh)_auto]'} lg:grid-cols-[340px_minmax(0,1fr)_360px] lg:grid-rows-1`}>
+      {opening ? <WorkspaceBodySkeleton /> : null}
+      <div className={`${opening ? 'hidden' : 'grid'} min-h-0 flex-1 ${blank ? 'grid-rows-1' : 'grid-rows-[minmax(380px,58vh)_auto]'} lg:grid-cols-[340px_minmax(0,1fr)_360px] lg:grid-rows-1`}>
         {/* the conversation */}
         <aside className={`${mobilePane === 'chat' && !blank ? 'flex' : 'hidden'} order-2 min-h-[360px] flex-col border-line lg:order-1 lg:flex lg:min-h-0 lg:border-r`}>
           <div className="flex-1 space-y-4 overflow-y-auto px-4 py-4">
@@ -902,7 +906,18 @@ export default function ModelLab() {
                 signedIn={signedIn}
               />
             ) : (
-              <div className="flex flex-1 items-center justify-center p-6 text-[13px] text-mute">Opening your model…</div>
+              <div className="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center text-[13px] text-mute">
+                {authStatus === 'signed-out' ? (
+                  <>
+                    <p>Sign in to open your saved models.</p>
+                    <button type="button" className={primaryBtn} onClick={() => useAuth.getState().openDialog()}>
+                      Sign in
+                    </button>
+                  </>
+                ) : (
+                  'Opening your model…'
+                )}
+              </div>
             )
           )}
 

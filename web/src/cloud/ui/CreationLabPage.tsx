@@ -7,6 +7,7 @@ import { ApiError } from '../api'
 import { useAuth } from '../auth'
 import { deleteCreation, getCreation, listCreations, saveNewCreation, updateCreation, type CreationSummary } from '../creations'
 import { ghostBtn, inputCls, primaryBtn } from './Modal'
+import { ModelCardSkeleton } from '@/ui/Skeleton'
 
 const when = (t: number) => {
   const mins = Math.round((Date.now() - t) / 60000)
@@ -163,7 +164,7 @@ export default function CreationLabPage() {
       }
     >
       {status === 'loading' ? (
-        <p className="text-[13px] text-mute">Loading…</p>
+        <ModelCardSkeleton />
       ) : status !== 'signed-in' ? (
         <section className="flex flex-col items-center gap-3 rounded-3xl border border-dashed border-line-2 bg-panel px-6 py-16 text-center">
           <Icon.build width={30} height={30} className="text-dim" />
@@ -181,11 +182,7 @@ export default function CreationLabPage() {
           </button>
         </section>
       ) : items === null ? (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {Array.from({ length: 4 }, (_, i) => (
-            <div key={i} className="aspect-[4/5] animate-pulse rounded-3xl border border-line bg-panel" />
-          ))}
-        </div>
+        <ModelCardSkeleton />
       ) : items.length === 0 ? (
         <section className="flex flex-col items-center gap-3 rounded-3xl border border-dashed border-line-2 bg-panel px-6 py-16 text-center">
           <Icon.build width={30} height={30} className="text-dim" />

@@ -10,7 +10,7 @@ import { ClassReport } from './ClassReport'
 import { StudentPapers, TeacherPapers, useClassPapers } from './ClassPapers'
 import { SignInFirst } from './ClassesPage'
 import { Notice, ghostBtn, inputCls, primaryBtn } from './Modal'
-import { Loader } from '@/ui/Loader'
+import { CardGridSkeleton, ListSkeleton } from '@/ui/Skeleton'
 
 interface ClassInfo {
   id: string
@@ -268,7 +268,7 @@ function TeacherView({ info, assignments, reload }: { info: ClassInfo; assignmen
             ) : null}
           </div>
           {!dash ? (
-            <Loader size={32} className="py-12" />
+            <ListSkeleton rows={5} />
           ) : !dash.students.length ? (
             <Notice>No students yet. Share the join code above.</Notice>
           ) : (
@@ -373,7 +373,7 @@ export default function ClassPage() {
       ) : error ? (
         <Notice tone="warn">{error}</Notice>
       ) : !info ? (
-        <Loader size={32} className="py-12" />
+        <CardGridSkeleton cards={4} />
       ) : info.isTeacher ? (
         <TeacherView info={info} assignments={assignments} reload={load} />
       ) : (

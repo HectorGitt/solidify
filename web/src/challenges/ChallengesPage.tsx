@@ -7,7 +7,7 @@ import { fmt } from '@/ui/controls'
 import { Icon } from '@/ui/icons'
 import { allChallenges } from './registry'
 import type { ChallengeEntry } from './types'
-import { Loader } from '@/ui/Loader'
+import { CardGridSkeleton } from '@/ui/Skeleton'
 
 const LEVEL = ['', 'Easy', 'Medium', 'Hard'] as const
 
@@ -69,7 +69,7 @@ export default function ChallengesPage() {
           ))}
         </ul>
       ) : (
-        <Loader size={32} className="py-12" />
+        <CardGridSkeleton cards={6} />
       )}
     </StudyShell>
   )

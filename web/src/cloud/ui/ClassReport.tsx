@@ -6,7 +6,7 @@ import { courseTitle } from '@/study/types'
 import { api } from '../api'
 import { SLIP_NAMES, type Paper } from '../papers'
 import { Notice } from './Modal'
-import { Loader } from '@/ui/Loader'
+import { ListSkeleton } from '@/ui/Skeleton'
 
 interface ClassProgress {
   students: { uid: string; displayName: string; questions: Record<string, QuestionProgress> }[]
@@ -66,7 +66,7 @@ export function ClassReport({ classId, papers }: { classId: string; papers: Pape
         <h3 className="mb-1 text-[13.5px] font-semibold">Weakest topics</h3>
         <p className="mb-3 text-[11.5px] text-dim">Average mastery among students who have started each topic.</p>
         {!progress ? (
-          <Loader size={32} className="py-12" />
+          <ListSkeleton rows={3} />
         ) : !topics.length ? (
           <Notice>No practice yet. Topics appear here once students start answering questions.</Notice>
         ) : (
@@ -95,7 +95,7 @@ export function ClassReport({ classId, papers }: { classId: string; papers: Pape
         <h3 className="mb-1 text-[13.5px] font-semibold">Most common mistakes</h3>
         <p className="mb-3 text-[11.5px] text-dim">From the marker’s notes on this class’s papers.</p>
         {!slips ? (
-          <Loader size={32} className="py-12" />
+          <ListSkeleton rows={3} />
         ) : !topSlips.length ? (
           <Notice>None recorded yet. They appear after students hand in papers.</Notice>
         ) : (
