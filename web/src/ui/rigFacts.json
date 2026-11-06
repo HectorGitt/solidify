@@ -1,0 +1,4119 @@
+{
+ "chassis/configurator": {
+  "readings": [
+   {
+    "label": "Speed",
+    "value": "5.97",
+    "unit": "km/h"
+   },
+   {
+    "label": "Slip",
+    "value": "14.4",
+    "unit": "%"
+   },
+   {
+    "label": "Gear / drive",
+    "value": "gear 4",
+    "unit": ""
+   },
+   {
+    "label": "Engine",
+    "value": "2,305",
+    "unit": "rpm"
+   }
+  ],
+  "equations": [
+   {
+    "label": "Weight transfer from the pull",
+    "tex": "V_f = W_f - \\dfrac{P\\,y_d}{x},\\quad V_r = W_r + \\dfrac{P\\,y_d}{x}"
+   },
+   {
+    "label": "Mobility number of the rear tyres",
+    "tex": "B_n = \\dfrac{CI\\,b\\,d}{W}\\cdot\\dfrac{1 + 5\\delta/h}{1 + 3b/d}"
+   },
+   {
+    "label": "Slip that gives the pull (Brixius)",
+    "tex": "NTR(s) = GTR(s) - MRR(s) = \\dfrac{P + R_f}{V_r}"
+   }
+  ]
+ },
+ "chassis/hitches": {
+  "readings": [
+   {
+    "label": "Front Vf",
+    "value": "5.51",
+    "unit": "kN"
+   },
+   {
+    "label": "Rear Vr",
+    "value": "25.9",
+    "unit": "kN"
+   },
+   {
+    "label": "tan θ",
+    "value": "0.364",
+    "unit": ""
+   },
+   {
+    "label": "Rear gain",
+    "value": "5.95",
+    "unit": "kN"
+   }
+  ],
+  "equations": [
+   {
+    "label": "Fully mounted: rear axle",
+    "tex": "V_r = W_r + \\dfrac{S\\sin\\theta\\,(x+x'+b)}{x} - \\dfrac{S\\cos\\theta\\,z}{x}"
+   },
+   {
+    "label": "Fully mounted: front axle",
+    "tex": "V_f = W_f - \\dfrac{S\\sin\\theta\\,(x'+b)}{x} + \\dfrac{S\\cos\\theta\\,z}{x}"
+   },
+   {
+    "label": "Mounted vs trailed",
+    "tex": "\\tan\\theta > \\dfrac{z + y'}{x + x' + b}"
+   }
+  ]
+ },
+ "chassis/stability": {
+  "readings": [
+   {
+    "label": "h = y′/(r + yg)",
+    "value": "0.588",
+    "unit": ""
+   },
+   {
+    "label": "tan αs",
+    "value": "0.706",
+    "unit": ""
+   },
+   {
+    "label": "ψ′ to rear",
+    "value": "1.2",
+    "unit": ""
+   },
+   {
+    "label": "ψ′ soil gives",
+    "value": "0.63",
+    "unit": ""
+   }
+  ],
+  "equations": [
+   {
+    "label": "Static overturn slope",
+    "tex": "\\tan\\alpha_s = \\dfrac{x_r}{r + y_g}"
+   },
+   {
+    "label": "Hitch-height ratio",
+    "tex": "h = \\dfrac{y'}{r + y_g}"
+   },
+   {
+    "label": "Tractive coefficient at impending instability",
+    "tex": "\\psi' = \\tan\\alpha + \\dfrac{\\tan\\alpha_s - \\tan\\alpha}{h}"
+   }
+  ]
+ },
+ "chassis/tractor-types": {
+  "readings": [],
+  "equations": []
+ },
+ "chassis/weight-transfer": {
+  "readings": [
+   {
+    "label": "Front Vf",
+    "value": "5.37",
+    "unit": "kN"
+   },
+   {
+    "label": "Rear Vr",
+    "value": "23.5",
+    "unit": "kN"
+   },
+   {
+    "label": "Moved to rear",
+    "value": "2.66",
+    "unit": "kN"
+   },
+   {
+    "label": "Rear share",
+    "value": "81.4",
+    "unit": "%"
+   }
+  ],
+  "equations": [
+   {
+    "label": "Static axle loads",
+    "tex": "W_f = \\dfrac{W x_r}{x},\\quad W_r = W - W_f"
+   },
+   {
+    "label": "Front wheels, with slope and pull",
+    "tex": "V_f = W_f\\cos\\alpha - \\dfrac{W\\sin\\alpha\\,(r+y_g)}{x} - \\dfrac{P\\cos\\theta\\,y'}{x} - \\dfrac{P\\sin\\theta\\,x'}{x}"
+   },
+   {
+    "label": "Rear wheels",
+    "tex": "V_r = W_r\\cos\\alpha + \\dfrac{W\\sin\\alpha\\,(r+y_g)}{x} + \\dfrac{P\\cos\\theta\\,y'}{x} + \\dfrac{P\\sin\\theta\\,(x+x')}{x}"
+   }
+  ]
+ },
+ "drawing/interpenetration": {
+  "readings": [
+   {
+    "label": "Pattern width",
+    "value": "188.5",
+    "unit": "mm"
+   },
+   {
+    "label": "Longest line",
+    "value": "110",
+    "unit": "mm"
+   },
+   {
+    "label": "Shortest line",
+    "value": "100",
+    "unit": "mm"
+   }
+  ],
+  "equations": [
+   {
+    "label": "Cutting plane for a line round the branch",
+    "tex": "z = r\\sin\\phi + e"
+   },
+   {
+    "label": "Across to the main cylinder, from the plan",
+    "tex": "x = \\sqrt{R^2 - z^2}"
+   },
+   {
+    "label": "Project to the elevation",
+    "tex": "t = \\dfrac{x - r\\cos\\phi\\cos\\theta}{\\sin\\theta}"
+   }
+  ]
+ },
+ "drawing/true-length": {
+  "readings": [
+   {
+    "label": "Elevation",
+    "value": "94.34",
+    "unit": "mm"
+   },
+   {
+    "label": "Plan",
+    "value": "100",
+    "unit": "mm"
+   },
+   {
+    "label": "End view",
+    "value": "78.1",
+    "unit": "mm"
+   },
+   {
+    "label": "True length",
+    "value": "111.8",
+    "unit": "mm"
+   }
+  ],
+  "equations": [
+   {
+    "label": "Plan length",
+    "tex": "L_p = \\sqrt{x^2 + z^2}"
+   },
+   {
+    "label": "Right-angled triangle: plan and height",
+    "tex": "L = \\sqrt{L_p^2 + y^2}"
+   },
+   {
+    "label": "Slope to the horizontal",
+    "tex": "\\sin\\theta = y/L"
+   }
+  ]
+ },
+ "elements/bearings": {
+  "readings": [
+   {
+    "label": "Shaft",
+    "value": "1,000",
+    "unit": "rpm"
+   },
+   {
+    "label": "Cage",
+    "value": "400",
+    "unit": "rpm"
+   },
+   {
+    "label": "Equiv. load P",
+    "value": "2.58",
+    "unit": "kN"
+   },
+   {
+    "label": "L10 life",
+    "value": "1,430",
+    "unit": "M rev"
+   }
+  ],
+  "equations": [
+   {
+    "label": "Stribeck static capacity (balls)",
+    "tex": "C_0=\\dfrac{KZD^2}{5}"
+   },
+   {
+    "label": "AFBMA basic static rating",
+    "tex": "C_0=f_0\\,i\\,Z\\,D^2\\cos\\alpha"
+   },
+   {
+    "label": "Static equivalent load",
+    "tex": "P_0=X_0F_r+Y_0F_a\\ \\ (\\ge F_r)"
+   }
+  ]
+ },
+ "elements/belts": {
+  "readings": [
+   {
+    "label": "Driver",
+    "value": "1,000",
+    "unit": "rpm"
+   },
+   {
+    "label": "Driven",
+    "value": "491.2",
+    "unit": "rpm"
+   },
+   {
+    "label": "Belt speed",
+    "value": "13.1",
+    "unit": "m/s"
+   },
+   {
+    "label": "α small / large",
+    "value": "214.9° / 214.9°",
+    "unit": ""
+   }
+  ],
+  "equations": [
+   {
+    "label": "Angle of wrap, crossed belt",
+    "tex": "\\alpha_1=\\alpha_2=180^\\circ+2\\sin^{-1}\\dfrac{R+r}{C}"
+   },
+   {
+    "label": "Tension factor on each pulley — the smaller governs",
+    "tex": "k=e^{f\\alpha}"
+   },
+   {
+    "label": "Belt speed",
+    "tex": "v=\\dfrac{\\pi d N}{60}"
+   }
+  ]
+ },
+ "elements/chains": {
+  "readings": [
+   {
+    "label": "Driver",
+    "value": "200",
+    "unit": "rpm"
+   },
+   {
+    "label": "Driven",
+    "value": "59.65",
+    "unit": "rpm"
+   },
+   {
+    "label": "Chain speed",
+    "value": "1.08",
+    "unit": "m/s"
+   },
+   {
+    "label": "Links",
+    "value": "118",
+    "unit": "C = 761.9 mm"
+   }
+  ],
+  "equations": [
+   {
+    "label": "(a) Service factor → design power",
+    "tex": "P_d=\\text{SF}\\times P"
+   },
+   {
+    "label": "(b) Speed ratio",
+    "tex": "i=N_1/N_2"
+   },
+   {
+    "label": "(c) Pitch and sprockets (chart)",
+    "tex": "p=3/4''\\ (19.05\\ \\text{mm}),\\ z_2/z_1=57/17"
+   }
+  ]
+ },
+ "elements/clutch-brake": {
+  "readings": [
+   {
+    "label": "Torque capacity",
+    "value": "15.98",
+    "unit": "N·m"
+   },
+   {
+    "label": "Power at speed",
+    "value": "0.502",
+    "unit": "kW"
+   }
+  ],
+  "equations": [
+   {
+    "label": "Pairs of friction surfaces",
+    "tex": "n=n_{steel}+n_{bronze}-1"
+   },
+   {
+    "label": "Axial force",
+    "tex": "F=p\\pi(R_o^2-R_i^2)"
+   },
+   {
+    "label": "Friction radius (uniform pressure)",
+    "tex": "R_f=\\tfrac23\\dfrac{R_o^3-R_i^3}{R_o^2-R_i^2}"
+   }
+  ]
+ },
+ "elements/gears": {
+  "readings": [
+   {
+    "label": "Fₜ tangential",
+    "value": "4,000",
+    "unit": "N"
+   },
+   {
+    "label": "Fᵣ separating",
+    "value": "1,456",
+    "unit": "N"
+   },
+   {
+    "label": "Resultant",
+    "value": "4,257",
+    "unit": "N"
+   }
+  ],
+  "equations": [
+   {
+    "label": "Tangential force at the pitch radius",
+    "tex": "F_t=\\dfrac{M_t}{r}"
+   },
+   {
+    "label": "Separating (radial) force",
+    "tex": "F_r=F_t\\tan\\phi"
+   }
+  ]
+ },
+ "elements/springs-welds": {
+  "readings": [
+   {
+    "label": "Index C",
+    "value": "8",
+    "unit": ""
+   },
+   {
+    "label": "Wahl K",
+    "value": "1.184",
+    "unit": ""
+   },
+   {
+    "label": "Stiffness",
+    "value": "20",
+    "unit": "N/mm"
+   },
+   {
+    "label": "Deflection",
+    "value": "25",
+    "unit": "mm"
+   }
+  ],
+  "equations": [
+   {
+    "label": "Spring index",
+    "tex": "C=D/d"
+   },
+   {
+    "label": "Wahl factor",
+    "tex": "K=\\dfrac{4C-1}{4C-4}+\\dfrac{0.615}{C}"
+   },
+   {
+    "label": "Shear stress in the wire",
+    "tex": "s_s=K\\dfrac{8FD}{\\pi d^3}"
+   }
+  ]
+ },
+ "engine/air-governor": {
+  "readings": [
+   {
+    "label": "Engine speed",
+    "value": "1,600",
+    "unit": "rpm"
+   },
+   {
+    "label": "Sleeve lift",
+    "value": "7.34",
+    "unit": "mm"
+   },
+   {
+    "label": "Flyweights out",
+    "value": "17.1",
+    "unit": "°"
+   },
+   {
+    "label": "Rack (fuel)",
+    "value": "8",
+    "unit": "%"
+   }
+  ],
+  "equations": [
+   {
+    "label": "Worked example: speed regulation",
+    "tex": "R = \\dfrac{N_1 - N_2}{(N_1 + N_2)/2}\\times100"
+   },
+   {
+    "label": "This governor at its lever setting (no load → full load 220 N·m)",
+    "tex": "R = \\dfrac{N_1 - N_2}{(N_1 + N_2)/2}\\times100"
+   },
+   {
+    "label": "Flyweight force on the sleeve balances the spring (no load)",
+    "tex": "n\\,m\\,\\tfrac{b}{c}\\,r\\,\\Omega^2 = k\\,(x + s_0),\\quad r = r_p + \\tfrac{b}{c}x,\\ \\Omega = \\tfrac12\\omega"
+   }
+  ]
+ },
+ "engine/carburettor": {
+  "readings": [
+   {
+    "label": "Air flow",
+    "value": "26",
+    "unit": "g/s"
+   },
+   {
+    "label": "Fuel flow",
+    "value": "1.76",
+    "unit": "g/s"
+   },
+   {
+    "label": "A/F by weight",
+    "value": "14.8 : 1",
+    "unit": ""
+   },
+   {
+    "label": "Throat speed",
+    "value": "52.8",
+    "unit": "m/s"
+   }
+  ],
+  "equations": [
+   {
+    "label": "Air speed at the venturi throat (continuity)",
+    "tex": "v = \\dfrac{\\dot m_a}{C_d\\,\\rho\\,A_t}"
+   },
+   {
+    "label": "Depression at the throat (Bernoulli) plus choke suction",
+    "tex": "\\Delta p = \\tfrac12\\rho v^2 + \\Delta p_{choke}"
+   },
+   {
+    "label": "Fuel lifted up the main jet (head ρ g h to the jet tip)",
+    "tex": "\\dot m_f = C_d A_j\\sqrt{2\\rho_f\\,(\\Delta p - \\rho_f g h)}"
+   }
+  ]
+ },
+ "engine/cooling": {
+  "readings": [
+   {
+    "label": "Top hose",
+    "value": "46.8",
+    "unit": "°C"
+   },
+   {
+    "label": "Bottom hose",
+    "value": "30.1",
+    "unit": "°C"
+   },
+   {
+    "label": "Thermostat",
+    "value": "0 %",
+    "unit": "open"
+   },
+   {
+    "label": "Heat in",
+    "value": "36",
+    "unit": "kW"
+   }
+  ],
+  "equations": [
+   {
+    "label": "Heat the cooling system must remove (heat balance 40 / 30 / 30)",
+    "tex": "Q_{cool} = \\dfrac{30\\,\\%}{30\\,\\%}\\,(BP + FP)"
+   },
+   {
+    "label": "Coolant carries the heat to the radiator",
+    "tex": "Q = \\dot m\\, c_p\\,(T_{top} - T_{bottom})"
+   },
+   {
+    "label": "Boiling point under the pressure cap",
+    "tex": "T_{boil} = T_{sat}(p_{atm} + p_{cap})"
+   }
+  ]
+ },
+ "engine/diesel-fuel": {
+  "readings": [
+   {
+    "label": "Pump cam",
+    "value": "78°",
+    "unit": ""
+   },
+   {
+    "label": "Plunger lift",
+    "value": "3.18",
+    "unit": "mm"
+   },
+   {
+    "label": "Pipe pressure",
+    "value": "175",
+    "unit": "kg/cm²"
+   },
+   {
+    "label": "Effective stroke",
+    "value": "1.30",
+    "unit": "mm"
+   }
+  ],
+  "equations": [
+   {
+    "label": "Plunger rotation from rack travel",
+    "tex": "\\theta = \\dfrac{x_{rack}}{r_{pinion}}"
+   },
+   {
+    "label": "Effective stroke set by the helix (lead L per turn)",
+    "tex": "s_e = L\\,\\dfrac{\\theta}{2\\pi}\\quad(\\le \\text{cam lift} - \\text{pre-stroke})"
+   },
+   {
+    "label": "Fuel delivered per stroke",
+    "tex": "q = \\tfrac{\\pi}{4}d^2\\,s_e"
+   }
+  ]
+ },
+ "engine/four-stroke-diesel": {
+  "readings": [
+   {
+    "label": "Crank angle",
+    "value": "31°",
+    "unit": "rev 1"
+   },
+   {
+    "label": "Volume",
+    "value": "148",
+    "unit": "cm³"
+   },
+   {
+    "label": "Pressure",
+    "value": "1",
+    "unit": "bar"
+   },
+   {
+    "label": "Temperature",
+    "value": "310",
+    "unit": "K"
+   }
+  ],
+  "equations": [
+   {
+    "label": "Swept volume (piston displacement)",
+    "tex": "V_s = \\tfrac{\\pi}{4}D^2L"
+   },
+   {
+    "label": "Clearance volume for the compression ratio",
+    "tex": "r = \\dfrac{V_s+V_c}{V_c}\\;\\Rightarrow\\; V_c = \\dfrac{V_s}{r-1}"
+   },
+   {
+    "label": "End of compression (isentropic 1→2)",
+    "tex": "T_2 = T_1 r^{k-1},\\quad P_2 = P_1 r^{k}"
+   }
+  ]
+ },
+ "engine/ignition": {
+  "readings": [
+   {
+    "label": "Crank",
+    "value": "269°",
+    "unit": "of 720"
+   },
+   {
+    "label": "Rotor",
+    "value": "135°",
+    "unit": "½ speed"
+   },
+   {
+    "label": "HT available",
+    "value": "29.2",
+    "unit": "kV"
+   }
+  ],
+  "equations": [
+   {
+    "label": "Turns ratio of the coil",
+    "tex": "\\dfrac{N_2}{N_1}"
+   },
+   {
+    "label": "Battery voltage simply stepped up — not enough",
+    "tex": "V_2 = V_1\\dfrac{N_2}{N_1}"
+   },
+   {
+    "label": "Primary current when the points open (dwell 60 % of 90° cam)",
+    "tex": "i = \\dfrac{V}{R}\\left(1-e^{-tR/L}\\right),\\quad t = 0.6\\,\\dfrac{60}{N\\,n_{cyl}/2}"
+   }
+  ]
+ },
+ "engine/lubrication": {
+  "readings": [
+   {
+    "label": "Oil pressure",
+    "value": "4.74",
+    "unit": "bar"
+   },
+   {
+    "label": "Pump output",
+    "value": "13.1",
+    "unit": "L/min"
+   },
+   {
+    "label": "Viscosity",
+    "value": "14.6",
+    "unit": "cSt"
+   },
+   {
+    "label": "To bearings",
+    "value": "13.1",
+    "unit": "L/min"
+   }
+  ],
+  "equations": [
+   {
+    "label": "Oil viscosity at the running temperature",
+    "tex": "\\log\\log(\\nu+0.7) = A - B\\log T"
+   },
+   {
+    "label": "Gear-pump delivery (pump driven by the camshaft, ½ engine speed)",
+    "tex": "Q = \\eta_v\\, V_p\\, \\dfrac{N}{2}"
+   },
+   {
+    "label": "Flow balance at the relief valve",
+    "tex": "Q = Q_{bearings}(p) + Q_{relief}(p),\\quad Q_{relief}=K\\,(p-p_{set})\\ \\text{if}\\ p>p_{set}"
+   }
+  ]
+ },
+ "engine/multi-cylinder": {
+  "readings": [
+   {
+    "label": "Crank angle",
+    "value": "417°",
+    "unit": "of 720"
+   },
+   {
+    "label": "Last fired",
+    "value": "Cyl 4",
+    "unit": "57° ago"
+   },
+   {
+    "label": "Next",
+    "value": "Cyl 2",
+    "unit": ""
+   },
+   {
+    "label": "Interval",
+    "value": "180°",
+    "unit": "720°/n"
+   }
+  ],
+  "equations": [
+   {
+    "label": "Firing interval (four-stroke)",
+    "tex": "\\theta_f = \\dfrac{720^\\circ}{n}"
+   },
+   {
+    "label": "Crank angle at which each cylinder starts its power stroke",
+    "tex": "\\varphi_k = (k-1)\\,\\theta_f\\quad\\text{for the }k\\text{-th cylinder in the firing order}"
+   },
+   {
+    "label": "Stroke of cylinder c at crank angle θ",
+    "tex": "\\psi_c = (\\theta - \\varphi_c + 360^\\circ) \\bmod 720^\\circ:\\; 0\\text{–}180\\,I,\\;180\\text{–}360\\,C,\\;360\\text{–}540\\,P,\\;540\\text{–}720\\,E"
+   }
+  ]
+ },
+ "engine/performance": {
+  "readings": [
+   {
+    "label": "PD / cyl",
+    "value": "942.48",
+    "unit": "cm³"
+   },
+   {
+    "label": "TCV / cyl",
+    "value": "1,001.4",
+    "unit": "cm³"
+   },
+   {
+    "label": "CR",
+    "value": "17",
+    "unit": ""
+   },
+   {
+    "label": "Total Vd",
+    "value": "3.77",
+    "unit": "L"
+   }
+  ],
+  "equations": [
+   {
+    "label": "Piston displacement (swept volume) per cylinder",
+    "tex": "PD = \\tfrac{\\pi}{4}D^2L"
+   },
+   {
+    "label": "Clearance volume, total cylinder volume, compression ratio",
+    "tex": "TCV = PD + CV,\\qquad CR = \\dfrac{TCV}{CV}"
+   },
+   {
+    "label": "Total swept volume and mean piston speed",
+    "tex": "V_d = k\\,PD,\\qquad S_p = \\dfrac{2LN}{60}"
+   }
+  ]
+ },
+ "engine/two-stroke": {
+  "readings": [
+   {
+    "label": "Crank angle",
+    "value": "277°",
+    "unit": "ATDC"
+   },
+   {
+    "label": "Cylinder p",
+    "value": "1.38",
+    "unit": "bar"
+   },
+   {
+    "label": "Crankcase p",
+    "value": "0.906",
+    "unit": "bar"
+   },
+   {
+    "label": "Oil to add",
+    "value": "208",
+    "unit": "mL"
+   }
+  ],
+  "equations": [
+   {
+    "label": "Piston travel from TDC (slider-crank)",
+    "tex": "x(\\theta) = r(1-\\cos\\theta) + l - \\sqrt{l^2 - r^2\\sin^2\\theta}"
+   },
+   {
+    "label": "Exhaust opens when x reaches the top of the exhaust port",
+    "tex": "x(\\theta_{EO}) = h_E \\;\\Rightarrow\\; \\theta_{EC} = 360^\\circ - \\theta_{EO}"
+   },
+   {
+    "label": "Transfer port (lower, so it opens later)",
+    "tex": "x(\\theta_{TO}) = h_T"
+   }
+  ]
+ },
+ "hydraulics/cylinder": {
+  "readings": [
+   {
+    "label": "Rod out",
+    "value": "109",
+    "unit": "mm"
+   },
+   {
+    "label": "Speed",
+    "value": "0.249",
+    "unit": "m/s"
+   },
+   {
+    "label": "Cap-end p",
+    "value": "4.39",
+    "unit": "MPa"
+   },
+   {
+    "label": "Flow in / out",
+    "value": "68.1 / 60.8",
+    "unit": "L/min"
+   }
+  ],
+  "equations": [
+   {
+    "label": "Piston (full-bore) area",
+    "tex": "A = \\tfrac{\\pi}{4}D^2"
+   },
+   {
+    "label": "Rod area and annulus (effective retract) area",
+    "tex": "a = \\tfrac{\\pi}{4}d^2,\\quad A_{ann} = A - a"
+   },
+   {
+    "label": "Forces: extending (P on A) and retracting (P on A − a)",
+    "tex": "F_{ext} = pA,\\quad F_{ret} = p(A-a)"
+   }
+  ]
+ },
+ "hydraulics/draft-control": {
+  "readings": [
+   {
+    "label": "Field position",
+    "value": "0.509",
+    "unit": "m"
+   },
+   {
+    "label": "Soil resistance k",
+    "value": "58.8",
+    "unit": "kN/m²"
+   },
+   {
+    "label": "Depth",
+    "value": "-57.2",
+    "unit": "mm"
+   },
+   {
+    "label": "Top link",
+    "value": "4.6 T",
+    "unit": "kN"
+   }
+  ],
+  "equations": [
+   {
+    "label": "Draft of the plough at the set depth (mean soil)",
+    "tex": "D = k\\,w\\,d"
+   },
+   {
+    "label": "Top-link force from moments about the lower hitch point",
+    "tex": "C\\,r_{top} = -\\textstyle\\sum M_L(S,\\,W_{plough})"
+   },
+   {
+    "label": "Sensing spring deflection (the valve signal)",
+    "tex": "x_s = C / k_s"
+   }
+  ]
+ },
+ "hydraulics/lift-circuit": {
+  "readings": [
+   {
+    "label": "Hitch height",
+    "value": "409",
+    "unit": "mm"
+   },
+   {
+    "label": "Ram pressure",
+    "value": "4.82",
+    "unit": "MPa"
+   },
+   {
+    "label": "To ram",
+    "value": "27",
+    "unit": "L/min"
+   }
+  ],
+  "equations": [
+   {
+    "label": "Relief setting in SI",
+    "tex": "p_{relief} = 150\\ \\text{kg/cm}^2\\times0.0981"
+   },
+   {
+    "label": "Lever ratio of the linkage at mid-lift (hitch rise per mm of ram stroke)",
+    "tex": "i = \\dfrac{dy_{hitch}}{dL_{ram}}"
+   },
+   {
+    "label": "Ram force and pressure for the implement weight",
+    "tex": "F = W\\,i,\\quad p = \\dfrac{F}{A},\\quad A = \\tfrac{\\pi}{4}D^2"
+   }
+  ]
+ },
+ "hydraulics/pumps": {
+  "readings": [
+   {
+    "label": "Shaft angle",
+    "value": "80°",
+    "unit": ""
+   },
+   {
+    "label": "Gear pump D",
+    "value": "13.88",
+    "unit": "cm³/rev"
+   },
+   {
+    "label": "Vane pump D",
+    "value": "52.64",
+    "unit": "cm³/rev"
+   },
+   {
+    "label": "Gear delivery",
+    "value": "104.1",
+    "unit": "% of mean"
+   }
+  ],
+  "equations": [
+   {
+    "label": "Gear-pump displacement from the gear geometry",
+    "tex": "D = 2\\pi b\\left(r_a^2 - r^2 - \\tfrac{p_b^2}{12}\\right),\\ p_b = \\pi m\\cos 20^\\circ"
+   },
+   {
+    "label": "Theoretical delivery",
+    "tex": "Q_T = \\dfrac{DN}{1000}"
+   },
+   {
+    "label": "Actual delivery (volumetric efficiency)",
+    "tex": "Q_A = \\eta_v Q_T"
+   }
+  ]
+ },
+ "hydraulics/three-point": {
+  "readings": [
+   {
+    "label": "Hitch height",
+    "value": "400",
+    "unit": "mm"
+   },
+   {
+    "label": "Working depth",
+    "value": "128",
+    "unit": "mm"
+   },
+   {
+    "label": "Lift-arm angle β",
+    "value": "4.64",
+    "unit": "°"
+   },
+   {
+    "label": "V ahead of axle",
+    "value": "1.65",
+    "unit": "m"
+   }
+  ],
+  "equations": [
+   {
+    "label": "Lower link: hitch point L for the hitch height",
+    "tex": "\\varphi = \\sin^{-1}\\dfrac{y_A - h}{l},\\quad L = (x_A - l\\cos\\varphi,\\ h)"
+   },
+   {
+    "label": "Close the four-bar: mast top U",
+    "tex": "|U - L| = m,\\quad |U - B| = t"
+   },
+   {
+    "label": "Virtual hitch point: intersection of lines AL and BU",
+    "tex": "V = A + s\\,(L - A),\\quad s = \\dfrac{(B - A)\\times(U - B)}{(L - A)\\times(U - B)}"
+   }
+  ]
+ },
+ "implements/combine": {
+  "readings": [
+   {
+    "label": "Area capacity",
+    "value": "1.64",
+    "unit": "ha/h"
+   },
+   {
+    "label": "Grain feed",
+    "value": "9.83",
+    "unit": "t/h"
+   },
+   {
+    "label": "Total feed",
+    "value": "19.7",
+    "unit": "t/h"
+   },
+   {
+    "label": "Load",
+    "value": "98",
+    "unit": "% of 20 t/h"
+   }
+  ],
+  "equations": [
+   {
+    "label": "Hours actually worked",
+    "tex": "t = \\text{annual use}\\times\\text{fraction worked}"
+   },
+   {
+    "label": "Commodity throughput capacity (product only)",
+    "tex": "C_c = \\dfrac{\\text{mass of product}}{t}"
+   },
+   {
+    "label": "Total throughput capacity (grain + stalk + leaves)",
+    "tex": "C_t = \\dfrac{\\text{total mass handled}}{t}"
+   }
+  ]
+ },
+ "implements/cultivators": {
+  "readings": [
+   {
+    "label": "Working width",
+    "value": "2.1",
+    "unit": "m"
+   },
+   {
+    "label": "Depth",
+    "value": "120",
+    "unit": "mm"
+   },
+   {
+    "label": "Capacity",
+    "value": "1.01",
+    "unit": "ha/h"
+   }
+  ],
+  "equations": [
+   {
+    "label": "Field capacity",
+    "tex": "C = W S\\,FE/10"
+   }
+  ]
+ },
+ "implements/disc-plough": {
+  "readings": [
+   {
+    "label": "Cut per disc w",
+    "value": "474",
+    "unit": "mm"
+   },
+   {
+    "label": "Total width",
+    "value": "1.42",
+    "unit": "m"
+   },
+   {
+    "label": "Draft",
+    "value": "5,120",
+    "unit": "N"
+   },
+   {
+    "label": "Power",
+    "value": "7.11",
+    "unit": "kW"
+   }
+  ],
+  "equations": [
+   {
+    "label": "Depth measured in the disc face",
+    "tex": "d' = d/\\cos\\beta"
+   },
+   {
+    "label": "Half-chord in the soil",
+    "tex": "c = \\sqrt{R^2-(R-d')^2}"
+   },
+   {
+    "label": "Width of cut per disc",
+    "tex": "w = 2c\\sin\\alpha + d\\tan\\beta"
+   }
+  ]
+ },
+ "implements/land-clearing": {
+  "readings": [
+   {
+    "label": "Stems counted",
+    "value": "11",
+    "unit": "in 0.1 ha"
+   },
+   {
+    "label": "Density",
+    "value": "110",
+    "unit": "stems/ha"
+   },
+   {
+    "label": "Largest stem",
+    "value": "30",
+    "unit": "cm"
+   },
+   {
+    "label": "Trees down",
+    "value": "0/432",
+    "unit": ""
+   }
+  ],
+  "equations": [
+   {
+    "label": "Area in acres",
+    "tex": "A = \\dfrac{\\text{ha}}{0.4047}"
+   },
+   {
+    "label": "Manual: cost (₦) and time",
+    "tex": "\\text{cost} = A\\,(c_{slash}+c_{stump}),\\quad t = A/\\text{rate}"
+   },
+   {
+    "label": "Dozer (₦)",
+    "tex": "t = A/15,\\quad \\text{cost} = t\\times150\\,000"
+   }
+  ]
+ },
+ "implements/mouldboard": {
+  "readings": [
+   {
+    "label": "Furrow area",
+    "value": "1,620",
+    "unit": "cm²"
+   },
+   {
+    "label": "Draft D",
+    "value": "3,240",
+    "unit": "N"
+   },
+   {
+    "label": "Power D·v",
+    "value": "4.5",
+    "unit": "kW"
+   },
+   {
+    "label": "Power",
+    "value": "6.12",
+    "unit": "hp"
+   }
+  ],
+  "equations": [
+   {
+    "label": "Furrow cross-section",
+    "tex": "A = n\\,w\\,d"
+   },
+   {
+    "label": "Draft",
+    "tex": "D = (\\text{unit draft})\\times A"
+   },
+   {
+    "label": "Speed",
+    "tex": "v = S/3.6"
+   }
+  ]
+ },
+ "implements/mower-baler": {
+  "readings": [
+   {
+    "label": "Crank",
+    "value": "918",
+    "unit": "rpm"
+   },
+   {
+    "label": "Stroke",
+    "value": "77.2",
+    "unit": "mm"
+   },
+   {
+    "label": "Mean knife",
+    "value": "2.36",
+    "unit": "m/s"
+   },
+   {
+    "label": "Advance/stroke",
+    "value": "63.5",
+    "unit": "mm"
+   }
+  ],
+  "equations": [
+   {
+    "label": "Alignment lead (outer end ahead)",
+    "tex": "\\ell = L\\times 6\\ \\text{mm/m}"
+   },
+   {
+    "label": "Crank speed through the gears",
+    "tex": "N = N_{pto}\\,\\dfrac{z_1}{z_2}"
+   },
+   {
+    "label": "Mean knife speed (two strokes per turn)",
+    "tex": "\\bar v_k = \\dfrac{2SN}{60}"
+   }
+  ]
+ },
+ "implements/planters": {
+  "readings": [
+   {
+    "label": "Width",
+    "value": "0.75",
+    "unit": "m"
+   },
+   {
+    "label": "Capacity",
+    "value": "0.281",
+    "unit": "ha/h"
+   },
+   {
+    "label": "Revs per 0.1 ha",
+    "value": "424.4",
+    "unit": ""
+   }
+  ],
+  "equations": [
+   {
+    "label": "Drill width",
+    "tex": "W = n \\times s"
+   },
+   {
+    "label": "Distance for the test area",
+    "tex": "L = \\dfrac{10000\\,A}{W}"
+   },
+   {
+    "label": "Wheel revolutions",
+    "tex": "N = \\dfrac{L}{\\pi D}"
+   }
+  ]
+ },
+ "implements/root-crops": {
+  "readings": [
+   {
+    "label": "Ground speed",
+    "value": "0.833",
+    "unit": "m/s"
+   },
+   {
+    "label": "Elevator",
+    "value": "1.25",
+    "unit": "m/s"
+   },
+   {
+    "label": "Ratio",
+    "value": "1.5",
+    "unit": "× ground"
+   },
+   {
+    "label": "Soil lifted",
+    "value": "825",
+    "unit": "m³/h"
+   }
+  ],
+  "equations": [
+   {
+    "label": "Elevator speed ratio (must exceed 1)",
+    "tex": "k = \\dfrac{v_e}{v}"
+   },
+   {
+    "label": "Soil lifted by the blade",
+    "tex": "Q_s = W\\,d\\,S\\times1000"
+   },
+   {
+    "label": "Field capacity",
+    "tex": "C = \\dfrac{W\\,S}{10}"
+   }
+  ]
+ },
+ "implements/sprayer": {
+  "readings": [
+   {
+    "label": "Pressure",
+    "value": "3",
+    "unit": "bar"
+   },
+   {
+    "label": "Boom flow",
+    "value": "14.4",
+    "unit": "L/min"
+   },
+   {
+    "label": "Bypass",
+    "value": "17.9",
+    "unit": "L/min"
+   },
+   {
+    "label": "Rate",
+    "value": "240",
+    "unit": "L/ha"
+   }
+  ],
+  "equations": [
+   {
+    "label": "Effective sprayer width",
+    "tex": "W = n\\times s"
+   },
+   {
+    "label": "Distance to cover 0.1 ha",
+    "tex": "L = \\dfrac{10\\,000\\,A}{W}"
+   },
+   {
+    "label": "Pump delivery (positive displacement)",
+    "tex": "Q_p = z\\,\\tfrac{\\pi}{4}d^2\\,s\\,N\\,\\eta_v"
+   }
+  ]
+ },
+ "implements/spreaders": {
+  "readings": [
+   {
+    "label": "Rate",
+    "value": "180",
+    "unit": "kg/ha"
+   },
+   {
+    "label": "Gate flow",
+    "value": "0.32",
+    "unit": "kg/s"
+   },
+   {
+    "label": "Spread width",
+    "value": "8",
+    "unit": "m"
+   },
+   {
+    "label": "Disc tip",
+    "value": "9.68",
+    "unit": "m/s"
+   }
+  ],
+  "equations": [
+   {
+    "label": "Gate flow onto the disc",
+    "tex": "\\dot m = k_g\\,a"
+   },
+   {
+    "label": "Application rate",
+    "tex": "Q = \\dfrac{10\\,000\\,\\dot m}{B\\,v}"
+   },
+   {
+    "label": "Disc tip and exit speed (frictionless vane)",
+    "tex": "v_e = \\omega\\sqrt{2R^2 - r_0^2}"
+   }
+  ]
+ },
+ "materials/axial": {
+  "readings": [
+   {
+    "label": "Temperature",
+    "value": "45",
+    "unit": "°C"
+   },
+   {
+    "label": "Touch at",
+    "value": "30.2",
+    "unit": "°C"
+   },
+   {
+    "label": "Stress",
+    "value": "35.9",
+    "unit": "MPa"
+   }
+  ],
+  "equations": [
+   {
+    "label": "Temperature at which the ends meet",
+    "tex": "T = T_0 + \\dfrac{\\text{gap}}{\\alpha L}"
+   },
+   {
+    "label": "Gap now",
+    "tex": "\\text{gap} = \\text{gap}_0 - \\alpha L (T - T_0)"
+   },
+   {
+    "label": "Stress once touching",
+    "tex": "\\sigma = E\\alpha (T - T_{\\text{touch}})"
+   }
+  ]
+ },
+ "materials/beam": {
+  "readings": [
+   {
+    "label": "Reaction A",
+    "value": "26.67",
+    "unit": "kN"
+   },
+   {
+    "label": "Reaction B",
+    "value": "33.33",
+    "unit": "kN"
+   },
+   {
+    "label": "Largest shear",
+    "value": "33.33",
+    "unit": "kN"
+   },
+   {
+    "label": "Largest moment",
+    "value": "66.67",
+    "unit": "kN·m"
+   }
+  ],
+  "equations": [
+   {
+    "label": "Moments about A",
+    "tex": "R_B L = \\sum P_i x_i"
+   },
+   {
+    "label": "Vertical forces",
+    "tex": "R_A = \\sum P_i - R_B"
+   },
+   {
+    "label": "Neutral axis",
+    "tex": "\\bar y = \\dfrac{\\sum A_i y_i}{\\sum A_i}"
+   }
+  ]
+ },
+ "materials/buckling": {
+  "readings": [
+   {
+    "label": "Load",
+    "value": "58.14",
+    "unit": "kN"
+   },
+   {
+    "label": "Buckling load",
+    "value": "96.89",
+    "unit": "kN"
+   },
+   {
+    "label": "Crushing load",
+    "value": "412.3",
+    "unit": "kN"
+   },
+   {
+    "label": "Slenderness",
+    "value": "200",
+    "unit": ""
+   }
+  ],
+  "equations": [
+   {
+    "label": "Effective length",
+    "tex": "L_e = c L"
+   },
+   {
+    "label": "Radius of gyration",
+    "tex": "k = \\sqrt{I/A}"
+   },
+   {
+    "label": "Slenderness ratio",
+    "tex": "\\lambda = \\dfrac{L_e}{k}"
+   }
+  ]
+ },
+ "materials/creep": {
+  "readings": [
+   {
+    "label": "Strain",
+    "value": "0.1",
+    "unit": "%"
+   },
+   {
+    "label": "Life",
+    "value": "38,800",
+    "unit": "h"
+   },
+   {
+    "label": "Steady rate",
+    "value": "3.10e-4",
+    "unit": "%/h"
+   },
+   {
+    "label": "L–M parameter",
+    "value": "20,240",
+    "unit": ""
+   }
+  ],
+  "equations": [
+   {
+    "label": "Steady creep rate, Norton’s law",
+    "tex": "\\dot\\varepsilon = A\\sigma^n e^{-Q/RT}"
+   },
+   {
+    "label": "Larson–Miller parameter",
+    "tex": "P = T(C + \\log_{10} t),\\quad C \\approx 20"
+   },
+   {
+    "label": "Life at another temperature, the same stress",
+    "tex": "\\log_{10} t_2 = \\dfrac{T_1}{T_2}(C + \\log_{10} t_1) - C"
+   }
+  ]
+ },
+ "materials/fatigue": {
+  "readings": [
+   {
+    "label": "Life",
+    "value": "195,000",
+    "unit": "cycles"
+   },
+   {
+    "label": "Allowed swing",
+    "value": "250",
+    "unit": "MPa"
+   },
+   {
+    "label": "Safety factor",
+    "value": "0.833",
+    "unit": ""
+   },
+   {
+    "label": "Stress ratio R",
+    "value": "-1",
+    "unit": ""
+   }
+  ],
+  "equations": [
+   {
+    "label": "Stress cycle",
+    "tex": "\\sigma_a = \\dfrac{\\sigma_{\\max}-\\sigma_{\\min}}{2},\\quad \\sigma_m = \\dfrac{\\sigma_{\\max}+\\sigma_{\\min}}{2}"
+   },
+   {
+    "label": "Goodman line",
+    "tex": "\\dfrac{\\sigma_a}{S_e} + \\dfrac{\\sigma_m}{S_u} = 1"
+   },
+   {
+    "label": "Gerber parabola",
+    "tex": "\\dfrac{\\sigma_a}{S_e} + \\left(\\dfrac{\\sigma_m}{S_u}\\right)^2 = 1"
+   }
+  ]
+ },
+ "materials/fracture": {
+  "readings": [
+   {
+    "label": "K now",
+    "value": "35.4",
+    "unit": "MPa√m"
+   },
+   {
+    "label": "Toughness",
+    "value": "50",
+    "unit": "MPa√m"
+   },
+   {
+    "label": "Stress to break",
+    "value": "282.1",
+    "unit": "MPa"
+   },
+   {
+    "label": "Crack to break",
+    "value": "19.9",
+    "unit": "mm"
+   }
+  ],
+  "equations": [
+   {
+    "label": "Stress intensity factor",
+    "tex": "K = Y\\sigma\\sqrt{\\pi a}"
+   },
+   {
+    "label": "Stress it can carry",
+    "tex": "\\sigma_c = \\dfrac{K_{Ic}}{Y\\sqrt{\\pi a}}"
+   },
+   {
+    "label": "Crack it can carry",
+    "tex": "a_c = \\dfrac{1}{\\pi}\\left(\\dfrac{K_{Ic}}{Y\\sigma}\\right)^2"
+   }
+  ]
+ },
+ "materials/pressure-vessel": {
+  "readings": [
+   {
+    "label": "Hoop stress",
+    "value": "100",
+    "unit": "MPa"
+   },
+   {
+    "label": "Axial stress",
+    "value": "50",
+    "unit": "MPa"
+   },
+   {
+    "label": "In a sphere",
+    "value": "50",
+    "unit": "MPa"
+   },
+   {
+    "label": "Hoop strain",
+    "value": "425",
+    "unit": "µε"
+   }
+  ],
+  "equations": [
+   {
+    "label": "Hoop stress: cut lengthwise",
+    "tex": "\\sigma_h(2tL) = p(2rL) \\Rightarrow \\sigma_h = \\dfrac{p r}{t}"
+   },
+   {
+    "label": "Axial stress: cut across",
+    "tex": "\\sigma_a(2\\pi r t) = p(\\pi r^2) \\Rightarrow \\sigma_a = \\dfrac{p r}{2t}"
+   },
+   {
+    "label": "Hoop strain",
+    "tex": "\\varepsilon_h = \\dfrac{1}{E}(\\sigma_h - \\nu\\sigma_a) = \\dfrac{pr}{2tE}(2-\\nu)"
+   }
+  ]
+ },
+ "materials/stress-state": {
+  "readings": [
+   {
+    "label": "On this face",
+    "value": "80",
+    "unit": "MPa"
+   },
+   {
+    "label": "Shear on it",
+    "value": "25",
+    "unit": "MPa"
+   },
+   {
+    "label": "On the other",
+    "value": "-40",
+    "unit": "MPa"
+   },
+   {
+    "label": "Principal 1",
+    "value": "85",
+    "unit": "MPa"
+   }
+  ],
+  "equations": [
+   {
+    "label": "Stress on a turned plane",
+    "tex": "\\sigma_n = \\dfrac{\\sigma_x+\\sigma_y}{2} + \\dfrac{\\sigma_x-\\sigma_y}{2}\\cos 2\\theta + \\tau_{xy}\\sin 2\\theta"
+   },
+   {
+    "label": "Shear on it",
+    "tex": "\\tau_n = -\\dfrac{\\sigma_x-\\sigma_y}{2}\\sin 2\\theta + \\tau_{xy}\\cos 2\\theta"
+   },
+   {
+    "label": "Centre and radius",
+    "tex": "C = \\dfrac{\\sigma_x+\\sigma_y}{2},\\quad R = \\sqrt{\\left(\\dfrac{\\sigma_x-\\sigma_y}{2}\\right)^2 + \\tau_{xy}^2}"
+   }
+  ]
+ },
+ "materials/tensile": {
+  "readings": [
+   {
+    "label": "Young’s modulus",
+    "value": "200",
+    "unit": "GPa"
+   },
+   {
+    "label": "Yield",
+    "value": "250",
+    "unit": "MPa"
+   },
+   {
+    "label": "Ultimate",
+    "value": "420",
+    "unit": "MPa"
+   },
+   {
+    "label": "Fracture",
+    "value": "300",
+    "unit": "MPa"
+   }
+  ],
+  "equations": [
+   {
+    "label": "Direct stress, on the original area",
+    "tex": "\\sigma = \\dfrac{P}{A}"
+   },
+   {
+    "label": "Strain",
+    "tex": "\\varepsilon = \\dfrac{\\delta}{L}"
+   },
+   {
+    "label": "Young’s modulus, on the straight part",
+    "tex": "E = \\dfrac{\\sigma}{\\varepsilon}"
+   }
+  ]
+ },
+ "materials/torsion": {
+  "readings": [
+   {
+    "label": "Twist",
+    "value": "2.45",
+    "unit": "°"
+   },
+   {
+    "label": "Largest stress",
+    "value": "88.42",
+    "unit": "MPa"
+   },
+   {
+    "label": "Inner stress",
+    "value": "75.7",
+    "unit": "MPa"
+   },
+   {
+    "label": "Polar moment J",
+    "value": "2.06e+7",
+    "unit": "mm⁴"
+   }
+  ],
+  "equations": [
+   {
+    "label": "The torsion equation",
+    "tex": "\\dfrac{T}{J} = \\dfrac{\\tau}{r} = \\dfrac{G\\theta}{L}"
+   },
+   {
+    "label": "Polar second moment",
+    "tex": "J = \\dfrac{\\pi}{32}(D^4 - d^4)"
+   },
+   {
+    "label": "Largest shear stress",
+    "tex": "\\tau = \\dfrac{T r}{J}"
+   }
+  ]
+ },
+ "mechanisms/balancing": {
+  "readings": [
+   {
+    "label": "Left: m r",
+    "value": "0.127",
+    "unit": "kg·m"
+   },
+   {
+    "label": "Bearing force",
+    "value": "125",
+    "unit": "N"
+   },
+   {
+    "label": "Left: couple",
+    "value": "84.1",
+    "unit": "N·m"
+   }
+  ],
+  "equations": [
+   {
+    "label": "Resolve along x",
+    "tex": "\\sum m r\\cos\\theta"
+   },
+   {
+    "label": "Resolve along y",
+    "tex": "\\sum m r\\sin\\theta"
+   },
+   {
+    "label": "Out-of-balance",
+    "tex": "m_b r_b = \\sqrt{(\\sum m r\\cos\\theta)^2 + (\\sum m r\\sin\\theta)^2}"
+   }
+  ]
+ },
+ "mechanisms/cam": {
+  "readings": [
+   {
+    "label": "Cam angle",
+    "value": "303",
+    "unit": "°"
+   },
+   {
+    "label": "Lift",
+    "value": "7.29",
+    "unit": "mm"
+   },
+   {
+    "label": "Velocity",
+    "value": "-42.2",
+    "unit": "mm/s"
+   },
+   {
+    "label": "Acceleration",
+    "value": "86",
+    "unit": "mm/s²"
+   }
+  ],
+  "equations": [
+   {
+    "label": "Uniform velocity rise",
+    "tex": "s = h\\dfrac{\\theta}{\\beta}"
+   },
+   {
+    "label": "Simple harmonic",
+    "tex": "s = \\dfrac{h}{2}\\left(1 - \\cos\\dfrac{\\pi\\theta}{\\beta}\\right)"
+   },
+   {
+    "label": "Cycloidal",
+    "tex": "s = h\\left(\\dfrac{\\theta}{\\beta} - \\dfrac{1}{2\\pi}\\sin\\dfrac{2\\pi\\theta}{\\beta}\\right)"
+   }
+  ]
+ },
+ "mechanisms/flywheel": {
+  "readings": [
+   {
+    "label": "Speed now",
+    "value": "298.3",
+    "unit": "rpm"
+   },
+   {
+    "label": "Mean moment",
+    "value": "62.07",
+    "unit": "N·m"
+   },
+   {
+    "label": "Energy to store",
+    "value": "1,011",
+    "unit": "J"
+   },
+   {
+    "label": "Inertia I",
+    "value": "8.192",
+    "unit": "kg·m²"
+   }
+  ],
+  "equations": [
+   {
+    "label": "Inertia",
+    "tex": "I = m k^2"
+   },
+   {
+    "label": "Energy fluctuation, from the diagram",
+    "tex": "\\Delta E = E_{\\max} - E_{\\min}"
+   },
+   {
+    "label": "Coefficient of fluctuation of speed",
+    "tex": "C_s = \\dfrac{\\omega_1 - \\omega_2}{\\bar\\omega} = \\dfrac{\\Delta E}{I\\bar\\omega^2}"
+   }
+  ]
+ },
+ "mechanisms/four-bar": {
+  "readings": [
+   {
+    "label": "Crank angle",
+    "value": "146",
+    "unit": "°"
+   },
+   {
+    "label": "Output lever",
+    "value": "102",
+    "unit": "°"
+   },
+   {
+    "label": "Transmission",
+    "value": "62.5",
+    "unit": "°"
+   },
+   {
+    "label": "Crank to coupler",
+    "value": "72.7",
+    "unit": "°"
+   }
+  ],
+  "equations": [
+   {
+    "label": "Grashof’s law",
+    "tex": "S + L \\le P + Q"
+   },
+   {
+    "label": "Smallest γ: crank folded back along the frame",
+    "tex": "(d-r)^2 = c^2 + e^2 - 2ce\\cos\\gamma_{\\min}"
+   },
+   {
+    "label": "Largest γ: crank stretched out along the frame",
+    "tex": "(d+r)^2 = c^2 + e^2 - 2ce\\cos\\gamma_{\\max}"
+   }
+  ]
+ },
+ "mechanisms/geneva": {
+  "readings": [
+   {
+    "label": "Input angle",
+    "value": "163",
+    "unit": "°"
+   },
+   {
+    "label": "Output angle",
+    "value": "60",
+    "unit": "°"
+   },
+   {
+    "label": "Step",
+    "value": "60",
+    "unit": "°"
+   },
+   {
+    "label": "Moving for",
+    "value": "33.3",
+    "unit": "%"
+   }
+  ],
+  "equations": [
+   {
+    "label": "Output per step",
+    "tex": "\\beta = \\dfrac{360^\\circ}{n}"
+   },
+   {
+    "label": "Input while engaged",
+    "tex": "2\\alpha_0 = 180^\\circ - \\dfrac{360^\\circ}{n}"
+   },
+   {
+    "label": "Pin radius over centre distance",
+    "tex": "\\lambda = \\dfrac{a}{c} = \\sin\\dfrac{\\pi}{n}"
+   }
+  ]
+ },
+ "mechanisms/governors": {
+  "readings": [
+   {
+    "label": "Ball radius",
+    "value": "149.8",
+    "unit": "mm"
+   },
+   {
+    "label": "Sleeve lift",
+    "value": "62.4",
+    "unit": "mm"
+   },
+   {
+    "label": "Controlling force",
+    "value": "156.2",
+    "unit": "N"
+   },
+   {
+    "label": "Lowest speed",
+    "value": "137.1",
+    "unit": "rpm"
+   }
+  ],
+  "equations": [
+   {
+    "label": "Ball radius at 30°",
+    "tex": "r = c + l\\sin\\alpha"
+   },
+   {
+    "label": "Controlling force, lowest",
+    "tex": "F = (m + M) g \\tan\\alpha"
+   },
+   {
+    "label": "Speed, lowest",
+    "tex": "F = m\\omega^2 r"
+   }
+  ]
+ },
+ "mechanisms/inertia": {
+  "readings": [],
+  "equations": [
+   {
+    "label": "Inertia about the pivot",
+    "tex": "I_O = m g h \\left(\\dfrac{T}{2\\pi}\\right)^2"
+   },
+   {
+    "label": "About the centre of gravity",
+    "tex": "I_G = I_O - m h^2"
+   }
+  ]
+ },
+ "mechanisms/inversions": {
+  "readings": [],
+  "equations": []
+ },
+ "mechanisms/oldham": {
+  "readings": [
+   {
+    "label": "Shaft angle",
+    "value": "237",
+    "unit": "°"
+   },
+   {
+    "label": "Shaft speed",
+    "value": "20",
+    "unit": "rpm"
+   },
+   {
+    "label": "Disc speed",
+    "value": "20",
+    "unit": "rpm"
+   },
+   {
+    "label": "Locus diameter",
+    "value": "30",
+    "unit": "mm"
+   }
+  ],
+  "equations": [
+   {
+    "label": "The disc centre lies on both tongues",
+    "tex": "\\text{tongues at } 90^\\circ \\Rightarrow \\text{ a right angle at the centre, on diameter } AB"
+   },
+   {
+    "label": "How fast it goes round",
+    "tex": "\\omega_{\\text{locus}} = 2\\omega"
+   },
+   {
+    "label": "Largest sliding speed in a groove",
+    "tex": "v_{\\max} = \\omega d"
+   }
+  ]
+ },
+ "mechanisms/reciprocating": {
+  "readings": [
+   {
+    "label": "Primary now",
+    "value": "2.11",
+    "unit": "kN"
+   },
+   {
+    "label": "Secondary now",
+    "value": "0.282",
+    "unit": "kN"
+   }
+  ],
+  "equations": [
+   {
+    "label": "Primary, at crank speed",
+    "tex": "F_p = m\\omega^2 r\\cos\\theta"
+   },
+   {
+    "label": "Secondary, at twice crank speed",
+    "tex": "F_s = m\\omega^2 r\\dfrac{\\cos 2\\theta}{n}"
+   },
+   {
+    "label": "Equivalent rod: second point mass",
+    "tex": "b = \\dfrac{k^2}{a} = \\dfrac{I}{m a}"
+   }
+  ]
+ },
+ "mechanisms/slider-crank": {
+  "readings": [
+   {
+    "label": "Crank angle",
+    "value": "234",
+    "unit": "°"
+   },
+   {
+    "label": "Displacement",
+    "value": "41.7",
+    "unit": "mm"
+   },
+   {
+    "label": "Stroke",
+    "value": "50",
+    "unit": "mm"
+   },
+   {
+    "label": "Velocity",
+    "value": "-36.2",
+    "unit": "mm/s"
+   }
+  ],
+  "equations": [
+   {
+    "label": "Displacement, no offset",
+    "tex": "x = r\\left(n + 1 - \\cos\\theta - \\sqrt{n^2 - \\sin^2\\theta}\\right)"
+   },
+   {
+    "label": "Why half stroke is not at 90°",
+    "tex": "x_{90^\\circ} = r\\left(n + 1 - \\sqrt{n^2 - 1}\\right)"
+   },
+   {
+    "label": "Velocity",
+    "tex": "V \\approx \\omega r\\left(\\sin\\theta + \\dfrac{\\sin 2\\theta}{2n}\\right)"
+   }
+  ]
+ },
+ "mechanisms/velocity-diagram": {
+  "readings": [
+   {
+    "label": "Crank pin",
+    "value": "0.1",
+    "unit": "m/s"
+   },
+   {
+    "label": "Pin C",
+    "value": "0.0605",
+    "unit": "m/s"
+   },
+   {
+    "label": "C relative to B",
+    "value": "0.0501",
+    "unit": "m/s"
+   },
+   {
+    "label": "Coupler speed",
+    "value": "-0.278",
+    "unit": "rad/s"
+   }
+  ],
+  "equations": [
+   {
+    "label": "Start from what is known",
+    "tex": "v_B = \\omega_2 \\times AB"
+   },
+   {
+    "label": "Relative velocity equation",
+    "tex": "\\vec v_C = \\vec v_B + \\vec v_{C/B},\\quad v_{C/B}\\perp BC,\\ v_C\\perp DC"
+   },
+   {
+    "label": "Angular velocities",
+    "tex": "\\omega_3 = \\dfrac{v_{C/B}}{BC},\\quad \\omega_4 = \\dfrac{v_C}{DC}"
+   }
+  ]
+ },
+ "powertrain/brakes": {
+  "readings": [
+   {
+    "label": "Brake shaft",
+    "value": "300",
+    "unit": "rpm"
+   }
+  ],
+  "equations": [
+   {
+    "label": "Master cylinder pressure (one per pedal)",
+    "tex": "p = \\dfrac{F_{pedal}\\,i}{A_m}"
+   },
+   {
+    "label": "Balls on the ramps: thrust from the link pull",
+    "tex": "F_0 = \\dfrac{P}{\\tan\\alpha}"
+   },
+   {
+    "label": "Self-energising: friction drags the expander further round",
+    "tex": "F = \\dfrac{P}{\\tan\\alpha - f R_f / r_b}"
+   }
+  ]
+ },
+ "powertrain/clutches": {
+  "readings": [
+   {
+    "label": "Engine",
+    "value": "1,500",
+    "unit": "rpm"
+   },
+   {
+    "label": "Gearbox shaft",
+    "value": "1,500",
+    "unit": "rpm"
+   },
+   {
+    "label": "Capacity now",
+    "value": "518",
+    "unit": "N·m"
+   },
+   {
+    "label": "Clamp load",
+    "value": "100 %",
+    "unit": ""
+   }
+  ],
+  "equations": [
+   {
+    "label": "Number of friction pairs",
+    "tex": "n = n_1 + n_2 - 1"
+   },
+   {
+    "label": "Friction radius — uniform wear (run-in clutch)",
+    "tex": "R_f = \\dfrac{R_o + R_i}{2}"
+   },
+   {
+    "label": "Torque capacity",
+    "tex": "T = n\\,f\\,F\\,R_f"
+   }
+  ]
+ },
+ "powertrain/cvt": {
+  "readings": [
+   {
+    "label": "Ground speed",
+    "value": "8",
+    "unit": "km/h"
+   },
+   {
+    "label": "Engine",
+    "value": "1,700",
+    "unit": "rpm"
+   },
+   {
+    "label": "Output shaft",
+    "value": "1,599",
+    "unit": "rpm"
+   },
+   {
+    "label": "Pump displacement",
+    "value": "60.8",
+    "unit": "%"
+   }
+  ],
+  "equations": [
+   {
+    "label": "Planetary speeds (Willis), carrier = engine",
+    "tex": "z_s\\,\\omega_o + z_r\\,\\omega_r = (z_s + z_r)\\,\\omega_e"
+   },
+   {
+    "label": "Oil continuity, pump = motor flow",
+    "tex": "\\alpha V\\,(k_r\\,\\omega_r) = \\beta V\\,(k_m\\,\\omega_o)"
+   },
+   {
+    "label": "Overall ratio",
+    "tex": "\\dfrac{\\omega_o}{\\omega_e} = \\dfrac{(z_s+z_r)\\,\\alpha k_r}{z_s\\,\\alpha k_r + z_r\\,\\beta k_m}"
+   }
+  ]
+ },
+ "powertrain/differential": {
+  "readings": [
+   {
+    "label": "Pinion",
+    "value": "600",
+    "unit": "rpm"
+   },
+   {
+    "label": "Crown / cage",
+    "value": "140",
+    "unit": "rpm"
+   },
+   {
+    "label": "Left wheel",
+    "value": "140",
+    "unit": "rpm"
+   },
+   {
+    "label": "Right wheel",
+    "value": "140",
+    "unit": "rpm"
+   }
+  ],
+  "equations": [
+   {
+    "label": "Crown wheel & pinion reduction",
+    "tex": "i = \\dfrac{z_{crown}}{z_{pinion}},\\qquad N_{cage} = \\dfrac{N_{pinion}}{i}"
+   },
+   {
+    "label": "The cage turns at the mean of the two wheel speeds",
+    "tex": "N_{cage} = \\dfrac{N_L + N_R}{2}"
+   },
+   {
+    "label": "Planet pinion spin on the cross-pin (relative to the cage)",
+    "tex": "n_p = \\dfrac{N_L - N_R}{2}\\cdot\\dfrac{z_{side}}{z_{planet}}"
+   }
+  ]
+ },
+ "powertrain/final-drives": {
+  "readings": [
+   {
+    "label": "Engine",
+    "value": "2,000",
+    "unit": "rpm"
+   },
+   {
+    "label": "Bevel pinion",
+    "value": "384.6",
+    "unit": "rpm"
+   },
+   {
+    "label": "Half shaft",
+    "value": "90.02",
+    "unit": "rpm"
+   },
+   {
+    "label": "Wheel",
+    "value": "18.8",
+    "unit": "rpm"
+   }
+  ],
+  "equations": [
+   {
+    "label": "1 · Gearbox",
+    "tex": "N_1 = \\dfrac{N_e}{i_g},\\quad T_1 = T_e\\,i_g\\,\\eta^{2}"
+   },
+   {
+    "label": "2 · Crown wheel & pinion",
+    "tex": "i_c = \\dfrac{z_{crown}}{z_{pinion}}"
+   },
+   {
+    "label": "3 · Final reduction — MF rear axle",
+    "tex": "i_f = 1 + \\dfrac{z_{ring}}{z_{sun}}\\ \\ (\\text{ring held})"
+   }
+  ]
+ },
+ "powertrain/gearboxes": {
+  "readings": [
+   {
+    "label": "Engaged",
+    "value": "2 · H",
+    "unit": ""
+   },
+   {
+    "label": "Top shaft",
+    "value": "1,800",
+    "unit": "rpm"
+   },
+   {
+    "label": "Bottom shaft",
+    "value": "-1,040",
+    "unit": "rpm"
+   },
+   {
+    "label": "Output",
+    "value": "1,040",
+    "unit": "rpm"
+   }
+  ],
+  "equations": [
+   {
+    "label": "Gear train ratio",
+    "tex": "\\dfrac{N_{out}}{N_{in}} = \\dfrac{\\prod z_{driver}}{\\prod z_{follower}}"
+   },
+   {
+    "label": "Wheel speed through crown wheel and final drive",
+    "tex": "N_{wheel} = \\dfrac{N_e \\,(N_{out}/N_{in})}{i_{cw}\\, i_{fd}}"
+   },
+   {
+    "label": "Ground speed",
+    "tex": "v = \\dfrac{2\\pi r N}{60}\\times3.6"
+   }
+  ]
+ },
+ "powertrain/hydrostatic": {
+  "readings": [
+   {
+    "label": "Pump (engine)",
+    "value": "2,000",
+    "unit": "rpm"
+   },
+   {
+    "label": "Pump swashplate",
+    "value": "10.8°",
+    "unit": ""
+   },
+   {
+    "label": "Motor swashplate",
+    "value": "18°",
+    "unit": ""
+   },
+   {
+    "label": "Flow Q",
+    "value": "59.8",
+    "unit": "L/min"
+   }
+  ],
+  "equations": [
+   {
+    "label": "Pump displacement from the swashplate angle",
+    "tex": "D = z\\,\\tfrac{\\pi}{4}d^2\\,(2R\\tan\\beta)"
+   },
+   {
+    "label": "Pump delivery",
+    "tex": "Q_A = \\eta_v\\,\\dfrac{D_p N_p}{1000}"
+   },
+   {
+    "label": "Motor speed — set by the flow",
+    "tex": "N_m = \\eta_v\\,\\dfrac{1000\\,Q_A}{D_m}"
+   }
+  ]
+ },
+ "powertrain/line-of-drive": {
+  "readings": [
+   {
+    "label": "Engine",
+    "value": "2,357",
+    "unit": "rpm"
+   },
+   {
+    "label": "Engine torque",
+    "value": "65.9",
+    "unit": "N·m"
+   },
+   {
+    "label": "Engine power",
+    "value": "16.3",
+    "unit": "kW"
+   },
+   {
+    "label": "Wheel speed",
+    "value": "16.9",
+    "unit": "rpm"
+   }
+  ],
+  "equations": [
+   {
+    "label": "Wheel torque and engine torque needed",
+    "tex": "H = P + R,\\quad T_w = \\dfrac{H D}{2},\\quad T_e = \\dfrac{T_w}{q\\,\\eta_r}"
+   },
+   {
+    "label": "Engine speed from the governed torque curve",
+    "tex": "T(N_e) = T_e"
+   },
+   {
+    "label": "Travel speed, theoretical and with slip",
+    "tex": "V_0 = \\dfrac{\\pi D N_e}{q},\\quad V = V_0(1-i)"
+   }
+  ]
+ },
+ "powertrain/mf-16-speed": {
+  "readings": [
+   {
+    "label": "Speed",
+    "value": "F6",
+    "unit": ""
+   },
+   {
+    "label": "Ground speed",
+    "value": "5.21",
+    "unit": "km/h"
+   },
+   {
+    "label": "Box ratio",
+    "value": "-0.223",
+    "unit": "ω_out/ω_in"
+   },
+   {
+    "label": "Input (sun)",
+    "value": "2,000",
+    "unit": "rpm"
+   }
+  ],
+  "equations": [
+   {
+    "label": "Number of forward speeds",
+    "tex": "n = 4\\ \\text{gears} \\times 2\\ \\text{ranges} \\times 2\\ \\text{speed-shift}"
+   },
+   {
+    "label": "Speed-shift low: ring held, sun in, carrier out",
+    "tex": "\\dfrac{\\omega_c}{\\omega_s} = \\dfrac{z_s}{z_s+z_r}"
+   },
+   {
+    "label": "Gear train ratio = Π driver teeth / Π follower teeth",
+    "tex": "\\dfrac{N_{out}}{N_{in}} = i_{ss}\\cdot\\dfrac{z_{shuttle}}{z_{cm}}\\cdot\\dfrac{z_{main}}{z_{lay}}\\cdot\\dfrac{z_{lay,range}}{z_{out}}"
+   }
+  ]
+ },
+ "powertrain/planetary": {
+  "readings": [
+   {
+    "label": "Sun",
+    "value": "240",
+    "unit": "rpm"
+   },
+   {
+    "label": "Carrier",
+    "value": "66.7",
+    "unit": "rpm"
+   },
+   {
+    "label": "Planet spin",
+    "value": "-217",
+    "unit": "rpm on pin"
+   },
+   {
+    "label": "Output",
+    "value": "66.7",
+    "unit": "rpm"
+   }
+  ],
+  "equations": [
+   {
+    "label": "Ring teeth for sun and planets of one module",
+    "tex": "z_r = z_s + 2z_p"
+   },
+   {
+    "label": "Willis equation (speeds relative to the carrier)",
+    "tex": "\\dfrac{\\omega_s-\\omega_c}{\\omega_r-\\omega_c} = -\\dfrac{z_r}{z_s}\\;\\Leftrightarrow\\; z_s\\omega_s + z_r\\omega_r = (z_s+z_r)\\,\\omega_c"
+   },
+   {
+    "label": "Ring held: put \\omega_r = 0",
+    "tex": "z_s\\,\\omega_s \\ \\text{and}\\ (z_s+z_r)\\,\\omega_c\\ \\text{in}\\ z_s\\omega_s + z_r\\omega_r = (z_s+z_r)\\omega_c"
+   }
+  ]
+ },
+ "powertrain/powershift": {
+  "readings": [
+   {
+    "label": "Input",
+    "value": "381.3",
+    "unit": "rpm"
+   },
+   {
+    "label": "Output",
+    "value": "381.3",
+    "unit": "rpm"
+   },
+   {
+    "label": "Countershaft",
+    "value": "-254.2",
+    "unit": "rpm"
+   },
+   {
+    "label": "ω_out/ω_in",
+    "value": "1",
+    "unit": ""
+   }
+  ],
+  "equations": [
+   {
+    "label": "Underdrive ratio (two external meshes, same direction)",
+    "tex": "\\dfrac{N_{out}}{N_{in}} = \\dfrac{z_a}{z_b}\\cdot\\dfrac{z_c}{z_d}"
+   },
+   {
+    "label": "Reverse ratio (three meshes: output reversed; the idler cancels)",
+    "tex": "\\dfrac{N_{out}}{N_{in}} = -\\dfrac{z_a}{z_b}\\cdot\\dfrac{z_e}{z_f}"
+   },
+   {
+    "label": "Piston clamping force",
+    "tex": "F = p\\,\\pi(r_o^2-r_i^2) - F_{spring}"
+   }
+  ]
+ },
+ "powertrain/torque-converter": {
+  "readings": [
+   {
+    "label": "Pump torque",
+    "value": "300",
+    "unit": "N·m"
+   },
+   {
+    "label": "Turbine torque",
+    "value": "660",
+    "unit": "N·m"
+   },
+   {
+    "label": "Stator reaction",
+    "value": "360",
+    "unit": "N·m"
+   },
+   {
+    "label": "Torque ratio",
+    "value": "2.2",
+    "unit": ": 1"
+   }
+  ],
+  "equations": [
+   {
+    "label": "Speed ratio",
+    "tex": "SR = \\dfrac{N_{turbine}}{N_{pump}}"
+   },
+   {
+    "label": "Torque ratio from the characteristic",
+    "tex": "TR = TR_0 - (TR_0 - 1)\\dfrac{SR}{SR_c}\\ \\ (SR < SR_c),\\qquad TR = 1\\ \\ (SR \\ge SR_c)"
+   },
+   {
+    "label": "Torque balance: the stator is the fulcrum",
+    "tex": "T_{turbine} = T_{pump} + T_{stator}"
+   }
+  ]
+ },
+ "precision/autosteer": {
+  "readings": [
+   {
+    "label": "Cross-track error",
+    "value": "-122",
+    "unit": "cm"
+   },
+   {
+    "label": "Steer angle",
+    "value": "4",
+    "unit": "°"
+   },
+   {
+    "label": "Position error",
+    "value": "0.306",
+    "unit": "cm"
+   }
+  ],
+  "equations": [
+   {
+    "label": "Pure pursuit: curvature to reach the look-ahead point",
+    "tex": "\\kappa = \\dfrac{2\\,y}{L_d^{2}},\\qquad \\delta = \\arctan(\\kappa\\,l)"
+   },
+   {
+    "label": "Turn radius at a headland",
+    "tex": "R = \\dfrac{W}{2},\\quad \\delta = \\arctan\\dfrac{l}{R}"
+   },
+   {
+    "label": "Cost of overlap",
+    "tex": "\\text{waste} = \\text{overlap} \\times \\text{area} \\times \\text{input cost}"
+   }
+  ]
+ },
+ "precision/see-and-spray": {
+  "readings": [],
+  "equations": [
+   {
+    "label": "Time from first sight to the nozzle",
+    "tex": "t_{lead} = \\dfrac{L_{ahead} - b - r}{v}"
+   },
+   {
+    "label": "Where the patch lands",
+    "tex": "\\Delta x = v\\,(t_{uncomp} + \\max(0,\\,t_{lat} - t_{lead}))"
+   },
+   {
+    "label": "Chemical saved",
+    "tex": "\\text{saved} = 1 - \\dfrac{\\text{area wetted}}{\\text{area of the strip}}"
+   }
+  ]
+ },
+ "processing/cassava-garri": {
+  "readings": [
+   {
+    "label": "Roots in",
+    "value": "1,000",
+    "unit": "kg/h"
+   },
+   {
+    "label": "Garri out",
+    "value": "248.6",
+    "unit": "kg/h"
+   },
+   {
+    "label": "Yield",
+    "value": "24.9",
+    "unit": "% roots"
+   },
+   {
+    "label": "Steam off fryer",
+    "value": "175.2",
+    "unit": "kg/h"
+   }
+  ],
+  "equations": [
+   {
+    "label": "Peeling",
+    "tex": "m_{peeled}=m_{roots}(1-f_{peel})"
+   },
+   {
+    "label": "Pressing — dry matter conserved",
+    "tex": "m_{cake}=\\dfrac{S_{cake}}{1-M_{cake}}"
+   },
+   {
+    "label": "Frying — water evaporated",
+    "tex": "m_{garri}=\\dfrac{S}{1-M_{garri}},\\quad m_{steam}=m_{grits}-m_{garri}"
+   }
+  ]
+ },
+ "processing/conveyors": {
+  "readings": [
+   {
+    "label": "Load area A + As",
+    "value": "320",
+    "unit": "cm²"
+   },
+   {
+    "label": "Capacity",
+    "value": "288",
+    "unit": "m³/h"
+   },
+   {
+    "label": "Mass flow",
+    "value": "216",
+    "unit": "t/h"
+   },
+   {
+    "label": "Lift H",
+    "value": "4.18",
+    "unit": "m"
+   }
+  ],
+  "equations": [
+   {
+    "label": "Load area between the rolls (three equal rolls, b = B − 2M)",
+    "tex": "A=\\tfrac{1}{2}(l+l+2l\\cos\\beta)\\,l\\sin\\beta,\\ l=b/3"
+   },
+   {
+    "label": "Surcharge area above line AB (circular segment)",
+    "tex": "A_s=R^2(\\alpha-\\sin\\alpha\\cos\\alpha),\\ R=\\dfrac{w}{2\\sin\\alpha}"
+   },
+   {
+    "label": "Capacity C = V(A + As)",
+    "tex": "C=(A+A_s)\\,v\\times 60\\ \\ [v\\ \\text{in m/min}]"
+   }
+  ]
+ },
+ "processing/palm-oil": {
+  "readings": [
+   {
+    "label": "FFB in",
+    "value": "1,000",
+    "unit": "kg/h"
+   },
+   {
+    "label": "Crude palm oil",
+    "value": "225",
+    "unit": "kg/h"
+   },
+   {
+    "label": "OER",
+    "value": "22.5",
+    "unit": "%"
+   },
+   {
+    "label": "Kernels (KER)",
+    "value": "67 · 6.7 %",
+    "unit": "kg/h"
+   }
+  ],
+  "equations": [
+   {
+    "label": "Steriliser and thresher balance",
+    "tex": "m_{loss}=FFB-EFB-\\text{fruit}"
+   },
+   {
+    "label": "Fruit balance — dilution water",
+    "tex": "W=(CPO+sludge+fibre+shell+kernel)-\\text{fruit}"
+   },
+   {
+    "label": "Oil and kernel extraction rates",
+    "tex": "OER=\\dfrac{CPO}{FFB},\\quad KER=\\dfrac{kernels}{FFB}"
+   }
+  ]
+ },
+ "processing/plant-layout": {
+  "readings": [
+   {
+    "label": "Flow Crossings",
+    "value": "0 (Clean Flow)",
+    "unit": ""
+   },
+   {
+    "label": "Total Route Distance",
+    "value": "50",
+    "unit": "m"
+   },
+   {
+    "label": "Handling Effort",
+    "value": "100",
+    "unit": "t·m/batch"
+   },
+   {
+    "label": "Handling Index",
+    "value": "100%",
+    "unit": ""
+   }
+  ],
+  "equations": [
+   {
+    "label": "Total Material Handling Distance",
+    "tex": "L = \\sum_{i=1}^{n-1} \\sqrt{(x_{i+1} - x_i)^2 + (z_{i+1} - z_i)^2} = 50\\text{ m}"
+   },
+   {
+    "label": "Total Handling Effort per Batch (AGE 504 Note 4)",
+    "tex": "E = \\sum_{j=1}^{m} M_j \\cdot d_j = 100\\text{ t}\\cdot\\text{m/batch}"
+   },
+   {
+    "label": "Relative Handling Efficiency Index",
+    "tex": "\\eta = \\frac{E}{E_{\\text{optimal}}} \\times 100\\% = \\frac{100}{100} \\times 100\\% = 100\\%"
+   }
+  ]
+ },
+ "processing/preservation": {
+  "readings": [
+   {
+    "label": "Retort F₀",
+    "value": "2.52",
+    "unit": "min"
+   },
+   {
+    "label": "Cooling load",
+    "value": "263",
+    "unit": "kW"
+   },
+   {
+    "label": "Plank tf",
+    "value": "1.8",
+    "unit": "h"
+   },
+   {
+    "label": "D-value @ T",
+    "value": "0.21",
+    "unit": "min"
+   }
+  ],
+  "equations": [
+   {
+    "label": "1. Microbial death kinetics and D at the retort temperature",
+    "tex": "\\frac{dN}{dt} = -k N \\implies D = \\frac{2.303}{k}"
+   },
+   {
+    "label": "2. Process time and F₀",
+    "tex": "t = D \\log_{10}\\left(\\frac{N_0}{N}\\right) = D \\times \\Delta\\log, \\quad F_0 = D_{121.1} \\times \\Delta\\log"
+   },
+   {
+    "label": "3. Product cooling load",
+    "tex": "H = m\\left[C_a \\Delta T_a + h_l + C_b \\Delta T_b\\right]"
+   }
+  ]
+ },
+ "processing/rice-processing": {
+  "readings": [
+   {
+    "label": "Paddy in",
+    "value": "1,000",
+    "unit": "kg/h"
+   },
+   {
+    "label": "Milled rice",
+    "value": "712.9",
+    "unit": "kg/h"
+   },
+   {
+    "label": "Milling yield",
+    "value": "71.3",
+    "unit": "%"
+   },
+   {
+    "label": "Head rice yield",
+    "value": "62",
+    "unit": "%"
+   }
+  ],
+  "equations": [
+   {
+    "label": "Drying paddy (dry matter conserved)",
+    "tex": "m_2=m_1\\dfrac{1-M_1}{1-M_2}"
+   },
+   {
+    "label": "Shelling — hulls off",
+    "tex": "\\text{brown}=\\text{clean paddy}(1-h)"
+   },
+   {
+    "label": "Milling — bran off",
+    "tex": "\\text{milled}=\\text{brown}(1-DOM)"
+   }
+  ]
+ },
+ "processing/separation": {
+  "readings": [
+   {
+    "label": "Screen E",
+    "value": "0.888",
+    "unit": ""
+   },
+   {
+    "label": "Overflow A/F",
+    "value": "0.393",
+    "unit": ""
+   },
+   {
+    "label": "Underflow B/F",
+    "value": "0.607",
+    "unit": ""
+   },
+   {
+    "label": "Vt grain",
+    "value": "11.3",
+    "unit": "m/s"
+   }
+  ],
+  "equations": [
+   {
+    "label": "Mass split (eqs 3–4)",
+    "tex": "\\dfrac{A}{F}=\\dfrac{X_F-X_B}{X_A-X_B},\\ \\dfrac{B}{F}=\\dfrac{X_A-X_F}{X_A-X_B}"
+   },
+   {
+    "label": "Screen effectiveness (eqs 5–9)",
+    "tex": "E=E_AE_B=\\dfrac{(X_F-X_B)(X_A-X_F)X_A(1-X_B)}{(X_A-X_B)^2(1-X_F)X_F}"
+   },
+   {
+    "label": "Stokes terminal velocity (eqs 11–12)",
+    "tex": "V=\\dfrac{gD^2(\\rho_p-\\rho_a)}{18\\mu}"
+   }
+  ]
+ },
+ "processing/size-reduction": {
+  "readings": [
+   {
+    "label": "Rotor speed",
+    "value": "2,800",
+    "unit": "rpm"
+   },
+   {
+    "label": "Tip speed",
+    "value": "50",
+    "unit": "m/s"
+   },
+   {
+    "label": "Screen aperture",
+    "value": "2",
+    "unit": "mm"
+   },
+   {
+    "label": "Power draw",
+    "value": "4.1",
+    "unit": "kW"
+   }
+  ],
+  "equations": [
+   {
+    "label": "Size-reduction ratio (RR)",
+    "tex": "RR = \\frac{L_1}{L_2}"
+   },
+   {
+    "label": "Fineness Modulus (FM)",
+    "tex": "FM = \\frac{\\sum (\\%_{\\text{retained}, i} \\times m_i)}{100}"
+   },
+   {
+    "label": "Average particle size (D)",
+    "tex": "D = 0.135 \\times (1.366)^{FM} \\quad [\\text{mm}]"
+   }
+  ]
+ },
+ "pto/cv-joints": {
+  "readings": [
+   {
+    "label": "Input θ",
+    "value": "217°",
+    "unit": ""
+   },
+   {
+    "label": "Input speed",
+    "value": "600",
+    "unit": "rpm"
+   },
+   {
+    "label": "Output speed",
+    "value": "600",
+    "unit": "rpm"
+   },
+   {
+    "label": "ω_out / ω_in",
+    "value": "1.0000",
+    "unit": ""
+   }
+  ],
+  "equations": [
+   {
+    "label": "Drive members lie on the bisecting (homokinetic) plane",
+    "tex": "\\text{plane angle} = \\tfrac{\\delta}{2}"
+   },
+   {
+    "label": "Each drive point is the same distance from both shaft axes, so",
+    "tex": "\\omega_{out}\\,r = \\omega_{in}\\,r\\;\\Rightarrow\\;\\omega_{out} = \\omega_{in}"
+   },
+   {
+    "label": "For comparison, a single Hooke’s joint at δ would swing",
+    "tex": "\\omega_A\\cos\\delta\\ \\ldots\\ \\omega_A/\\cos\\delta"
+   }
+  ]
+ },
+ "pto/double-cardan": {
+  "readings": [
+   {
+    "label": "Input θ",
+    "value": "251°",
+    "unit": ""
+   },
+   {
+    "label": "Intermediate",
+    "value": "951",
+    "unit": "rpm"
+   },
+   {
+    "label": "Output",
+    "value": "1,000",
+    "unit": "rpm"
+   },
+   {
+    "label": "ω_C / ω_A",
+    "value": "0.9510",
+    "unit": ""
+   }
+  ],
+  "equations": [
+   {
+    "label": "Joint 1 (θ = 30°): intermediate shaft speed",
+    "tex": "\\dfrac{\\omega_C}{\\omega_A} = \\dfrac{\\cos\\delta_1}{1-\\sin^2\\delta_1\\cos^2\\theta}"
+   },
+   {
+    "label": "Angle turned by the intermediate shaft",
+    "tex": "\\tan\\theta_C = \\dfrac{\\tan\\theta}{\\cos\\delta_1}"
+   },
+   {
+    "label": "Joint 2 is driven a quarter turn (+ yoke phase − plane twist) later",
+    "tex": "\\dfrac{\\omega_{out}}{\\omega_C} = \\dfrac{\\cos\\delta_2}{1-\\sin^2\\delta_2\\cos^2(\\theta_C+90^\\circ+\\phi-\\gamma)}"
+   }
+  ]
+ },
+ "pto/hookes-joint": {
+  "readings": [
+   {
+    "label": "Driver θ",
+    "value": "244°",
+    "unit": ""
+   },
+   {
+    "label": "Driven θ_B",
+    "value": "246°",
+    "unit": ""
+   },
+   {
+    "label": "θ_B − θ",
+    "value": "+1.4°",
+    "unit": ""
+   },
+   {
+    "label": "ω_B / ω_A",
+    "value": "0.9610",
+    "unit": ""
+   }
+  ],
+  "equations": [
+   {
+    "label": "Velocity ratio at θ = 45°",
+    "tex": "\\dfrac{\\omega_B}{\\omega_A} = \\dfrac{\\cos\\delta}{1-\\sin^2\\delta\\,\\cos^2\\theta}"
+   },
+   {
+    "label": "Maximum and minimum driven speed",
+    "tex": "(\\omega_B)_{max} = \\dfrac{\\omega_A}{\\cos\\delta}\\ (\\theta = 0^\\circ,180^\\circ),\\quad (\\omega_B)_{min} = \\omega_A\\cos\\delta\\ (\\theta = 90^\\circ,270^\\circ)"
+   },
+   {
+    "label": "Driven-shaft acceleration at θ = 45°",
+    "tex": "\\alpha_B = -\\dfrac{\\omega_A^2\\cos\\delta\\,\\sin^2\\delta\\,\\sin 2\\theta}{(1-\\cos^2\\theta\\,\\sin^2\\delta)^2}"
+   }
+  ]
+ },
+ "pto/pto-shaft": {
+  "readings": [
+   {
+    "label": "PTO speed",
+    "value": "540",
+    "unit": "rpm"
+   },
+   {
+    "label": "Telescopic shaft",
+    "value": "540",
+    "unit": "rpm"
+   },
+   {
+    "label": "Implement input",
+    "value": "540",
+    "unit": "rpm"
+   },
+   {
+    "label": "Joint 1 angle β₁",
+    "value": "3.4",
+    "unit": "°"
+   }
+  ],
+  "equations": [
+   {
+    "label": "PTO standard",
+    "tex": "N = 540\\ \\text{rpm (6 splines, Ø35 mm)}\\ \\text{or}\\ 1000\\ \\text{rpm (21 splines, Ø44 mm)}"
+   },
+   {
+    "label": "One Hooke’s joint: output speed",
+    "tex": "\\dfrac{\\omega_B}{\\omega_A} = \\dfrac{\\cos\\beta}{1 - \\sin^2\\beta\\cos^2\\theta},\\quad \\omega_A\\cos\\beta \\le \\omega_B \\le \\dfrac{\\omega_A}{\\cos\\beta}"
+   },
+   {
+    "label": "Two joints: equal angles, coplanar, yokes in line → uniform",
+    "tex": "\\beta_1 = \\beta_2,\\ \\text{intermediate yokes in line} \\Rightarrow \\omega_{out} = \\omega_{in}"
+   }
+  ]
+ },
+ "pto/pto-types": {
+  "readings": [
+   {
+    "label": "Engine",
+    "value": "2,000",
+    "unit": "rpm"
+   },
+   {
+    "label": "Gearbox input",
+    "value": "2,000",
+    "unit": "rpm"
+   },
+   {
+    "label": "Travel",
+    "value": "7.3",
+    "unit": "km/h"
+   },
+   {
+    "label": "PTO stub",
+    "value": "538",
+    "unit": "rpm"
+   }
+  ],
+  "equations": [
+   {
+    "label": "Engine to PTO speed through the gear train",
+    "tex": "n_{PTO} = n_e\\,\\dfrac{z_1}{z_2}\\cdot\\dfrac{z_3}{z_4}"
+   },
+   {
+    "label": "Engine speed for the standard 540 rpm",
+    "tex": "n_e = \\dfrac{n_{PTO}}{\\text{ratio}}"
+   },
+   {
+    "label": "Shaft power (example: 2000 rpm, 65 N·m)",
+    "tex": "P = \\dfrac{2\\pi N T}{60}"
+   }
+  ]
+ },
+ "steering/boxes": {
+  "readings": [
+   {
+    "label": "Steering wheel",
+    "value": "+0°",
+    "unit": "0.00 turns"
+   },
+   {
+    "label": "Drop arm (ball)",
+    "value": "0.0°",
+    "unit": ""
+   },
+   {
+    "label": "Drop arm (peg)",
+    "value": "0.0°",
+    "unit": ""
+   }
+  ],
+  "equations": [
+   {
+    "label": "Nut (or peg) travel along the thread",
+    "tex": "x = p\\,\\dfrac{\\theta_w}{2\\pi}"
+   },
+   {
+    "label": "Recirculating ball: peg F swings rocker arm D",
+    "tex": "\\tan\\varphi = \\dfrac{x}{r}"
+   },
+   {
+    "label": "Worm and peg: peg C follows the thread",
+    "tex": "r\\sin\\varphi = p\\,\\dfrac{\\theta_w}{2\\pi}"
+   }
+  ]
+ },
+ "steering/hydrostatic-steering": {
+  "readings": [
+   {
+    "label": "Steering wheel",
+    "value": "469°",
+    "unit": "1.3 turns"
+   },
+   {
+    "label": "Left / right wheel",
+    "value": "38° / 29.3°",
+    "unit": ""
+   },
+   {
+    "label": "Outer (ideal)",
+    "value": "29.3° (27.3°)",
+    "unit": ""
+   },
+   {
+    "label": "Turning radius",
+    "value": "3.93",
+    "unit": "m"
+   }
+  ],
+  "equations": [
+   {
+    "label": "Oil sent to the cylinder per steering-wheel turn",
+    "tex": "V = D_{meter}\\times n"
+   },
+   {
+    "label": "Cylinder travel per turn (rod side when turning left, full bore when turning right)",
+    "tex": "\\Delta x = \\dfrac{D}{A_{ann}}\\ \\text{or}\\ \\dfrac{D}{A}"
+   },
+   {
+    "label": "Turns lock to lock",
+    "tex": "N = \\dfrac{\\tfrac12 S A_{ann} + \\tfrac12 S A}{D}"
+   }
+  ]
+ },
+ "steering/linkage": {
+  "readings": [
+   {
+    "label": "Steering wheel",
+    "value": "158°",
+    "unit": "0.44 turns"
+   },
+   {
+    "label": "Drop arm",
+    "value": "10.5°",
+    "unit": "÷ 15"
+   },
+   {
+    "label": "Turn radius",
+    "value": "7.85",
+    "unit": "m (rear centre)"
+   },
+   {
+    "label": "Inner wheel",
+    "value": "12.9°",
+    "unit": ""
+   }
+  ],
+  "equations": [
+   {
+    "label": "Steering box: the wheel turns the drop arm through a small angle",
+    "tex": "\\alpha = \\dfrac{\\theta_{wheel}}{i_{box}}"
+   },
+   {
+    "label": "Toe-in at the rim",
+    "tex": "B - A = 2r\\,(\\sin\\delta_+ - \\sin\\delta_-)"
+   },
+   {
+    "label": "Ideal outer angle for the inner angle (Ackermann)",
+    "tex": "\\cot\\delta_o = \\cot\\delta_i + \\dfrac{t}{l}"
+   }
+  ]
+ },
+ "structures/farmhouse": {
+  "readings": [
+   {
+    "label": "Floor area",
+    "value": "94.5",
+    "unit": "m²"
+   },
+   {
+    "label": "Wall area (material)",
+    "value": "297",
+    "unit": "m²"
+   },
+   {
+    "label": "External doors",
+    "value": "4",
+    "unit": ""
+   },
+   {
+    "label": "Floor raise",
+    "value": "15",
+    "unit": "cm"
+   }
+  ],
+  "equations": [
+   {
+    "label": "Parents' bedroom",
+    "tex": "A_{min} = \\max(9,\\ 3n)"
+   },
+   {
+    "label": "Boys' room",
+    "tex": "A_{min} = \\max(9,\\ 3n)"
+   },
+   {
+    "label": "Girls' room",
+    "tex": "A_{min} = \\max(9,\\ 3n)"
+   }
+  ]
+ },
+ "structures/farmstead": {
+  "readings": [
+   {
+    "label": "Wind from",
+    "value": "200° S",
+    "unit": ""
+   },
+   {
+    "label": "Wind vs axis",
+    "value": "20",
+    "unit": "°"
+   },
+   {
+    "label": "Farmstead depth",
+    "value": "160",
+    "unit": "m"
+   },
+   {
+    "label": "Farmstead area",
+    "value": "2.01",
+    "unit": "ha"
+   }
+  ],
+  "equations": [
+   {
+    "label": "Zone circles",
+    "tex": "r_k = r_{k-1} + w_k,\\quad \\text{centre } r_k \\text{ from the road}"
+   },
+   {
+    "label": "Farmstead share of the production area",
+    "tex": "\\dfrac{\\pi r_4^2}{A_{prod}} \\le 5\\%"
+   },
+   {
+    "label": "Drive width",
+    "tex": "\\text{two-way } 16\\text{–}20\\ \\text{ft},\\quad \\text{one-way } 12\\ \\text{ft}"
+   }
+  ]
+ },
+ "structures/greenhouse": {
+  "readings": [
+   {
+    "label": "Floor area",
+    "value": "400",
+    "unit": "m²"
+   },
+   {
+    "label": "Required Q (mid)",
+    "value": "20",
+    "unit": "m³/s"
+   },
+   {
+    "label": "Actual Q (fans + doors)",
+    "value": "20",
+    "unit": "m³/s"
+   },
+   {
+    "label": "Est. Temp Rise ΔT",
+    "value": "3.7",
+    "unit": "°C"
+   }
+  ],
+  "equations": [
+   {
+    "label": "Floor area",
+    "tex": "A = \\text{bays} \\times \\text{bay width} \\times L"
+   },
+   {
+    "label": "Ventilation flow (mid rate)",
+    "tex": "Q = \\text{rate} \\times A"
+   },
+   {
+    "label": "Fans required",
+    "tex": "N = \\lceil Q / \\text{capacity} \\rceil"
+   }
+  ]
+ },
+ "structures/machinery-storage": {
+  "readings": [
+   {
+    "label": "Building",
+    "value": "17.6 × 5.8",
+    "unit": "m"
+   },
+   {
+    "label": "Eave height",
+    "value": "3.05",
+    "unit": "m"
+   },
+   {
+    "label": "Workshop door",
+    "value": "3.05 × 2.75",
+    "unit": "m"
+   },
+   {
+    "label": "Side clearance",
+    "value": "0.6",
+    "unit": "m"
+   }
+  ],
+  "equations": [
+   {
+    "label": "Workshop door for the tractor",
+    "tex": "w_{door} = w + 2c,\\quad h_{door} = h + c_h"
+   },
+   {
+    "label": "Shed size",
+    "tex": "W = \\sum (w_i + 2c),\\quad D = \\max l_i + 0.6,\\quad H = \\max h_i + c_h"
+   },
+   {
+    "label": "Lifting gear",
+    "tex": "\\text{span} \\le 3\\ \\text{m} \\Rightarrow \\text{timber beam}"
+   }
+  ]
+ },
+ "testing/costs": {
+  "readings": [
+   {
+    "label": "Elapsed",
+    "value": "0.0394",
+    "unit": "min"
+   },
+   {
+    "label": "Worked",
+    "value": "0.00193",
+    "unit": "ha"
+   },
+   {
+    "label": "FE so far",
+    "value": "92",
+    "unit": "%"
+   },
+   {
+    "label": "Field eff. (plot)",
+    "value": "45.7",
+    "unit": "%"
+   }
+  ],
+  "equations": [
+   {
+    "label": "Field capacity (both forms)",
+    "tex": "C = \\dfrac{W\\,S\\,FE}{10}\\ \\text{ha/h} = \\dfrac{W_{ft}\\,S_{mph}\\,FE}{8.25}\\ \\text{ac/h}"
+   },
+   {
+    "label": "Tractor salvage and depreciation",
+    "tex": "\\text{Salvage} = \\text{list}\\times\\%,\\quad D = \\text{purchase} - \\text{salvage}"
+   },
+   {
+    "label": "Capital recovery and TIH",
+    "tex": "CR = D\\times CRF + \\text{salvage}\\times i,\\quad i = i_{nom} - \\text{inflation},\\quad TIH = 0.01\\times\\text{purchase}"
+   }
+  ]
+ },
+ "testing/drawbar-test": {
+  "readings": [
+   {
+    "label": "Mean pull P",
+    "value": "12",
+    "unit": "kN"
+   },
+   {
+    "label": "Instrument reads",
+    "value": "1.5",
+    "unit": "kN"
+   },
+   {
+    "label": "Engine",
+    "value": "2,336",
+    "unit": "rpm"
+   },
+   {
+    "label": "Speed V",
+    "value": "6.32",
+    "unit": "km/h"
+   }
+  ],
+  "equations": [
+   {
+    "label": "Weight transfer to the rear axle",
+    "tex": "V_r = W_r + \\dfrac{P\\,y'}{x}"
+   },
+   {
+    "label": "Net traction ratio and slip",
+    "tex": "\\text{NTR} = \\dfrac{P}{V_r},\\quad \\text{NTR} = \\text{GTR}(s)-\\text{MRR}(s)\\ \\text{solved for } s"
+   },
+   {
+    "label": "Rolling resistance and soil reaction",
+    "tex": "R = \\text{MRR}_r V_r + \\text{MRR}_f V_f,\\quad H = P + R"
+   }
+  ]
+ },
+ "testing/dynamometers": {
+  "readings": [
+   {
+    "label": "Engine speed",
+    "value": "483.5",
+    "unit": "rpm"
+   },
+   {
+    "label": "Engine torque",
+    "value": "35.3",
+    "unit": "N·m"
+   },
+   {
+    "label": "Brake power",
+    "value": "7.57",
+    "unit": "kW"
+   },
+   {
+    "label": "Dyno speed",
+    "value": "483.5",
+    "unit": "rpm"
+   }
+  ],
+  "equations": [
+   {
+    "label": "Torque from the arm",
+    "tex": "T = F\\,l"
+   },
+   {
+    "label": "Brake power from the scale",
+    "tex": "P = \\dfrac{2\\pi\\,l\\,F\\,n}{60\\,000}"
+   },
+   {
+    "label": "Same power from torque",
+    "tex": "P = \\dfrac{2\\pi\\,n\\,T}{60\\,000}"
+   }
+  ]
+ },
+ "thermal/heat-exchanger": {
+  "readings": [
+   {
+    "label": "Duty",
+    "value": "16.71",
+    "unit": "kW"
+   },
+   {
+    "label": "Hot leaves",
+    "value": "70",
+    "unit": "°C"
+   },
+   {
+    "label": "Cold leaves",
+    "value": "79.97",
+    "unit": "°C"
+   },
+   {
+    "label": "LMTD",
+    "value": "27.44",
+    "unit": "K"
+   }
+  ],
+  "equations": [
+   {
+    "label": "Duty, from the cold stream",
+    "tex": "Q = \\dot m_c c_c (T_{c,o} - T_{c,i})"
+   },
+   {
+    "label": "End differences",
+    "tex": "\\Delta T_1 = T_{h,i} - T_{c,o},\\ \\Delta T_2 = T_{h,o} - T_{c,i}"
+   },
+   {
+    "label": "Log-mean difference",
+    "tex": "\\Delta T_m = \\dfrac{\\Delta T_1 - \\Delta T_2}{\\ln(\\Delta T_1/\\Delta T_2)}"
+   }
+  ]
+ },
+ "thermal/refrigeration": {
+  "readings": [
+   {
+    "label": "Effect",
+    "value": "956.7",
+    "unit": "kJ/kg"
+   },
+   {
+    "label": "Work",
+    "value": "187.9",
+    "unit": "kJ/kg"
+   },
+   {
+    "label": "COP",
+    "value": "5.09",
+    "unit": ""
+   },
+   {
+    "label": "Carnot COP",
+    "value": "5.74",
+    "unit": ""
+   }
+  ],
+  "equations": [
+   {
+    "label": "Dryness at inlet: same entropy as state 2",
+    "tex": "s_{g2} = s_{f1} + x_1 s_{fg1}"
+   },
+   {
+    "label": "State 1",
+    "tex": "h_1 = h_f + x_1 h_{fg}"
+   },
+   {
+    "label": "State 2, after the compressor",
+    "tex": "s_2 = s_1"
+   }
+  ]
+ },
+ "thermal/steam-plant": {
+  "readings": [
+   {
+    "label": "Turbine",
+    "value": "1,175",
+    "unit": "kJ/kg"
+   },
+   {
+    "label": "Pump",
+    "value": "4.01",
+    "unit": "kJ/kg"
+   },
+   {
+    "label": "Heat in",
+    "value": "3,089",
+    "unit": "kJ/kg"
+   },
+   {
+    "label": "Efficiency",
+    "value": "37.9",
+    "unit": "%"
+   }
+  ],
+  "equations": [
+   {
+    "label": "Leaving the condenser",
+    "tex": "h_1 = h_f"
+   },
+   {
+    "label": "Pump work",
+    "tex": "w_p = v_f(p_2 - p_1)"
+   },
+   {
+    "label": "Leaving the superheater",
+    "tex": "h_3"
+   }
+  ]
+ },
+ "traction/ballast": {
+  "readings": [
+   {
+    "label": "Rear axle",
+    "value": "4,747",
+    "unit": "kg · 10,500 lb"
+   },
+   {
+    "label": "Guide",
+    "value": "9.98–12.1",
+    "unit": "×1000 lb"
+   },
+   {
+    "label": "Slip",
+    "value": "13.9",
+    "unit": "%"
+   },
+   {
+    "label": "Liquid / tyre",
+    "value": "493",
+    "unit": "kg"
+   }
+  ],
+  "equations": [
+   {
+    "label": "Wheel slip from the chalk-mark test",
+    "tex": "\\%\\,\\text{slip} = \\frac{R_2 - R_1}{R_2}"
+   },
+   {
+    "label": "Liquid ballast in one tyre",
+    "tex": "m = V_w(1 + c),\\quad V_w = f\\,V_{cavity}"
+   },
+   {
+    "label": "Chart check (both tyres, 75 %)",
+    "tex": "\\text{lb} = \\text{gal}\\times(8.34 + 3.5)"
+   }
+  ]
+ },
+ "traction/tracks": {
+  "readings": [
+   {
+    "label": "Sag (front span)",
+    "value": "25.4",
+    "unit": "mm · 1 in"
+   },
+   {
+    "label": "Strand pull",
+    "value": "13.4",
+    "unit": "kN"
+   },
+   {
+    "label": "Sprocket",
+    "value": "19.5",
+    "unit": "rpm"
+   },
+   {
+    "label": "Revolution",
+    "value": "1",
+    "unit": ""
+   }
+  ],
+  "equations": [
+   {
+    "label": "Hunting tooth: bushings per sprocket revolution",
+    "tex": "\\frac{z}{2} = \\frac{25}{2} = 12.5\\ \\text{bushings}\\;\\Rightarrow\\;\\text{each tooth drives on alternate revolutions}"
+   },
+   {
+    "label": "Spare chain in the front span (parabolic strand)",
+    "tex": "\\Delta L \\approx \\frac{8\\delta^2}{3s}"
+   },
+   {
+    "label": "Sag guide",
+    "tex": "\\delta \\approx 1\\ \\text{in} = 25.4\\ \\text{mm, midway carrier roller → front idler}"
+   }
+  ]
+ },
+ "traction/traction-lab": {
+  "readings": [
+   {
+    "label": "No-slip speed V₀",
+    "value": "4.01",
+    "unit": "km/h"
+   },
+   {
+    "label": "Actual speed V",
+    "value": "3.42",
+    "unit": "km/h"
+   },
+   {
+    "label": "Slip i",
+    "value": "14.6",
+    "unit": "%"
+   },
+   {
+    "label": "Pull P",
+    "value": "12",
+    "unit": "kN"
+   }
+  ],
+  "equations": [
+   {
+    "label": "No-slip travel speed",
+    "tex": "V_0 = \\dfrac{\\pi D N_e}{q}"
+   },
+   {
+    "label": "Weight transfer from the pull (level ground)",
+    "tex": "V_r = W_r + \\dfrac{P\\,y'}{x}"
+   },
+   {
+    "label": "Mobility number of a rear tyre",
+    "tex": "B_n = \\dfrac{CI\\,b\\,d}{W}\\cdot\\dfrac{1 + 5\\delta/h}{1 + 3b/d}"
+   }
+  ]
+ },
+ "traction/tyre": {
+  "readings": [
+   {
+    "label": "Section width",
+    "value": "18.4",
+    "unit": "in · 467 mm"
+   },
+   {
+    "label": "Rim diameter",
+    "value": "38",
+    "unit": "in"
+   },
+   {
+    "label": "Overall dia.",
+    "value": "1.76",
+    "unit": "m"
+   },
+   {
+    "label": "Plies / rating",
+    "value": "4 / 4",
+    "unit": "ply"
+   }
+  ],
+  "equations": [
+   {
+    "label": "Decode the size code",
+    "tex": "\\text{section width (in)} - \\text{rim diameter (in)}"
+   },
+   {
+    "label": "Section height and overall diameter",
+    "tex": "h = \\tfrac{h}{b}\\,b,\\quad D = d_{rim} + 2h"
+   },
+   {
+    "label": "Rolling circumference (no slip)",
+    "tex": "\\text{distance per rev} = \\pi D"
+   }
+  ]
+ },
+ "vibration/cab": {
+  "readings": [
+   {
+    "label": "Level",
+    "value": "88",
+    "unit": "dB(A)"
+   },
+   {
+    "label": "OSHA allows",
+    "value": "10.6",
+    "unit": "h/day"
+   },
+   {
+    "label": "Dose",
+    "value": "75.8",
+    "unit": "%"
+   },
+   {
+    "label": "Stature",
+    "value": "173",
+    "unit": "cm"
+   }
+  ],
+  "equations": [
+   {
+    "label": "Sound pressure level",
+    "tex": "SPL = 20\\log_{10}\\dfrac{P}{P_0},\\quad P_0 = 2\\times10^{-5}\\ \\text{N/m}^2"
+   },
+   {
+    "label": "+6 dB doubles the sound pressure",
+    "tex": "\\dfrac{P_2}{P_1} = 10^{6/20}"
+   },
+   {
+    "label": "Two 80 dB sources",
+    "tex": "L = 10\\log_{10}\\left(10^{8}+10^{8}\\right)"
+   }
+  ]
+ },
+ "vibration/isolation": {
+  "readings": [
+   {
+    "label": "Speed",
+    "value": "1,750",
+    "unit": "rpm"
+   },
+   {
+    "label": "r = ω/ω_n",
+    "value": "2.72",
+    "unit": ""
+   },
+   {
+    "label": "ζ",
+    "value": "0.15",
+    "unit": ""
+   },
+   {
+    "label": "Exciting force F₀",
+    "value": "33.6",
+    "unit": "kN"
+   }
+  ],
+  "equations": [
+   {
+    "label": "Natural frequency and damping ratio of the mounted machine",
+    "tex": "\\omega_n = \\sqrt{k/M},\\quad \\zeta = \\dfrac{c}{2\\sqrt{kM}}"
+   },
+   {
+    "label": "Operating speed and frequency ratio",
+    "tex": "\\omega = \\dfrac{2\\pi N}{60},\\quad r = \\omega/\\omega_n"
+   },
+   {
+    "label": "Exciting force from the unbalance",
+    "tex": "F_0 = m\\,e\\,\\omega^2"
+   }
+  ]
+ },
+ "vibration/seat": {
+  "readings": [
+   {
+    "label": "Operator a_z RMS",
+    "value": "0.562",
+    "unit": "m/s²"
+   },
+   {
+    "label": "Floor RMS",
+    "value": "0.797",
+    "unit": "m/s²"
+   },
+   {
+    "label": "Stroke",
+    "value": "2.2",
+    "unit": "mm"
+   },
+   {
+    "label": "Steady a_z RMS",
+    "value": "1.54",
+    "unit": "m/s²"
+   }
+  ],
+  "equations": [
+   {
+    "label": "Seat natural frequency (seat + operator on the suspension spring)",
+    "tex": "\\omega_s = \\sqrt{k/M},\\quad M = m_1 + m_2"
+   },
+   {
+    "label": "Damping ratio",
+    "tex": "\\zeta = c/c_c,\\quad c_c = 2M\\omega_s"
+   },
+   {
+    "label": "Transmissibility at the dominant tractor frequency (3.15 Hz band)",
+    "tex": "T = \\left[\\dfrac{1+4\\zeta^2(\\omega_t/\\omega_s)^2}{\\left[1-(\\omega_t/\\omega_s)^2\\right]^2+4\\zeta^2(\\omega_t/\\omega_s)^2}\\right]^{0.5}"
+   }
+  ]
+ },
+ "vibration/smd": {
+  "readings": [
+   {
+    "label": "Time",
+    "value": "0.426",
+    "unit": "of 2.5 s"
+   },
+   {
+    "label": "Displacement x",
+    "value": "-7.74",
+    "unit": "mm"
+   },
+   {
+    "label": "Velocity ẋ",
+    "value": "-0.228",
+    "unit": "m/s"
+   },
+   {
+    "label": "ω_n",
+    "value": "35.36",
+    "unit": "rad/s"
+   }
+  ],
+  "equations": [
+   {
+    "label": "Equation of motion (free-body diagram of the mass)",
+    "tex": "m\\ddot x + b\\dot x + kx = F(t)"
+   },
+   {
+    "label": "Undamped natural frequency",
+    "tex": "\\omega_n = \\sqrt{k/m} = \\sqrt{a_0/a_2}"
+   },
+   {
+    "label": "Damping ratio",
+    "tex": "\\zeta = \\dfrac{b}{c_c} = \\dfrac{a_1}{2\\sqrt{a_0 a_2}},\\quad c_c = 2\\sqrt{km}"
+   }
+  ]
+ },
+ "water/irrigation-methods": {
+  "readings": [
+   {
+    "label": "Event",
+    "value": "3.69",
+    "unit": "%"
+   },
+   {
+    "label": "Wetted surface",
+    "value": "1.34",
+    "unit": "%"
+   },
+   {
+    "label": "Front advance",
+    "value": "2.01",
+    "unit": "m"
+   },
+   {
+    "label": "Depth at head",
+    "value": "0.324",
+    "unit": "m"
+   }
+  ],
+  "equations": [
+   {
+    "label": "Weekly water need",
+    "tex": "V = ET\\times7\\times A\\times27{,}158\\ \\text{gal per acre-inch}"
+   },
+   {
+    "label": "Run time",
+    "tex": "t = \\dfrac{V}{\\text{system output}}"
+   }
+  ]
+ },
+ "water/water-erosion": {
+  "readings": [
+   {
+    "label": "Soil loss A",
+    "value": "14.7",
+    "unit": "Mg/ha/yr"
+   },
+   {
+    "label": "LS",
+    "value": "0.928",
+    "unit": ""
+   },
+   {
+    "label": "P",
+    "value": "0.5",
+    "unit": ""
+   },
+   {
+    "label": "Erosion develops",
+    "value": "6.96",
+    "unit": "%"
+   }
+  ],
+  "equations": [
+   {
+    "label": "Slope angle and exponent",
+    "tex": "\\theta = \\tan^{-1}\\dfrac{s}{100},\\ \\beta = \\dfrac{\\sin\\theta/0.0896}{3(\\sin\\theta)^{0.8} + 0.56},\\ m = \\dfrac{\\beta}{1+\\beta}"
+   },
+   {
+    "label": "Length factor",
+    "tex": "L = (l/22)^m"
+   },
+   {
+    "label": "Slope factor",
+    "tex": "S = 10.8\\sin\\theta + 0.03"
+   }
+  ]
+ },
+ "water/water-requirement": {
+  "readings": [
+   {
+    "label": "ET",
+    "value": "4.81",
+    "unit": "mm/day"
+   },
+   {
+    "label": "Available water",
+    "value": "95.8",
+    "unit": "%"
+   },
+   {
+    "label": "Interval",
+    "value": "44.9",
+    "unit": "days"
+   },
+   {
+    "label": "E_c",
+    "value": "60",
+    "unit": "%"
+   }
+  ],
+  "equations": [
+   {
+    "label": "Blaney–Criddle (SCS)",
+    "tex": "ET = K_{cs}K_t\\,p(0.46T + 8.13),\\quad K_t = 0.0311T + 0.24"
+   },
+   {
+    "label": "Conveyance efficiency",
+    "tex": "E_c = \\dfrac{W_d}{W_i}"
+   },
+   {
+    "label": "Application efficiency",
+    "tex": "W_d = Qt,\\ W_s = W_d - \\text{runoff} - \\text{deep percolation},\\ E_a = \\dfrac{W_s}{W_d}"
+   }
+  ]
+ },
+ "water/waterways": {
+  "readings": [
+   {
+    "label": "Flow depth",
+    "value": "0.629",
+    "unit": "m"
+   },
+   {
+    "label": "Velocity",
+    "value": "1.75",
+    "unit": "m/s"
+   },
+   {
+    "label": "Discharge",
+    "value": "5.67",
+    "unit": "m³/s"
+   },
+   {
+    "label": "Bottom width b",
+    "value": "2.63",
+    "unit": "m"
+   }
+  ],
+  "equations": [
+   {
+    "label": "Flow area",
+    "tex": "a = \\dfrac{Q}{v}"
+   },
+   {
+    "label": "Hydraulic radius from Manning",
+    "tex": "R = \\left(\\dfrac{vn}{\\sqrt{s}}\\right)^{1.5}"
+   },
+   {
+    "label": "Wetted perimeter",
+    "tex": "p = \\dfrac{a}{R}"
+   }
+  ]
+ },
+ "water/wells-ponds": {
+  "readings": [
+   {
+    "label": "Discharge Q",
+    "value": "324.4",
+    "unit": "m³/day"
+   },
+   {
+    "label": "Level in well h_w",
+    "value": "15.24",
+    "unit": "m"
+   },
+   {
+    "label": "s₁ at 14 m",
+    "value": "3.19",
+    "unit": "m"
+   },
+   {
+    "label": "s₂ at 40 m",
+    "value": "1.83",
+    "unit": "m"
+   }
+  ],
+  "equations": [
+   {
+    "label": "Darcy, radial flow",
+    "tex": "Q = 2\\pi r h K\\dfrac{dh}{dr} \\Rightarrow \\int_{h_w}^{H} h\\,dh = \\dfrac{Q}{2\\pi K}\\int_{r_w}^{R}\\dfrac{dr}{r}"
+   },
+   {
+    "label": "Gravity well (Dupuit–Thiem)",
+    "tex": "Q = \\dfrac{\\pi K (H^2 - h_w^2)}{\\ln(R/r_w)}"
+   },
+   {
+    "label": "Drawdown at an observation well",
+    "tex": "h^2 = h_w^2 + \\dfrac{Q\\ln(r/r_w)}{\\pi K}"
+   }
+  ]
+ },
+ "water/wind-erosion": {
+  "readings": [
+   {
+    "label": "Wind at 0.3 m",
+    "value": "8",
+    "unit": "m/s"
+   },
+   {
+    "label": "Threshold",
+    "value": "5",
+    "unit": "m/s"
+   },
+   {
+    "label": "In the lee (3H)",
+    "value": "3.8",
+    "unit": "m/s"
+   },
+   {
+    "label": "Field eroding",
+    "value": "28.5",
+    "unit": "%"
+   }
+  ],
+  "equations": [
+   {
+    "label": "Threshold check",
+    "tex": "u_{0.3} > u_t \\Rightarrow \\text{erosion}"
+   },
+   {
+    "label": "Transport mode of a 0.2 mm grain",
+    "tex": "d < 0.05: \\text{suspension};\\ 0.05\\text{–}0.5: \\text{saltation};\\ 0.5\\text{–}1: \\text{creep}"
+   },
+   {
+    "label": "Log wind profile",
+    "tex": "u(z) = u_{0.3}\\dfrac{\\ln(z/z_0)}{\\ln(0.3/z_0)}"
+   }
+  ]
+ }
+}

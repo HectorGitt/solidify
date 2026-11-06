@@ -32,7 +32,9 @@ export const RIGS_WITH_FACTS = Object.keys(ALL).filter((k) => ALL[k].readings.le
 const Tex = lazy(() => import('./Tex').then((m) => ({ default: m.Tex })))
 
 /** a rig's readings as compact figures: value, unit, and what it measures */
-export function RigReadings({ readings, max = 2, size = 'sm' }: { readings: RigReading[]; max?: number; size?: 'sm' | 'lg' }) {
+export function RigReadings({ readings: all, max = 2, size = 'sm' }: { readings: RigReading[]; max?: number; size?: 'sm' | 'lg' }) {
+  // a figure at rest ("0 % open") says nothing about the rig
+  const readings = all.filter((r) => Number.parseFloat(r.value.replace(/[,\s]/g, '')) !== 0)
   if (!readings.length) return null
   return (
     <dl className={`flex flex-wrap ${size === 'lg' ? 'gap-3' : 'gap-x-4 gap-y-1'}`}>
