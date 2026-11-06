@@ -133,12 +133,13 @@ export interface BuildReply {
   ms: number
 }
 
-export const getAdminSettings = () => api<{ settings: QualitySettings; topics: TopicItem[] | null; canRunTests: boolean }>('/v1/admin/settings')
+export const getAdminSettings = () => api<{ settings: QualitySettings; topics: TopicItem[] | null }>('/v1/admin/settings')
 export const saveSettings = (patch: Partial<QualitySettings>) => api<{ settings: QualitySettings }>('/v1/admin/settings', { method: 'PUT', body: patch })
 export const saveTopics = (items: TopicItem[]) => api<{ topics: TopicItem[] }>('/v1/admin/topics', { method: 'PUT', body: { items } })
 export const resetTopics = () => api<{ topics: null }>('/v1/admin/topics', { method: 'DELETE' })
 export const adminBuild = (req: { prompt: string; currentSpec?: Record<string, unknown>; history?: { prompt: string; response: string }[] }) => api<BuildReply>('/v1/admin/build', { method: 'POST', body: req })
-export const runTestsNow = (r: { limit?: number; drafts?: number }) => api<{ ok: true }>('/v1/admin/run-tests', { method: 'POST', body: r })
+/** saves a run made on the admin page with the nightly ones */
+export const saveRun = (run: Omit<EvalRun, 'cases'> & { cases: EvalRun['cases'] }) => api<{ ok: true }>('/v1/evals/runs', { method: 'POST', body: run })
 
 export interface DraftFields {
   title: string

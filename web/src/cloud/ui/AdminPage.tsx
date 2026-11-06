@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react'
+import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { EVAL_CASES } from '@/evals/cases'
 import { scoreBuild } from '@/evals/score'
-import { DRAFT_TOPICS, type DraftTopic } from '@/evals/topics'
+import { DRAFT_TOPICS, topicsFor, type DraftTopic } from '@/evals/topics'
 import { Pills, StudyShell } from '@/study/ui/StudyShell'
 import { ListSkeleton } from '@/ui/Skeleton'
 import { toast } from '@/ui/toast'
@@ -22,7 +22,7 @@ import {
   updateLibraryItem,
   type LibraryCard,
   resetTopics,
-  runTestsNow,
+  saveRun,
   saveSettings,
   saveTopics,
   updateDraft,
@@ -47,8 +47,6 @@ import {
 import { ghostBtn, inputCls, primaryBtn } from './Modal'
 
 type Tab = 'quality' | 'review' | 'library' | 'feedback' | 'waitlist' | 'settings'
-
-const REPO_ACTIONS = 'https://github.com/HectorGitt/solidify/actions/workflows/nightly-evals.yml'
 
 /** scores a build made from the admin page with the nightly run's own checks */
 function scoreReply(prompt: string, reply: BuildReply, caseId?: string) {
@@ -309,49 +307,177 @@ function AiCostTable({ days, price }: { days: Record<string, number | string>[];
   )
 }
 
-/** starts the nightly run now, through GitHub */
-function RunNow({ onStarted }: { onStarted: () => void }) {
+interface LiveCase {
+  id: string
+  prompt: string
+  kind: 'case' | 'draft'
+  topic?: string
+  state: 'waiting' | 'building' | 'done' | 'failed'
+  score?: number
+  seconds?: number
+  checks?: EvalCheck[]
+  error?: string
+  queued?: boolean
+  tokensIn?: number
+  tokensOut?: number
+}
+
+/**
+ * Runs the tests here, in this tab: the same cases, the same Gemini call and the same checks as the nightly
+ * run, three builds at a time, with each score appearing as it lands. The run is saved with the nightly ones,
+ * and drafts that reach the minimum score go to the review queue.
+ */
+function RunNow({ onFinished }: { onFinished: () => void }) {
   const admin = useLoad(getAdminSettings)
   const [limit, setLimit] = useState('3')
-  const [drafts, setDrafts] = useState('')
-  const [busy, setBusy] = useState(false)
-  const can = admin.data?.canRunTests
+  const [drafts, setDrafts] = useState('0')
+  const [rows, setRows] = useState<LiveCase[] | null>(null)
+  const [running, setRunning] = useState(false)
+  const stopRef = useRef(false)
+
+  // leaving mid-run loses the builds still going: ask first
+  useEffect(() => {
+    if (!running) return
+    const warn = (e: BeforeUnloadEvent) => e.preventDefault()
+    window.addEventListener('beforeunload', warn)
+    return () => window.removeEventListener('beforeunload', warn)
+  }, [running])
+
   const start = async () => {
-    setBusy(true)
-    try {
-      await runTestsNow({ limit: limit ? Number(limit) : undefined, drafts: drafts === '' ? undefined : Number(drafts) })
-      toast('Run started. Results appear here when it finishes (a few minutes for 3 cases, about half an hour for all 30).')
-      onStarted()
-    } catch (e) {
-      toast(e instanceof ApiError ? e.message : 'Couldn’t start the run.', { tone: 'warn' })
-    } finally {
-      setBusy(false)
+    const settings = admin.data?.settings
+    const n = limit ? Math.min(EVAL_CASES.length, Number(limit)) : EVAL_CASES.length
+    const d = drafts === '' ? (settings?.draftsPerNight ?? 0) : Number(drafts)
+    const topics = topicsFor(Math.floor(Date.now() / 86_400_000), d, admin.data?.topics?.length ? admin.data.topics : DRAFT_TOPICS)
+    const list: LiveCase[] = [
+      ...EVAL_CASES.slice(0, n).map((c) => ({ id: c.id, prompt: c.prompt, kind: 'case' as const, state: 'waiting' as const })),
+      ...topics.map((t, i) => ({ id: `draft-${i}`, prompt: t.prompt, topic: t.topic, kind: 'draft' as const, state: 'waiting' as const })),
+    ]
+    if (!list.length) return
+    stopRef.current = false
+    setRows(list)
+    setRunning(true)
+    const done: LiveCase[] = list.map((r) => ({ ...r }))
+    const update = (i: number, patch: Partial<LiveCase>) => {
+      Object.assign(done[i], patch)
+      setRows(done.map((r) => ({ ...r })))
     }
+    let next = 0
+    await Promise.all(
+      Array.from({ length: 3 }, async () => {
+        while (next < list.length && !stopRef.current) {
+          const i = next++
+          const r = list[i]
+          update(i, { state: 'building' })
+          try {
+            const reply = await adminBuild({ prompt: r.prompt })
+            const { score, checks } = scoreReply(r.prompt, reply, r.kind === 'case' ? r.id : undefined)
+            let queued = false
+            if (r.kind === 'draft' && score >= (settings?.draftMin ?? 85)) {
+              const title = typeof reply.spec.title === 'string' && reply.spec.title.trim() ? reply.spec.title.trim().slice(0, 120) : r.prompt.slice(0, 120)
+              await addDraft({ title, prompt: r.prompt, topic: r.topic, spec: reply.spec, explanation: reply.explanation.slice(0, 4000), score, checks })
+              queued = true
+            }
+            update(i, { state: 'done', score, checks, seconds: Math.round(reply.ms / 1000), queued, tokensIn: reply.usage?.input, tokensOut: reply.usage?.output })
+          } catch (e) {
+            update(i, { state: 'failed', score: 0, error: e instanceof ApiError ? e.message : 'The build failed.' })
+          }
+        }
+      }),
+    )
+    const cases = done.filter((r) => r.kind === 'case' && (r.state === 'done' || r.state === 'failed'))
+    if (cases.length) {
+      try {
+        await saveRun({
+          runAt: Date.now(),
+          label: 'manual',
+          cases: cases.map((r) => ({
+            id: r.id,
+            prompt: r.prompt,
+            score: r.score ?? 0,
+            seconds: r.seconds ?? 0,
+            checks: r.checks ?? [{ name: 'builds', ok: false, detail: r.error }],
+            ...(r.error ? { error: r.error.slice(0, 300) } : {}),
+            ...(r.tokensIn !== undefined ? { tokensIn: r.tokensIn, tokensOut: r.tokensOut ?? 0 } : {}),
+          })),
+          summary: {
+            score: Math.round(cases.reduce((t, r) => t + (r.score ?? 0), 0) / cases.length),
+            passed: cases.filter((r) => r.score === 100).length,
+            total: cases.length,
+            tokensIn: cases.reduce((t, r) => t + (r.tokensIn ?? 0), 0),
+            tokensOut: cases.reduce((t, r) => t + (r.tokensOut ?? 0), 0),
+          },
+        })
+        onFinished()
+      } catch (e) {
+        toast(e instanceof ApiError ? e.message : 'The run finished but couldn’t be saved.', { tone: 'warn' })
+      }
+    }
+    setRunning(false)
+    const queued = done.filter((r) => r.queued).length
+    toast(`Run finished${stopRef.current ? ' (stopped early)' : ''}.${queued ? ` ${queued} draft${queued > 1 ? 's' : ''} in the review queue.` : ''}`)
   }
+
+  const finished = rows?.filter((r) => r.state === 'done' || r.state === 'failed').length ?? 0
   const num = 'w-20 rounded-lg border border-line-2 bg-panel-2 px-2.5 py-1.5 text-[13px] text-ink outline-none focus:border-accent/60'
   return (
-    <section className={`${card} flex flex-wrap items-end gap-x-4 gap-y-3 p-5`}>
-      <div className="min-w-48 flex-1">
-        <h2 className="text-[15px] font-semibold">Run the tests now</h2>
-        <p className="mt-1 text-[12.5px] text-mute">
-          {admin.data && !can ? (
-            <>Starting runs from here needs GITHUB_DISPATCH_TOKEN on the API. Until then, use Run workflow on <a className="text-accent hover:underline" href={REPO_ACTIONS} target="_blank" rel="noreferrer">GitHub</a>.</>
-          ) : (
-            'Each case and each draft is one build. Few cases is cheap; leave it blank for all 30.'
-          )}
-        </p>
+    <section className={`${card} p-5`}>
+      <div className="flex flex-wrap items-end gap-x-4 gap-y-3">
+        <div className="min-w-48 flex-1">
+          <h2 className="text-[15px] font-semibold">Run the tests now</h2>
+          <p className="mt-1 text-[12.5px] text-mute">Runs here in this tab, three builds at a time, with the nightly checks. Each case or draft is one build; keep the tab open until it finishes.</p>
+        </div>
+        <label className="text-[11.5px] text-dim">
+          Cases
+          <input value={limit} disabled={running} onChange={(e) => setLimit(e.target.value.replace(/\D/g, ''))} placeholder={`all ${EVAL_CASES.length}`} inputMode="numeric" className={`${num} mt-1 block`} />
+        </label>
+        <label className="text-[11.5px] text-dim">
+          Drafts
+          <input value={drafts} disabled={running} onChange={(e) => setDrafts(e.target.value.replace(/\D/g, ''))} placeholder="setting" inputMode="numeric" className={`${num} mt-1 block`} />
+        </label>
+        {running ? (
+          <button type="button" onClick={() => (stopRef.current = true)} className={`${ghostBtn} px-4 py-2 text-[13px]`}>
+            Stop after these
+          </button>
+        ) : (
+          <button type="button" disabled={!admin.data} onClick={() => void start()} className={`${primaryBtn} px-4 py-2 text-[13px]`}>
+            Start run
+          </button>
+        )}
       </div>
-      <label className="text-[11.5px] text-dim">
-        Cases
-        <input value={limit} onChange={(e) => setLimit(e.target.value.replace(/\D/g, ''))} placeholder="all" inputMode="numeric" className={`${num} mt-1 block`} />
-      </label>
-      <label className="text-[11.5px] text-dim">
-        Drafts
-        <input value={drafts} onChange={(e) => setDrafts(e.target.value.replace(/\D/g, ''))} placeholder="setting" inputMode="numeric" className={`${num} mt-1 block`} />
-      </label>
-      <button type="button" disabled={busy || !can} onClick={() => void start()} className={`${primaryBtn} px-4 py-2 text-[13px]`}>
-        {busy ? 'Starting…' : 'Start run'}
-      </button>
+      {rows ? (
+        <div className="mt-4">
+          <div className="mb-2 flex items-center gap-3 text-[11.5px] text-dim">
+            <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-line-2">
+              <div className="h-full rounded-full bg-accent transition-[width] duration-500" style={{ width: `${Math.round((100 * finished) / rows.length)}%` }} />
+            </div>
+            {finished} of {rows.length}
+          </div>
+          <ul className="divide-y divide-line">
+            {rows.map((r) => (
+              <li key={r.id} className="py-2">
+                <div className="flex items-center gap-3">
+                  <span className={`w-9 shrink-0 text-right text-[13.5px] font-semibold tabular-nums ${r.score !== undefined ? scoreTone(r.score) : 'text-dim'}`}>
+                    {r.state === 'building' ? <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-accent" /> : (r.score ?? '–')}
+                  </span>
+                  <span className="min-w-0 flex-1 truncate text-[12.5px] text-ink/90">
+                    {r.kind === 'draft' ? <span className="mr-1.5 rounded bg-panel-3 px-1.5 py-0.5 text-[10.5px] text-mute">draft</span> : null}
+                    {r.prompt}
+                  </span>
+                  <span className="shrink-0 text-[11.5px] text-dim">
+                    {r.state === 'waiting' ? 'waiting' : r.state === 'building' ? 'building…' : r.state === 'failed' ? 'failed' : r.kind === 'draft' ? (r.queued ? 'queued for review' : 'below the minimum') : `${r.seconds}s`}
+                  </span>
+                </div>
+                {r.error ? <p className="ml-12 mt-1 text-[11.5px] text-warn">{r.error}</p> : null}
+                {r.checks && r.checks.some((x) => !x.ok) ? (
+                  <div className="ml-12 mt-1">
+                    <FailedChecks checks={r.checks} />
+                  </div>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
     </section>
   )
 }
@@ -364,7 +490,7 @@ function Quality() {
   const delta = last && prev ? last.summary.score - prev.summary.score : null
   return (
     <div className="space-y-5">
-      <RunNow onStarted={() => undefined} />
+      <RunNow onFinished={evals.reload} />
       <Loading error={evals.error} onRetry={evals.reload}>
         {evals.data ? (
           last ? (
