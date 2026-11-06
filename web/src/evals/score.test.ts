@@ -60,3 +60,14 @@ describe('scoring a build', () => {
     expect(new Set(EVAL_CASES.map((c) => c.id)).size).toBe(30)
   })
 })
+
+describe('nightly drafting topics', () => {
+  it('works through the whole list in turn, a few a night, without repeats', async () => {
+    const { DRAFT_TOPICS, topicsFor } = await import('./topics')
+    expect(new Set(DRAFT_TOPICS.map((t) => t.prompt)).size).toBe(DRAFT_TOPICS.length)
+    const nights = Math.ceil(DRAFT_TOPICS.length / 3)
+    const seen = new Set(Array.from({ length: nights }, (_, d) => topicsFor(d, 3).map((t) => t.prompt)).flat())
+    expect(seen.size).toBe(DRAFT_TOPICS.length)
+    expect(topicsFor(5, 0)).toEqual([])
+  })
+})
