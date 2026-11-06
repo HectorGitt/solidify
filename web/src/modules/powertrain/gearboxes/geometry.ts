@@ -2,7 +2,7 @@ import * as THREE from 'three'
 import { box, cylinder, mat4, merge, xform } from '@/geometry'
 import { baulkRing, bevelPinion, crownHousing, crownWheel, diffCase, gearLever, shiftCollar, shiftFork, slidingCluster, synchroGear } from '@/parts/lib/driveline'
 import { axial, boxFrom, casing, dogRing, helical, shaftZ, splineZ, spur } from '@/parts/lib/shapes'
-import { BAULK_W, BEVEL, BOTTOM_Y, DOG_W, GW, HUB_W, INPUT_END, M, OUTPUT_END, RANGE, SLIDE, Z } from './dims'
+import { BAULK_W, BEVEL, BOTTOM_Y, DOG_W, GW, HUB_W, INPUT_END, M, OUTPUT_END, RANGE, SLIDE, Z, IDLER } from './dims'
 
 /** Gearbox geometry (worker-safe). Gears in XY, shafts along Z; gear centres at z = 0 (positioned in the scene). */
 
@@ -33,6 +33,10 @@ export function buildStatic() {
     output: merge(shaftZ(0.016, INPUT_END - 0.03, INPUT_END, 20), splineZ(12, 0.0235, 0.021, INPUT_END, OUTPUT_END)),
     bottom: shaftZ(0.024, -0.008, RANGE.l + 0.03, 32),
     idlerShaft: shaftZ(0.016, 0.0, 0.44, 20),
+    // the reverse idler turns on a short stub shaft, carried by a boss from the casing's side wall (a pin
+    // the length of the box would run through third gear and the range gears beside it). Local to the idler.
+    idlerStub: shaftZ(0.0155, -GW / 2 - 0.004, GW / 2 + 0.014, 20),
+    idlerBoss: boxFrom([-0.02, -0.013, GW / 2 + 0.004], [0.14 - IDLER.x, 0.013, GW / 2 + 0.016]),
     // sliding mesh
     clusterA: slidingClusterG(Z.t1, Z.t2),
     clusterB: slidingClusterG(Z.t3, Z.tr),

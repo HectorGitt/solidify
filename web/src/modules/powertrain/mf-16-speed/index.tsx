@@ -7,8 +7,9 @@ import { MF16Panel } from './Panel'
 import { MF16Scene3D } from './Scene3D'
 
 type V3 = [number, number, number]
-const home = { position: [1.75, 0.72, 1.62] as V3, target: [0, 0.03, 0.5] as V3 }
-const at = (z: number, y = -0.07, d = 0.55) => ({ position: [d, 0.18, z + d * 0.8] as V3, target: [0, y, z] as V3 })
+// seen from the −X side: the cut removes that half, keeping the idler with its shaft's walls and the casing top the levers stand on
+const home = { position: [-1.75, 0.72, 1.62] as V3, target: [0, 0.03, 0.5] as V3 }
+const at = (z: number, y = -0.07, d = 0.55) => ({ position: [-d, 0.18, z + d * 0.8] as V3, target: [0, y, z] as V3 })
 
 const scene: SceneDef = {
   id: 'mf-16-speed',
@@ -23,9 +24,9 @@ const scene: SceneDef = {
   hatchScale: 0.006,
   timeScale: 1 / 30,
   cutPresets: [
-    { id: 'side', label: 'Through both shaft lines', planes: [{ normal: [1, 0, 0], pos: 0 }] },
-    { id: 'quarter', label: 'Quarter cut', planes: [{ normal: [1, 0, 0], pos: 0 }, { normal: [0, 1, 0], pos: -0.07 }], intersection: true },
-    { id: 'all', label: 'Section everything', planes: [{ normal: [1, 0, 0], pos: 0 }], sectionMoving: true },
+    { id: 'side', label: 'Through both shaft lines', planes: [{ normal: [-1, 0, 0], pos: 0 }] },
+    { id: 'quarter', label: 'Quarter cut', planes: [{ normal: [-1, 0, 0], pos: 0 }, { normal: [0, 1, 0], pos: -0.07 }], intersection: true },
+    { id: 'all', label: 'Section everything', planes: [{ normal: [-1, 0, 0], pos: 0 }], sectionMoving: true },
   ],
   defaultPreset: 'side',
   cites: [SRC.top510('p3–4, Fig A2.6'), SRC.tts510('p4–5 — gearbox speeds and levers')],
@@ -116,7 +117,7 @@ const scene: SceneDef = {
     {
       title: '4WD clutch and parking brake',
       body: 'A **transfer gear** on the output shaft drives the **four-wheel-drive clutch** and the **front axle drive shaft** under the box. The **parking brake** holds the output shaft.',
-      camera: { position: [0.55, -0.1, ST.transfer + 0.45], target: [0, -0.25, ST.transfer] },
+      camera: { position: [-0.55, -0.1, ST.transfer + 0.45], target: [0, -0.25, ST.transfer] },
       select: 'transfer',
       params: { fourWD: true },
       cites: [SRC.top510('Fig A2.6')],
@@ -125,7 +126,7 @@ const scene: SceneDef = {
       title: 'All the speeds',
       body:
         'Open **Controls**: the table lists all 16 forward speeds, slowest first — 1.7 to 32.7 km/h at 2000 rpm, close to the typical 1.6–32 km/h of a tractor box — and the 12 reverse speeds. Tooth numbers are typical values.',
-      camera: { position: [0.7, 0.3, BEVEL.apexZ + 0.6], target: [0, -0.1, 0.6] },
+      camera: { position: [-0.7, 0.3, BEVEL.apexZ + 0.6], target: [0, -0.1, 0.6] },
       select: null,
       cites: [SRC.tts510('p4')],
     },

@@ -267,6 +267,9 @@ export function GearboxScene3D() {
 
         <Part id="idler" name="Reverse idler" role="moving" material="steelDark" info={INFO.idler} cites={C.sliding}>
           <group position={[IDLER.x, IDLER.y, idlerZ]}>
+            {/* still: the stub shaft it turns on, and the boss holding it to the side wall */}
+            <PartMesh geometry={g.idlerStub} material="steel" />
+            <PartMesh geometry={g.idlerBoss} material="castIron" />
             <group ref={idler}>
               <PartMesh geometry={sl ? g.spurIdler : g.hIdler} material={pf(on.gr, 'steelDark')} />
             </group>

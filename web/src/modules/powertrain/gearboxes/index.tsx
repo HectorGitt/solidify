@@ -7,8 +7,9 @@ import { GearboxPanel } from './Panel'
 import { GearboxScene3D } from './Scene3D'
 
 type V3 = [number, number, number]
-const home = { position: [1.5, 0.64, 1.42] as V3, target: [0, 0.05, 0.42] as V3 }
-const near = (z: number) => ({ position: [0.5, 0.18, z + 0.32] as V3, target: [0, -0.06, z] as V3 })
+// seen from the −X side: the cut removes that half, keeping the idler's side wall and the casing top the levers stand on
+const home = { position: [-1.5, 0.64, 1.42] as V3, target: [0, 0.05, 0.42] as V3 }
+const near = (z: number) => ({ position: [-0.5, 0.18, z + 0.32] as V3, target: [0, -0.06, z] as V3 })
 
 const scene: SceneDef = {
   id: 'gearboxes',
@@ -23,10 +24,10 @@ const scene: SceneDef = {
   hatchScale: 0.005,
   timeScale: 1 / 20,
   cutPresets: [
-    { id: 'side', label: 'Through the shafts', planes: [{ normal: [1, 0, 0], pos: 0 }] },
-    { id: 'quarter', label: 'Quarter cut', planes: [{ normal: [1, 0, 0], pos: 0 }, { normal: [0, 1, 0], pos: 0.02 }], intersection: true },
+    { id: 'side', label: 'Through the shafts', planes: [{ normal: [-1, 0, 0], pos: 0 }] },
+    { id: 'quarter', label: 'Quarter cut', planes: [{ normal: [-1, 0, 0], pos: 0 }, { normal: [0, 1, 0], pos: 0.02 }], intersection: true },
     { id: 'plan', label: 'Plan section', planes: [{ normal: [0, 1, 0], pos: 0.02 }] },
-    { id: 'all', label: 'Section everything', planes: [{ normal: [1, 0, 0], pos: 0 }], sectionMoving: true },
+    { id: 'all', label: 'Section everything', planes: [{ normal: [-1, 0, 0], pos: 0 }], sectionMoving: true },
   ],
   defaultPreset: 'side',
   cites: [SRC.tts510('p4–7, Figs 32–33'), SRC.pt510('p3 — sliding gear, collar shift, synchromesh'), SRC.top510('p3–4')],
@@ -68,7 +69,7 @@ const scene: SceneDef = {
       title: 'Reverse through an idler',
       body:
         'For reverse the sliding gear meshes with an **idler**: power passes top → idler → bottom, two meshes instead of one, so the output turns the other way.',
-      camera: { position: [0.55, 0.15, 0.62], target: [0.04, -0.05, 0.32] },
+      camera: { position: [-0.55, 0.15, 0.62], target: [0.04, -0.05, 0.32] },
       select: 'idler',
       params: { variant: 'sliding', gear: 'R', range: 'L' },
       cites: [SRC.pt510('p3 — reverse the travel')],
@@ -118,7 +119,7 @@ const scene: SceneDef = {
       title: 'Crown wheel and pinion',
       body:
         'The output shaft’s bevel **pinion** drives the **crown wheel** through 90° — a second reduction (47 : 11). The final reduction in the hubs makes the third. The bottom-shaft gears dip into **SAE 40/50 gear oil**, checked weekly.',
-      camera: { position: [0.55, 0.3, BEVEL.apexZ + 0.35], target: [-0.04, -0.05, BEVEL.apexZ - 0.05] },
+      camera: { position: [-0.55, 0.3, BEVEL.apexZ + 0.35], target: [-0.04, -0.05, BEVEL.apexZ - 0.05] },
       select: 'crown',
       cites: [SRC.tts510('p7, p10')],
     },
