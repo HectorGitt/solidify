@@ -41,6 +41,8 @@ interface CaseResult {
   seconds: number
   checks: EvalCheck[]
   error?: string
+  tokensIn?: number
+  tokensOut?: number
 }
 
 async function buildOne(prompt: string): Promise<{ reply: Record<string, unknown>; seconds: number }> {
@@ -63,7 +65,8 @@ it('nightly test run', { timeout: 60 * 60_000 }, async () => {
     try {
       const { reply, seconds } = await buildOne(c.prompt)
       const { score, checks } = scoreBuild(c, reply, seconds)
-      results.push({ id: c.id, prompt: c.prompt, score, seconds: Math.round(seconds), checks })
+      const usage = reply.usage as { input?: number; output?: number } | undefined
+      results.push({ id: c.id, prompt: c.prompt, score, seconds: Math.round(seconds), checks, tokensIn: usage?.input, tokensOut: usage?.output })
     } catch (e) {
       results.push({ id: c.id, prompt: c.prompt, score: 0, seconds: 0, checks: [{ name: 'builds', ok: false, detail: String(e).slice(0, 300) }], error: String(e).slice(0, 300) })
     }
@@ -75,8 +78,10 @@ it('nightly test run', { timeout: 60 * 60_000 }, async () => {
     score: Math.round(results.reduce((n, r) => n + r.score, 0) / Math.max(1, results.length)),
     passed: results.filter((r) => r.score === 100).length,
     total: results.length,
+    tokensIn: results.reduce((n, r) => n + (r.tokensIn ?? 0), 0),
+    tokensOut: results.reduce((n, r) => n + (r.tokensOut ?? 0), 0),
   }
-  console.log(`\nnight's score ${summary.score} · ${summary.passed} of ${summary.total} builds perfect`)
+  console.log(`\nnight's score ${summary.score} · ${summary.passed} of ${summary.total} builds perfect · ${summary.tokensIn.toLocaleString()} tokens in, ${summary.tokensOut.toLocaleString()} out`)
   if (!DRY) await post('/v1/evals/runs', { runAt: Date.now(), label: process.env.EVAL_LABEL, cases: results, summary })
 
   // new models for the library: built and scored the same way, and only the good ones queued for review
