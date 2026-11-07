@@ -1,7 +1,7 @@
 import { StudyShell } from '@/study/ui/StudyShell'
 import { ListSkeleton } from '@/ui/Skeleton'
 import { useAuth } from '../auth'
-import { useProfile } from '../profile'
+import { can, useProfile } from '../profile'
 import { ReviewQueue } from './AdminPage'
 import { primaryBtn } from './Modal'
 
@@ -30,7 +30,7 @@ export default function ReviewPage() {
         ) : !allowed ? (
           <section className="rounded-2xl border border-dashed border-line-2 bg-panel px-6 py-12 text-center text-[13.5px] text-mute">This page is for Solidify’s reviewers.</section>
         ) : (
-          <ReviewQueue canDraft={!!profile?.isAdmin} backTo="/review" />
+          <ReviewQueue canDraft={can(profile?.roles, 'curate')} backTo="/review" />
         )}
       </div>
     </StudyShell>

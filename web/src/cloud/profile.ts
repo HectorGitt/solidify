@@ -8,6 +8,18 @@ export interface ClassRef {
   role: 'student' | 'teacher'
 }
 
+export type StaffRole = 'admin' | 'curator' | 'reviewer' | 'support'
+
+/** what each permission needs: any one of these roles (the API checks the same) */
+const PERMS = {
+  admin: ['admin'],
+  curate: ['admin', 'curator'],
+  review: ['admin', 'curator', 'reviewer'],
+  support: ['admin', 'support'],
+} as const
+export type Perm = keyof typeof PERMS
+export const can = (roles: StaffRole[] | undefined, perm: Perm) => (roles ?? []).some((r) => (PERMS[perm] as readonly StaffRole[]).includes(r))
+
 export interface Profile {
   uid: string
   displayName: string
@@ -18,6 +30,8 @@ export interface Profile {
   isAdmin?: boolean
   /** can review drafts and publish them (the API decides; this only shows the link) */
   isReviewer?: boolean
+  /** staff roles: admin, curator, reviewer, support */
+  roles?: StaffRole[]
 }
 
 /** The signed-in user's Solidify profile (role, display name, classes), from the API. */

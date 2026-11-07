@@ -1,4 +1,5 @@
 import { api } from './api'
+import type { StaffRole } from './profile'
 
 /** what the admin page reads: the nightly test results, usage events, the review queue, feedback and the waitlist */
 
@@ -86,6 +87,7 @@ export interface LibraryItem extends LibraryCard {
 
 export interface FeedbackItem {
   id: string
+  status?: 'new' | 'done'
   kind: 'bug' | 'error' | 'idea' | 'sales'
   message: string
   route?: string
@@ -184,3 +186,28 @@ export interface AuditEntry {
 export const getAudit = (f: { by?: string; action?: string } = {}) =>
   api<{ entries: AuditEntry[]; people: AuditEntry['by'][]; actions: string[] }>(`/v1/admin/audit?${new URLSearchParams(Object.entries(f).filter(([, v]) => !!v) as [string, string][]).toString()}`)
 export const getHistory = (id: string) => api<{ entries: AuditEntry[] }>(`/v1/review/history/${encodeURIComponent(id)}`)
+
+/* people and their roles */
+export interface Person {
+  email: string
+  roles: StaffRole[]
+  owner: boolean
+  name?: string
+  uid?: string
+  joined?: number
+}
+export interface Lookup {
+  email: string
+  found: boolean
+  roles: StaffRole[]
+  uid?: string
+  name?: string
+  role?: 'student' | 'teacher'
+  joined?: number
+  today?: { builds: number; notePages: number; tutor: number }
+  models?: number
+}
+export const getPeople = () => api<{ people: Person[]; roles: StaffRole[] }>('/v1/admin/people')
+export const setRoles = (email: string, roles: StaffRole[]) => api<{ email: string; roles: StaffRole[] }>('/v1/admin/people', { method: 'PUT', body: { email, roles } })
+export const lookupPerson = (email: string) => api<Lookup>(`/v1/admin/people/lookup?email=${encodeURIComponent(email)}`)
+export const setFeedbackStatus = (id: string, status: 'new' | 'done') => api<{ ok: true }>(`/v1/feedback/${encodeURIComponent(id)}`, { method: 'PUT', body: { status } })

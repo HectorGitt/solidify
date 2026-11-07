@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../api'
 import { useAuth } from '../auth'
-import { useProfile } from '../profile'
+import { can, useProfile } from '../profile'
 import { syncNow, useSync } from '../sync'
 import { useReport } from './ReportDialog'
 
@@ -100,7 +100,7 @@ export function AccountMenu({ compact = false }: { compact?: boolean }) {
                 Review queue
               </Link>
             ) : null}
-            {profile?.isAdmin ? (
+            {can(profile?.roles, 'curate') || can(profile?.roles, 'support') || profile?.isAdmin ? (
               <Link to="/admin" onClick={() => setOpen(false)} className="block px-3.5 py-2 text-ink/90 hover:bg-panel-3">
                 Admin
               </Link>

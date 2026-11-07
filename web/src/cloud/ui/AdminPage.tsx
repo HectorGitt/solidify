@@ -11,18 +11,21 @@ import { toast } from '@/ui/toast'
 import { ApiError, download } from '../api'
 import { useAuth } from '../auth'
 import { setPreviewModel } from '../previewModel'
-import { useProfile } from '../profile'
+import { can, useProfile, type Perm, type StaffRole } from '../profile'
 import {
   addDraft,
   adminBuild,
   approveDraft,
   costOf,
   getAdminSettings,
-  getReviewers,
+  getPeople,
+  setRoles,
+  lookupPerson,
+  setFeedbackStatus,
+  type Lookup,
   getAudit,
   getHistory,
   type AuditEntry,
-  saveReviewers,
   type ReviewChecklist,
   nextTopics,
   getLibraryItem,
@@ -56,7 +59,7 @@ import {
 import { ghostBtn, inputCls, primaryBtn } from './Modal'
 import { ThumbnailMaker } from './ThumbnailMaker'
 
-type Tab = 'quality' | 'review' | 'library' | 'reviewers' | 'activity' | 'feedback' | 'waitlist' | 'settings'
+type Tab = 'quality' | 'review' | 'library' | 'users' | 'activity' | 'feedback' | 'waitlist' | 'settings'
 
 /** scores a build made from the admin page with the nightly run's own checks */
 function scoreReply(prompt: string, reply: BuildReply, caseId?: string) {
@@ -513,9 +516,9 @@ function RunNow({ onFinished }: { onFinished: () => void }) {
   )
 }
 
-function Quality() {
+function Quality({ admin }: { admin: boolean }) {
   const evals = useLoad(getEvals)
-  const events = useLoad(getEventSummary)
+  const events = useLoad(useCallback(() => (admin ? getEventSummary() : Promise.resolve(null)), [admin]))
   const runs = evals.data?.runs ?? []
   const [last, prev] = runs
   const delta = last && prev ? last.summary.score - prev.summary.score : null
@@ -549,10 +552,12 @@ function Quality() {
           )
         ) : null}
       </Loading>
-      <AiCost />
-      <Loading error={events.error} onRetry={events.reload}>
-        {events.data ? <Usage days={events.data.days} notes={events.data.notes} /> : null}
-      </Loading>
+      {admin ? <AiCost /> : null}
+      {admin ? (
+        <Loading error={events.error} onRetry={events.reload}>
+          {events.data ? <Usage days={events.data.days} notes={events.data.notes} /> : null}
+        </Loading>
+      ) : null}
     </div>
   )
 }
@@ -1033,65 +1038,162 @@ function Activity() {
   )
 }
 
-/* ------------------------------------------------------------------ reviewers */
+/* ------------------------------------------------------------------ users */
 
-/** who may review drafts and publish them (admins always can) */
-function Reviewers() {
-  const { data, setData, error, reload } = useLoad(getReviewers)
+const ROLE_INFO: [StaffRole, string, string][] = [
+  ['admin', 'Admin', 'everything, people included'],
+  ['curator', 'Curator', 'the library: drafting, topics, publishing, editing; and reviewing'],
+  ['reviewer', 'Reviewer', 'checks drafts and publishes them'],
+  ['support', 'Support', 'feedback and the waitlist'],
+]
+
+function RolePicker({ value, onChange, disabled, owner }: { value: StaffRole[]; onChange: (r: StaffRole[]) => void; disabled?: boolean; owner?: boolean }) {
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {ROLE_INFO.map(([r, label, hint]) => {
+        const on = value.includes(r)
+        const locked = owner && r === 'admin'
+        return (
+          <button
+            key={r}
+            type="button"
+            title={locked ? 'An owner (set on the server): always an admin' : hint}
+            aria-pressed={on}
+            disabled={disabled || locked}
+            onClick={() => onChange(on ? value.filter((x) => x !== r) : [...value, r])}
+            className={`rounded-full border px-2.5 py-1 text-[12px] font-medium transition-colors disabled:cursor-default ${on ? 'border-ink bg-ink text-bg' : 'border-line-2 text-mute hover:border-ink/40 hover:text-ink'} ${locked ? 'opacity-80' : ''}`}
+          >
+            {label}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+/** staff and their roles; anyone looked up by email */
+function Users() {
+  const { data, setData, error, reload } = useLoad(getPeople)
   const [email, setEmail] = useState('')
-  const [busy, setBusy] = useState(false)
-  const save = async (emails: string[]) => {
-    setBusy(true)
+  const [roles, setNewRoles] = useState<StaffRole[]>(['reviewer'])
+  const [busy, setBusy] = useState<string | null>(null)
+  const [found, setFound] = useState<Lookup | null>(null)
+  const [query, setQuery] = useState('')
+
+  const save = async (who: string, next: StaffRole[]) => {
+    setBusy(who)
     try {
-      setData(await saveReviewers(emails))
+      const res = await setRoles(who, next)
+      setData((cur) => {
+        if (!cur) return cur
+        const rest = cur.people.filter((p) => p.email !== res.email)
+        const had = cur.people.find((p) => p.email === res.email)
+        return { ...cur, people: res.roles.length ? [...rest, { ...(had ?? { email: res.email, owner: false }), roles: res.roles }].sort((x, y) => Number(y.owner) - Number(x.owner) || x.email.localeCompare(y.email)) : rest }
+      })
+      if (found?.email === res.email) setFound({ ...found, roles: res.roles })
+      return true
     } catch (e) {
-      toast(e instanceof ApiError ? e.message : 'Couldn’t save the reviewers.', { tone: 'warn' })
+      toast(e instanceof ApiError ? e.message : 'Couldn’t change the roles.', { tone: 'warn' })
+      return false
     } finally {
-      setBusy(false)
+      setBusy(null)
     }
   }
+  const look = async (e: FormEvent) => {
+    e.preventDefault()
+    const q = query.trim().toLowerCase()
+    if (!q) return
+    setBusy('lookup')
+    try {
+      setFound(await lookupPerson(q))
+    } catch (err) {
+      toast(err instanceof ApiError ? err.message : 'Couldn’t look that up.', { tone: 'warn' })
+    } finally {
+      setBusy(null)
+    }
+  }
+  const validEmail = (v: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)
+
   return (
-    <Loading error={error} onRetry={reload}>
-      {data ? (
-        <section className={`${card} space-y-4 p-5`}>
-          <div>
-            <h2 className="text-[15px] font-semibold">Reviewers</h2>
-            <p className="mt-1 text-[12.5px] text-mute">
-              They check drafts (calculations, model, notes), fix or rebuild them, and publish them to the library, from the Review queue in their account menu. They can’t see settings, costs, feedback or the waitlist. They sign in with the Google account of the email you add.
-            </p>
-          </div>
-          <form
-            className="flex flex-wrap gap-2"
-            onSubmit={(e) => {
-              e.preventDefault()
-              const v = email.trim().toLowerCase()
-              if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) return toast('That doesn’t look like an email address.', { tone: 'warn' })
-              setEmail('')
-              void save([...data.emails, v])
-            }}
-          >
-            <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" placeholder="reviewer@example.com" className={`${inputCls} max-w-xs`} />
-            <button type="submit" disabled={busy || !email.trim()} className={primaryBtn}>
-              Add reviewer
-            </button>
-          </form>
-          {data.emails.length ? (
-            <ul className="divide-y divide-line rounded-xl border border-line">
-              {data.emails.map((e) => (
-                <li key={e} className="flex items-center justify-between gap-3 px-3.5 py-2.5 text-[13px]">
-                  <span className="truncate text-ink">{e}</span>
-                  <button type="button" disabled={busy} onClick={() => void save(data.emails.filter((x) => x !== e))} className={`${smallBtn} text-mute hover:text-warn`}>
-                    Remove
-                  </button>
+    <div className="space-y-5">
+      <Loading error={error} onRetry={reload}>
+        {data ? (
+          <section className={`${card} p-5`}>
+            <h2 className="text-[15px] font-semibold">Staff</h2>
+            <p className="mt-1 text-[12.5px] text-mute">Roles are given by email, to the Google account the person signs in with; they apply from their next page load. Owners are set on the server and are always admins. Every change is in Activity.</p>
+            <ul className="mt-3 divide-y divide-line">
+              {data.people.map((p) => (
+                <li key={p.email} className="flex flex-wrap items-center gap-x-4 gap-y-2 py-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-[13.5px] font-medium text-ink">
+                      {p.name ?? p.email}
+                      {p.owner ? <span className="ml-2 rounded-full bg-accent/15 px-2 py-0.5 text-[10.5px] font-medium text-accent">owner</span> : null}
+                    </div>
+                    <div className="truncate text-[12px] text-mute">
+                      {p.name ? p.email : 'Not signed in yet'}
+                      {p.joined ? ` · joined ${date(p.joined)}` : ''}
+                    </div>
+                  </div>
+                  <RolePicker value={p.roles} owner={p.owner} disabled={busy === p.email} onChange={(next) => void save(p.email, next)} />
                 </li>
               ))}
             </ul>
+            <form
+              className="mt-4 flex flex-wrap items-center gap-2 border-t border-line pt-4"
+              onSubmit={(e) => {
+                e.preventDefault()
+                const v = email.trim().toLowerCase()
+                if (!validEmail(v)) return toast('That doesn’t look like an email address.', { tone: 'warn' })
+                if (!roles.length) return toast('Pick at least one role.', { tone: 'warn' })
+                void save(v, roles).then((ok) => ok && setEmail(''))
+              }}
+            >
+              <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" placeholder="name@example.com" aria-label="Email" className={`${inputCls} max-w-xs`} />
+              <RolePicker value={roles} onChange={setNewRoles} />
+              <button type="submit" disabled={!!busy || !email.trim()} className={`${primaryBtn} ml-auto`}>
+                Add
+              </button>
+            </form>
+          </section>
+        ) : null}
+      </Loading>
+
+      <section className={`${card} p-5`}>
+        <h2 className="text-[15px] font-semibold">Look someone up</h2>
+        <form onSubmit={look} className="mt-3 flex flex-wrap gap-2">
+          <input value={query} onChange={(e) => setQuery(e.target.value)} type="email" placeholder="student@example.com" aria-label="Email to look up" className={`${inputCls} max-w-xs`} />
+          <button type="submit" disabled={busy === 'lookup' || !query.trim()} className={ghostBtn}>
+            {busy === 'lookup' ? 'Looking…' : 'Look up'}
+          </button>
+        </form>
+        {found ? (
+          found.found ? (
+            <div className="mt-4 space-y-3 rounded-xl border border-line p-4">
+              <div>
+                <div className="text-[14px] font-semibold text-ink">{found.name}</div>
+                <div className="text-[12px] text-mute">
+                  {found.email} · {found.role === 'teacher' ? 'teacher' : 'student'}
+                  {found.joined ? ` · joined ${date(found.joined)}` : ''} · {found.models ?? 0} saved models
+                </div>
+              </div>
+              {found.today ? (
+                <div className="flex flex-wrap gap-3 text-[12px]">
+                  <span className="rounded-lg border border-line px-2.5 py-1.5">3D builds today: <b className="tabular-nums">{found.today.builds}</b></span>
+                  <span className="rounded-lg border border-line px-2.5 py-1.5">Note pages today: <b className="tabular-nums">{found.today.notePages}</b></span>
+                  <span className="rounded-lg border border-line px-2.5 py-1.5">Tutor questions today: <b className="tabular-nums">{found.today.tutor}</b></span>
+                </div>
+              ) : null}
+              <div>
+                <div className="mb-1.5 text-[11.5px] font-medium uppercase tracking-wide text-dim">Roles</div>
+                <RolePicker value={found.roles} owner={data?.people.find((p) => p.email === found.email)?.owner} disabled={busy === found.email} onChange={(next) => void save(found.email, next)} />
+              </div>
+            </div>
           ) : (
-            <p className="text-[12.5px] text-dim">No reviewers yet.</p>
-          )}
-        </section>
-      ) : null}
-    </Loading>
+            <p className="mt-3 text-[12.5px] text-mute">No account with that email yet. You can still give it a role above; it applies when they sign in.</p>
+          )
+        ) : null}
+      </section>
+    </div>
   )
 }
 
@@ -1120,7 +1222,7 @@ const textToTopics = (text: string): DraftTopic[] => {
   return items
 }
 
-function Settings() {
+function Settings({ admin }: { admin: boolean }) {
   const { data, setData, error, reload } = useLoad(getAdminSettings)
   const [form, setForm] = useState<QualitySettings | null>(null)
   const [topicText, setTopicText] = useState<string | null>(null)
@@ -1172,6 +1274,7 @@ function Settings() {
     <Loading error={error} onRetry={reload}>
       {data && form ? (
         <div className="space-y-5">
+          {admin ? (
           <section className={`${card} space-y-4 p-5`}>
             <h2 className="text-[15px] font-semibold">Nightly run</h2>
             <label className="flex items-center justify-between gap-4 text-[13px]">
@@ -1210,6 +1313,7 @@ function Settings() {
               {busy === 'settings' ? 'Saving…' : 'Save settings'}
             </button>
           </section>
+          ) : null}
 
           <section className={`${card} space-y-3 p-5`}>
             <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -1242,14 +1346,25 @@ function Settings() {
 const KIND_LABEL: Record<FeedbackItem['kind'], string> = { bug: 'Bug', error: 'Error', idea: 'Idea', sales: 'Sales' }
 
 function Feedback() {
-  const { data, error, reload } = useLoad(getFeedback)
+  const { data, setData, error, reload } = useLoad(getFeedback)
   const [kind, setKind] = useState<'all' | FeedbackItem['kind']>('all')
-  const items = data?.feedback.filter((f) => kind === 'all' || f.kind === kind) ?? []
+  const [show, setShow] = useState<'open' | 'all'>('open')
+  const items = data?.feedback.filter((f) => (kind === 'all' || f.kind === kind) && (show === 'all' || f.status !== 'done')) ?? []
+  const mark = async (f: FeedbackItem) => {
+    const status = f.status === 'done' ? 'new' : 'done'
+    try {
+      await setFeedbackStatus(f.id, status)
+      setData((cur) => (cur ? { feedback: cur.feedback.map((x) => (x.id === f.id ? { ...x, status } : x)) } : cur))
+    } catch (e) {
+      toast(e instanceof ApiError ? e.message : 'Couldn’t update it.', { tone: 'warn' })
+    }
+  }
   return (
     <Loading error={error} onRetry={reload}>
       {data ? (
         <>
-          <div className="mb-3">
+          <div className="mb-3 flex flex-wrap items-center gap-3">
+            <Pills label="Show" value={show} onChange={setShow} options={[{ value: 'open', label: `Open ${data.feedback.filter((f) => f.status !== 'done').length}` }, { value: 'all', label: 'All' }]} />
             <Pills label="Kind" value={kind} onChange={setKind} options={[{ value: 'all', label: `All ${data.feedback.length}` }, ...(['bug', 'error', 'idea', 'sales'] as const).map((k) => ({ value: k, label: `${KIND_LABEL[k]} ${data.feedback.filter((f) => f.kind === k).length}` }))]} />
           </div>
           {items.length ? (
@@ -1260,6 +1375,9 @@ function Feedback() {
                     <span className={`rounded-full px-2 py-0.5 font-medium ${f.kind === 'sales' ? 'bg-accent/15 text-accent' : f.kind === 'idea' ? 'bg-panel-3 text-ink/80' : 'bg-warn/15 text-warn'}`}>{KIND_LABEL[f.kind]}</span>
                     <span>{dateTime(f.createdAt)}</span>
                     {f.route ? <span className="truncate">{f.route}</span> : null}
+                    <button type="button" onClick={() => void mark(f)} className={`ml-auto rounded-full px-2.5 py-0.5 font-medium ${f.status === 'done' ? 'bg-accent/15 text-accent' : 'border border-line-2 text-mute hover:text-ink'}`}>
+                      {f.status === 'done' ? 'Dealt with ✓' : 'Mark dealt with'}
+                    </button>
                   </div>
                   <p className="mt-1.5 whitespace-pre-wrap text-[13px] leading-relaxed text-ink/90">{f.message}</p>
                   {f.contact || f.name || f.organisation ? (
@@ -1327,15 +1445,16 @@ function Waitlist() {
 
 /* ------------------------------------------------------------------ page */
 
-const TABS: { value: Tab; label: string }[] = [
-  { value: 'quality', label: 'Quality' },
-  { value: 'review', label: 'Review queue' },
-  { value: 'library', label: 'Library' },
-  { value: 'reviewers', label: 'Reviewers' },
-  { value: 'activity', label: 'Activity' },
-  { value: 'feedback', label: 'Feedback' },
-  { value: 'waitlist', label: 'Waitlist' },
-  { value: 'settings', label: 'Settings' },
+/** each tab, and the permission it needs (the API checks the same) */
+const TABS: { value: Tab; label: string; perm: Perm }[] = [
+  { value: 'quality', label: 'Quality', perm: 'curate' },
+  { value: 'review', label: 'Review queue', perm: 'review' },
+  { value: 'library', label: 'Library', perm: 'curate' },
+  { value: 'users', label: 'Users', perm: 'admin' },
+  { value: 'activity', label: 'Activity', perm: 'admin' },
+  { value: 'feedback', label: 'Feedback', perm: 'support' },
+  { value: 'waitlist', label: 'Waitlist', perm: 'support' },
+  { value: 'settings', label: 'Settings', perm: 'curate' },
 ]
 
 /** for the team: how good the builds are each night, models waiting for review, and what people have sent in */
@@ -1343,7 +1462,11 @@ export default function AdminPage() {
   const status = useAuth((s) => s.status)
   const profile = useProfile((s) => s.profile)
   const [params, setParams] = useSearchParams()
-  const tab = (TABS.find((t) => t.value === params.get('tab'))?.value ?? 'quality') as Tab
+  // the tabs this person's roles open
+  const roles = profile?.roles ?? (profile?.isAdmin ? (['admin'] as StaffRole[]) : [])
+  const mine = TABS.filter((t) => can(roles, t.perm))
+  const tab = (mine.find((t) => t.value === params.get('tab'))?.value ?? mine[0]?.value ?? 'quality') as Tab
+  const admin = can(roles, 'admin')
 
   let body: ReactNode
   if (status === 'loading' || (status === 'signed-in' && !profile)) body = <ListSkeleton rows={5} />
@@ -1355,14 +1478,25 @@ export default function AdminPage() {
         </button>
       </Empty>
     )
-  else if (!profile?.isAdmin) body = <Empty>This page is for the Solidify team.</Empty>
+  else if (!mine.length || (mine.length === 1 && mine[0].value === 'review'))
+    body = (
+      <Empty>
+        This page is for the Solidify team.
+        {can(roles, 'review') ? (
+          <>
+            {' '}
+            Your review queue is <a href="#/review" className="text-accent hover:underline">here</a>.
+          </>
+        ) : null}
+      </Empty>
+    )
   else
     body = (
       <>
         <div className="mb-5">
-          <Pills label="Section" value={tab} onChange={(t) => setParams(t === 'quality' ? {} : { tab: t }, { replace: true })} options={TABS} />
+          <Pills label="Section" value={tab} onChange={(t) => setParams(t === mine[0]?.value ? {} : { tab: t }, { replace: true })} options={mine.map(({ value, label }) => ({ value, label }))} />
         </div>
-        {tab === 'quality' ? <Quality /> : tab === 'review' ? <ReviewQueue /> : tab === 'library' ? <Library /> : tab === 'reviewers' ? <Reviewers /> : tab === 'activity' ? <Activity /> : tab === 'feedback' ? <Feedback /> : tab === 'waitlist' ? <Waitlist /> : <Settings />}
+        {tab === 'quality' ? <Quality admin={admin} /> : tab === 'review' ? <ReviewQueue canDraft={can(roles, 'curate')} /> : tab === 'library' ? <Library /> : tab === 'users' ? <Users /> : tab === 'activity' ? <Activity /> : tab === 'feedback' ? <Feedback /> : tab === 'waitlist' ? <Waitlist /> : <Settings admin={admin} />}
       </>
     )
 
