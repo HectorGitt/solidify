@@ -7,7 +7,7 @@ import { ApiError } from '@/cloud/api'
 import { generateOrEdit3DScene } from './ai3dCompiler'
 import { verifyBackProjection } from './backProjectCheck'
 import { buildPartGeometry } from './builder'
-import { analyzeTextbookPage } from './pdfPageRenderer'
+import { analyzeTextbookPage, analyzeTextbookPageAll } from './pdfPageRenderer'
 import {
   BEARING_BRACKET_ORTHO_SPEC,
   FLANGED_COUPLING_SPEC,
@@ -105,6 +105,11 @@ describe('note3d safeguards, benchmark & back-projection checks', () => {
     await expect(analyzeTextbookPage({ pageNumber: 1, pageImageUrl: '', pageText: 'beam', fileName: 'x.pdf' })).rejects.toMatchObject({ status: 0 })
     apiMock.mockResolvedValueOnce({ figures: [{ id: 'f', visualization: { kind: 'none' } }] })
     await expect(analyzeTextbookPage({ pageNumber: 1, pageImageUrl: '', pageText: 'beam', fileName: 'x.pdf' })).resolves.toEqual([])
+    // a drawing the reader can't show but Solidify can build (a truss) waits as a candidate instead of vanishing
+    apiMock.mockResolvedValueOnce({ figures: [{ id: 'truss', title: 'Fig. 3', caption: 'Pratt truss', box: [100, 100, 500, 900], visualization: { kind: 'build' } }, { id: 'graph', box: [600, 100, 900, 900], visualization: { kind: 'none' } }] })
+    const all = await analyzeTextbookPageAll({ pageNumber: 2, pageImageUrl: '', pageText: 'truss', fileName: 'x.pdf' })
+    expect(all.figures).toEqual([])
+    expect(all.candidates).toEqual([{ id: 'truss', pageNumber: 2, box: [100, 100, 500, 900], title: 'Fig. 3', caption: 'Pratt truss' }])
     // shapes the builder can't draw are dropped; a reply with nothing drawable is an incomplete answer
     const good = { id: 'shaft', name: 'Shaft', shapes: [{ kind: 'cylinder', r: 0.02, h: 0.2 }] }
     apiMock.mockResolvedValueOnce({ spec: { title: 'T', parts: [good, { id: 'b', name: 'Bolt', shapes: [{ kind: 'bolt' }] }, { id: 'n', name: 'No shapes' }] } })

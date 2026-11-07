@@ -18,7 +18,7 @@ import { toast } from '@/ui/toast'
 import { Toolbar } from '@/ui/Toolbar'
 import { InlineFigure3D } from './InlineFigure3D'
 import { createSceneDefFromSpec } from './NoteSceneRenderer'
-import { analyzeTextbookPage, loadUploadedDocument } from './pdfPageRenderer'
+import { analyzeTextbookPage, buildFigureFromPage, loadUploadedDocument } from './pdfPageRenderer'
 import { SAMPLE_TEXTBOOKS, type TextbookDocument } from './sampleTextbooks'
 import { CONFIDENCE_THRESHOLD, type DetectedPageFigure } from './schema'
 
@@ -229,12 +229,12 @@ export default function ReadPage() {
   // Single Active Live Figure ID: only ONE figure on the page runs a live WebGL canvas at a time
   // so repeated rigs (e.g. two beam figures on the same page) never collide on global stores!
   const [activeFigureId, setActiveFigureId] = useState<string | null>(() => {
-    const firstHighConf = currentPage.figures.find((f) => (f.confidence ?? 0) >= CONFIDENCE_THRESHOLD)
+    const firstHighConf = currentPage.figures.find((f) => f.chosen || (f.confidence ?? 0) >= CONFIDENCE_THRESHOLD)
     return (firstHighConf ?? currentPage.figures[0])?.id ?? null
   })
 
   useEffect(() => {
-    const firstHighConf = currentPage.figures.find((f) => (f.confidence ?? 0) >= CONFIDENCE_THRESHOLD)
+    const firstHighConf = currentPage.figures.find((f) => f.chosen || (f.confidence ?? 0) >= CONFIDENCE_THRESHOLD)
     setActiveFigureId((firstHighConf ?? currentPage.figures[0])?.id ?? null)
   }, [activeDoc.id, currentPage.pageNumber, currentPage.figures])
 
@@ -261,6 +261,25 @@ export default function ReadPage() {
       setReading(null)
     }
   }
+
+  /** adds figures to a page (replacing any with the same id), and drops the candidates they came from */
+  const putFigures = (docId: string, pageNumber: number, figs: DetectedPageFigure[], usedCandidates: string[] = []) =>
+    setDocuments((prev) =>
+      prev.map((doc) =>
+        doc.id !== docId
+          ? doc
+          : {
+              ...doc,
+              pages: doc.pages.map((p) => {
+                if (p.pageNumber !== pageNumber) return p
+                const ids = new Set(figs.map((f) => f.id))
+                const kept = p.figures.filter((f) => !ids.has(f.id))
+                const newSlots = figs.filter((f) => !p.figures.some((x) => x.id === f.id)).map((nf) => ({ kind: 'figure-slot' as const, figureId: nf.id }))
+                return { ...p, figures: [...kept, ...figs], blocks: [...p.blocks, ...newSlots], candidates: (p.candidates ?? []).filter((c) => !usedCandidates.includes(c.id)) }
+              }),
+            },
+      ),
+    )
 
   const toNormCoords = (e: MouseEvent<HTMLDivElement>): [number, number] => {
     const rect = pageSheetRef.current?.getBoundingClientRect()
@@ -289,38 +308,26 @@ export default function ReadPage() {
     setUploading(true)
     setReading({ kind: 'figure' })
     try {
-      const newFigs = await analyzeTextbookPage({
+      // a lab rig the reader recognises is used as it is (with the figure's values)
+      const found = await analyzeTextbookPage({
         pageNumber: currentPage.pageNumber,
         pageImageUrl: currentPage.pageImageUrl,
         pageText: currentPage.pageText,
         fileName: activeDoc.title,
         cropBox,
       })
-      if (newFigs.length > 0) {
-        setDocuments((prev) =>
-          prev.map((doc) =>
-            doc.id !== activeDoc.id
-              ? doc
-              : {
-                  ...doc,
-                  pages: doc.pages.map((p) =>
-                    p.pageNumber !== currentPage.pageNumber
-                      ? p
-                      : {
-                          ...p,
-                          figures: [...p.figures, ...newFigs],
-                          blocks: [
-                            ...p.blocks,
-                            ...newFigs.map((nf) => ({ kind: 'figure-slot' as const, figureId: nf.id })),
-                          ],
-                        },
-                  ),
-                },
-          ),
-        )
-        setActiveFigureId(newFigs[0].id)
+      const rigs = found.filter((f) => f.visualization.kind === 'catalog').map((f) => ({ ...f, chosen: true }))
+      // anything else is built from the picture of the box, the way Create in 3D builds from a photo
+      const figs = rigs.length
+        ? rigs
+        : [await buildFigureFromPage({ pageNumber: currentPage.pageNumber, pageImageUrl: currentPage.pageImageUrl, pageText: currentPage.pageText, box: cropBox, title: found[0]?.title, caption: found[0]?.caption })].filter(
+            (f): f is DetectedPageFigure => !!f,
+          )
+      if (figs.length) {
+        putFigures(activeDoc.id, currentPage.pageNumber, figs)
+        setActiveFigureId(figs[0].id)
       } else {
-        toast('Solidify couldn’t turn that part of the page into 3D. Try a box tighter around the figure.')
+        toast('Solidify couldn’t build that part of the page. Try a box tighter around the drawing.', { tone: 'warn' })
       }
     } catch (e) {
       showError(e, 'Couldn’t read that part of the page.')
@@ -330,7 +337,43 @@ export default function ReadPage() {
     }
   }
 
-  const highConfCount = currentPage.figures.filter((f) => (f.confidence ?? 0) >= CONFIDENCE_THRESHOLD).length
+  /* "Make every figure 3D": builds each drawing the reader found but could not show, and shows the ones kept as drawings */
+  const [converting, setConverting] = useState<{ done: number; total: number } | null>(null)
+  const stopConvert = useRef(false)
+  const todo = useMemo(() => {
+    const kept = activeDoc.pages.flatMap((p) => p.figures.filter((f) => !f.chosen && (f.confidence ?? 0) < CONFIDENCE_THRESHOLD).map((f) => ({ page: p, figure: f })))
+    const toBuild = activeDoc.pages.flatMap((p) => (p.candidates ?? []).map((c) => ({ page: p, candidate: c })))
+    return { kept, toBuild }
+  }, [activeDoc])
+  const convertAll = async () => {
+    const docId = activeDoc.id
+    // drawings kept for low confidence: shown in 3D now (each can still be switched back to the drawing)
+    for (const { page, figure } of todo.kept) putFigures(docId, page.pageNumber, [{ ...figure, chosen: true }])
+    const list = todo.toBuild
+    if (!list.length) return
+    stopConvert.current = false
+    setConverting({ done: 0, total: list.length })
+    let built = 0
+    for (let i = 0; i < list.length && !stopConvert.current; i++) {
+      const { page, candidate } = list[i]
+      try {
+        const fig = await buildFigureFromPage({ pageNumber: page.pageNumber, pageImageUrl: page.pageImageUrl, pageText: page.pageText, box: candidate.box, title: candidate.title, caption: candidate.caption })
+        if (fig) {
+          putFigures(docId, page.pageNumber, [fig], [candidate.id])
+          built++
+        }
+      } catch (e) {
+        showError(e, 'Couldn’t build one of the figures.')
+        // out of builds for today, or signed out: no point going on
+        if (e instanceof ApiError && (e.status === 429 || e.status === 401)) break
+      }
+      setConverting({ done: i + 1, total: list.length })
+    }
+    setConverting(null)
+    toast(`Built ${built} of ${list.length} figures in 3D.`)
+  }
+
+  const highConfCount = currentPage.figures.filter((f) => f.chosen || (f.confidence ?? 0) >= CONFIDENCE_THRESHOLD).length
   const gatedCount = currentPage.figures.length - highConfCount
 
   const segBtn = (on: boolean) =>
@@ -423,7 +466,23 @@ export default function ReadPage() {
             <span className="hidden text-dim xl:inline">Pages are sent only to find figures and are never saved.</span>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            {converting ? (
+              <button type="button" onClick={() => (stopConvert.current = true)} className={smallGhost} title="Stop after the figure being built">
+                Building {converting.done + 1} of {converting.total}… Stop
+              </button>
+            ) : todo.kept.length + todo.toBuild.length > 0 ? (
+              <button
+                type="button"
+                onClick={() => void convertAll()}
+                disabled={uploading}
+                className={smallGhost}
+                title={todo.toBuild.length ? `Builds ${todo.toBuild.length} more ${todo.toBuild.length === 1 ? 'drawing' : 'drawings'} in 3D (one 3D build each)` : 'Shows the figures kept as drawings in 3D'}
+              >
+                <Icon.build width={14} height={14} />
+                Make every figure 3D ({todo.kept.length + todo.toBuild.length})
+              </button>
+            ) : null}
             {readingMode === 'page-overlay' && (
               <button
                 type="button"

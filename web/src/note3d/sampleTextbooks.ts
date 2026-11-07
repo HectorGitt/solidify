@@ -1,4 +1,5 @@
-import type { DetectedPageFigure, NoteSceneSpec } from './schema'
+import type { DetectedPageFigure, FigureCandidate, NoteSceneSpec } from './schema'
+
 
 export interface TextbookParagraphBlock {
   kind: 'heading' | 'subheading' | 'paragraph' | 'equation' | 'example-box' | 'figure-slot'
@@ -20,6 +21,8 @@ export interface RenderedTextbookPage {
   blocks: TextbookParagraphBlock[]
   /** Detected figures on this page whose 2D bounding boxes are replaced in-place by <InlineFigure3D> */
   figures: DetectedPageFigure[]
+  /** drawings found that can be built in 3D on request ("Make every figure 3D") */
+  candidates?: FigureCandidate[]
 }
 
 export interface TextbookDocument {

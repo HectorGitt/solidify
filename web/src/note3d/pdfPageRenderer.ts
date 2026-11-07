@@ -4,7 +4,8 @@ import {
   type TextbookDocument,
   type TextbookParagraphBlock,
 } from './sampleTextbooks'
-import type { DetectedPageFigure, NoteSceneSpec } from './schema'
+import type { DetectedPageFigure, FigureCandidate, NoteSceneSpec } from './schema'
+import { sanitizeGeneratedSpec } from './sanitize'
 
 /**
  * Crops a normalized `[ymin, xmin, ymax, xmax]` (0..1000) region out of a page image Data URL
@@ -53,6 +54,17 @@ export async function analyzeTextbookPage(opts: {
   fileName: string
   cropBox?: [number, number, number, number]
 }): Promise<DetectedPageFigure[]> {
+  return (await analyzeTextbookPageAll(opts)).figures
+}
+
+/** a page's figures shown in 3D now, and the drawings that can be built on request */
+export async function analyzeTextbookPageAll(opts: {
+  pageNumber: number
+  pageImageUrl: string
+  pageText: string
+  fileName: string
+  cropBox?: [number, number, number, number]
+}): Promise<{ figures: DetectedPageFigure[]; candidates: FigureCandidate[] }> {
   const res = await api<{ figures: DetectedPageFigure[] }>('/v1/notes/analyze', {
     body: {
       pageNumber: opts.pageNumber,
@@ -62,14 +74,52 @@ export async function analyzeTextbookPage(opts: {
       cropBox: opts.cropBox,
     },
   })
-  // only figures Solidify can show in 3D are overlaid; the rest stay as printed on the page
-  const showable = (res?.figures ?? []).filter((f) => f?.visualization?.kind === 'catalog' || f?.visualization?.kind === 'procedural')
-  return Promise.all(
+  // only figures Solidify can show in 3D are overlaid; drawings it can build wait as candidates; the rest stay as printed
+  const all = res?.figures ?? []
+  const showable = all.filter((f) => f?.visualization?.kind === 'catalog' || f?.visualization?.kind === 'procedural')
+  const candidates: FigureCandidate[] = all
+    .filter((f) => (f?.visualization as { kind?: string } | undefined)?.kind === 'build' && Array.isArray(f.box) && f.box.length === 4)
+    .map((f, i) => ({ id: f.id || `cand-${opts.pageNumber}-${i}`, pageNumber: opts.pageNumber, box: f.box, title: f.title || 'Figure', caption: f.caption || '' }))
+  const figures = await Promise.all(
     showable.map(async (f) => ({
       ...f,
       originalCropUrl: f.originalCropUrl ?? (await cropFigureFromPage(opts.pageImageUrl, f.box)),
     })),
   )
+  return { figures, candidates }
+}
+
+/**
+ * Builds a figure in 3D the way Create in 3D builds from a photo: a picture of the region and the words
+ * around it go to the full build prompt, so trusses, frames and assemblies work too, with their loads,
+ * graphs and calculations. Counts as one 3D build.
+ */
+export async function buildFigureFromPage(opts: {
+  pageNumber: number
+  pageImageUrl: string
+  pageText: string
+  box: [number, number, number, number]
+  title?: string
+  caption?: string
+}): Promise<DetectedPageFigure | null> {
+  const crop = await cropFigureFromPage(opts.pageImageUrl, opts.box)
+  const words = [opts.title, opts.caption].filter(Boolean).join(': ')
+  const prompt = `Build the engineering figure in this picture, from page ${opts.pageNumber} of a student's notes${words ? ` (${words})` : ''}. Use the sizes, loads and values it shows; where it leaves one out, take it from this text from the page: ${opts.pageText.slice(0, 1500)}`
+  const res = await api<Record<string, unknown>>('/v1/create-3d', { body: { prompt: prompt.slice(0, 2000), photoBase64: crop } })
+  const spec = sanitizeGeneratedSpec(res, prompt)
+  if (!spec) return null
+  return {
+    id: `built-${opts.pageNumber}-${Date.now().toString(36)}`,
+    pageNumber: opts.pageNumber,
+    box: opts.box,
+    title: opts.title || spec.title,
+    caption: opts.caption || (typeof res.explanation === 'string' ? res.explanation.slice(0, 200) : ''),
+    confidence: 1,
+    chosen: true,
+    originalCropUrl: crop,
+    extractedGivens: [],
+    visualization: { kind: 'procedural', spec },
+  }
 }
 
 /**
@@ -102,7 +152,7 @@ export async function loadUploadedDocument(file: File): Promise<TextbookDocument
       img.src = dataUrl
     })
 
-    const figures = await analyzeTextbookPage({
+    const { figures, candidates } = await analyzeTextbookPageAll({
       pageNumber: 1,
       pageImageUrl: dataUrl,
       pageText: baseTitle,
@@ -133,6 +183,7 @@ export async function loadUploadedDocument(file: File): Promise<TextbookDocument
           pageText: baseTitle,
           blocks,
           figures,
+          candidates,
         },
       ],
     }
@@ -167,7 +218,7 @@ export async function loadUploadedDocument(file: File): Promise<TextbookDocument
       const strings: string[] = textContent.items.map((it: any) => String(it.str ?? '')).filter(Boolean)
       const pageText = strings.join(' ')
 
-      const figures = await analyzeTextbookPage({
+      const { figures, candidates } = await analyzeTextbookPageAll({
         pageNumber: p,
         pageImageUrl,
         pageText: pageText || baseTitle,
@@ -190,6 +241,7 @@ export async function loadUploadedDocument(file: File): Promise<TextbookDocument
         pageText,
         blocks,
         figures,
+        candidates,
       })
     }
 

@@ -354,6 +354,17 @@ export interface DetectedPageFigure {
     result?: string
   }[]
   visualization: FigureVisualization
+  /** the student picked this figure, or asked for it in 3D: shown in 3D whatever the confidence */
+  chosen?: boolean
+}
+
+/** a drawing the page reader found that is not a lab rig or a single part: built on request (Create in 3D's pipeline) */
+export interface FigureCandidate {
+  id: string
+  pageNumber: number
+  box: [number, number, number, number]
+  title: string
+  caption: string
 }
 
 /* -------------------------------------------------------------------------- */

@@ -175,7 +175,8 @@ export function InlineFigure3D({
   const gatedByConfidence = confidence < CONFIDENCE_THRESHOLD
   const gatedByBackProjection = !backProjection.passed
   const gatedByValues = !!mapped && mapped.usable === 0
-  const isGated = gatedByConfidence || gatedByBackProjection || gatedByValues
+  // a figure the student picked (or asked for in 3D) is shown in 3D; they can still switch to the drawing
+  const isGated = !figure.chosen && (gatedByConfidence || gatedByBackProjection || gatedByValues)
 
   // If gated (low confidence or failed back-projection check), keep original 2D figure by default!
   const [viewMode, setViewMode] = useState<'3d' | '2d' | 'split'>(() =>
@@ -217,7 +218,7 @@ export function InlineFigure3D({
       setParams({ ...figure.visualization.params })
     }
     const values = figure.visualization.kind === 'catalog' ? toSceneParams(figure.visualization.moduleId, figure.visualization.sceneId, figure.visualization.params).usable : 1
-    setViewMode((figure.confidence ?? 0) < CONFIDENCE_THRESHOLD || values === 0 ? '2d' : '3d')
+    setViewMode(!figure.chosen && ((figure.confidence ?? 0) < CONFIDENCE_THRESHOLD || values === 0) ? '2d' : '3d')
   }, [figure])
 
   // Load catalog SceneDef when visualization.kind === 'catalog'
