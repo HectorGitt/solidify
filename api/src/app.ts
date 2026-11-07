@@ -209,6 +209,14 @@ export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision
     if (!isAdmin(u)) throw fail(403, 'Admins only.')
     return u
   }
+  /** reviewers check drafts and publish them; admins name them on the admin page, and are reviewers too */
+  const getReviewers = async () => (await db.get<{ emails: string[] }>('settings/reviewers'))?.emails ?? []
+  const isReviewer = async (u: { email?: string | null }) => isAdmin(u) || (!!u.email && (await getReviewers()).includes(u.email.toLowerCase()))
+  const requireReviewer = async (c: Context<Env>) => {
+    const u = requireUser(c)
+    if (!(await isReviewer(u))) throw fail(403, 'Reviewers only.')
+    return u
+  }
 
   /* ------------------------------------------------------------------ account */
 
@@ -216,7 +224,7 @@ export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision
     const u = requireUser(c)
     const p = await profile(u)
     const classes = await db.list<{ name: string; role: Role }>(`users/${u.uid}/classes`)
-    return c.json({ uid: u.uid, ...p, isAdmin: isAdmin(u) || undefined, classes: classes.map((r) => ({ id: r.id, ...r.data })) })
+    return c.json({ uid: u.uid, ...p, isAdmin: isAdmin(u) || undefined, isReviewer: (await isReviewer(u)) || undefined, classes: classes.map((r) => ({ id: r.id, ...r.data })) })
   })
 
   app.patch('/v1/me', async (c) => {
@@ -561,9 +569,10 @@ export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision
 
   /** one build for the admin page (a draft from a prompt, a fix, a rebuild, a re-test): outside the students' allowance and usage counts */
   app.post('/v1/admin/build', async (c) => {
-    requireAdmin(c)
+    const u = await requireReviewer(c)
     const req = await body(c, create3dRequest)
-    await spend('admin', 'adminBuildUsage', 100, 'admin builds')
+    if (isAdmin(u)) await spend('admin', 'adminBuildUsage', 100, 'admin builds')
+    else await spend(u.uid, 'reviewBuildUsage', 40, 'review builds')
     const t0 = now()
     const out = await model(() => noteVision.createOrEdit3D(req))
     return c.json({ ...out, ms: now() - t0 })
@@ -721,12 +730,18 @@ export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision
   })
 
   /** a draft changed from the admin page: fixed, rebuilt or retitled, with its new score */
+  /** what a review records on a draft: the reviewer's notes, and what they have checked */
+  const reviewFields = {
+    reviewNotes: z.string().trim().max(2000),
+    checklist: z.object({ calculations: z.boolean(), model: z.boolean(), text: z.boolean() }).partial(),
+  }
+
   app.put('/v1/library/drafts/:id', async (c) => {
-    requireAdmin(c)
+    await requireReviewer(c)
     const id = libraryId(c.req.param('id'))
     const draft = await db.get<LibraryDoc>(`libraryDrafts/${id}`)
     if (!draft) throw fail(404, 'Draft not found.')
-    const patch = await body(c, libraryInput.partial())
+    const patch = await body(c, libraryInput.partial().extend(reviewFields).partial())
     if (patch.spec && JSON.stringify(patch.spec).length > 300_000) throw fail(413, 'This model is too large to save.')
     const next = { ...draft, ...patch, ...(patch.spec ? { parts: Array.isArray(patch.spec.parts) ? patch.spec.parts.length : 0 } : {}) }
     await db.set(`libraryDrafts/${id}`, next)
@@ -735,18 +750,20 @@ export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision
 
   /** the review queue, newest first, in full so the reviewer can open each one */
   app.get('/v1/library/drafts', async (c) => {
-    requireAdmin(c)
+    await requireReviewer(c)
     const rows = await db.list<LibraryDoc>('libraryDrafts', { limit: 200 })
     return c.json({ drafts: rows.map((r) => ({ id: r.id, ...r.data })).sort((a, b) => b.createdAt - a.createdAt) })
   })
 
   app.post('/v1/library/drafts/:id/approve', async (c) => {
-    requireAdmin(c)
+    const u = await requireReviewer(c)
     const id = libraryId(c.req.param('id'))
     const draft = await db.get<LibraryDoc>(`libraryDrafts/${id}`)
     if (!draft) throw fail(404, 'Draft not found.')
     const patch = await body(c, z.object({ title: libraryInput.shape.title.optional() }))
-    const published = { ...draft, ...(patch.title ? { title: patch.title } : {}), publishedAt: now() }
+    // who checked it, and when, goes with it into the library
+    const reviewedBy = { uid: u.uid, name: (await db.get<{ displayName?: string }>(`users/${u.uid}`))?.displayName ?? u.name ?? 'Reviewer' }
+    const published = { ...draft, ...(patch.title ? { title: patch.title } : {}), reviewedBy, publishedAt: now() }
     await db.set(`library/${id}`, published)
     await db.delete(`libraryDrafts/${id}`)
     await embedOne(id, published)
@@ -754,9 +771,28 @@ export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision
   })
 
   app.delete('/v1/library/drafts/:id', async (c) => {
-    requireAdmin(c)
-    await db.delete(`libraryDrafts/${libraryId(c.req.param('id'))}`)
+    const u = await requireReviewer(c)
+    const id = libraryId(c.req.param('id'))
+    const draft = await db.get<LibraryDoc>(`libraryDrafts/${id}`)
+    // a rejection keeps its reason, so the drafting can learn what goes wrong
+    const reason = (c.req.query('reason') ?? '').trim().slice(0, 500)
+    if (draft) await db.set(`libraryRejected/${id}`, { title: draft.title, prompt: draft.prompt, topic: draft.topic ?? '', reason, by: u.uid, at: now() })
+    await db.delete(`libraryDrafts/${id}`)
     return c.json({ ok: true })
+  })
+
+  /** the reviewer list, for admins */
+  app.get('/v1/admin/reviewers', async (c) => {
+    requireAdmin(c)
+    return c.json({ emails: await getReviewers() })
+  })
+
+  app.put('/v1/admin/reviewers', async (c) => {
+    requireAdmin(c)
+    const { emails } = await body(c, z.object({ emails: z.array(z.string().trim().toLowerCase().email().max(200)).max(100) }))
+    const unique = [...new Set(emails)]
+    await db.set('settings/reviewers', { emails: unique })
+    return c.json({ emails: unique })
   })
 
   /** the published models: cards only, anyone may read */

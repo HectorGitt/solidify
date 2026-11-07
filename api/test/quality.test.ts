@@ -232,3 +232,40 @@ describe('the drafting pool', () => {
     expect((await req('PUT', '/v1/admin/settings', { draftsPerNight: 100 }, boss)).status).toBe(200)
   })
 })
+
+describe('reviewers', () => {
+  const boss = { Authorization: 'Bearer user:boss:Boss' }
+  const rita = { Authorization: 'Bearer user:rita:Rita' }
+  const draft = { title: 'Worm gear set', prompt: 'A worm and worm wheel', spec: { title: 'Worm', parts: [{ id: 'worm' }] }, score: 90 }
+
+  it('are named by admins, and can review and publish, but nothing else of the admin page', async () => {
+    const add = await req('PUT', '/v1/admin/reviewers', { emails: ['RITA@example.test', 'rita@example.test'] }, boss)
+    expect(((await add.json()) as { emails: string[] }).emails).toEqual(['rita@example.test'])
+    expect((await req('PUT', '/v1/admin/reviewers', { emails: ['sam@example.test'] }, rita)).status).toBe(403)
+    expect(((await (await req('GET', '/v1/me', undefined, rita)).json()) as { isReviewer?: boolean; isAdmin?: boolean })).toMatchObject({ isReviewer: true })
+
+    const { id } = (await (await req('POST', '/v1/library/drafts', draft, { 'x-eval-token': TOKEN })).json()) as { id: string }
+    expect((await req('GET', '/v1/library/drafts', undefined, rita)).status).toBe(200)
+    // notes and the checklist are kept on the draft
+    await req('PUT', `/v1/library/drafts/${id}`, { reviewNotes: 'Ratio checked: 30 : 1.', checklist: { calculations: true, model: true, text: true } }, rita)
+    const queue = (await (await req('GET', '/v1/library/drafts', undefined, rita)).json()) as { drafts: Record<string, unknown>[] }
+    expect(queue.drafts[0]).toMatchObject({ reviewNotes: 'Ratio checked: 30 : 1.', checklist: { calculations: true, model: true, text: true } })
+    // a fix or rebuild is theirs to make, within their own limit
+    expect((await req('POST', '/v1/admin/build', { prompt: 'a worm gear' }, rita)).status).toBe(200)
+    // publishing records who checked it
+    expect((await req('POST', `/v1/library/drafts/${id}/approve`, {}, rita)).status).toBe(200)
+    const item = (await (await req('GET', `/v1/library/${id}`)).json()) as { reviewedBy?: { uid: string } }
+    expect(item.reviewedBy?.uid).toBe('rita')
+
+    // the rest of the admin page stays the admins'
+    for (const [m, p] of [['GET', '/v1/admin/settings'], ['GET', '/v1/feedback'], ['GET', '/v1/waitlist'], ['GET', '/v1/ai-usage'], ['DELETE', `/v1/library/${id}`]] as const) expect((await req(m, p, undefined, rita)).status).toBe(403)
+    expect((await req('GET', '/v1/library/drafts', undefined, asUser('sam'))).status).toBe(403)
+  })
+
+  it('keep the reason when they reject a draft', async () => {
+    await req('PUT', '/v1/admin/reviewers', { emails: ['rita@example.test'] }, boss)
+    const { id } = (await (await req('POST', '/v1/library/drafts', draft, { 'x-eval-token': TOKEN })).json()) as { id: string }
+    expect((await req('DELETE', `/v1/library/drafts/${id}?reason=${encodeURIComponent('Rods do not reach the crank')}`, undefined, rita)).status).toBe(200)
+    expect(await db.get(`libraryRejected/${id}`)).toMatchObject({ reason: 'Rods do not reach the crank', by: 'rita' })
+  })
+})
