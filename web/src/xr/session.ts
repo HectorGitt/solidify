@@ -33,6 +33,8 @@ let checked = false
 export async function checkXRSupport() {
   if (checked) return
   checked = true
+  // headsets only: a phone with AR would also say yes, but this is built for hands, not a phone held up
+  if (/Android|iPhone|iPad|Mobile/i.test(navigator.userAgent) && !/OculusBrowser|Quest|Pico|Wolvic/i.test(navigator.userAgent)) return
   const probe = async () => {
     const xr = (navigator as Navigator & { xr?: XRSystem }).xr
     if (!xr) return null
