@@ -13,6 +13,7 @@ import { Media, SOON } from './labsCatalog'
 import { RIGS_WITH_FACTS, RigEquations, RigReadings, rigFacts } from './rigFacts'
 import { applySceneView, useHomeStage } from './homeStage'
 import { Stage } from './Stage'
+import { hasWebGL } from './webgl'
 import { toast } from './toast'
 
 /** desktop with a mouse, motion allowed: the only place a second live view is worth its cost */
@@ -76,7 +77,7 @@ export function RigOfTheDay() {
   if (!today) return null
   const { m, s, facts } = today
   const to = `/m/${m.id}/${s.id}`
-  const live = owner === 'rigday' && !!scene && !failed
+  const live = owner === 'rigday' && !!scene && !failed && hasWebGL()
   return (
     <section className="mx-auto grid max-w-[1360px] items-center gap-8 px-5 pt-20 sm:px-10 lg:grid-cols-12 lg:gap-12">
       <div ref={ref} className="group relative overflow-hidden rounded-3xl border border-line bg-[var(--color-stage)] lg:col-span-7">

@@ -391,7 +391,7 @@ export function Viewer() {
         ) : null}
 
         <main className="relative min-w-0 flex-1 bg-bg">
-          {scene ? <Stage key={scene.id} scene={scene} loadingLabel="Building the model" xr /> : null}
+          {scene ? <Stage key={scene.id} scene={scene} loadingLabel="Building the model" poster={mod && entry ? `scenes/${mod.id}--${entry.id}` : undefined} xr /> : null}
           {!scene && !error ? (
             entry?.load ? <Loader label="Building the model" className="absolute inset-0" /> : <div className="absolute inset-0 grid place-items-center text-[13px] text-mute">This scene is coming soon.</div>
           ) : null}

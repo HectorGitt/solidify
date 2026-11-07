@@ -1,7 +1,9 @@
 import { CameraControls, ContactShadows, Environment, Grid, Lightformer, Html, Line } from '@react-three/drei'
 import { BuildController } from '@/render/BuildController'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
-import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Component, Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { hasWebGL } from './webgl'
+import { Media } from './labsCatalog'
 import { useXRSession } from '@/xr/session'
 
 // the headset layer: its own file, fetched only on a device that can use it
@@ -402,7 +404,73 @@ function BuildCover({ label, veil }: { label?: string; veil?: boolean }) {
   )
 }
 
+/**
+ * In place of the 3D view when this browser can't draw 3D: the model's picture if there is one, and how to
+ * turn 3D on. The rest of the page carries on as normal.
+ */
+export function NoWebGL({ poster, title, quiet }: { poster?: string; title: string; quiet?: boolean }) {
+  return (
+    <div className="relative h-full w-full overflow-hidden bg-[var(--color-stage)]">
+      {poster ? <Media name={poster} alt={`${title}, in 3D`} className="absolute inset-0 h-full w-full object-cover" /> : null}
+      {quiet ? null : (
+        <div className="absolute inset-x-3 top-16 mx-auto max-w-md rounded-xl border border-line-2 bg-panel/95 px-4 py-3 shadow-xl backdrop-blur">
+          <p className="text-[13px] font-semibold text-ink">3D is switched off in this browser</p>
+          <p className="mt-1 text-[12.5px] leading-relaxed text-mute">
+            Turn on graphics (hardware) acceleration in your browser’s settings and reload, or try another browser. Everything else on Solidify still works.
+          </p>
+        </div>
+      )}
+    </div>
+  )
+}
+
+/** if the 3D view fails to start anyway (the browser refuses a drawing context), the picture instead of an error */
+class GLBoundary extends Component<{ children: ReactNode; fallback: ReactNode }, { failed: boolean }> {
+  state = { failed: false }
+  static getDerivedStateFromError(e: unknown) {
+    // only a refused drawing context: other errors go on to the page's own boundary
+    if (/WebGL|context/i.test(String((e as Error)?.message ?? e))) return { failed: true }
+    throw e
+  }
+  render() {
+    return this.state.failed ? this.props.fallback : this.props.children
+  }
+}
+
 export function Stage({
+  scene,
+  smooth = true,
+  pageScroll = false,
+  frame,
+  loadingLabel,
+  veil = false,
+  cover = true,
+  viewKey,
+  poster,
+  xr = false,
+}: {
+  scene: SceneDef
+  smooth?: boolean
+  pageScroll?: boolean
+  frame?: StageFrame
+  loadingLabel?: string
+  /** a frosted cover the model shows through as it builds, instead of a solid one (the home hero) */
+  veil?: boolean
+  /** false: no build cover (the capture page photographs the bare canvas) */
+  cover?: boolean
+  /** the camera returns to the scene's pose when this changes (default: the scene id); a page that swaps
+   *  scenes for the same model (a live build, then the finished model) keeps it steady so the view stays put */
+  viewKey?: string
+  /** the model's picture (a media name, e.g. "scenes/engine--cooling"), shown if this browser can't draw 3D */
+  poster?: string
+  /** the rig can be opened in a headset (rig pages) */
+  xr?: boolean
+}) {
+  if (!hasWebGL()) return <NoWebGL poster={poster} title={scene.title} quiet={pageScroll} />
+  return <GLBoundary fallback={<NoWebGL poster={poster} title={scene.title} quiet={pageScroll} />}><StageView scene={scene} smooth={smooth} pageScroll={pageScroll} frame={frame} loadingLabel={loadingLabel} veil={veil} cover={cover} viewKey={viewKey} xr={xr} /></GLBoundary>
+}
+
+function StageView({
   scene,
   smooth = true,
   pageScroll = false,
@@ -418,12 +486,8 @@ export function Stage({
   pageScroll?: boolean
   frame?: StageFrame
   loadingLabel?: string
-  /** a frosted cover the model shows through as it builds, instead of a solid one (the home hero) */
   veil?: boolean
-  /** false: no build cover (the capture page photographs the bare canvas) */
   cover?: boolean
-  /** the camera returns to the scene's pose when this changes (default: the scene id); a page that swaps
-   *  scenes for the same model (a live build, then the finished model) keeps it steady so the view stays put */
   viewKey?: string
   /** the rig can be opened in a headset (rig pages) */
   xr?: boolean
