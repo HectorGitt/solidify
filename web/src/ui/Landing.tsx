@@ -10,6 +10,7 @@ import { useSales } from '@/cloud/ui/SalesDialog'
 import { Icon } from './icons'
 import { Loader, LoaderMark } from './Loader'
 import { Stage, type StageFrame } from './Stage'
+import { hasWebGL } from './webgl'
 import { SiteHeader } from '@/ui/SiteHeader'
 import { SiteFooter } from './SiteFooter'
 import { ALL_ORDER, MEDIA, Media, ModuleTile, READY } from './labsCatalog'
@@ -117,7 +118,7 @@ function Gauge({ label, value, unit, fill }: HeroReadout) {
 function Hero({ copy }: { copy: (typeof COPY)[keyof typeof COPY] }) {
   const [heroIdx, setHeroIdx] = useState(0)
   // falls back to the still render if a scene fails to load
-  const [live3D, setLive3D] = useState(true)
+  const [live3D, setLive3D] = useState(hasWebGL)
   const [scene, setScene] = useState<SceneDef | null>(null)
   const cutEnabled = useView((s) => s.cut.enabled)
   const explode = useView((s) => s.explode)
@@ -174,7 +175,8 @@ function Hero({ copy }: { copy: (typeof COPY)[keyof typeof COPY] }) {
         ) : live3D ? (
           <Loader size={52} className="h-full bg-[var(--color-stage)] lg:pl-[40%]" />
         ) : (
-          <div className="h-full bg-[var(--color-stage)]" />
+          // no live 3D (this browser can't, or the scene failed): the scene's picture
+          <Media name={`scenes/${hero.moduleId}--${hero.sceneId}`} alt="A Solidify lab rig, in 3D" className="h-full w-full object-cover lg:pl-[30%]" />
         )}
       </div>
       {/* scrims keep the headline readable in either theme; they never take pointer events, so the scene stays draggable */}
