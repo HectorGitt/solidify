@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
+import { Fragment, useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { create } from 'zustand'
 import { startTask } from '@/ui/tasks'
 import { useNavigate, useSearchParams } from 'react-router-dom'
@@ -19,6 +19,10 @@ import {
   costOf,
   getAdminSettings,
   getPeople,
+  getAccounts,
+  accountQuery,
+  type Account,
+  type AccountFilter,
   setRoles,
   lookupPerson,
   setFeedbackStatus,
@@ -136,7 +140,12 @@ function Trend({ runs }: { runs: { runAt: number; summary: { score: number } }[]
   return (
     <div className="flex h-24 items-end gap-[3px]" role="img" aria-label={`Night scores, last ${shown.length} runs`}>
       {shown.map((r) => (
-        <div key={r.runAt} title={`${date(r.runAt)}: ${r.summary.score}`} className={`min-w-[6px] flex-1 rounded-t ${r.summary.score >= 90 ? 'bg-accent' : r.summary.score >= 70 ? 'bg-ink/50' : 'bg-warn'}`} style={{ height: `${Math.max(4, r.summary.score)}%` }} />
+        <div
+          key={r.runAt}
+          title={`${date(r.runAt)}: ${r.summary.score}`}
+          className={`min-w-[6px] flex-1 rounded-t ${r.summary.score >= 90 ? 'bg-accent' : r.summary.score >= 70 ? 'bg-ink/50' : 'bg-warn'}`}
+          style={{ height: `${Math.max(4, r.summary.score)}%` }}
+        />
       ))}
     </div>
   )
@@ -499,7 +508,17 @@ function RunNow({ onFinished }: { onFinished: () => void }) {
                     {r.prompt}
                   </span>
                   <span className="shrink-0 text-[11.5px] text-dim">
-                    {r.state === 'waiting' ? 'waiting' : r.state === 'building' ? 'building…' : r.state === 'failed' ? 'failed' : r.kind === 'draft' ? (r.queued ? 'queued for review' : 'below the minimum') : `${r.seconds}s`}
+                    {r.state === 'waiting'
+                      ? 'waiting'
+                      : r.state === 'building'
+                        ? 'building…'
+                        : r.state === 'failed'
+                          ? 'failed'
+                          : r.kind === 'draft'
+                            ? r.queued
+                              ? 'queued for review'
+                              : 'below the minimum'
+                            : `${r.seconds}s`}
                   </span>
                 </div>
                 {r.error ? <p className="ml-12 mt-1 text-[11.5px] text-warn">{r.error}</p> : null}
@@ -536,7 +555,9 @@ function Quality({ admin }: { admin: boolean }) {
                   <div className={`text-[44px] font-semibold leading-none tabular-nums ${scoreTone(last.summary.score)}`}>{last.summary.score}</div>
                   <div className="mt-2 text-[12.5px] text-mute">
                     {last.summary.passed} of {last.summary.total} builds perfect
-                    {last.summary.tokensIn ? ` · ${tokens(last.summary.tokensIn)} tokens in, ${tokens(last.summary.tokensOut ?? 0)} out${evals.data.price ? ` (${usd(costOf(evals.data.price, last.summary.tokensIn, last.summary.tokensOut ?? 0))})` : ''}` : ''}
+                    {last.summary.tokensIn
+                      ? ` · ${tokens(last.summary.tokensIn)} tokens in, ${tokens(last.summary.tokensOut ?? 0)} out${evals.data.price ? ` (${usd(costOf(evals.data.price, last.summary.tokensIn, last.summary.tokensOut ?? 0))})` : ''}`
+                      : ''}
                     {delta !== null ? <span className={delta >= 0 ? ' text-accent' : ' text-warn'}>{` · ${delta >= 0 ? '+' : ''}${delta} on the night before`}</span> : null}
                   </div>
                   <div className="mt-1 text-[11.5px] text-dim">{dateTime(last.runAt)}</div>
@@ -585,7 +606,17 @@ function DraftHistory({ id }: { id: string }) {
   return (
     <div className="rounded-xl border border-line px-3 py-1">
       <Loading error={error} onRetry={reload}>
-        {data ? data.entries.length ? <ul className="divide-y divide-line">{data.entries.map((e, i) => <AuditLine key={i} e={e} />)}</ul> : <p className="py-2 text-[12px] text-dim">Nothing recorded yet.</p> : null}
+        {data ? (
+          data.entries.length ? (
+            <ul className="divide-y divide-line">
+              {data.entries.map((e, i) => (
+                <AuditLine key={i} e={e} />
+              ))}
+            </ul>
+          ) : (
+            <p className="py-2 text-[12px] text-dim">Nothing recorded yet.</p>
+          )
+        ) : null}
       </Loading>
     </div>
   )
@@ -732,7 +763,15 @@ function DraftCard({ d, onDone, onChanged, backTo }: { d: LibraryDraft; onDone: 
             if (note.trim()) void remake('fix')
           }}
         >
-          <textarea autoFocus value={note} onChange={(e) => setNote(e.target.value)} rows={2} maxLength={1500} placeholder="What’s wrong, e.g. “the connecting rods don’t reach the crank and the flywheel is tilted”" className={`${inputCls} text-[12.5px]`} />
+          <textarea
+            autoFocus
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            rows={2}
+            maxLength={1500}
+            placeholder="What’s wrong, e.g. “the connecting rods don’t reach the crank and the flywheel is tilted”"
+            className={`${inputCls} text-[12.5px]`}
+          />
           <div className="flex gap-2">
             <button type="submit" disabled={!!busy || !note.trim()} className={`${smallBtn} bg-ink text-bg hover:opacity-90`}>
               {busy === 'fix' ? BUILD_NOTE : 'Ask Gemini to fix it'}
@@ -844,7 +883,8 @@ export function ReviewQueue({ canDraft = true, backTo = '/admin?tab=review' }: {
           data.drafts.length ? (
             <>
               <p className="mb-3 text-[12.5px] text-mute">
-                Scored by the same checks as the test set. Approved models appear on the Create page for everyone; open one first to look round it in the workspace (a preview: nothing is saved), or ask Gemini to fix what’s wrong.
+                Scored by the same checks as the test set. Approved models appear on the Create page for everyone; open one first to look round it in the workspace (a preview: nothing is saved), or ask Gemini to fix
+                what’s wrong.
               </p>
               <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                 {data.drafts.map((d) => (
@@ -1032,7 +1072,17 @@ function Activity() {
       </div>
       <div className="mt-3">
         <Loading error={error} onRetry={reload}>
-          {data ? data.entries.length ? <ul className="divide-y divide-line">{data.entries.map((e, i) => <AuditLine key={i} e={e} showTarget />)}</ul> : <Empty>Nothing recorded yet.</Empty> : null}
+          {data ? (
+            data.entries.length ? (
+              <ul className="divide-y divide-line">
+                {data.entries.map((e, i) => (
+                  <AuditLine key={i} e={e} showTarget />
+                ))}
+              </ul>
+            ) : (
+              <Empty>Nothing recorded yet.</Empty>
+            )
+          ) : null}
         </Loading>
       </div>
     </section>
@@ -1046,6 +1096,7 @@ const ROLE_INFO: [StaffRole, string, string][] = [
   ['curator', 'Curator', 'the library: drafting, topics, publishing, editing; and reviewing'],
   ['reviewer', 'Reviewer', 'checks drafts and publishes them'],
   ['support', 'Support', 'feedback and the waitlist'],
+  ['ambassador', 'Ambassador', 'a student who brings their school: referral link and dashboard'],
 ]
 
 function RolePicker({ value, onChange, disabled, owner }: { value: StaffRole[]; onChange: (r: StaffRole[]) => void; disabled?: boolean; owner?: boolean }) {
@@ -1089,7 +1140,10 @@ function Users() {
         if (!cur) return cur
         const rest = cur.people.filter((p) => p.email !== res.email)
         const had = cur.people.find((p) => p.email === res.email)
-        return { ...cur, people: res.roles.length ? [...rest, { ...(had ?? { email: res.email, owner: false }), roles: res.roles }].sort((x, y) => Number(y.owner) - Number(x.owner) || x.email.localeCompare(y.email)) : rest }
+        return {
+          ...cur,
+          people: res.roles.length ? [...rest, { ...(had ?? { email: res.email, owner: false }), roles: res.roles }].sort((x, y) => Number(y.owner) - Number(x.owner) || x.email.localeCompare(y.email)) : rest,
+        }
       })
       if (found?.email === res.email) setFound({ ...found, roles: res.roles })
       return true
@@ -1121,7 +1175,9 @@ function Users() {
         {data ? (
           <section className={`${card} p-5`}>
             <h2 className="text-[15px] font-semibold">Staff</h2>
-            <p className="mt-1 text-[12.5px] text-mute">Roles are given by email, to the Google account the person signs in with; they apply from their next page load. Owners are set on the server and are always admins. Every change is in Activity.</p>
+            <p className="mt-1 text-[12.5px] text-mute">
+              Roles are given by email, to the Google account the person signs in with; they apply from their next page load. Owners are set on the server and are always admins. Every change is in Activity.
+            </p>
             <ul className="mt-3 divide-y divide-line">
               {data.people.map((p) => (
                 <li key={p.email} className="flex flex-wrap items-center gap-x-4 gap-y-2 py-3">
@@ -1159,6 +1215,8 @@ function Users() {
         ) : null}
       </Loading>
 
+      <Everyone onRoles={save} busy={busy} />
+
       <section className={`${card} p-5`}>
         <h2 className="text-[15px] font-semibold">Look someone up</h2>
         <form onSubmit={look} className="mt-3 flex flex-wrap gap-2">
@@ -1179,10 +1237,18 @@ function Users() {
               </div>
               {found.today ? (
                 <div className="flex flex-wrap gap-3 text-[12px]">
-                  <span className="rounded-lg border border-line px-2.5 py-1.5">3D builds today: <b className="tabular-nums">{found.today.builds}</b></span>
-                  <span className="rounded-lg border border-line px-2.5 py-1.5">Note pages today: <b className="tabular-nums">{found.today.notePages}</b></span>
-                  <span className="rounded-lg border border-line px-2.5 py-1.5">Tutor questions today: <b className="tabular-nums">{found.today.tutor}</b></span>
-                  <span className="rounded-lg border border-line px-2.5 py-1.5">Library models today: <b className="tabular-nums">{found.today.libraryModels ?? 0}</b> of 100</span>
+                  <span className="rounded-lg border border-line px-2.5 py-1.5">
+                    3D builds today: <b className="tabular-nums">{found.today.builds}</b>
+                  </span>
+                  <span className="rounded-lg border border-line px-2.5 py-1.5">
+                    Note pages today: <b className="tabular-nums">{found.today.notePages}</b>
+                  </span>
+                  <span className="rounded-lg border border-line px-2.5 py-1.5">
+                    Tutor questions today: <b className="tabular-nums">{found.today.tutor}</b>
+                  </span>
+                  <span className="rounded-lg border border-line px-2.5 py-1.5">
+                    Library models today: <b className="tabular-nums">{found.today.libraryModels ?? 0}</b> of 100
+                  </span>
                 </div>
               ) : null}
               <div>
@@ -1196,6 +1262,258 @@ function Users() {
         ) : null}
       </section>
     </div>
+  )
+}
+
+const ago = (t: number | null) => {
+  if (!t) return 'never'
+  const d = Math.floor((Date.now() - t) / 86_400_000)
+  return d <= 0 ? 'today' : d === 1 ? 'yesterday' : d < 30 ? `${d} days ago` : date(t)
+}
+const selectCls = 'rounded-lg border border-line-2 bg-panel-2 px-2 py-1.5 text-[12.5px] text-ink'
+
+/** every account: searched, filtered, sorted, fifty to a page; a row opens to show today's use and roles */
+function Everyone({ onRoles, busy }: { onRoles: (email: string, roles: StaffRole[]) => Promise<boolean>; busy: string | null }) {
+  const [f, setF] = useState<AccountFilter>({ q: '', type: 'all', role: 'all', active: 'all', sort: 'joined', dir: 'desc', page: 1 })
+  const [typed, setTyped] = useState('')
+  const [data, setData] = useState<Awaited<ReturnType<typeof getAccounts>> | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [open, setOpen] = useState<string | null>(null)
+  const [detail, setDetail] = useState<Lookup | null>(null)
+  const set = (patch: Partial<AccountFilter>) => setF((cur) => ({ ...cur, page: 1, ...patch }))
+
+  // search as you type, after a pause
+  useEffect(() => {
+    const t = window.setTimeout(() => setF((cur) => (cur.q === typed.trim() ? cur : { ...cur, page: 1, q: typed.trim() })), 300)
+    return () => window.clearTimeout(t)
+  }, [typed])
+  useEffect(() => {
+    let alive = true
+    setLoading(true)
+    getAccounts(f)
+      .then((d) => {
+        if (!alive) return
+        setData(d)
+        setError(null)
+      })
+      .catch((e) => alive && setError(e instanceof ApiError ? e.message : 'Couldn’t load the accounts.'))
+      .finally(() => alive && setLoading(false))
+    return () => {
+      alive = false
+    }
+  }, [f])
+  useEffect(() => {
+    setDetail(null)
+    if (!open) return
+    let alive = true
+    lookupPerson(open)
+      .then((d) => alive && setDetail(d))
+      .catch(() => {})
+    return () => {
+      alive = false
+    }
+  }, [open])
+
+  const changeRoles = async (a: Account, next: StaffRole[]) => {
+    if (!(await onRoles(a.email, next))) return
+    setData((cur) => (cur ? { ...cur, accounts: cur.accounts.map((x) => (x.email === a.email ? { ...x, roles: next } : x)) } : cur))
+  }
+  const sortBtn = (key: AccountFilter['sort'], label: string) => (
+    <button
+      type="button"
+      onClick={() => set({ sort: key, dir: f.sort === key && f.dir === 'desc' ? 'asc' : 'desc' })}
+      className={`inline-flex items-center gap-1 uppercase ${f.sort === key ? 'text-ink' : 'text-dim hover:text-ink'}`}
+    >
+      {label}
+      {f.sort === key ? <span aria-hidden>{f.dir === 'desc' ? '↓' : '↑'}</span> : null}
+    </button>
+  )
+  const badges = (a: Account) => (
+    <div className="flex flex-wrap gap-1">
+      {a.owner ? <span className="rounded-full bg-accent/15 px-2 py-0.5 text-[10.5px] font-medium text-accent">owner</span> : null}
+      {a.roles.map((r) => (
+        <span key={r} className="rounded-full border border-line-2 px-2 py-0.5 text-[10.5px] text-mute">
+          {r}
+        </span>
+      ))}
+    </div>
+  )
+  const details = (a: Account) =>
+    !detail ? (
+      <p className="text-[12px] text-mute">Loading…</p>
+    ) : (
+      <div className="space-y-3">
+        <div className="flex flex-wrap gap-2 text-[12px]">
+          <span className="rounded-lg border border-line px-2.5 py-1.5">
+            Saved models: <b className="tabular-nums">{detail.models ?? 0}</b>
+          </span>
+          <span className="rounded-lg border border-line px-2.5 py-1.5">
+            3D builds today: <b className="tabular-nums">{detail.today?.builds ?? 0}</b>
+          </span>
+          <span className="rounded-lg border border-line px-2.5 py-1.5">
+            Note pages today: <b className="tabular-nums">{detail.today?.notePages ?? 0}</b>
+          </span>
+          <span className="rounded-lg border border-line px-2.5 py-1.5">
+            Tutor questions today: <b className="tabular-nums">{detail.today?.tutor ?? 0}</b>
+          </span>
+          <span className="rounded-lg border border-line px-2.5 py-1.5">
+            Library models today: <b className="tabular-nums">{detail.today?.libraryModels ?? 0}</b> of 100
+          </span>
+          {a.referredBy ? (
+            <span className="rounded-lg border border-line px-2.5 py-1.5">
+              Came through ambassador <b>{a.referredBy}</b>
+            </span>
+          ) : null}
+        </div>
+        {a.email ? (
+          <div>
+            <div className="mb-1.5 text-[11.5px] font-medium uppercase tracking-wide text-dim">Roles</div>
+            <RolePicker value={a.roles} owner={a.owner} disabled={busy === a.email} onChange={(next) => void changeRoles(a, next)} />
+          </div>
+        ) : null}
+      </div>
+    )
+  const c = data?.counts
+  const from = data && data.total ? (data.page - 1) * data.size + 1 : 0
+  const to = data ? Math.min(data.total, data.page * data.size) : 0
+
+  return (
+    <section className={`${card} p-5`}>
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h2 className="text-[15px] font-semibold">Everyone</h2>
+        {c ? (
+          <p className="text-[12px] text-mute">
+            {c.all} accounts · {c.students} students · {c.teachers} teachers · {c.staff} staff · {c.active7} active this week · {c.new7} new this week
+          </p>
+        ) : null}
+      </div>
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <input value={typed} onChange={(e) => setTyped(e.target.value)} type="search" placeholder="Search name or email" aria-label="Search accounts" className={`${inputCls} min-w-0 flex-1 basis-48`} />
+        <select aria-label="Student or teacher" value={f.type} onChange={(e) => set({ type: e.target.value as AccountFilter['type'] })} className={selectCls}>
+          <option value="all">Students and teachers</option>
+          <option value="student">Students</option>
+          <option value="teacher">Teachers</option>
+        </select>
+        <select aria-label="Role" value={f.role} onChange={(e) => set({ role: e.target.value as AccountFilter['role'] })} className={selectCls}>
+          <option value="all">Any role</option>
+          <option value="staff">Staff (any role)</option>
+          <option value="none">No role</option>
+          {ROLE_INFO.map(([r, label]) => (
+            <option key={r} value={r}>
+              {label}s
+            </option>
+          ))}
+        </select>
+        <select aria-label="Last seen" value={f.active} onChange={(e) => set({ active: e.target.value as AccountFilter['active'] })} className={selectCls}>
+          <option value="all">Seen any time</option>
+          <option value="7">Seen this week</option>
+          <option value="30">Seen this month</option>
+          <option value="inactive">Not seen for a month</option>
+        </select>
+        {/* phones have no column headers to sort by */}
+        <select
+          aria-label="Sort"
+          value={`${f.sort}:${f.dir}`}
+          onChange={(e) => {
+            const [sort, dir] = e.target.value.split(':')
+            set({ sort: sort as AccountFilter['sort'], dir: dir as AccountFilter['dir'] })
+          }}
+          className={`${selectCls} sm:hidden`}
+        >
+          <option value="joined:desc">Newest first</option>
+          <option value="joined:asc">Oldest first</option>
+          <option value="seen:desc">Seen most recently</option>
+          <option value="seen:asc">Seen longest ago</option>
+          <option value="name:asc">Name A–Z</option>
+          <option value="email:asc">Email A–Z</option>
+        </select>
+        <button type="button" className={ghostBtn} onClick={() => void download(`/v1/admin/accounts.csv?${accountQuery(f)}`, 'solidify-accounts.csv').catch(() => toast('Couldn’t download the list.', { tone: 'warn' }))}>
+          Download CSV
+        </button>
+      </div>
+
+      {error ? (
+        <p className="mt-4 text-[12.5px] text-danger">{error}</p>
+      ) : !data ? (
+        <div className="mt-4">
+          <ListSkeleton rows={5} />
+        </div>
+      ) : (
+        <>
+          {/* phones: one card per account */}
+          <ul className={`mt-4 divide-y divide-line transition-opacity sm:hidden ${loading ? 'opacity-60' : ''}`}>
+            {data.accounts.map((a) => (
+              <li key={a.uid} className={open === a.email ? 'bg-panel-2' : ''}>
+                <button type="button" onClick={() => setOpen(open === a.email ? null : a.email)} aria-expanded={open === a.email} className="block w-full px-1 py-2.5 text-left">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span className="truncate text-[13px] font-medium text-ink">{a.name || '—'}</span>
+                    <span className="shrink-0 text-[11.5px] text-mute">{a.type}</span>
+                  </div>
+                  <div className="truncate text-[12px] text-mute">{a.email || '—'}</div>
+                  <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11.5px] text-dim">
+                    <span>joined {a.joined ? date(a.joined) : '—'}</span>
+                    <span>seen {ago(a.lastSeen)}</span>
+                    {badges(a)}
+                  </div>
+                </button>
+                {open === a.email ? <div className="px-1 pb-3">{details(a)}</div> : null}
+              </li>
+            ))}
+          </ul>
+          <div className={`mt-4 hidden overflow-x-auto transition-opacity sm:block ${loading ? 'opacity-60' : ''}`}>
+            <table className="w-full min-w-[640px] text-left text-[12.5px]">
+              <thead className="border-b border-line text-[11px] tracking-wide">
+                <tr>
+                  <th className="py-2 pr-3 font-medium">{sortBtn('name', 'Name')}</th>
+                  <th className="py-2 pr-3 font-medium">{sortBtn('email', 'Email')}</th>
+                  <th className="py-2 pr-3 font-medium uppercase text-dim">Type</th>
+                  <th className="py-2 pr-3 font-medium">{sortBtn('joined', 'Joined')}</th>
+                  <th className="py-2 pr-3 font-medium">{sortBtn('seen', 'Last seen')}</th>
+                  <th className="py-2 font-medium uppercase text-dim">Roles</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-line">
+                {data.accounts.map((a) => (
+                  <Fragment key={a.uid}>
+                    <tr onClick={() => setOpen(open === a.email ? null : a.email)} className={`cursor-pointer hover:bg-panel-2 ${open === a.email ? 'bg-panel-2' : ''}`} aria-expanded={open === a.email}>
+                      <td className="max-w-[200px] truncate py-2 pr-3 font-medium text-ink">{a.name || '—'}</td>
+                      <td className="max-w-[240px] truncate py-2 pr-3 text-mute">{a.email || '—'}</td>
+                      <td className="py-2 pr-3 text-mute">{a.type}</td>
+                      <td className="whitespace-nowrap py-2 pr-3 tabular-nums text-mute">{a.joined ? date(a.joined) : '—'}</td>
+                      <td className="whitespace-nowrap py-2 pr-3 text-mute">{ago(a.lastSeen)}</td>
+                      <td className="py-2">{badges(a)}</td>
+                    </tr>
+                    {open === a.email ? (
+                      <tr className="bg-panel-2">
+                        <td colSpan={6} className="px-3 pb-4 pt-1">
+                          {details(a)}
+                        </td>
+                      </tr>
+                    ) : null}
+                  </Fragment>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {!data.accounts.length ? <p className="py-6 text-center text-[12.5px] text-mute">No accounts match.</p> : null}
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-[12px] text-mute">
+            <span className="tabular-nums">{data.total ? `${from}–${to} of ${data.total}` : '0 accounts'}</span>
+            <div className="flex items-center gap-1">
+              <button type="button" className={ghostBtn} disabled={data.page <= 1} onClick={() => setF((cur) => ({ ...cur, page: cur.page - 1 }))}>
+                ‹ Previous
+              </button>
+              <span className="px-2 tabular-nums">
+                Page {data.page} of {data.pages}
+              </span>
+              <button type="button" className={ghostBtn} disabled={data.page >= data.pages} onClick={() => setF((cur) => ({ ...cur, page: cur.page + 1 }))}>
+                Next ›
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+    </section>
   )
 }
 
@@ -1234,7 +1552,9 @@ function AppCheckPanel() {
         <section className={`${card} space-y-3 p-5`}>
           <div className="flex flex-wrap items-baseline justify-between gap-2">
             <h2 className="text-[15px] font-semibold">Scraping protection</h2>
-            <span className={`rounded-full px-2.5 py-0.5 text-[11.5px] font-medium ${data.mode === 'enforce' ? 'bg-accent/15 text-accent' : data.mode === 'monitor' ? 'bg-warn/15 text-warn' : 'bg-panel-3 text-mute'}`}>App Check: {data.mode}</span>
+            <span className={`rounded-full px-2.5 py-0.5 text-[11.5px] font-medium ${data.mode === 'enforce' ? 'bg-accent/15 text-accent' : data.mode === 'monitor' ? 'bg-warn/15 text-warn' : 'bg-panel-3 text-mute'}`}>
+              App Check: {data.mode}
+            </span>
           </div>
           <p className="text-[12.5px] text-mute">
             Full library models need sign-in (100 a day each, staff not counted); each address has limits per minute. App Check proves a request came from the app, not a script: run it in
@@ -1313,44 +1633,69 @@ function Settings({ admin }: { admin: boolean }) {
         <div className="space-y-5">
           {admin ? <AppCheckPanel /> : null}
           {admin ? (
-          <section className={`${card} space-y-4 p-5`}>
-            <h2 className="text-[15px] font-semibold">Nightly run</h2>
-            <label className="flex items-center justify-between gap-4 text-[13px]">
-              <span>
-                Pause the nightly run
-                <span className="block text-[11.5px] text-dim">Skips the scheduled run, for when credit is low. A run started by hand still goes.</span>
-              </span>
-              <button type="button" role="switch" aria-checked={form.paused} onClick={() => set({ paused: !form.paused })} className={`relative h-[20px] w-9 shrink-0 rounded-full transition-colors ${form.paused ? 'bg-warn' : 'bg-line-2'}`}>
-                <span className={`absolute top-[3px] h-[14px] w-[14px] rounded-full bg-ink transition-all ${form.paused ? 'left-[19px]' : 'left-[3px]'}`} />
+            <section className={`${card} space-y-4 p-5`}>
+              <h2 className="text-[15px] font-semibold">Nightly run</h2>
+              <label className="flex items-center justify-between gap-4 text-[13px]">
+                <span>
+                  Pause the nightly run
+                  <span className="block text-[11.5px] text-dim">Skips the scheduled run, for when credit is low. A run started by hand still goes.</span>
+                </span>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={form.paused}
+                  onClick={() => set({ paused: !form.paused })}
+                  className={`relative h-[20px] w-9 shrink-0 rounded-full transition-colors ${form.paused ? 'bg-warn' : 'bg-line-2'}`}
+                >
+                  <span className={`absolute top-[3px] h-[14px] w-[14px] rounded-full bg-ink transition-all ${form.paused ? 'left-[19px]' : 'left-[3px]'}`} />
+                </button>
+              </label>
+              <div className="flex flex-wrap gap-5">
+                <label className="text-[12px] text-mute">
+                  Drafts per night
+                  <input type="number" min={0} max={100} value={form.draftsPerNight} onChange={(e) => set({ draftsPerNight: Math.max(0, Math.min(100, Math.round(Number(e.target.value) || 0))) })} className={num} />
+                  <span className="mt-1 block text-[11px] text-dim">{form.draftsPerNight} builds a night on top of the tests; the Quality tab shows what each one really costs</span>
+                </label>
+                <label className="text-[12px] text-mute">
+                  Minimum score for the queue
+                  <input type="number" min={0} max={100} value={form.draftMin} onChange={(e) => set({ draftMin: Math.max(0, Math.min(100, Number(e.target.value) || 0)) })} className={num} />
+                </label>
+              </div>
+              <h2 className="pt-2 text-[15px] font-semibold">Model price</h2>
+              <p className="text-[12px] text-mute">
+                US dollars per million tokens. Leave blank to use Google’s list price, built in for Gemini 3.8 Flash (0.75 in and 3.75 out until 31 December 2026, then 1.50 and 7.50 on its own). Fill in only for a
+                discount or a different model.
+              </p>
+              <div className="flex flex-wrap items-end gap-5">
+                <label className="text-[12px] text-mute">
+                  Input
+                  <input
+                    type="number"
+                    min={0}
+                    step={0.01}
+                    value={form.price?.inputPerM ?? ''}
+                    placeholder="list"
+                    onChange={(e) => set({ price: e.target.value === '' ? null : { inputPerM: Number(e.target.value), outputPerM: form.price?.outputPerM ?? 0 } })}
+                    className={num}
+                  />
+                </label>
+                <label className="text-[12px] text-mute">
+                  Output
+                  <input
+                    type="number"
+                    min={0}
+                    step={0.01}
+                    value={form.price?.outputPerM ?? ''}
+                    placeholder="list"
+                    onChange={(e) => set({ price: e.target.value === '' ? null : { inputPerM: form.price?.inputPerM ?? 0, outputPerM: Number(e.target.value) } })}
+                    className={num}
+                  />
+                </label>
+              </div>
+              <button type="button" disabled={busy === 'settings'} onClick={() => void save()} className={primaryBtn}>
+                {busy === 'settings' ? 'Saving…' : 'Save settings'}
               </button>
-            </label>
-            <div className="flex flex-wrap gap-5">
-              <label className="text-[12px] text-mute">
-                Drafts per night
-                <input type="number" min={0} max={100} value={form.draftsPerNight} onChange={(e) => set({ draftsPerNight: Math.max(0, Math.min(100, Math.round(Number(e.target.value) || 0))) })} className={num} />
-                <span className="mt-1 block text-[11px] text-dim">{form.draftsPerNight} builds a night on top of the tests; the Quality tab shows what each one really costs</span>
-              </label>
-              <label className="text-[12px] text-mute">
-                Minimum score for the queue
-                <input type="number" min={0} max={100} value={form.draftMin} onChange={(e) => set({ draftMin: Math.max(0, Math.min(100, Number(e.target.value) || 0)) })} className={num} />
-              </label>
-            </div>
-            <h2 className="pt-2 text-[15px] font-semibold">Model price</h2>
-            <p className="text-[12px] text-mute">US dollars per million tokens. Leave blank to use Google’s list price, built in for Gemini 3.8 Flash (0.75 in and 3.75 out until 31 December 2026, then 1.50 and 7.50 on its own). Fill in only for a discount or a different model.</p>
-            <div className="flex flex-wrap items-end gap-5">
-              <label className="text-[12px] text-mute">
-                Input
-                <input type="number" min={0} step={0.01} value={form.price?.inputPerM ?? ''} placeholder="list" onChange={(e) => set({ price: e.target.value === '' ? null : { inputPerM: Number(e.target.value), outputPerM: form.price?.outputPerM ?? 0 } })} className={num} />
-              </label>
-              <label className="text-[12px] text-mute">
-                Output
-                <input type="number" min={0} step={0.01} value={form.price?.outputPerM ?? ''} placeholder="list" onChange={(e) => set({ price: e.target.value === '' ? null : { inputPerM: form.price?.inputPerM ?? 0, outputPerM: Number(e.target.value) } })} className={num} />
-              </label>
-            </div>
-            <button type="button" disabled={busy === 'settings'} onClick={() => void save()} className={primaryBtn}>
-              {busy === 'settings' ? 'Saving…' : 'Save settings'}
-            </button>
-          </section>
+            </section>
           ) : null}
 
           <section className={`${card} space-y-3 p-5`}>
@@ -1402,18 +1747,40 @@ function Feedback() {
       {data ? (
         <>
           <div className="mb-3 flex flex-wrap items-center gap-3">
-            <Pills label="Show" value={show} onChange={setShow} options={[{ value: 'open', label: `Open ${data.feedback.filter((f) => f.status !== 'done').length}` }, { value: 'all', label: 'All' }]} />
-            <Pills label="Kind" value={kind} onChange={setKind} options={[{ value: 'all', label: `All ${data.feedback.length}` }, ...(['bug', 'error', 'idea', 'sales'] as const).map((k) => ({ value: k, label: `${KIND_LABEL[k]} ${data.feedback.filter((f) => f.kind === k).length}` }))]} />
+            <Pills
+              label="Show"
+              value={show}
+              onChange={setShow}
+              options={[
+                { value: 'open', label: `Open ${data.feedback.filter((f) => f.status !== 'done').length}` },
+                { value: 'all', label: 'All' },
+              ]}
+            />
+            <Pills
+              label="Kind"
+              value={kind}
+              onChange={setKind}
+              options={[
+                { value: 'all', label: `All ${data.feedback.length}` },
+                ...(['bug', 'error', 'idea', 'sales'] as const).map((k) => ({ value: k, label: `${KIND_LABEL[k]} ${data.feedback.filter((f) => f.kind === k).length}` })),
+              ]}
+            />
           </div>
           {items.length ? (
             <ul className={`${card} divide-y divide-line`}>
               {items.map((f) => (
                 <li key={f.id} className="px-4 py-3">
                   <div className="flex flex-wrap items-center gap-x-2 text-[11.5px] text-dim">
-                    <span className={`rounded-full px-2 py-0.5 font-medium ${f.kind === 'sales' ? 'bg-accent/15 text-accent' : f.kind === 'idea' ? 'bg-panel-3 text-ink/80' : 'bg-warn/15 text-warn'}`}>{KIND_LABEL[f.kind]}</span>
+                    <span className={`rounded-full px-2 py-0.5 font-medium ${f.kind === 'sales' ? 'bg-accent/15 text-accent' : f.kind === 'idea' ? 'bg-panel-3 text-ink/80' : 'bg-warn/15 text-warn'}`}>
+                      {KIND_LABEL[f.kind]}
+                    </span>
                     <span>{dateTime(f.createdAt)}</span>
                     {f.route ? <span className="truncate">{f.route}</span> : null}
-                    <button type="button" onClick={() => void mark(f)} className={`ml-auto rounded-full px-2.5 py-0.5 font-medium ${f.status === 'done' ? 'bg-accent/15 text-accent' : 'border border-line-2 text-mute hover:text-ink'}`}>
+                    <button
+                      type="button"
+                      onClick={() => void mark(f)}
+                      className={`ml-auto rounded-full px-2.5 py-0.5 font-medium ${f.status === 'done' ? 'bg-accent/15 text-accent' : 'border border-line-2 text-mute hover:text-ink'}`}
+                    >
                       {f.status === 'done' ? 'Dealt with ✓' : 'Mark dealt with'}
                     </button>
                   </div>
@@ -1523,7 +1890,11 @@ export default function AdminPage() {
         {can(roles, 'review') ? (
           <>
             {' '}
-            Your review queue is <a href="#/review" className="text-accent hover:underline">here</a>.
+            Your review queue is{' '}
+            <a href="#/review" className="text-accent hover:underline">
+              here
+            </a>
+            .
           </>
         ) : null}
       </Empty>
@@ -1534,7 +1905,23 @@ export default function AdminPage() {
         <div className="mb-5">
           <Pills label="Section" value={tab} onChange={(t) => setParams(t === mine[0]?.value ? {} : { tab: t }, { replace: true })} options={mine.map(({ value, label }) => ({ value, label }))} />
         </div>
-        {tab === 'quality' ? <Quality admin={admin} /> : tab === 'review' ? <ReviewQueue canDraft={can(roles, 'curate')} /> : tab === 'library' ? <Library /> : tab === 'users' ? <Users /> : tab === 'activity' ? <Activity /> : tab === 'feedback' ? <Feedback /> : tab === 'waitlist' ? <Waitlist /> : <Settings admin={admin} />}
+        {tab === 'quality' ? (
+          <Quality admin={admin} />
+        ) : tab === 'review' ? (
+          <ReviewQueue canDraft={can(roles, 'curate')} />
+        ) : tab === 'library' ? (
+          <Library />
+        ) : tab === 'users' ? (
+          <Users />
+        ) : tab === 'activity' ? (
+          <Activity />
+        ) : tab === 'feedback' ? (
+          <Feedback />
+        ) : tab === 'waitlist' ? (
+          <Waitlist />
+        ) : (
+          <Settings admin={admin} />
+        )}
       </>
     )
 

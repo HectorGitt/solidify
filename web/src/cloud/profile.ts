@@ -8,7 +8,7 @@ export interface ClassRef {
   role: 'student' | 'teacher'
 }
 
-export type StaffRole = 'admin' | 'curator' | 'reviewer' | 'support'
+export type StaffRole = 'admin' | 'curator' | 'reviewer' | 'support' | 'ambassador'
 
 /** what each permission needs: any one of these roles (the API checks the same) */
 const PERMS = {
@@ -16,6 +16,7 @@ const PERMS = {
   curate: ['admin', 'curator'],
   review: ['admin', 'curator', 'reviewer'],
   support: ['admin', 'support'],
+  ambassador: ['ambassador'],
 } as const
 export type Perm = keyof typeof PERMS
 export const can = (roles: StaffRole[] | undefined, perm: Perm) => (roles ?? []).some((r) => (PERMS[perm] as readonly StaffRole[]).includes(r))
