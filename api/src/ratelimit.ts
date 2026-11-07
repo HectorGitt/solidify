@@ -14,7 +14,7 @@ export interface Rule {
 export const RULES: Rule[] = [
   { name: 'library search', limit: 120, windowMs: 60_000, matches: (m, p) => m === 'GET' && p === '/v1/library/match' },
   { name: 'library', limit: 240, windowMs: 60_000, matches: (m, p) => m === 'GET' && p.startsWith('/v1/library') && !p.startsWith('/v1/library/drafts') },
-  { name: 'sign-ups and messages', limit: 20, windowMs: 60_000, matches: (m, p) => m === 'POST' && (p === '/v1/waitlist' || p === '/v1/feedback') },
+  { name: 'sign-ups and messages', limit: 20, windowMs: 60_000, matches: (m, p) => m === 'POST' && (p === '/v1/waitlist' || p === '/v1/feedback' || p === '/v1/ambassadors/apply') },
   { name: 'share links', limit: 240, windowMs: 60_000, matches: (_m, p) => p.startsWith('/v1/shares') },
   // everything else together. A whole class at a school often shares one address, so this is sized for 40 or
   // so students at once: still a wall for a script copying the site

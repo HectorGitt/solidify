@@ -243,7 +243,7 @@ export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision
    * email (before the person has even signed in) on the admin page's Users tab and kept in `roles`; the
    * emails in ADMIN_EMAILS are owners, always admins, and cannot be changed from the app.
    */
-  const STAFF_ROLES = ['admin', 'curator', 'reviewer', 'support'] as const
+  const STAFF_ROLES = ['admin', 'curator', 'reviewer', 'support', 'ambassador'] as const
   type StaffRole = (typeof STAFF_ROLES)[number]
   /** what each permission needs: any one of these roles */
   const PERMS = {
@@ -251,6 +251,7 @@ export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision
     curate: ['admin', 'curator'],
     review: ['admin', 'curator', 'reviewer'],
     support: ['admin', 'support'],
+    ambassador: ['ambassador'],
   } as const satisfies Record<string, readonly StaffRole[]>
   type Perm = keyof typeof PERMS
   const roleKey = (email: string) => encodeURIComponent(email.trim().toLowerCase())
@@ -309,6 +310,8 @@ export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision
   app.get('/v1/me', async (c) => {
     const u = requireUser(c)
     const p = await profile(u)
+    // last seen, at most one write a day: what makes a referred student count as active
+    if (!p.lastSeenAt || day(p.lastSeenAt as number) !== day(now())) await db.set(`users/${u.uid}`, { lastSeenAt: now() }, { merge: true })
     const classes = await db.list<{ name: string; role: Role }>(`users/${u.uid}/classes`)
     const roles = await rolesOfEmail(u.email)
     return c.json({ uid: u.uid, ...p, roles, isAdmin: can(roles, 'admin') || undefined, isReviewer: can(roles, 'review') || undefined, classes: classes.map((r) => ({ id: r.id, ...r.data })) })
@@ -573,7 +576,7 @@ export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision
   const DEFAULT_SETTINGS: QualitySettings = { paused: false, draftsPerNight: 3, draftMin: 85, price: null }
   const getSettings = async (): Promise<QualitySettings> => ({ ...DEFAULT_SETTINGS, ...((await db.get<QualitySettings>('settings/quality')) ?? {}) })
   const priceNow = async () => (await getSettings()).price ?? (typeof config.modelPrice === 'function' ? config.modelPrice(now()) : config.modelPrice) ?? null
-  const topicItem = z.object({ topic: z.string().trim().min(1).max(60), prompt: z.string().trim().min(3).max(400) })
+  const topicItem = z.object({ topic: z.string().trim().min(1).max(60), prompt: z.string().trim().min(3).max(400), suggestedBy: z.string().max(80).optional() })
   /** null = the built-in list in the runner */
   const getTopics = async () => (await db.get<{ items: z.infer<typeof topicItem>[] }>('settings/topics'))?.items ?? null
 
@@ -828,7 +831,9 @@ export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision
     const d = await body(c, libraryInput)
     if (JSON.stringify(d.spec).length > 300_000) throw fail(413, 'This model is too large to save.')
     const id = randomId()
-    await db.set(`libraryDrafts/${id}`, { ...d, parts: Array.isArray(d.spec.parts) ? d.spec.parts.length : 0, createdAt: now() })
+    // drafted from an ambassador's suggestion: the credit goes with it into the library
+    const suggestedBy = ((await getTopics()) ?? []).find((t) => draftedKey(t.prompt) === draftedKey(d.prompt))?.suggestedBy
+    await db.set(`libraryDrafts/${id}`, { ...d, parts: Array.isArray(d.spec.parts) ? d.spec.parts.length : 0, createdAt: now(), ...(suggestedBy ? { suggestedBy } : {}) })
     await markDrafted(d.prompt)
     await audit(by, 'drafted', { type: 'draft', id, title: d.title }, `scored ${d.score}`)
     return c.json({ id }, 201)
@@ -1055,6 +1060,150 @@ export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision
     return c.json({ ok: true })
   })
 
+  /* ------------------------------------------------------------------ student ambassadors */
+
+  /*
+   * Students who bring their classmates and lecturers to Solidify. They apply on /ambassadors; an admin accepts
+   * them (the ambassador role and a referral code); sign-ups from their link, and classes those people create,
+   * are credited to them; their topic suggestions go into the drafting pool with their name.
+   */
+  interface AmbassadorDoc {
+    [k: string]: unknown
+    email: string
+    name: string
+    school: string
+    code: string
+    status: 'active' | 'paused'
+    joinedAt: number
+  }
+  const ambassadorOf = async (email?: string | null) => (email ? db.get<AmbassadorDoc>(`ambassadors/${roleKey(email)}`) : null)
+  const requireAmbassador = async (c: Context<Env>) => {
+    const u = await requirePerm(c, 'ambassador')
+    const a = await ambassadorOf(u.email)
+    if (!a) throw fail(403, 'You are not an ambassador yet.')
+    return { u, a }
+  }
+  /** a short code from the name, unique: "ada", "ada2" */
+  const newCode = async (name: string) => {
+    const base = name.toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '').slice(0, 12) || 'friend'
+    for (let i = 1; i < 500; i++) {
+      const code = i === 1 ? base : `${base}${i}`
+      if (!(await db.where('ambassadors', 'code', code, { limit: 1 })).length) return code
+    }
+    return `${base}${randomId().slice(0, 4)}`
+  }
+  /** what an ambassador has brought in: sign-ups, how many are active (seen in 14 days), teachers, classes */
+  const ambassadorStats = async (code: string) => {
+    const users = await db.where<UserDoc & { lastSeenAt?: number }>('users', 'referredBy', code, { limit: 5000 })
+    const classes = await db.where('classes', 'referredBy', code, { limit: 5000 })
+    const recent = now() - 14 * 86_400_000
+    return {
+      signups: users.length,
+      active: users.filter((r) => (r.data.lastSeenAt ?? r.data.createdAt) >= recent).length,
+      teachers: users.filter((r) => r.data.role === 'teacher').length,
+      classes: classes.length,
+      // first names only: an ambassador sees who joined, not their accounts
+      latest: users
+        .sort((a, b) => b.data.createdAt - a.data.createdAt)
+        .slice(0, 10)
+        .map((r) => ({ name: String(r.data.displayName ?? '').split(' ')[0] || 'Someone', role: r.data.role, joined: r.data.createdAt })),
+    }
+  }
+
+  const applicationInput = z.object({
+    name: z.string().trim().min(2).max(120),
+    email: z.string().trim().toLowerCase().email().max(200),
+    school: z.string().trim().min(2).max(160),
+    department: z.string().trim().max(160).default(''),
+    level: z.string().trim().max(40).default(''),
+    why: z.string().trim().min(20).max(2000),
+    links: z.string().trim().max(500).default(''),
+    website: z.string().max(0).optional(), // a field people never see: bots fill it in
+  })
+
+  /** anyone may apply (one application per email) */
+  app.post('/v1/ambassadors/apply', async (c) => {
+    const a = await body(c, applicationInput)
+    if (a.website) return c.json({ ok: true }, 201)
+    const { website: _w, ...entry } = a
+    void _w
+    await db.set(`ambassadorApplications/${roleKey(a.email)}`, { ...entry, status: 'new', at: now(), uid: c.get('user')?.uid ?? null })
+    return c.json({ ok: true }, 201)
+  })
+
+  /** a signed-in person who arrived through a referral link: credited to that ambassador, if their account is new */
+  app.post('/v1/me/referral', async (c) => {
+    const u = requireUser(c)
+    const { code } = await body(c, z.object({ code: z.string().trim().toLowerCase().regex(/^[a-z0-9]{2,20}$/) }))
+    const p = await profile(u)
+    // only brand-new accounts, and never twice, so nobody can claim people who were here already
+    if (p.referredBy || now() - p.createdAt > 24 * 3_600_000) return c.json({ credited: false })
+    const [amb] = await db.where<AmbassadorDoc>('ambassadors', 'code', code, { limit: 1 })
+    if (!amb || amb.data.status !== 'active' || amb.data.email === u.email?.toLowerCase()) return c.json({ credited: false })
+    await db.set(`users/${u.uid}`, { referredBy: code }, { merge: true })
+    return c.json({ credited: true })
+  })
+
+  /** an ambassador's own dashboard */
+  app.get('/v1/ambassador/me', async (c) => {
+    const { a } = await requireAmbassador(c)
+    const suggestions = ((await getTopics()) ?? []).filter((t) => t.suggestedBy === a.name)
+    const drafted = await getDrafted()
+    const published = (await db.list<LibraryDoc & { suggestedBy?: string }>('library', { limit: 1000 })).filter((r) => r.data.suggestedBy === a.name).map((r) => r.data.title)
+    return c.json({
+      ...a,
+      stats: await ambassadorStats(a.code),
+      suggestions: suggestions.map((t) => ({ ...t, drafted: drafted.has(draftedKey(t.prompt)) })),
+      published,
+    })
+  })
+
+  /** an ambassador suggests a model for the library: it joins the drafting pool with their name */
+  app.post('/v1/ambassador/suggestions', async (c) => {
+    const { u, a } = await requireAmbassador(c)
+    const t = await body(c, z.object({ topic: z.string().trim().min(2).max(60), prompt: z.string().trim().min(12).max(400) }))
+    await spend(u.uid, 'suggestionUsage', 20, 'suggestions')
+    const pool = (await getTopics()) ?? []
+    if (pool.some((x) => draftedKey(x.prompt) === draftedKey(t.prompt))) throw fail(409, 'That one is already in the list.')
+    await db.set('settings/topics', { items: [...pool, { ...t, suggestedBy: a.name }].slice(-1000) })
+    await audit(await whoIs(u), 'suggested a topic', { type: 'topics', title: t.prompt }, `${a.name} (${a.school})`)
+    return c.json({ ok: true }, 201)
+  })
+
+  /** the programme, for admins: applications, and every ambassador with results */
+  app.get('/v1/admin/ambassadors', async (c) => {
+    await requireAdmin(c)
+    const apps = (await db.list<Record<string, unknown> & { at: number; status: string }>('ambassadorApplications', { limit: 1000 })).map((r) => ({ id: r.id, ...r.data })).sort((x, y) => y.at - x.at)
+    const ambs = await Promise.all((await db.list<AmbassadorDoc>('ambassadors', { limit: 1000 })).map(async (r) => ({ ...r.data, stats: await ambassadorStats(r.data.code) })))
+    return c.json({ applications: apps, ambassadors: ambs.sort((x, y) => y.stats.active - x.stats.active || y.stats.signups - x.stats.signups) })
+  })
+
+  /** accept an application (makes them an ambassador), decline it, or pause or resume an ambassador */
+  app.post('/v1/admin/ambassadors/decide', async (c) => {
+    const u = await requireAdmin(c)
+    const { email, decision } = await body(c, z.object({ email: z.string().trim().toLowerCase().email(), decision: z.enum(['accept', 'decline', 'pause', 'resume']) }))
+    const by = await whoIs(u)
+    if (decision === 'accept' || decision === 'decline') {
+      const appl = await db.get<{ name: string; school: string }>(`ambassadorApplications/${roleKey(email)}`)
+      if (!appl) throw fail(404, 'No application from that email.')
+      await db.set(`ambassadorApplications/${roleKey(email)}`, { status: decision === 'accept' ? 'accepted' : 'declined', decidedAt: now() }, { merge: true })
+      if (decision === 'accept') {
+        const existing = await ambassadorOf(email)
+        const code = existing?.code ?? (await newCode(appl.name))
+        await db.set(`ambassadors/${roleKey(email)}`, { email, name: appl.name, school: appl.school, code, status: 'active', joinedAt: existing?.joinedAt ?? now() })
+        const roles = (await db.get<{ roles: StaffRole[] }>(`roles/${roleKey(email)}`))?.roles ?? []
+        if (!roles.includes('ambassador')) await db.set(`roles/${roleKey(email)}`, { email, roles: [...roles, 'ambassador'], at: now(), by })
+      }
+      await audit(by, decision === 'accept' ? 'accepted an ambassador' : 'declined an ambassador', { type: 'reviewers', title: email }, `${appl.name}, ${appl.school}`)
+      return c.json({ ok: true })
+    }
+    const amb = await ambassadorOf(email)
+    if (!amb) throw fail(404, 'Not an ambassador.')
+    await db.set(`ambassadors/${roleKey(email)}`, { status: decision === 'pause' ? 'paused' : 'active' }, { merge: true })
+    await audit(by, decision === 'pause' ? 'paused an ambassador' : 'resumed an ambassador', { type: 'reviewers', title: email }, amb.name)
+    return c.json({ ok: true })
+  })
+
   /* ------------------------------------------------------------------ creation lab */
 
   /** a student's saved models: everything they build in Create in 3D, to reopen and keep changing */
@@ -1166,7 +1315,7 @@ export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision
       if (await db.create(`classCodes/${candidate}`, { classId: id })) code = candidate
     }
     if (!code) throw new Error('could not allocate a class code')
-    const cls: ClassDoc = { name, teacherUid: u.uid, teacherName: p.displayName, code, createdAt: now() }
+    const cls: ClassDoc = { name, teacherUid: u.uid, teacherName: p.displayName, code, createdAt: now(), ...(p.referredBy ? { referredBy: p.referredBy } : {}) }
     await db.set(`classes/${id}`, cls)
     await db.set(`users/${u.uid}/classes/${id}`, { name, role: 'teacher' })
     return c.json({ id, ...cls }, 201)
