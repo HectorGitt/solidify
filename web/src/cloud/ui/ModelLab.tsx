@@ -31,6 +31,7 @@ import { peekPreviewModel } from '../previewModel'
 import { ghostBtn, inputCls, primaryBtn } from './Modal'
 import { PartInspector } from './PartInspector'
 import { WorkspaceBodySkeleton } from '@/ui/Skeleton'
+import { dismissTask, startTask } from '@/ui/tasks'
 import { ErrorBoundary } from '@/ui/ErrorBoundary'
 
 /** one turn of the conversation about a model (saved newest first, shown oldest first) */
@@ -460,18 +461,16 @@ export default function ModelLab() {
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ block: 'end', behavior: 'smooth' })
   }, [turns.length, live?.progress?.parts.length, live?.progress?.parameters.length, !!live])
-  // leaving the page stops a build that is still streaming (a remount straight after, as React's
-  // development checks do, keeps it going)
+  // leaving the page does not stop a build: it carries on as a background task and saves to My models
   const mountedRef = useRef(false)
   useEffect(() => {
     mountedRef.current = true
     return () => {
       mountedRef.current = false
-      window.setTimeout(() => {
-        if (!mountedRef.current) abortRef.current?.abort()
-      }, 0)
     }
   }, [])
+  /** each build's number: a build only writes to the screen while it is still this page's current one */
+  const buildSeq = useRef(0)
 
   const applyCutPlane = (enabled: boolean, axis: 'x' | 'y' | 'z', pos: number) => {
     const normal: [number, number, number] = axis === 'x' ? [1, 0, 0] : axis === 'y' ? [0, 1, 0] : [0, 0, 1]
@@ -490,23 +489,36 @@ export default function ModelLab() {
     }, 1600)
   }
 
-  const persist = async (next: { spec: NoteSceneSpec; params: Record<string, number>; turns: Turn[]; prompt: string; fromPhoto: boolean }, asNew: boolean) => {
+  /** saves a build: `id` is the model it changed (none for a new one); `attached` says whether this page still shows it */
+  const persist = async (
+    next: { spec: NoteSceneSpec; params: Record<string, number>; turns: Turn[]; prompt: string; fromPhoto: boolean },
+    asNew: boolean,
+    ctx: { id: string | null; attached: () => boolean },
+  ): Promise<string | null> => {
     const payload = { title: next.spec.title.slice(0, 120) || 'Untitled model', spec: next.spec as unknown as Record<string, unknown>, params: next.params, history: savedHistory(next.turns) }
-    lastSavedRef.current = JSON.stringify([next.spec, next.params])
-    setSaveState('saving')
+    if (ctx.attached()) {
+      lastSavedRef.current = JSON.stringify([next.spec, next.params])
+      setSaveState('saving')
+    }
     try {
-      let id = creationIdRef.current
+      let id = ctx.id
       if (asNew || !id) {
         id = (await saveNewCreation({ ...payload, prompt: next.prompt.slice(0, 2000), fromPhoto: next.fromPhoto })).id
-        creationIdRef.current = id
-        setCreationId(id)
-        navigate(`/create/${id}`, { replace: true })
+        if (ctx.attached()) {
+          creationIdRef.current = id
+          setCreationId(id)
+          navigate(`/create/${id}`, { replace: true })
+        }
       } else await updateCreation(id, payload)
-      setSaveState('saved')
-      saveThumbnail(id)
+      if (ctx.attached()) {
+        setSaveState('saved')
+        saveThumbnail(id)
+      }
+      return id
     } catch (e) {
-      setSaveState('error')
+      if (ctx.attached()) setSaveState('error')
       if (e instanceof ApiError && e.status === 409) toast(e.message, { tone: 'warn', action: { label: 'My models', run: () => navigate('/create/lab') } })
+      return null
     }
   }
 
@@ -541,6 +553,12 @@ export default function ModelLab() {
     }
     const isNew = !spec
     const asked = withPhoto && !text.trim() ? (isNew ? `From a photo: ${withPhoto.name}` : 'Change it to match this photo') : prompt
+    // a background task: it keeps going if the student leaves, and writes to this screen only while it is still here
+    const token = ++buildSeq.current
+    const attached = () => mountedRef.current && buildSeq.current === token
+    const startId = creationIdRef.current
+    const short = asked.length > 48 ? `${asked.slice(0, 46)}…` : asked
+    const task = startTask(isNew ? `Building: ${short}` : `Changing ${spec?.title ?? 'your model'}`, startId ? `/create/${startId}` : '/create/new')
     setInput('')
     setAttached(null)
     setLive({ prompt: asked, photoUrl: withPhoto?.url, isNew, progress: null })
@@ -558,39 +576,54 @@ export default function ModelLab() {
     try {
       const res = await streamOrEdit3DScene(
         { prompt, currentSpec: isNew ? undefined : (spec ?? undefined), photoDataUrl: withPhoto?.url, history: isNew ? [] : savedHistory(turns).reverse() },
-        (progress) => setLive((l) => (l ? { ...l, progress } : l)),
+        (progress) => {
+          if (attached()) setLive((l) => (l ? { ...l, progress } : l))
+          task.update(progress.isQuestion ? 'Answering' : progress.parts.length ? `${progress.parts.length} ${progress.parts.length === 1 ? 'part' : 'parts'} placed` : 'Working out the engineering')
+        },
         ac.signal,
       )
       if (res.isQuestion) {
         const next = [{ id: `t-${Date.now()}`, prompt: asked, response: res.explanation, kind: 'answer' as const, photoUrl: withPhoto?.url }, ...turns]
-        setTurns(next)
-        if (creationIdRef.current) void updateCreation(creationIdRef.current, { history: savedHistory(next) }).catch(() => {})
+        if (attached()) setTurns(next)
+        if (startId) void updateCreation(startId, { history: savedHistory(next) }).catch(() => {})
+        // an answer is quick: only worth a notice if the student has moved on
+        if (attached()) dismissTask(task.id)
+        else task.finish({ message: 'Your answer is ready.' })
         return
       }
-      const asNew = isNew || res.isNewMachine || !creationIdRef.current
+      const asNew = isNew || res.isNewMachine || !startId
       const next = [{ id: `t-${Date.now()}`, prompt: asked, response: res.explanation, kind: 'build' as const, photoUrl: withPhoto?.url }, ...(asNew ? [] : turns)]
       const p = Object.fromEntries(res.spec.parameters.map((x) => [x.id, x.value]))
-      setTurns(next)
-      setSpec(res.spec)
-      setParams(p)
-      if (withPhoto) setPhoto(withPhoto)
-      if (asNew || res.matchedCatalogScene) {
-        setMatchedCatalog(res.matchedCatalogScene)
-        setViewMode('parametric')
+      if (attached()) {
+        setTurns(next)
+        setSpec(res.spec)
+        setParams(p)
+        if (withPhoto) setPhoto(withPhoto)
+        if (asNew || res.matchedCatalogScene) {
+          setMatchedCatalog(res.matchedCatalogScene)
+          setViewMode('parametric')
+        }
       }
-      await persist({ spec: res.spec, params: p, turns: next, prompt: asked, fromPhoto: !!withPhoto }, asNew)
+      const savedId = await persist({ spec: res.spec, params: p, turns: next, prompt: asked, fromPhoto: !!withPhoto }, asNew, { id: asNew ? null : startId, attached })
+      task.finish({ href: savedId ? `/create/${savedId}` : undefined, message: `${res.spec.title || 'Your model'} is ready.` })
     } catch (e) {
-      if ((e as Error).name === 'AbortError') return
+      if ((e as Error).name === 'AbortError') {
+        dismissTask(task.id)
+        return
+      }
       const message =
         e instanceof ApiError && e.status === 401
           ? 'Your sign-in has expired. Sign in again and resend this.'
           : e instanceof ApiError
             ? e.message
             : 'That didn’t work. Please try again.'
-      setTurns((list) => [{ id: `t-${Date.now()}`, prompt: asked, response: message, kind: 'error', photoUrl: withPhoto?.url }, ...list])
+      if (attached()) {
+        setTurns((list) => [{ id: `t-${Date.now()}`, prompt: asked, response: message, kind: 'error', photoUrl: withPhoto?.url }, ...list])
+        dismissTask(task.id)
+      } else task.fail(message)
     } finally {
-      setLive(null)
-      if (wasPlaying) useSim.getState().setPlaying(true)
+      if (attached()) setLive(null)
+      if (wasPlaying && attached()) useSim.getState().setPlaying(true)
       window.setTimeout(() => {
         liveAssembly.active = false
       }, 900)
@@ -600,7 +633,8 @@ export default function ModelLab() {
   // /create/new after a saved model was open: start afresh
   useEffect(() => {
     if (routeId !== 'new' || !creationIdRef.current) return
-    abortRef.current?.abort()
+    // a build still running carries on in the background (and saves); this page starts afresh
+    buildSeq.current++
     creationIdRef.current = null
     lastSavedRef.current = ''
     startedRef.current = false
@@ -671,6 +705,8 @@ export default function ModelLab() {
         setParams(p)
         setTurns(c.history.map((h, i) => ({ id: `saved-${i}`, ...h })))
         setSaveState('saved')
+        // built while the student was elsewhere: no card picture yet
+        if (!c.thumbnail) saveThumbnail(routeId)
       })
       .catch((e) => {
         if (cancelled) return
