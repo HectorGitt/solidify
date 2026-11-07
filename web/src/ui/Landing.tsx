@@ -11,6 +11,7 @@ import { Icon } from './icons'
 import { Loader, LoaderMark } from './Loader'
 import { Stage, type StageFrame } from './Stage'
 import { hasWebGL } from './webgl'
+import { getCameraControls } from './camera'
 import { SiteHeader } from '@/ui/SiteHeader'
 import { SiteFooter } from './SiteFooter'
 import { ALL_ORDER, MEDIA, Media, ModuleTile, READY } from './labsCatalog'
@@ -153,6 +154,41 @@ function Hero({ copy }: { copy: (typeof COPY)[keyof typeof COPY] }) {
 
   // the rig of the day borrows the live view while it is on screen; back here, the hero's scene is set up again
   const owner = useHomeStage((s) => s.owner)
+
+  /*
+   * The show reel: until someone takes hold of the model, each system shows itself off in turn: the camera
+   * circles it, it is cut open, comes apart and goes back together, then the next system. A press on the
+   * model (mouse or pen; a finger only scrolls the page here) or on any chip stops it for good. Not run for
+   * people who ask for less motion.
+   */
+  const [reel, setReel] = useState(() => hasWebGL() && !window.matchMedia?.('(prefers-reduced-motion: reduce)').matches)
+  const stopReel = () => setReel(false)
+  useEffect(() => {
+    if (!reel || !scene || owner !== 'hero' || switching) return
+    const view = () => useView.getState()
+    const timers = [
+      window.setTimeout(() => view().setCut({ enabled: true }), 2500),
+      window.setTimeout(() => view().setExplode(0.75), 6500),
+      window.setTimeout(() => view().setExplode(0), 10500),
+      window.setTimeout(() => view().setCut({ enabled: false }), 13000),
+      window.setTimeout(() => setHeroIdx((i) => (i + 1) % HERO_SCENES.length), 15000),
+    ]
+    // the camera sways gently either side of the scene's own view (about 18°), so flat rigs never turn edge-on
+    let raf = 0
+    const t0 = performance.now()
+    let applied = 0
+    const spin = (t: number) => {
+      const want = 0.32 * Math.sin(((t - t0) / 1000) * ((2 * Math.PI) / 15))
+      void getCameraControls()?.rotate(want - applied, 0, false)
+      applied = want
+      raf = requestAnimationFrame(spin)
+    }
+    raf = requestAnimationFrame(spin)
+    return () => {
+      timers.forEach(clearTimeout)
+      cancelAnimationFrame(raf)
+    }
+  }, [reel, scene, owner, switching])
   useEffect(() => {
     if (owner === 'hero' && scene) applySceneView(scene)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -165,7 +201,7 @@ function Hero({ copy }: { copy: (typeof COPY)[keyof typeof COPY] }) {
     <section className="relative overflow-hidden bg-panel-3 lg:flex lg:min-h-[max(min(92vh,860px),640px)] lg:flex-col lg:justify-end">
       {/* touch screens: the hero is look-only so a swipe always scrolls the page (camera controls
           otherwise capture the touch); "Open scene" is the way in. Mouse users can still drag it. */}
-      <div className="absolute inset-0 [&_canvas]:!touch-pan-y pointer-coarse:[&_*]:!pointer-events-none">
+      <div className="absolute inset-0 [&_canvas]:!touch-pan-y pointer-coarse:[&_*]:!pointer-events-none" onPointerDownCapture={(e) => e.pointerType !== 'touch' && stopReel()}>
         {/* the current scene stays up while the next one's code loads; then the new scene builds
             under a frosted veil, so switching never blanks the hero */}
         {live3D && scene && owner === 'hero' ? (
@@ -231,8 +267,9 @@ function Hero({ copy }: { copy: (typeof COPY)[keyof typeof COPY] }) {
                 <button
                   key={`${h.moduleId}/${h.sceneId}`}
                   onClick={() => {
+                    stopReel()
                     setHeroIdx(i)
-                    setLive3D(true)
+                    setLive3D(hasWebGL())
                   }}
                   aria-pressed={i === heroIdx}
                   className={`${chip(i === heroIdx)} inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap`}
@@ -245,10 +282,10 @@ function Hero({ copy }: { copy: (typeof COPY)[keyof typeof COPY] }) {
             <div className="flex flex-wrap items-center justify-end gap-1 rounded-full border border-line-2 bg-[var(--color-scrim)] p-1 backdrop-blur-xl">
               {live3D && scene ? (
                 <>
-                  <button onClick={() => useView.getState().setCut({ enabled: !cutEnabled })} aria-pressed={cutEnabled} className={chip(cutEnabled)}>
+                  <button onClick={() => (stopReel(), useView.getState().setCut({ enabled: !cutEnabled }))} aria-pressed={cutEnabled} className={chip(cutEnabled)}>
                     Cutaway
                   </button>
-                  <button onClick={() => useView.getState().setExplode(explode > 0.1 ? 0 : 0.75)} aria-pressed={explode > 0.1} className={chip(explode > 0.1)}>
+                  <button onClick={() => (stopReel(), useView.getState().setExplode(explode > 0.1 ? 0 : 0.75))} aria-pressed={explode > 0.1} className={chip(explode > 0.1)}>
                     Explode
                   </button>
                 </>
