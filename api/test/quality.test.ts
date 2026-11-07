@@ -144,7 +144,7 @@ describe('the admin controls', () => {
     expect(first).toMatchObject({ settings: { paused: false, draftsPerNight: 3, draftMin: 85, price: null }, topics: null })
     expect((await req('PUT', '/v1/admin/settings', { paused: true }, asUser('sam'))).status).toBe(403)
     expect((await req('PUT', '/v1/admin/settings', { paused: true, draftMin: 90, price: { inputPerM: 0.75, outputPerM: 3.75 } }, boss)).status).toBe(200)
-    expect((await req('PUT', '/v1/admin/settings', { draftsPerNight: 99 }, boss)).status).toBe(400)
+    expect((await req('PUT', '/v1/admin/settings', { draftsPerNight: 101 }, boss)).status).toBe(400)
     await req('PUT', '/v1/admin/topics', { items: [{ topic: 'Gears', prompt: 'A worm gear reducer' }] }, boss)
     const night = (await (await req('GET', '/v1/evals/settings', undefined, { 'x-eval-token': TOKEN })).json()) as { settings: Record<string, unknown>; topics: unknown[] }
     expect(night.settings).toMatchObject({ paused: true, draftsPerNight: 3, draftMin: 90 })
@@ -199,5 +199,36 @@ describe('library pictures', () => {
     expect(card.thumbnail).toBe(pic)
     expect((await req('PUT', `/v1/library/${id}`, { thumbnail: 'javascript:alert(1)' }, boss)).status).toBe(400)
     expect((await req('PUT', `/v1/library/${id}`, { thumbnail: pic }, boss)).status).toBe(200)
+  })
+})
+
+describe('the drafting pool', () => {
+  const boss = { Authorization: 'Bearer user:boss:Boss' }
+  const fallback = [
+    { topic: 'Gears', prompt: 'A worm gear reducer' },
+    { topic: 'Beams', prompt: 'A propped cantilever' },
+  ]
+  it('hands out each topic once, and asks Gemini for more when the list runs low', async () => {
+    const next = (want: number) => req('POST', '/v1/evals/topics/next', { want, fallback }, { 'x-eval-token': TOKEN }).then((r) => r.json() as Promise<{ topics: { prompt: string }[]; added: number }>)
+    const first = await next(2)
+    expect(first.topics.map((t) => t.prompt)).toEqual(['A worm gear reducer', 'A propped cantilever'])
+    expect(first.added).toBe(0)
+    // all used: new ones are suggested, none repeating
+    const second = await next(3)
+    expect(second.added).toBeGreaterThanOrEqual(3)
+    expect(second.topics).toHaveLength(3)
+    expect(second.topics.map((t) => t.prompt)).not.toContain('A worm gear reducer')
+    const third = await next(3)
+    expect(new Set([...second.topics, ...third.topics].map((t) => t.prompt)).size).toBe(6)
+    // the list the admin sees grew
+    const settings = (await (await req('GET', '/v1/admin/settings', undefined, boss)).json()) as { topics: unknown[] }
+    expect(settings.topics.length).toBeGreaterThanOrEqual(5)
+  })
+
+  it('is for the nightly run and admins only, up to 100 at a time', async () => {
+    expect((await req('POST', '/v1/admin/topics/next', { want: 2 }, asUser('sam'))).status).toBe(403)
+    expect((await req('POST', '/v1/admin/topics/next', { want: 2, fallback }, boss)).status).toBe(200)
+    expect((await req('POST', '/v1/admin/topics/next', { want: 500 }, boss)).status).toBe(400)
+    expect((await req('PUT', '/v1/admin/settings', { draftsPerNight: 100 }, boss)).status).toBe(200)
   })
 })

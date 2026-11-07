@@ -37,7 +37,19 @@ export interface NoteVisionModel {
   createOrEdit3D(req: Create3dRequest): Promise<CreateReply>
   /** the same answer as it is written, as raw JSON text; read the whole of it with `readCreateReply` */
   streamCreate3D(req: Create3dRequest, signal?: AbortSignal, onUsage?: (u: ModelUsage) => void): AsyncIterable<string>
+  /** new requests for the model library, none of them already in `avoid` */
+  suggestTopics(count: number, avoid: string[]): Promise<{ topic: string; prompt: string }[]>
 }
+
+const TOPICS_PROMPT = `You plan the model library of Solidify, an engineering-education app where each request is built as an interactive 3D model with its engineering worked out (sizes on sliders, calculations, graphs, loads as arrows).
+
+Suggest new requests, each one machine, mechanism, structure or test piece a university engineering student studies, with the key numbers given, in one line, like:
+"A worm and worm wheel reducer, 30 : 1, with the worm on a steel shaft"
+"A simply supported beam, 5 m span, with two 8 kN point loads at the third points"
+
+Spread them across these subjects: gears and drives; shafts, bearings and couplings; fasteners and joints; strength of materials (beams, shafts in torsion, columns, pressure vessels, stress states); fluids and hydraulic machines (pumps, turbines, meters, cylinders); thermodynamics and heat transfer (engines, compressors, exchangers, refrigeration); mechanisms and machine dynamics; agricultural machinery and processing; structures and farm buildings; soil and water engineering (irrigation, drainage, wells). Each must be something that can be drawn as a 3D model, not a concept, a graph or a calculation alone. No course codes or textbook names.
+
+Return JSON only: { "topics": [ { "topic": "<subject, as above>", "prompt": "<the request>" } ] }`
 
 /** tokens a model call used: what it was sent, and what it wrote (thinking included, as it is billed) */
 export interface ModelUsage {
@@ -152,6 +164,18 @@ export class GeminiNoteVision implements NoteVisionModel {
     return parseModelJson<T>(res.text)
   }
 
+  async suggestTopics(count: number, avoid: string[]) {
+    const parsed = await this.json<{ topics?: { topic?: unknown; prompt?: unknown }[] }>(
+      TOPICS_PROMPT,
+      [{ text: `Give ${count} new requests. Do not repeat or closely rephrase any of these, already in the library or planned:\n${avoid.slice(-400).map((a) => `- ${a}`).join('\n')}` }],
+      8192,
+      0.9,
+    )
+    return (parsed.topics ?? [])
+      .filter((t) => typeof t.topic === 'string' && typeof t.prompt === 'string' && t.prompt.trim().length >= 12)
+      .map((t) => ({ topic: String(t.topic).trim().slice(0, 60), prompt: String(t.prompt).trim().slice(0, 400) }))
+  }
+
   async analyzePage(req: NoteAnalyzeRequest): Promise<{ figures: unknown[] }> {
     const parsed = await this.json<{ figures?: unknown[] }>(
       NOTE_SYSTEM_PROMPT,
@@ -237,6 +261,17 @@ export class FakeNoteVision implements NoteVisionModel {
   /** a stand-in token count: the photo costs the most, then the current model sent back, then the words */
   private fakeUsage(req: Create3dRequest, text: string): ModelUsage {
     return { input: 1000 + (req.photoBase64 ? 1500 : 0) + (req.currentSpec ? JSON.stringify(req.currentSpec).length : 0), output: text.length }
+  }
+
+  /** numbered stand-ins, so tests can see new ones arrive */
+  suggested = 0
+  async suggestTopics(count: number, avoid: string[]) {
+    const out: { topic: string; prompt: string }[] = []
+    while (out.length < count) {
+      const prompt = `Suggested machine number ${++this.suggested}`
+      if (!avoid.includes(prompt)) out.push({ topic: 'Machines', prompt })
+    }
+    return out
   }
 
   async createOrEdit3D(req: Create3dRequest) {

@@ -454,7 +454,7 @@ export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision
   const settingsSchema = z.object({
     /** the nightly schedule skips its run (a run started by hand still goes) */
     paused: z.boolean(),
-    draftsPerNight: z.number().int().min(0).max(20),
+    draftsPerNight: z.number().int().min(0).max(100),
     /** the score a draft needs to reach the review queue */
     draftMin: z.number().min(0).max(100),
     /** overrides MODEL_PRICE */
@@ -467,6 +467,59 @@ export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision
   const topicItem = z.object({ topic: z.string().trim().min(1).max(60), prompt: z.string().trim().min(3).max(400) })
   /** null = the built-in list in the runner */
   const getTopics = async () => (await db.get<{ items: z.infer<typeof topicItem>[] }>('settings/topics'))?.items ?? null
+
+  /*
+   * The drafting pool: every prompt ever drafted is remembered (settings/drafted), so no topic is built twice;
+   * when fewer than a batch are left unused, Gemini suggests new ones (avoiding everything planned, drafted or
+   * published), which join the topic list. The list starts from the runner's built-in one (`fallback`).
+   */
+  const draftedKey = (p: string) => p.trim().toLowerCase().replace(/\s+/g, ' ')
+  const getDrafted = async () => new Set((await db.get<{ prompts: string[] }>('settings/drafted'))?.prompts ?? [])
+  const markDrafted = async (prompt: string) => {
+    await db.transact<{ prompts: string[] }>('settings/drafted', (prev) => {
+      const prompts = prev?.prompts ?? []
+      const k = draftedKey(prompt)
+      return prompts.includes(k) ? { prompts } : { prompts: [...prompts, k].slice(-5000) }
+    })
+  }
+  const nextTopics = async (want: number, fallback: z.infer<typeof topicItem>[]) => {
+    let pool = (await getTopics()) ?? fallback
+    const drafted = await getDrafted()
+    const unused = () => pool.filter((t) => !drafted.has(draftedKey(t.prompt)))
+    let added = 0
+    if (unused().length < want) {
+      const library = (await db.list<{ title?: string; prompt?: string }>('library', { limit: 1000 })).map((r) => r.data.prompt ?? r.data.title ?? '')
+      const avoid = [...pool.map((t) => t.prompt), ...drafted, ...library].filter(Boolean)
+      // ask for a few more than needed, so a short or repeated answer still fills the batch
+      const fresh = (await model(() => noteVision.suggestTopics(Math.min(60, want - unused().length + 10), avoid))).filter(
+        (t) => !drafted.has(draftedKey(t.prompt)) && !pool.some((x) => draftedKey(x.prompt) === draftedKey(t.prompt)),
+      )
+      if (fresh.length) {
+        pool = [...pool, ...fresh].slice(-1000)
+        await db.set('settings/topics', { items: pool })
+        added = fresh.length
+      }
+    }
+    // handed out counts as used: a topic that builds badly is not tried again every night
+    const topics = unused().slice(0, want)
+    for (const t of topics) await markDrafted(t.prompt)
+    return { topics, added }
+  }
+  const nextTopicsInput = z.object({ want: z.number().int().min(1).max(100), fallback: z.array(topicItem).max(300).default([]) })
+
+  /** tonight's topics for the nightly run: unused ones, topped up by Gemini when the list runs low */
+  app.post('/v1/evals/topics/next', async (c) => {
+    requireEval(c)
+    const { want, fallback } = await body(c, nextTopicsInput)
+    return c.json(await nextTopics(want, fallback))
+  })
+
+  /** the same, for a batch drafted from the admin page */
+  app.post('/v1/admin/topics/next', async (c) => {
+    requireAdmin(c)
+    const { want, fallback } = await body(c, nextTopicsInput)
+    return c.json(await nextTopics(want, fallback))
+  })
 
   app.get('/v1/admin/settings', async (c) => {
     requireAdmin(c)
@@ -576,6 +629,7 @@ export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision
     if (JSON.stringify(d.spec).length > 300_000) throw fail(413, 'This model is too large to save.')
     const id = randomId()
     await db.set(`libraryDrafts/${id}`, { ...d, parts: Array.isArray(d.spec.parts) ? d.spec.parts.length : 0, createdAt: now() })
+    await markDrafted(d.prompt)
     return c.json({ id }, 201)
   })
 
