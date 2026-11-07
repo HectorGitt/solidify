@@ -7,6 +7,8 @@ import { useSim } from '@/core/sim'
 import type { SceneDef } from '@/modules/types'
 import { useParts } from '@/parts/registry'
 import { useView } from '@/render/view'
+import { useBuild } from '@/render/build'
+import { buildHands, buildHint, buildTray } from '@/render/BuildController'
 import { handlers, items, mirrorChange, useMirror, type Mirrored } from './mirror'
 import { PANEL_H, PANEL_M, PANEL_W, drawPanel, hitAt, hitKey, type Hit, type PanelButton } from './panel'
 import { useXRSession } from './session'
@@ -83,6 +85,8 @@ xrStore.subscribe((s, p) => {
   const on = !!s.session
   useXRSession.setState({ active: on, mode: on ? (s.mode === 'immersive-ar' ? 'ar' : 'vr') : null })
   useMirror.getState().setOn(on)
+  // in the headset the panel is to the right of the rig, so a build tray goes to the left
+  buildTray.side = on ? -1 : 1
   if (on) {
     useLab.setState({ full: false, surface: false })
     useLab.getState().setPlacing(true)
@@ -217,6 +221,7 @@ function Lab({ scene }: { scene: SceneDef }) {
     if (!import.meta.env.DEV) return
     ;(window as unknown as { __xrInfo?: unknown }).__xrInfo = gl.info
   }, [gl])
+  const pinches = useRef(new Map<XRHandedness, { on: boolean; held: string | null }>())
   const head = useMemo(() => new THREE.Vector3(), [])
   const fwd = useMemo(() => new THREE.Vector3(), [])
   useFrame(({ camera }, _dt, frame?: XRFrame) => {
@@ -236,6 +241,35 @@ function Lab({ scene }: { scene: SceneDef }) {
         if (useLab.getState().placing) {
           // back where it was left: no placing needed
           useLab.setState({ placing: false })
+        }
+      }
+      // building it by hand: thumb and index fingertip coming together on a loose part pick it up; it moves
+      // with the fingers, and opening them lets it go (fitted if it is by its home)
+      if (useBuild.getState().def && !useLab.getState().placing) {
+        for (const src of frame.session.inputSources) {
+          const hand = src.hand
+          if (!hand || !frame.getJointPose) continue
+          const it = hand.get('index-finger-tip')
+          const th = hand.get('thumb-tip')
+          const a = it && frame.getJointPose(it, space)
+          const b = th && frame.getJointPose(th, space)
+          if (!a || !b) continue
+          const pa = a.transform.position
+          const pb = b.transform.position
+          const gap = Math.hypot(pa.x - pb.x, pa.y - pb.y, pa.z - pb.z)
+          const st = pinches.current.get(src.handedness) ?? { on: false, held: null }
+          pinches.current.set(src.handedness, st)
+          o.updateMatrixWorld()
+          const at = o.localToWorld(new THREE.Vector3((pa.x + pb.x) / 2, (pa.y + pb.y) / 2, (pa.z + pb.z) / 2))
+          if (!st.on && gap < 0.02) {
+            st.on = true
+            // within 2.5 cm of a part, in the room, counts as on it
+            st.held = buildHands.grab?.(at, 0.025 * o.scale.x) ?? null
+          } else if (st.on && gap > 0.04) {
+            st.on = false
+            if (st.held) buildHands.release?.(st.held)
+            st.held = null
+          } else if (st.on && st.held) buildHands.carry?.(st.held, at)
         }
       }
     }
@@ -427,11 +461,26 @@ function Panel({ scene, placing }: { scene: SceneDef; placing: boolean }) {
   const part = useParts((s) => (selected ? s.parts[selected] : undefined))
   const full = useLab((s) => s.full)
   const surface = useLab((s) => s.surface)
+  const building = useBuild((s) => s.def)
+  const fitted = useBuild((s) => s.placed.length)
+  const buildMsg = useBuild((s) => s.message)
 
   const cutLabel = !cutOn ? 'Cut: off' : `Cut: ${presets.find((p) => p.id === preset)?.label.replace(/ (section|cut)$/i, '') ?? 'on'}`
   const buttons: PanelButton[][] = placing
     ? [[{ id: 'place', label: 'Put it here', primary: true }, { id: 'exit', label: 'Exit' }]]
-    : [
+    : building
+      ? [
+          [
+            { id: 'hint', label: 'Hint' },
+            { id: 'restart', label: 'Start over' },
+            { id: 'stopbuild', label: 'Stop building' },
+          ],
+          [
+            { id: 'move', label: 'Move' },
+            { id: 'exit', label: 'Exit' },
+          ],
+        ]
+      : [
         [
           { id: 'play', label: playing ? 'Pause' : 'Run', primary: !playing },
           { id: 'cut', label: cutLabel, on: cutOn },
@@ -440,6 +489,7 @@ function Panel({ scene, placing }: { scene: SceneDef; placing: boolean }) {
         ],
         [
           { id: 'move', label: 'Move' },
+          ...(scene.build ? [{ id: 'build', label: 'Build it', primary: true }] : []),
           { id: 'size', label: full ? 'Table size' : 'Full size', on: full },
           { id: 'reset', label: 'Reset' },
           { id: 'exit', label: 'Exit' },
@@ -452,7 +502,7 @@ function Panel({ scene, placing }: { scene: SceneDef; placing: boolean }) {
   const last = useRef(0)
   useEffect(() => {
     dirty.current = true
-  }, [version, playing, selected, explode, xray, cutOn, preset, part, full, surface, placing, page, hover, dom.groups])
+  }, [version, playing, selected, explode, xray, cutOn, preset, part, full, surface, placing, page, hover, dom.groups, building, fitted, buildMsg])
   useFrame(() => {
     const t = performance.now()
     if (!dirty.current || t - last.current < 66) return
@@ -462,7 +512,13 @@ function Panel({ scene, placing }: { scene: SceneDef; placing: boolean }) {
     const all = [...items.entries()]
     const drawn = drawPanel(g, {
       title: scene.title,
-      hint: placing ? (surface ? 'Pinch to put it on this surface' : 'Look at your table, then pinch') : null,
+      hint: placing
+        ? surface
+          ? 'Pinch to put it on this surface'
+          : 'Look at your table, then pinch'
+        : building
+          ? `${fitted}/${building.steps.length} · ${buildMsg?.text ?? 'Pinch a part on the table, put it where it goes'}`
+          : null,
       buttons,
       part: part ? { name: part.name, summary: part.info?.summary } : null,
       controls: [...dom.groups, ...all.filter(([, m]) => m.kind !== 'readout')],
@@ -489,6 +545,15 @@ function Panel({ scene, placing }: { scene: SceneDef; placing: boolean }) {
       v.resetView()
       place.turn = 0
     } else if (id === 'size') useLab.setState((s) => ({ full: !s.full }))
+    else if (id === 'build' && scene.build) {
+      useLab.setState({ full: false })
+      v.setExplode(0)
+      useBuild.getState().start(scene.build)
+    } else if (id === 'hint') {
+      const d = useBuild.getState().def
+      if (d) buildHint(d)
+    } else if (id === 'restart') useBuild.getState().restart()
+    else if (id === 'stopbuild') useBuild.getState().stop()
     else if (id === 'cut') {
       // off → each cut in turn → off
       const ids = v.cutPresets.map((p) => p.id)

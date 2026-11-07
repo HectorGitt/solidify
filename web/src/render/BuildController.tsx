@@ -40,6 +40,19 @@ const lower = (s: string) => s.charAt(0).toLowerCase() + s.slice(1)
 const shuffleKey = (id: string) => [...id].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7) % 997
 
 /**
+ * Hands in a headset (set while build mode is on): pick up the loose part at a point (fingers pinched on
+ * it), carry it, and let it go, with the same rules as dragging it with a mouse. Points are in the scene.
+ */
+/** which side of the machine the tray goes, as seen by the viewer: 1 right, -1 left (the headset panel is on the right) */
+export const buildTray = { side: 1 }
+
+export const buildHands: {
+  grab?: (p: THREE.Vector3, reach: number) => string | null
+  carry?: (id: string, p: THREE.Vector3) => void
+  release?: (id: string) => void
+} = {}
+
+/**
  * Lays the loose parts out on a tray in front of the machine, lets them be dragged (or tapped) home,
  * and checks each one against what it needs. Lives inside the Canvas; reads and writes useBuild.
  */
@@ -86,7 +99,7 @@ export function BuildController({ floorY = 0 }: { floorY?: number }) {
     const front = camera.position.clone().sub(C).setY(0)
     if (front.lengthSq() < 1e-6) front.set(0, 0, 1)
     front.normalize()
-    const across = new THREE.Vector3(front.z, 0, -front.x)
+    const across = new THREE.Vector3(front.z, 0, -front.x).multiplyScalar(buildTray.side)
     const gap = 0.14 * big
     const rowW = 1.7 * big
     const ids = [...m.keys()].sort((a, b) => shuffleKey(a) - shuffleKey(b))
@@ -265,6 +278,53 @@ export function BuildController({ floorY = 0 }: { floorY?: number }) {
       // anything that didn't go in goes back to its place on the tray
       if (!useBuild.getState().placed.includes(d.id)) slot.at.copy(slot.tray)
     }
+    // the same, for fingers in a headset: the part under the pinch, carried with it, fitted if let go by its home
+    const held = new Map<string, THREE.Vector3>()
+    buildHands.grab = (p, reach) => {
+      if (useBuild.getState().finishedAt) return null
+      const placed = useBuild.getState().placed
+      const box = new THREE.Box3()
+      let best: { id: string; size: number } | null = null
+      for (const id of slots.current.keys()) {
+        if (placed.includes(id) || held.has(id)) continue
+        const o = partObjects.get(id)
+        if (!o) continue
+        box.setFromObject(o)
+        if (box.isEmpty()) continue
+        const size = box.getSize(_v).length()
+        box.expandByScalar(Math.max(reach, size * 0.1))
+        if (box.containsPoint(p) && (!best || size < best.size)) best = { id, size }
+      }
+      if (!best) return null
+      const slot = slots.current.get(best.id)!
+      held.set(best.id, p.clone().sub(slot.at))
+      useBuild.getState().hold(best.id)
+      buildSnappy.add(best.id)
+      return best.id
+    }
+    buildHands.carry = (id, p) => {
+      const slot = slots.current.get(id)
+      const grab = held.get(id)
+      if (!slot || !grab) return
+      slot.at.copy(p).sub(grab)
+      slot.at.y = Math.max(slot.at.y, floorY + slot.size.y / 2)
+      const near = slot.at.distanceTo(slot.home) < snapR.current || onMachine.current.containsPoint(p)
+      useView.getState().hover(near && allowed(id) ? id : null)
+    }
+    buildHands.release = (id) => {
+      const slot = slots.current.get(id)
+      if (!slot || !held.has(id)) return
+      held.delete(id)
+      buildSnappy.delete(id)
+      useView.getState().hover(null)
+      const near = slot.at.distanceTo(slot.home) < snapR.current || onMachine.current.containsPoint(slot.at)
+      if (near) {
+        if (allowed(id)) accept(id)
+        else refuse(id)
+      } else useBuild.getState().hold(null)
+      if (!useBuild.getState().placed.includes(id)) slot.at.copy(slot.tray)
+    }
+
     window.addEventListener('pointerdown', down, { capture: true })
     window.addEventListener('pointermove', move)
     window.addEventListener('pointerup', up)
@@ -274,6 +334,7 @@ export function BuildController({ floorY = 0 }: { floorY?: number }) {
       window.removeEventListener('pointermove', move)
       window.removeEventListener('pointerup', up)
       window.removeEventListener('pointercancel', up)
+      buildHands.grab = buildHands.carry = buildHands.release = undefined
       const cc = getCameraControls()
       if (cc) cc.enabled = true
     }
