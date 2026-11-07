@@ -3,6 +3,7 @@ import { createApp } from './app.js'
 import { FirebaseVerifier, FirestoreDb } from './firestore.js'
 import { GeminiTutor } from './tutor.js'
 import { GeminiNoteVision } from './note3d.js'
+import { GeminiEmbedder } from './embed.js'
 import { listPrice } from './prices.js'
 
 const env = (k: string, d?: string) => {
@@ -22,6 +23,8 @@ const app = createApp({
   db: new FirestoreDb(),
   verifier: new FirebaseVerifier(),
   tutor: new GeminiTutor(env('GEMINI_MODEL', 'gemini-3.8-flash'), project, env('GEMINI_LOCATION', 'global')),
+  // matching requests to the library: the first region that serves the embedding model is kept
+  embedder: new GeminiEmbedder(env('EMBED_MODEL', 'gemini-embedding-001'), project, [...new Set([env('EMBED_LOCATION', env('GEMINI_LOCATION', 'global')), 'us-central1', 'europe-west1'])]),
   noteVision: new GeminiNoteVision(env('GEMINI_MODEL', 'gemini-3.8-flash'), project, env('GEMINI_LOCATION', 'global')),
   config: {
     allowedOrigins: list(env('ALLOWED_ORIGINS', 'https://solidify.studio,http://localhost:5173,http://localhost:5180')),

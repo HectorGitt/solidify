@@ -29,7 +29,10 @@ export const create3dRequest = z.object({
   history: z.array(z.object({ prompt: z.string().max(2000), response: z.string().max(2000) })).max(12).optional(),
 })
 
-export type Create3dRequest = z.infer<typeof create3dRequest>
+export type Create3dRequest = z.infer<typeof create3dRequest> & {
+  /** a checked library model close to the request, to start from (the server sets it; clients cannot) */
+  reference?: { title: string; spec: Record<string, unknown> }
+}
 
 export interface NoteVisionModel {
   analyzePage(req: NoteAnalyzeRequest): Promise<{ figures: unknown[] }>
@@ -73,9 +76,12 @@ export interface CreateReply {
 /** what Gemini is sent for a build, change or question */
 export function createParts(req: Create3dRequest): Part[] {
   const chat = req.history?.length ? `Conversation so far (oldest first):\n${req.history.map((h) => `Student: ${h.prompt}\nSolidify: ${h.response}`).join('\n')}\n\n` : ''
+  const reference = req.reference && !req.currentSpec ? JSON.stringify(req.reference.spec) : ''
   const text = req.currentSpec
     ? `${chat}Student: "${req.prompt}"\nCurrent NoteSceneSpec:\n${JSON.stringify(req.currentSpec)}`
-    : `Build a complete 3D NoteSceneSpec for: "${req.prompt}"`
+    : reference && reference.length < 80_000
+      ? `Build a complete 3D NoteSceneSpec for: "${req.prompt}"\n\nSolidify's library has a checked model of something close to this, "${req.reference!.title}". Start from its layout, parts and relations where they fit the request, and change the parts, sizes, values, calculations and graphs to match exactly what was asked. Give it a new title for this request.\nChecked model:\n${reference}`
+      : `Build a complete 3D NoteSceneSpec for: "${req.prompt}"`
   return [...imagePart(req.photoBase64), { text }]
 }
 

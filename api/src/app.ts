@@ -1,4 +1,5 @@
 import { isBusy, retryBusy } from './retry.js'
+import { FakeEmbedder, cosine, keywordScore, type Embedder } from './embed.js'
 import { Hono, type Context } from 'hono'
 import { cors } from 'hono/cors'
 import { HTTPException } from 'hono/http-exception'
@@ -21,6 +22,9 @@ export interface Config {
   createDailyLimit?: number
   /** emails allowed to read the feedback queue */
   adminEmails: string[]
+  /** how close (cosine, 0 to 1) a library model must be to be offered for a request, and to be given to a build to start from */
+  matchMin?: number
+  referenceMin?: number
   /** waits between retries when the model is busy (tests use zeros); default 2, 6 and 15 s */
   retryWaits?: number[]
   /** shared secret for the nightly test run (at least 24 characters); unset = no nightly runs */
@@ -36,6 +40,8 @@ export interface Deps {
   tutor: TutorModel
   noteVision?: NoteVisionModel
   config: Config
+  /** text embeddings for matching requests to the library (a word-count stand-in when not given) */
+  embedder?: Embedder
 }
 
 type Role = 'student' | 'teacher'
@@ -126,7 +132,7 @@ const randomId = () => crypto.randomUUID().replace(/-/g, '').slice(0, 16)
 
 const day = (t: number) => new Date(t).toISOString().slice(0, 10)
 
-export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision(), config }: Deps) {
+export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision(), embedder = new FakeEmbedder(), config }: Deps) {
   const now = config.now ?? Date.now
   const app = new Hono<Env>()
 
@@ -325,7 +331,7 @@ export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision
 
   app.post('/v1/create-3d', async (c) => {
     const u = requireUser(c)
-    const req = await body(c, create3dRequest)
+    const req = await withReference(await body(c, create3dRequest))
     const remaining = await spend(u.uid, 'createUsage', config.createDailyLimit ?? 15, '3D builds')
     const { usage, ...out } = await model(() => noteVision.createOrEdit3D(req))
     await recordUsage(actionOf(req, out.isQuestion), usage)
@@ -339,7 +345,7 @@ export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision
    */
   app.post('/v1/create-3d/stream', async (c) => {
     const u = requireUser(c)
-    const req = await body(c, create3dRequest)
+    const req = await withReference(await body(c, create3dRequest))
     const remaining = await spend(u.uid, 'createUsage', config.createDailyLimit ?? 15, '3D builds')
     return streamSSE(c, async (stream) => {
       const ac = new AbortController()
@@ -615,12 +621,93 @@ export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision
     if (!/^[a-z0-9]{6,20}$/.test(id)) throw fail(404, 'Not found.')
     return id
   }
-  const libraryCard = ({ spec, checks: _c, explanation: _e, ...rest }: LibraryDoc, id: string) => {
+  const libraryCard = ({ spec, checks: _c, explanation: _e, embedding: _v, ...rest }: LibraryDoc, id: string) => {
     void _c
     void _e
+    void _v
     void spec
     return { id, ...rest }
   }
+
+  /*
+   * Matching a request to the library: each published model is embedded (title, subject and request), and a
+   * request is compared with them all. Embeddings are made when a model is published, or the first time the
+   * index is built for older ones. If embeddings cannot be had, shared words stand in.
+   */
+  const entryText = (d: { title?: string; topic?: string; prompt?: string }) => [d.title, d.topic, d.prompt].filter(Boolean).join(' · ')
+  const MATCH_MIN = config.matchMin ?? 0.75
+  const REFERENCE_MIN = config.referenceMin ?? 0.82
+  let index: { at: number; items: { id: string; doc: LibraryDoc; text: string; embedding?: number[] }[] } | null = null
+  const dropIndex = () => {
+    index = null
+  }
+  const libraryIndex = async () => {
+    if (index && now() - index.at < 60_000) return index
+    const rows = await db.list<LibraryDoc>('library', { limit: 1000 })
+    const items = rows.map((r) => ({ id: r.id, doc: r.data, text: entryText(r.data), embedding: Array.isArray(r.data.embedding) ? (r.data.embedding as number[]) : undefined }))
+    const missing = items.filter((i) => !i.embedding)
+    if (missing.length) {
+      try {
+        const vectors = await embedder.embed(missing.map((i) => i.text), 'document')
+        await Promise.all(
+          missing.map(async (item, k) => {
+            item.embedding = vectors[k]
+            await db.set(`library/${item.id}`, { embedding: vectors[k] }, { merge: true })
+          }),
+        )
+      } catch (e) {
+        console.error('embedding the library', e) // matched by shared words until it works
+      }
+    }
+    index = { at: now(), items }
+    return index
+  }
+  /** the closest library models to a request, best first, with how close (0 to 1) */
+  const matchLibrary = async (q: string, n: number, min: number) => {
+    const { items } = await libraryIndex()
+    if (!items.length) return []
+    let scored: { item: (typeof items)[number]; score: number }[]
+    try {
+      const [v] = await embedder.embed([q], 'query')
+      scored = items.filter((i) => i.embedding).map((item) => ({ item, score: cosine(v, item.embedding!) }))
+      if (!scored.length) throw new Error('no embeddings yet')
+    } catch {
+      // shared words, on their own scale
+      scored = items.map((item) => ({ item, score: Math.min(1, keywordScore(q, item.text) * 1.6) }))
+    }
+    return scored.filter((s) => s.score >= min).sort((a, b) => b.score - a.score).slice(0, n)
+  }
+  /** a new build from words starts from the closest checked library model, if one is close enough */
+  const withReference = async (req: Create3dRequest): Promise<Create3dRequest> => {
+    if (req.currentSpec || req.photoBase64) return req
+    try {
+      const [best] = await matchLibrary(req.prompt, 1, REFERENCE_MIN)
+      return best ? { ...req, reference: { title: best.item.doc.title, spec: best.item.doc.spec } } : req
+    } catch {
+      return req
+    }
+  }
+
+  /** embeds one newly published model (best effort: the index catches up later if this fails) */
+  const embedOne = async (id: string, d: LibraryDoc) => {
+    try {
+      const [v] = await embedder.embed([entryText(d)], 'document')
+      await db.set(`library/${id}`, { embedding: v }, { merge: true })
+    } catch {
+      /* embedded next time the index is built */
+    }
+    dropIndex()
+  }
+
+  /** checked library models close to what someone is typing: anyone may ask (signed out too) */
+  app.get('/v1/library/match', async (c) => {
+    const q = (c.req.query('q') ?? '').trim().slice(0, 400)
+    if (q.length < 8) return c.json({ matches: [] })
+    const u = c.get('user')
+    await spend(u?.uid ?? 'anyone', 'matchUsage', u ? 600 : 20_000, 'library searches')
+    const found = await matchLibrary(q, 3, MATCH_MIN)
+    return c.json({ matches: found.map(({ item, score }) => ({ ...libraryCard(item.doc, item.id), score: Math.round(score * 100) / 100 })) })
+  })
 
   app.post('/v1/library/drafts', async (c) => {
     if (c.req.header('x-eval-token')) requireEval(c)
@@ -659,8 +746,10 @@ export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision
     const draft = await db.get<LibraryDoc>(`libraryDrafts/${id}`)
     if (!draft) throw fail(404, 'Draft not found.')
     const patch = await body(c, z.object({ title: libraryInput.shape.title.optional() }))
-    await db.set(`library/${id}`, { ...draft, ...(patch.title ? { title: patch.title } : {}), publishedAt: now() })
+    const published = { ...draft, ...(patch.title ? { title: patch.title } : {}), publishedAt: now() }
+    await db.set(`library/${id}`, published)
     await db.delete(`libraryDrafts/${id}`)
+    await embedOne(id, published)
     return c.json({ ok: true })
   })
 
@@ -679,14 +768,16 @@ export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision
   app.get('/v1/library/:id', async (c) => {
     const item = await db.get<LibraryDoc>(`library/${libraryId(c.req.param('id'))}`)
     if (!item) throw fail(404, 'Not found.')
-    const { checks: _c, ...rest } = item
+    const { checks: _c, embedding: _v, ...rest } = item
     void _c
+    void _v
     return c.json({ id: c.req.param('id'), ...rest })
   })
 
   app.delete('/v1/library/:id', async (c) => {
     requireAdmin(c)
     await db.delete(`library/${libraryId(c.req.param('id'))}`)
+    dropIndex()
     return c.json({ ok: true })
   })
 
@@ -696,7 +787,9 @@ export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision
     const d = await body(c, libraryInput)
     if (JSON.stringify(d.spec).length > 300_000) throw fail(413, 'This model is too large to save.')
     const id = randomId()
-    await db.set(`library/${id}`, { ...d, parts: Array.isArray(d.spec.parts) ? d.spec.parts.length : 0, createdAt: now(), publishedAt: now() })
+    const published = { ...d, parts: Array.isArray(d.spec.parts) ? d.spec.parts.length : 0, createdAt: now(), publishedAt: now() }
+    await db.set(`library/${id}`, published)
+    await embedOne(id, published)
     return c.json({ id }, 201)
   })
 
@@ -707,7 +800,10 @@ export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision
     const item = await db.get<LibraryDoc>(`library/${id}`)
     if (!item) throw fail(404, 'Not found.')
     const patch = await body(c, z.object({ title: libraryInput.shape.title, topic: z.string().trim().max(60), thumbnail: libraryInput.shape.thumbnail }).partial())
-    await db.set(`library/${id}`, { ...item, ...patch })
+    const next = { ...item, ...patch }
+    await db.set(`library/${id}`, next)
+    // a new title or subject changes what it matches
+    if (patch.title || patch.topic !== undefined) await embedOne(id, next)
     return c.json({ ok: true })
   })
 
