@@ -117,6 +117,7 @@ function Lab({ scene }: { scene: SceneDef }) {
   const hit = useRef<THREE.Vector3 | null>(null)
   const m4 = useMemo(() => new THREE.Matrix4(), [])
   const tmp = useMemo(() => new THREE.Vector3(), [])
+  const tmp2 = useMemo(() => new THREE.Vector3(), [])
   const q = useMemo(() => new THREE.Quaternion(), [])
   useXRHitTest(
     (results, getWorldMatrix) => {
@@ -149,6 +150,11 @@ function Lab({ scene }: { scene: SceneDef }) {
     [],
   )
 
+  // development only: what each frame costs, for the headset speed budget
+  useEffect(() => {
+    if (!import.meta.env.DEV) return
+    ;(window as unknown as { __xrInfo?: unknown }).__xrInfo = gl.info
+  }, [gl])
   const head = useMemo(() => new THREE.Vector3(), [])
   const fwd = useMemo(() => new THREE.Vector3(), [])
   useFrame(({ camera }) => {
@@ -175,7 +181,10 @@ function Lab({ scene }: { scene: SceneDef }) {
     // the origin, so the rig's base lands on the chosen spot, turned and scaled
     o.scale.setScalar(scale)
     o.rotation.set(0, place.turn, 0)
-    o.position.copy(base).sub(tmp.copy(place.at).applyAxisAngle(UP, place.turn).multiplyScalar(scale))
+    // full size: standing on the floor, set back from the table by its own size, so the student sees it whole
+    // and the panel stays within reach on the table
+    const spot = full ? tmp2.set(place.at.x - Math.sin(place.face) * (scene.extent * 0.6 + 0.4), 0, place.at.z - Math.cos(place.face) * (scene.extent * 0.6 + 0.4)) : place.at
+    o.position.copy(base).sub(tmp.copy(spot).applyAxisAngle(UP, place.turn).multiplyScalar(scale))
     if (roomThings.current) {
       roomThings.current.position.copy(place.at)
       roomThings.current.rotation.set(0, place.face, 0)
