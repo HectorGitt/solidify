@@ -7,7 +7,7 @@ import { HTTPException } from 'hono/http-exception'
 import { streamSSE } from 'hono/streaming'
 import { z } from 'zod'
 import type { AuthUser, Verifier } from './auth.js'
-import type { Db } from './db.js'
+import type { Db, Row } from './db.js'
 import { MAX_ENTRIES, emptyProgress, entryCount, mergeProgress, progressSchema, type Progress } from './progress.js'
 import { SYSTEM_PROMPT, buildTurns, tutorRequest, type TutorModel } from './tutor.js'
 import { FakeNoteVision, ModelReplyError, create3dRequest, noteAnalyzeRequest, noteRefineRequest, readCreateReply, type Create3dRequest, type ModelUsage, type NoteVisionModel } from './note3d.js'
@@ -942,7 +942,7 @@ export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision
   /** give someone roles (by email, signed up or not), or take them away; an owner stays an admin */
   app.put('/v1/admin/people', async (c) => {
     const u = await requireAdmin(c)
-    const { email, roles } = await body(c, z.object({ email: z.string().trim().toLowerCase().email().max(200), roles: z.array(z.enum(STAFF_ROLES)).max(4) }))
+    const { email, roles } = await body(c, z.object({ email: z.string().trim().toLowerCase().email().max(200), roles: z.array(z.enum(STAFF_ROLES)).max(STAFF_ROLES.length) }))
     const before = await rolesOfEmail(email)
     const wanted = [...new Set(roles)].filter((r) => !(r === 'admin' && isOwner(email)))
     if (isOwner(email) && !roles.includes('admin')) throw fail(400, 'This is an owner (set on the server): they are always an admin.')
@@ -955,6 +955,94 @@ export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision
     const after = await rolesOfEmail(email)
     if (after.join() !== before.join()) await audit(await whoIs(u), 'changed roles', { type: 'reviewers', title: email }, `${email}: ${before.join(', ') || 'none'} → ${after.join(', ') || 'none'}`)
     return c.json({ email, roles: after })
+  })
+
+  /*
+   * Every account, for admins: searched, filtered, sorted and a page at a time (or all as CSV). Accounts are
+   * read in one go and kept for 30 s per server, which is fine up to some tens of thousands of accounts.
+   */
+  let accountsCache: { at: number; rows: Row<UserDoc & { lastSeenAt?: number; referredBy?: string }>[] } | null = null
+  const allAccounts = async () => {
+    if (!accountsCache || now() - accountsCache.at > 30_000 || now() < accountsCache.at) accountsCache = { at: now(), rows: await db.list<UserDoc & { lastSeenAt?: number; referredBy?: string }>('users', { limit: 50_000 }) }
+    return accountsCache.rows
+  }
+  const accountsQuery = z.object({
+    q: z.string().trim().toLowerCase().max(200).default(''),
+    type: z.enum(['all', 'student', 'teacher']).default('all'),
+    // a staff role, "staff" (any), or "none"
+    role: z.enum(['all', 'staff', 'none', ...STAFF_ROLES]).default('all'),
+    active: z.enum(['all', '7', '30', 'inactive']).default('all'),
+    sort: z.enum(['joined', 'seen', 'name', 'email']).default('joined'),
+    dir: z.enum(['asc', 'desc']).default('desc'),
+    page: z.coerce.number().int().min(1).max(10_000).default(1),
+    size: z.coerce.number().int().min(10).max(200).default(50),
+  })
+  const findAccounts = async (f: z.infer<typeof accountsQuery>) => {
+    const staff = new Map<string, StaffRole[]>()
+    for (const r of await db.list<{ email: string; roles: StaffRole[] }>('roles', { limit: 5000 })) staff.set(r.data.email, r.data.roles)
+    for (const e of await getReviewers()) staff.set(e, [...new Set([...(staff.get(e) ?? []), 'reviewer' as StaffRole])])
+    for (const e of config.adminEmails) staff.set(e, [...new Set(['admin' as StaffRole, ...(staff.get(e) ?? [])])])
+    const t = now()
+    const all = (await allAccounts()).map((r) => {
+      const email = (r.data.email ?? '').toLowerCase()
+      return {
+        uid: r.id,
+        email,
+        name: r.data.displayName ?? '',
+        type: r.data.role === 'teacher' ? ('teacher' as const) : ('student' as const),
+        joined: r.data.createdAt ?? 0,
+        lastSeen: r.data.lastSeenAt ?? null,
+        roles: staff.get(email) ?? [],
+        owner: isOwner(email),
+        referredBy: r.data.referredBy ?? null,
+      }
+    })
+    const seen = (a: (typeof all)[number]) => a.lastSeen ?? a.joined
+    const rows = all.filter(
+      (a) =>
+        (!f.q || a.email.includes(f.q) || a.name.toLowerCase().includes(f.q) || a.uid === f.q) &&
+        (f.type === 'all' || a.type === f.type) &&
+        (f.role === 'all' || (f.role === 'staff' ? a.roles.length > 0 : f.role === 'none' ? a.roles.length === 0 : a.roles.includes(f.role))) &&
+        (f.active === 'all' || (f.active === 'inactive' ? t - seen(a) > 30 * 86_400_000 : t - seen(a) <= Number(f.active) * 86_400_000)),
+    )
+    const key = { joined: (a: (typeof all)[number]) => a.joined, seen, name: (a: (typeof all)[number]) => a.name.toLowerCase(), email: (a: (typeof all)[number]) => a.email }[f.sort]
+    rows.sort((x, y) => {
+      const a = key(x)
+      const b = key(y)
+      const c = typeof a === 'number' && typeof b === 'number' ? a - b : String(a).localeCompare(String(b))
+      return f.dir === 'asc' ? c : -c
+    })
+    const counts = {
+      all: all.length,
+      students: all.filter((a) => a.type === 'student').length,
+      teachers: all.filter((a) => a.type === 'teacher').length,
+      staff: all.filter((a) => a.roles.length).length,
+      active7: all.filter((a) => t - seen(a) <= 7 * 86_400_000).length,
+      new7: all.filter((a) => t - a.joined <= 7 * 86_400_000).length,
+    }
+    return { rows, counts }
+  }
+  app.get('/v1/admin/accounts', async (c) => {
+    await requireAdmin(c)
+    const f = accountsQuery.parse(c.req.query())
+    const { rows, counts } = await findAccounts(f)
+    const pages = Math.max(1, Math.ceil(rows.length / f.size))
+    const page = Math.min(f.page, pages)
+    return c.json({ accounts: rows.slice((page - 1) * f.size, page * f.size), total: rows.length, page, pages, size: f.size, counts })
+  })
+  app.get('/v1/admin/accounts.csv', async (c) => {
+    await requireAdmin(c)
+    const { rows } = await findAccounts(accountsQuery.parse(c.req.query()))
+    const cell = (v: unknown) => {
+      const t = v == null ? '' : String(v)
+      // quoted, and never read as a formula by a spreadsheet
+      return `"${(/^[=+\-@]/.test(t) ? `'${t}` : t).replace(/"/g, '""')}"`
+    }
+    const iso = (n: number | null) => (n ? new Date(n).toISOString().slice(0, 10) : '')
+    const lines = [['name', 'email', 'type', 'joined', 'last seen', 'roles', 'referred by'].join(','), ...rows.map((a) => [a.name, a.email, a.type, iso(a.joined), iso(a.lastSeen), a.roles.join(' '), a.referredBy].map(cell).join(','))]
+    c.header('Content-Type', 'text/csv; charset=utf-8')
+    c.header('Content-Disposition', 'attachment; filename="solidify-accounts.csv"')
+    return c.body(lines.join('\r\n'))
   })
 
   /** an account by email: profile, roles and today's use, for admins */
