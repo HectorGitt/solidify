@@ -10,6 +10,7 @@ import { Part, PartMesh } from '@/render/Part'
 import { useView } from '@/render/view'
 import { resolveAnnotation, resolveAssembly, type Placement } from './assembly'
 import { buildPartGeometry } from './builder'
+import { fitView } from './fitView'
 import {
   evalDim,
   evaluateCalculations,
@@ -468,17 +469,14 @@ export function createSceneDefFromSpec(
   spec: NoteSceneSpec,
   params: Record<string, number>,
 ): SceneDef {
-  const extent = spec.extent ?? 0.35
-  const camera = spec.camera ?? {
-    position: [extent * 1.45, extent * 1.05, extent * 1.55],
-    target: [0, 0, 0],
-  }
+  // framed from where the parts actually are, not Gemini's guess at the distance
+  const { extent, floorY, camera } = fitView(spec, params)
   return {
     id: spec.id,
     title: spec.title,
     summary: spec.summary,
     extent,
-    floorY: spec.floorY ?? -extent * 0.45,
+    floorY,
     camera,
     Viewport: () => <NoteSceneViewport spec={spec} params={params} />,
   }
@@ -503,12 +501,13 @@ export function useLiveSceneDef(spec: NoteSceneSpec | null, params: Record<strin
       },
     [store],
   )
-  const extent = spec?.extent ?? 0.35
-  const cameraKey = JSON.stringify(spec?.camera ?? null)
+  // framed from where the parts actually are (the camera only moves to it when the page's view key changes,
+  // so a model streaming in, or a slider moving, does not shift the view)
+  const fit = useMemo(() => (spec ? fitView(spec, params) : null), [spec, params])
+  const fitKey = fit ? JSON.stringify([+fit.extent.toFixed(3), +fit.floorY.toFixed(3), fit.camera.position.map((v) => +v.toFixed(3)), fit.camera.target.map((v) => +v.toFixed(3))]) : ''
   return useMemo(() => {
-    if (!spec) return null
-    const camera = spec.camera ?? { position: [extent * 1.45, extent * 1.05, extent * 1.55] as [number, number, number], target: [0, 0, 0] as [number, number, number] }
-    return { id: spec.id, title: spec.title, summary: spec.summary, extent, floorY: spec.floorY ?? -extent * 0.45, camera, Viewport }
+    if (!spec || !fit) return null
+    return { id: spec.id, title: spec.title, summary: spec.summary, extent: fit.extent, floorY: fit.floorY, camera: fit.camera, Viewport }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [spec?.id, spec?.title, spec?.summary, extent, spec?.floorY, cameraKey, Viewport, !!spec])
+  }, [spec?.id, spec?.title, spec?.summary, fitKey, Viewport, !!spec])
 }
