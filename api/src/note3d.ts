@@ -114,7 +114,8 @@ Rules:
 - Use "kind": "catalog" only for one of these rigs, with params named exactly as listed and in the units listed:
 ${catalogPromptText()}
 - Otherwise, for a single machine part shown in orthographic, isometric or sectional views, use "kind": "procedural" with a NoteSceneSpec built from simple solids (box, cylinder, tube, cone, lathe, extrude, gear, hexNut, hexBolt) and holes cut from them.
-- For graphs, equations, photos and anything else, use "kind": "none". Do not force a figure onto a rig it is not.`
+- For a drawing of a machine, mechanism or structure that is neither one of those rigs nor a single part (a truss, a frame, a beam with its supports, an assembly, a linkage), use "kind": "build" with nothing else in visualization: Solidify builds it from the drawing.
+- For graphs, equations, tables, photos and anything else, use "kind": "none". Do not force a figure onto a rig it is not.`
 
 
 /** a lab model id the model named, kept only if it is a real one */
