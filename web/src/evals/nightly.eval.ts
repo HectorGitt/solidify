@@ -82,7 +82,7 @@ async function buildOne(prompt: string): Promise<{ reply: Record<string, unknown
   }
 }
 
-it('nightly test run', { timeout: 60 * 60_000 }, async () => {
+it('nightly test run', { timeout: 150 * 60_000 }, async () => {
   if (!API || !TOKEN) throw new Error('Set EVAL_API and EVAL_TOKEN.')
   const { settings, topics: topicList } = await nightSettings()
   if (settings.paused && process.env.EVAL_LABEL === 'nightly') {
@@ -117,7 +117,24 @@ it('nightly test run', { timeout: 60 * 60_000 }, async () => {
   if (!DRY) await post('/v1/evals/runs', { runAt: Date.now(), label: process.env.EVAL_LABEL, cases: results, summary })
 
   // new models for the library: built and scored the same way, and only the good ones queued for review
-  const topics = topicsFor(Math.floor(Date.now() / 86_400_000), DRAFTS, topicList)
+  // tonight's topics from the server's pool: each handed out once, topped up by Gemini when it runs low
+  // (the built-in rotation only if the API can't say)
+  let topics: DraftTopic[] = []
+  if (DRAFTS > 0) {
+    try {
+      const res = await fetch(`${API}/v1/evals/topics/next`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-eval-token': TOKEN },
+        body: JSON.stringify({ want: Math.min(100, DRAFTS), fallback: topicList.slice(0, 300) }),
+      })
+      if (!res.ok) throw new Error(String(res.status))
+      const got = (await res.json()) as { topics: DraftTopic[]; added: number }
+      topics = got.topics
+      if (got.added) console.log(`${got.added} new topics suggested for the list`)
+    } catch {
+      topics = topicsFor(Math.floor(Date.now() / 86_400_000), DRAFTS, topicList)
+    }
+  }
   if (topics.length) console.log(`\ndrafting ${topics.length} new models`)
   await pool(topics, async (t) => {
     try {

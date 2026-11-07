@@ -9,6 +9,6 @@ export default defineConfig({
     ...base.test,
     // replaced, not merged: only the nightly run
     include: ['src/evals/**/*.eval.ts'],
-    testTimeout: 60 * 60_000,
+    testTimeout: 150 * 60_000,
   },
 })

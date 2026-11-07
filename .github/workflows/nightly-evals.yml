@@ -18,7 +18,8 @@ on:
 jobs:
   evals:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    # up to 100 drafts as well as the tests: about an hour and a half at three builds at a time
+    timeout-minutes: 150
     defaults:
       run:
         working-directory: web
