@@ -105,37 +105,52 @@ export function ModuleTile({ m, academic, big }: { m: ModuleDef; academic: boole
           {academic && exam > 0 ? <span className="text-warn">· {exam} often examined</span> : null}
         </div>
         <h3 className={`mt-1.5 font-semibold tracking-[-0.02em] text-ink ${big ? 'text-[28px]' : 'text-[21px]'}`}>{m.title}</h3>
-        <p className={`mt-1 text-[13.5px] leading-relaxed text-mute [@media(hover:hover)]:group-hover:hidden ${big ? 'line-clamp-2 max-w-[480px]' : 'line-clamp-1'}`}>{m.blurb}</p>
-        {facts?.readings.length ? (
-          <div className="mt-3 [@media(hover:hover)]:group-hover:hidden">
-            <RigReadings readings={facts.readings} max={big ? 3 : 2} />
-          </div>
-        ) : null}
-        {focus ? (
-          <div className="mt-2 hidden [@media(hover:hover)]:group-hover:block">
-            <div className="truncate text-[12px] text-mute">
-              <span className="font-medium text-ink">{focus.title}</span>
-              {facts?.readings.length ? ` · ${facts.readings.slice(0, 2).map((r) => `${r.label} ${r.value}${r.unit ? ` ${r.unit}` : ''}`).join(' · ')}` : ` · ${focus.summary}`}
-            </div>
-            {big && facts?.equations[0] ? (
-              <div className="mt-1">
-                <RigEquations equations={facts.equations} max={1} />
+        {/* at rest: the blurb and the featured rig's figures; on hover (pointer devices) they fold away and the
+            rigs inside slide up, one after another; touch screens keep the rest view, the Labs page lists the rigs */}
+        <div className="grid grid-rows-[1fr] opacity-100 transition-[grid-template-rows,opacity] duration-500 ease-out motion-reduce:transition-none [@media(hover:hover)]:group-hover:grid-rows-[0fr] [@media(hover:hover)]:group-hover:opacity-0 [@media(hover:hover)]:group-focus-within:grid-rows-[0fr] [@media(hover:hover)]:group-focus-within:opacity-0">
+          <div className="min-h-0 overflow-hidden">
+            <p className={`mt-1 text-[13.5px] leading-relaxed text-mute ${big ? 'line-clamp-2 max-w-[480px]' : 'line-clamp-1'}`}>{m.blurb}</p>
+            {facts?.readings.length ? (
+              <div className="mt-3">
+                <RigReadings readings={facts.readings} max={big ? 3 : 2} />
               </div>
             ) : null}
           </div>
-        ) : null}
-        <ul className="pointer-events-auto mt-2 hidden gap-2 [@media(hover:hover)]:group-hover:flex [@media(hover:hover)]:group-focus-within:flex">
-          {strip.map((s) => (
-            <li key={s.id} className="min-w-0 flex-1">
-              <Link to={`/m/${m.id}/${s.id}`} title={s.summary} onMouseEnter={() => setFocusId(s.id)} onFocus={() => setFocusId(s.id)} className="block rounded-xl border border-line-2 bg-[var(--color-scrim)] p-1.5 backdrop-blur-md transition-colors hover:border-accent/60">
-                <span className="relative block aspect-[16/10] overflow-hidden rounded-lg bg-[var(--color-stage)]">
-                  <Media name={`scenes/${m.id}--${s.id}`} alt="" className="absolute inset-0 h-full w-full object-cover" />
-                </span>
-                <span className="mt-1 block truncate px-0.5 text-[11.5px] font-medium text-ink">{s.title}</span>
-              </Link>
-            </li>
-          ))}
-        </ul>
+        </div>
+        <div className="grid grid-rows-[0fr] transition-[grid-template-rows] duration-500 ease-out motion-reduce:transition-none [@media(hover:hover)]:group-hover:grid-rows-[1fr] [@media(hover:hover)]:group-focus-within:grid-rows-[1fr]">
+          <div className="pointer-events-auto min-h-0 overflow-hidden">
+            {focus ? (
+              <div className="mt-2 translate-y-2 opacity-0 transition duration-300 motion-reduce:transition-none [@media(hover:hover)]:group-hover:translate-y-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-within:translate-y-0 [@media(hover:hover)]:group-focus-within:opacity-100">
+                <div className="truncate text-[12px] text-mute">
+                  <span className="font-medium text-ink">{focus.title}</span>
+                  {facts?.readings.length ? ` · ${facts.readings.slice(0, 2).map((r) => `${r.label} ${r.value}${r.unit ? ` ${r.unit}` : ''}`).join(' · ')}` : ` · ${focus.summary}`}
+                </div>
+                {big && facts?.equations[0] ? (
+                  <div className="mt-1">
+                    <RigEquations equations={facts.equations} max={1} />
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+            <ul className="mt-2 flex gap-2 pb-0.5">
+              {strip.map((s, i) => (
+                <li
+                  key={s.id}
+                  // each card rises a beat after the one before it
+                  style={{ transitionDelay: `${90 + i * 70}ms` }}
+                  className="min-w-0 flex-1 translate-y-4 opacity-0 transition duration-500 ease-out motion-reduce:translate-y-0 motion-reduce:transition-none [@media(hover:hover)]:group-hover:translate-y-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-within:translate-y-0 [@media(hover:hover)]:group-focus-within:opacity-100"
+                >
+                  <Link to={`/m/${m.id}/${s.id}`} title={s.summary} onMouseEnter={() => setFocusId(s.id)} onFocus={() => setFocusId(s.id)} className="block rounded-xl border border-line-2 bg-[var(--color-scrim)] p-1.5 backdrop-blur-md transition-[border-color,transform] duration-200 hover:-translate-y-0.5 hover:border-accent/60">
+                    <span className="relative block aspect-[16/10] overflow-hidden rounded-lg bg-[var(--color-stage)]">
+                      <Media name={`scenes/${m.id}--${s.id}`} alt="" className="absolute inset-0 h-full w-full object-cover" />
+                    </span>
+                    <span className="mt-1 block truncate px-0.5 text-[11.5px] font-medium text-ink">{s.title}</span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
         {academic ? (
           <div className="mt-3 max-w-[260px]">
             <ModuleProgress moduleId={m.id} />
