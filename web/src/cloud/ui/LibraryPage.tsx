@@ -6,6 +6,7 @@ import { CardGridSkeleton } from '@/ui/Skeleton'
 import { ApiError } from '../api'
 import { listLibrary, type LibraryCard } from '../admin'
 import { useOpenLibrary } from '../library'
+import { useAuth } from '../auth'
 import { ghostBtn, inputCls, primaryBtn } from './Modal'
 import { LibraryCardView } from './LibraryCardView'
 
@@ -16,6 +17,7 @@ export default function LibraryPage() {
   const [query, setQuery] = useState('')
   const [topic, setTopic] = useState('all')
   const { opening, open } = useOpenLibrary()
+  const signedIn = useAuth((st) => st.status) === 'signed-in'
 
   const load = () => {
     setError(null)
@@ -42,6 +44,18 @@ export default function LibraryPage() {
       }
     >
       <div className="pb-16">
+        {/* signed out: what opening needs, and what needs no account at all */}
+        {!signedIn ? (
+          <p className="mb-5 rounded-2xl border border-line bg-panel px-4 py-3 text-[13px] text-mute">
+            <button type="button" onClick={() => useAuth.getState().openDialog()} className="font-medium text-accent hover:underline">
+              Sign in
+            </button>{' '}
+            to open a model as your own copy. The labs need no account: every rig runs in your browser ·{' '}
+            <Link to="/labs" className="font-medium text-accent hover:underline">
+              Open the labs
+            </Link>
+          </p>
+        ) : null}
         {error ? (
           <section className="flex flex-col items-center gap-3 rounded-3xl border border-line bg-panel px-6 py-12 text-center">
             <p className="text-[13.5px] text-ink">{error}</p>
