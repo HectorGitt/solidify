@@ -1,4 +1,5 @@
 import { isBusy, retryBusy } from './retry.js'
+import { RateLimiter, clientIp } from './ratelimit.js'
 import { FakeEmbedder, cosine, keywordScore, type Embedder } from './embed.js'
 import { Hono, type Context } from 'hono'
 import { cors } from 'hono/cors'
@@ -25,6 +26,10 @@ export interface Config {
   /** how close (cosine, 0 to 1) a library model must be to be offered for a request, and to be given to a build to start from */
   matchMin?: number
   referenceMin?: number
+  /** App Check: off (not checked), monitor (checked and counted, never refused) or enforce (refused without it) */
+  appCheck?: 'off' | 'monitor' | 'enforce'
+  /** per-address limits on public routes (tests may turn them off) */
+  rateLimits?: boolean
   /** waits between retries when the model is busy (tests use zeros); default 2, 6 and 15 s */
   retryWaits?: number[]
   /** shared secret for the nightly test run (at least 24 characters); unset = no nightly runs */
@@ -42,6 +47,8 @@ export interface Deps {
   config: Config
   /** text embeddings for matching requests to the library (a word-count stand-in when not given) */
   embedder?: Embedder
+  /** checks an App Check token (proof a request came from the real app); absent = none checked */
+  appChecker?: { verify(token: string): Promise<boolean> }
 }
 
 type Role = 'student' | 'teacher'
@@ -132,7 +139,7 @@ const randomId = () => crypto.randomUUID().replace(/-/g, '').slice(0, 16)
 
 const day = (t: number) => new Date(t).toISOString().slice(0, 10)
 
-export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision(), embedder = new FakeEmbedder(), config }: Deps) {
+export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision(), embedder = new FakeEmbedder(), appChecker, config }: Deps) {
   const now = config.now ?? Date.now
   const app = new Hono<Env>()
 
@@ -140,11 +147,38 @@ export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision
     '*',
     cors({
       origin: (o) => (config.allowedOrigins.includes(o) ? o : null),
-      allowHeaders: ['Authorization', 'Content-Type'],
+      allowHeaders: ['Authorization', 'Content-Type', 'X-Firebase-AppCheck'],
       allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
       maxAge: 3600,
     }),
   )
+
+  /*
+   * Against scraping and floods: limits per address, then App Check (proof the request came from the real
+   * Solidify app, not a script). The nightly run (its token) and preflights are not counted.
+   */
+  const limiter = new RateLimiter(undefined, now)
+  app.use('/v1/*', async (c, next) => {
+    if (c.req.method === 'OPTIONS' || c.req.header('x-eval-token')) return next()
+    if (config.rateLimits !== false) {
+      const over = limiter.check(clientIp(c.req.header('X-Forwarded-For')), c.req.method, c.req.path)
+      if (over) {
+        c.header('Retry-After', String(over.retryAfterS))
+        throw fail(429, `Too many requests. Please wait ${over.retryAfterS} s and try again.`)
+      }
+    }
+    const mode = config.appCheck ?? 'off'
+    if (mode !== 'off') {
+      const token = c.req.header('X-Firebase-AppCheck')
+      const ok = !!token && !!appChecker && (await appChecker.verify(token).catch(() => false))
+      if (!ok) {
+        // counted by day, so the admin page can show how much traffic comes from outside the app before enforcing
+        await db.transact<Record<string, number>>(`appCheckMisses/${day(now())}`, (prev) => ({ ...(prev ?? {}), [token ? 'invalid' : 'missing']: ((prev ?? {})[token ? 'invalid' : 'missing'] ?? 0) + 1 }))
+        if (mode === 'enforce') throw fail(401, 'This request did not come from the Solidify app. Please reload the page.')
+      }
+    }
+    await next()
+  })
 
   // Sign-in is optional on every route; routes that need it call `requireUser`.
   app.use('/v1/*', async (c, next) => {
@@ -506,6 +540,14 @@ export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision
     const rows = await db.list<z.infer<typeof evalRun>>('evalRuns')
     const runs = rows.map((r) => r.data).sort((a, b) => b.runAt - a.runAt)
     return c.json({ runs: runs.slice(0, 90).map(({ runAt, label, summary }) => ({ runAt, label, summary })), latest: runs[0] ?? null, price: await priceNow() })
+  })
+
+  /** requests without a valid App Check token, by day: how much would be refused if App Check were enforced */
+  app.get('/v1/admin/app-check', async (c) => {
+    await requireAdmin(c)
+    const days = Array.from({ length: 14 }, (_, i) => day(now() - i * 86_400_000)).reverse()
+    const rows = await Promise.all(days.map(async (d) => ({ day: d, ...((await db.get<Record<string, number>>(`appCheckMisses/${d}`)) ?? {}) })))
+    return c.json({ mode: config.appCheck ?? 'off', days: rows })
   })
 
   /** the last 30 days of AI actions by kind (count and tokens), and the model's price if configured */
@@ -929,7 +971,7 @@ export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision
       name: account.data.displayName,
       role: account.data.role,
       joined: account.data.createdAt,
-      today: { builds: await used('createUsage'), notePages: await used('noteUsage'), tutor: await used('tutorUsage') },
+      today: { builds: await used('createUsage'), notePages: await used('noteUsage'), tutor: await used('tutorUsage'), libraryModels: await used('libraryFetchUsage') },
       models,
     })
   })
@@ -959,6 +1001,9 @@ export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision
   })
 
   app.get('/v1/library/:id', async (c) => {
+    // the cards are public; the full model is for people signed in, up to a day's worth (staff are not counted)
+    const u = requireUser(c)
+    if (!can(await rolesOfEmail(u.email), 'review')) await spend(u.uid, 'libraryFetchUsage', 100, 'library models')
     const item = await db.get<LibraryDoc>(`library/${libraryId(c.req.param('id'))}`)
     if (!item) throw fail(404, 'Not found.')
     const { checks: _c, embedding: _v, ...rest } = item

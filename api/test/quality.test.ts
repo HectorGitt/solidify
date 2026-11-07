@@ -85,7 +85,7 @@ describe('the model library and its review queue', () => {
     expect(lib.items).toHaveLength(1)
     expect(lib.items[0]).toMatchObject({ id, title: 'Worm and wheel, 30 : 1', parts: 2 })
     expect(lib.items[0].spec).toBeUndefined()
-    const full = (await (await req('GET', `/v1/library/${id}`)).json()) as { spec: { parts: unknown[] } }
+    const full = (await (await req('GET', `/v1/library/${id}`, undefined, asUser('sam'))).json()) as { spec: { parts: unknown[] } }
     expect(full.spec.parts).toHaveLength(2)
     expect(((await (await req('GET', '/v1/library/drafts', undefined, boss)).json()) as { drafts: unknown[] }).drafts).toEqual([])
   })
@@ -98,7 +98,7 @@ describe('the model library and its review queue', () => {
     await req('POST', `/v1/library/drafts/${second.id}/approve`, {}, boss)
     expect((await req('DELETE', `/v1/library/${second.id}`, undefined, asUser('sam'))).status).toBe(403)
     expect((await req('DELETE', `/v1/library/${second.id}`, undefined, boss)).status).toBe(200)
-    expect((await req('GET', `/v1/library/${second.id}`)).status).toBe(404)
+    expect((await req('GET', `/v1/library/${second.id}`, undefined, asUser('sam'))).status).toBe(404)
   })
 
   it('tells the account whether it is an admin', async () => {
@@ -254,7 +254,7 @@ describe('reviewers', () => {
     expect((await req('POST', '/v1/admin/build', { prompt: 'a worm gear' }, rita)).status).toBe(200)
     // publishing records who checked it
     expect((await req('POST', `/v1/library/drafts/${id}/approve`, {}, rita)).status).toBe(200)
-    const item = (await (await req('GET', `/v1/library/${id}`)).json()) as { reviewedBy?: { uid: string } }
+    const item = (await (await req('GET', `/v1/library/${id}`, undefined, asUser('sam'))).json()) as { reviewedBy?: { uid: string } }
     expect(item.reviewedBy?.uid).toBe('rita')
 
     // the rest of the admin page stays the admins'
