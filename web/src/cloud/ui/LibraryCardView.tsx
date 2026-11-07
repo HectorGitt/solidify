@@ -17,7 +17,10 @@ export function LibraryCardView({ item, opening, onOpen }: { item: LibraryCard; 
       {item.topic ? <span className="text-[11px] uppercase tracking-wide text-dim">{item.topic}</span> : null}
       <span className="mt-1 text-[13.5px] font-semibold text-ink group-hover:underline">{item.title}</span>
       <span className="mt-1 line-clamp-2 text-[12px] leading-snug text-mute">{item.prompt}</span>
-      <span className="mt-auto pt-3 text-[11.5px] text-dim">{opening ? 'Opening…' : `${item.parts} parts`}</span>
+      <span className="mt-auto pt-3 text-[11.5px] text-dim">
+        {opening ? 'Opening…' : `${item.parts} parts`}
+        {!opening && item.reviewedBy ? ` · checked by ${item.reviewedBy.name}` : ''}
+      </span>
     </button>
   )
 }

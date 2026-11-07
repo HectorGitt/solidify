@@ -31,6 +31,7 @@ const ModelLab = lazy(() => import('./cloud/ui/ModelLab'))
 const ReadPage = lazy(() => import('./note3d/ReadPage'))
 const PaperPage = lazy(() => import('./cloud/ui/PaperPage'))
 const AdminPage = lazy(() => import('./cloud/ui/AdminPage'))
+const ReviewPage = lazy(() => import('./cloud/ui/ReviewPage'))
 const LibraryPage = lazy(() => import('./cloud/ui/LibraryPage'))
 const LabsPage = lazy(() => import('./ui/LabsPage'))
 // dev only: bare scenes for scripts/capture-tiles.mjs
@@ -70,6 +71,7 @@ export default function App() {
         <Route path="/create/:id" element={page(<ModelLab />, <WorkspaceSkeleton />)} />
         <Route path="/read" element={page(<ReadPage />)} />
         <Route path="/admin" element={page(<AdminPage />)} />
+        <Route path="/review" element={page(<ReviewPage />)} />
         <Route path="/library" element={page(<LibraryPage />)} />
         <Route path="/labs" element={page(<LabsPage />)} />
         {ShotPage ? <Route path="/shot/:moduleId/:sceneId" element={page(<ShotPage />)} /> : null}

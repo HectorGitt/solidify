@@ -28,7 +28,9 @@ import { useProfile } from '../profile'
 import { PublishDialog } from './PublishDialog'
 import { LibraryMatches } from './LibraryMatches'
 import { clearPendingBuild, peekPendingBuild } from '../pendingBuild'
-import { peekPreviewModel } from '../previewModel'
+import { peekPreviewModel, setPreviewModel } from '../previewModel'
+import { updateDraft } from '../admin'
+import { scoreBuild } from '@/evals/score'
 import { ghostBtn, inputCls, primaryBtn } from './Modal'
 import { PartInspector } from './PartInspector'
 import { WorkspaceBodySkeleton } from '@/ui/Skeleton'
@@ -684,8 +686,32 @@ export default function ModelLab() {
     setParams(Object.fromEntries((loaded.parameters ?? []).map((x) => [x.id, x.value])))
     setTurns(viewing.explanation ? [{ id: 'preview', prompt: viewing.prompt, response: viewing.explanation, kind: 'build' }] : [])
     setSaveState('idle')
+    draftBaseRef.current = JSON.stringify([loaded, Object.fromEntries((loaded.parameters ?? []).map((x) => [x.id, x.value]))])
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [routeId])
+
+  /* a draft under review: what the reviewer changes here (sizes, materials, parts) can go back into the draft */
+  const draftBaseRef = useRef('')
+  const [savingDraft, setSavingDraft] = useState(false)
+  const draftChanged = !!viewing?.draftId && !!spec && !live && JSON.stringify([spec, params]) !== draftBaseRef.current
+  const saveToDraft = async () => {
+    if (!viewing?.draftId || !spec) return
+    setSavingDraft(true)
+    try {
+      // the slider settings become the model's own values, then it is scored and pictured again
+      const next = { ...spec, parameters: spec.parameters.map((p) => ({ ...p, value: params[p.id] ?? p.value })) }
+      const { score, checks } = scoreBuild({ id: 'draft', prompt: viewing.prompt }, { spec: next, explanation: viewing.explanation }, 0)
+      const thumbnail = await requestSnapshot({ width: 480 })
+      await updateDraft(viewing.draftId, { spec: next as unknown as Record<string, unknown>, score, checks: checks.filter((c) => c.name !== 'under two minutes'), ...(thumbnail ? { thumbnail } : {}) })
+      draftBaseRef.current = JSON.stringify([spec, params])
+      setPreviewModel({ ...viewing, spec: next as unknown as Record<string, unknown> })
+      toast(`Saved to the draft: now scores ${score}.`, { tone: 'ok' })
+    } catch (e) {
+      toast(e instanceof ApiError ? e.message : 'Couldn’t save to the draft.', { tone: 'warn' })
+    } finally {
+      setSavingDraft(false)
+    }
+  }
 
   // /create/:id opens a saved model
   useEffect(() => {
@@ -887,7 +913,12 @@ export default function ModelLab() {
               {viewMode === 'parametric' ? `Open the lab model: ${matchedCatalog.scene.title}` : 'Back to your model'}
             </button>
           ) : null}
-          {isAdmin && spec && !live ? (
+          {viewing?.draftId ? (
+            <button type="button" disabled={!draftChanged || savingDraft} onClick={() => void saveToDraft()} title={draftChanged ? 'Save your changes into the draft under review' : 'Change sizes, materials or parts to save them to the draft'} className={`${primaryBtn} px-4 py-1.5 text-[12.5px]`}>
+              {savingDraft ? 'Saving…' : 'Save changes to the draft'}
+            </button>
+          ) : null}
+          {isAdmin && spec && !live && !viewing?.draftId ? (
             <button type="button" onClick={() => setPublishing(true)} className={`${ghostBtn} px-4 py-1.5 text-[12.5px]`}>
               Publish
             </button>
