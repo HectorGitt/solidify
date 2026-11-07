@@ -269,3 +269,36 @@ describe('reviewers', () => {
     expect(await db.get(`libraryRejected/${id}`)).toMatchObject({ reason: 'Rods do not reach the crank', by: 'rita' })
   })
 })
+
+describe('the audit trail', () => {
+  const boss = { Authorization: 'Bearer user:boss:Boss' }
+  const rita = { Authorization: 'Bearer user:rita:Rita' }
+  const draft = { title: 'Worm gear set', prompt: 'A worm and worm wheel', spec: { title: 'Worm', parts: [{ id: 'worm' }] }, score: 90 }
+
+  it('records who did what to a draft, through to publishing, and to the settings', async () => {
+    await req('PUT', '/v1/admin/reviewers', { emails: ['rita@example.test'] }, boss)
+    const { id } = (await (await req('POST', '/v1/library/drafts', draft, { 'x-eval-token': TOKEN })).json()) as { id: string }
+    await req('PUT', `/v1/library/drafts/${id}`, { spec: { title: 'Worm', parts: [{ id: 'worm' }, { id: 'wheel' }] }, score: 96 }, rita)
+    await req('PUT', `/v1/library/drafts/${id}`, { checklist: { calculations: true, model: true, text: true }, reviewNotes: 'Ratio is 30 : 1.' }, rita)
+    await req('PUT', `/v1/library/drafts/${id}`, { thumbnail: 'data:image/jpeg;base64,/9j/AAAA' }, rita)
+    await req('POST', `/v1/library/drafts/${id}/approve`, {}, rita)
+    await req('PUT', '/v1/admin/settings', { draftsPerNight: 40 }, boss)
+
+    // the draft's own history, newest first, for a reviewer
+    const history = ((await (await req('GET', `/v1/review/history/${id}`, undefined, rita)).json()) as { entries: { action: string; by: { uid: string }; detail: string }[] }).entries
+    expect(history.map((e) => e.action)).toEqual(['approved and published', 'wrote review notes', 'updated the checklist', 'changed the model', 'drafted'])
+    expect(history.find((e) => e.action === 'drafted')!.by.uid).toBe('nightly')
+    expect(history.find((e) => e.action === 'changed the model')!.detail).toBe('score 90 → 96')
+    // a new picture alone is not a line in the trail
+    expect(history.some((e) => /picture|thumbnail/.test(e.action))).toBe(false)
+
+    // everything, for admins, by person and by action
+    const all = (await (await req('GET', '/v1/admin/audit', undefined, boss)).json()) as { entries: { action: string; detail: string }[]; people: { uid: string }[]; actions: string[] }
+    expect(all.entries[0]).toMatchObject({ action: 'changed settings', detail: 'draftsPerNight: 3 → 40' })
+    expect(all.people.map((p) => p.uid).sort()).toEqual(['boss', 'nightly', 'rita'])
+    expect(all.actions).toContain('added a reviewer')
+    const ritas = (await (await req('GET', '/v1/admin/audit?by=rita', undefined, boss)).json()) as { entries: unknown[] }
+    expect(ritas.entries).toHaveLength(4)
+    expect((await req('GET', '/v1/admin/audit', undefined, rita)).status).toBe(403)
+  })
+})

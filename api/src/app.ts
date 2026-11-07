@@ -218,6 +218,35 @@ export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision
     return u
   }
 
+  /*
+   * The audit trail: who did what to the library, the review queue and the admin settings, and when. Every
+   * change is a line in `audit`, never edited; the admin page lists them and each draft shows its own.
+   */
+  type Who = { uid: string; name: string; email?: string }
+  const NIGHTLY: Who = { uid: 'nightly', name: 'Nightly run' }
+  const whoIs = async (u: { uid: string; email?: string; name?: string }): Promise<Who> => ({
+    uid: u.uid,
+    name: (await db.get<{ displayName?: string }>(`users/${u.uid}`))?.displayName ?? u.name ?? u.email ?? 'Someone',
+    ...(u.email ? { email: u.email } : {}),
+  })
+  type AuditTarget = { type: 'draft' | 'library' | 'settings' | 'reviewers' | 'topics'; id?: string; title?: string }
+  // a counter breaks ties between entries made in the same millisecond, so the order is always the order done
+  let auditSeq = 0
+  const audit = async (by: Who, action: string, target: AuditTarget, detail = '') => {
+    const seq = ++auditSeq
+    await db.set(`audit/${now()}_${String(seq).padStart(6, '0')}_${randomId()}`, { at: now(), seq, by, action, target, detail: detail.slice(0, 500) })
+  }
+  const newestFirst = (a: AuditDoc, b: AuditDoc) => b.at - a.at || (b.seq ?? 0) - (a.seq ?? 0)
+  interface AuditDoc {
+    [k: string]: unknown
+    at: number
+    by: Who
+    action: string
+    target: AuditTarget
+    detail: string
+    seq?: number
+  }
+
   /* ------------------------------------------------------------------ account */
 
   app.get('/v1/me', async (c) => {
@@ -541,23 +570,31 @@ export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision
   })
 
   app.put('/v1/admin/settings', async (c) => {
-    requireAdmin(c)
+    const u = requireAdmin(c)
     const patch = await body(c, settingsSchema.partial())
-    await db.set('settings/quality', { ...(await getSettings()), ...patch })
+    const before = await getSettings()
+    await db.set('settings/quality', { ...before, ...patch })
+    const changes = (Object.keys(patch) as (keyof typeof patch)[])
+      .filter((k) => JSON.stringify(before[k]) !== JSON.stringify(patch[k]))
+      .map((k) => `${k}: ${JSON.stringify(before[k])} → ${JSON.stringify(patch[k])}`)
+    if (changes.length) await audit(await whoIs(u), 'changed settings', { type: 'settings' }, changes.join('; '))
     return c.json({ settings: await getSettings() })
   })
 
   app.put('/v1/admin/topics', async (c) => {
-    requireAdmin(c)
+    const u = requireAdmin(c)
     const { items } = await body(c, z.object({ items: z.array(topicItem).min(1).max(300) }))
+    const had = (await getTopics())?.length
     await db.set('settings/topics', { items })
+    await audit(await whoIs(u), 'edited the topic list', { type: 'topics' }, `${had ?? 'built-in'} → ${items.length} topics`)
     return c.json({ topics: items })
   })
 
   /** back to the built-in list */
   app.delete('/v1/admin/topics', async (c) => {
-    requireAdmin(c)
+    const u = requireAdmin(c)
     await db.delete('settings/topics')
+    await audit(await whoIs(u), 'went back to the built-in topic list', { type: 'topics' })
     return c.json({ topics: null })
   })
 
@@ -719,13 +756,15 @@ export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision
   })
 
   app.post('/v1/library/drafts', async (c) => {
+    let by = NIGHTLY
     if (c.req.header('x-eval-token')) requireEval(c)
-    else requireAdmin(c)
+    else by = await whoIs(requireAdmin(c))
     const d = await body(c, libraryInput)
     if (JSON.stringify(d.spec).length > 300_000) throw fail(413, 'This model is too large to save.')
     const id = randomId()
     await db.set(`libraryDrafts/${id}`, { ...d, parts: Array.isArray(d.spec.parts) ? d.spec.parts.length : 0, createdAt: now() })
     await markDrafted(d.prompt)
+    await audit(by, 'drafted', { type: 'draft', id, title: d.title }, `scored ${d.score}`)
     return c.json({ id }, 201)
   })
 
@@ -737,14 +776,24 @@ export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision
   }
 
   app.put('/v1/library/drafts/:id', async (c) => {
-    await requireReviewer(c)
+    const u = await requireReviewer(c)
     const id = libraryId(c.req.param('id'))
-    const draft = await db.get<LibraryDoc>(`libraryDrafts/${id}`)
+    const draft = await db.get<LibraryDoc & { reviewNotes?: string; checklist?: Record<string, boolean> }>(`libraryDrafts/${id}`)
     if (!draft) throw fail(404, 'Draft not found.')
     const patch = await body(c, libraryInput.partial().extend(reviewFields).partial())
     if (patch.spec && JSON.stringify(patch.spec).length > 300_000) throw fail(413, 'This model is too large to save.')
     const next = { ...draft, ...patch, ...(patch.spec ? { parts: Array.isArray(patch.spec.parts) ? patch.spec.parts.length : 0 } : {}) }
     await db.set(`libraryDrafts/${id}`, next)
+    // the trail: what changed (a new picture alone is not worth a line)
+    const by = await whoIs(u)
+    const target = { type: 'draft' as const, id, title: next.title }
+    if (patch.spec) await audit(by, 'changed the model', target, patch.score !== undefined ? `score ${draft.score} → ${patch.score}` : '')
+    if (patch.title && patch.title !== draft.title) await audit(by, 'renamed', target, `${draft.title} → ${patch.title}`)
+    if (patch.checklist) {
+      const ticks = Object.entries(patch.checklist).filter(([k, v]) => draft.checklist?.[k] !== v)
+      if (ticks.length) await audit(by, 'updated the checklist', target, ticks.map(([k, v]) => `${v ? 'ticked' : 'unticked'} ${k}`).join(', '))
+    }
+    if (patch.reviewNotes !== undefined && patch.reviewNotes !== (draft.reviewNotes ?? '')) await audit(by, 'wrote review notes', target, patch.reviewNotes)
     return c.json({ id, ...next })
   })
 
@@ -762,10 +811,12 @@ export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision
     if (!draft) throw fail(404, 'Draft not found.')
     const patch = await body(c, z.object({ title: libraryInput.shape.title.optional() }))
     // who checked it, and when, goes with it into the library
-    const reviewedBy = { uid: u.uid, name: (await db.get<{ displayName?: string }>(`users/${u.uid}`))?.displayName ?? u.name ?? 'Reviewer' }
+    const by = await whoIs(u)
+    const reviewedBy = { uid: by.uid, name: by.name }
     const published = { ...draft, ...(patch.title ? { title: patch.title } : {}), reviewedBy, publishedAt: now() }
     await db.set(`library/${id}`, published)
     await db.delete(`libraryDrafts/${id}`)
+    await audit(by, 'approved and published', { type: 'library', id, title: published.title }, `score ${draft.score}`)
     await embedOne(id, published)
     return c.json({ ok: true })
   })
@@ -778,7 +829,29 @@ export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision
     const reason = (c.req.query('reason') ?? '').trim().slice(0, 500)
     if (draft) await db.set(`libraryRejected/${id}`, { title: draft.title, prompt: draft.prompt, topic: draft.topic ?? '', reason, by: u.uid, at: now() })
     await db.delete(`libraryDrafts/${id}`)
+    if (draft) await audit(await whoIs(u), 'rejected', { type: 'draft', id, title: draft.title }, reason)
     return c.json({ ok: true })
+  })
+
+  /** the audit trail, newest first, for admins: optionally one person's, one action's, or one model's */
+  app.get('/v1/admin/audit', async (c) => {
+    requireAdmin(c)
+    const by = c.req.query('by')
+    const action = c.req.query('action')
+    const target = c.req.query('target')
+    const rows = (await db.list<AuditDoc>('audit', { limit: 5000 })).map((r) => r.data).sort(newestFirst)
+    const people = [...new Map(rows.map((r) => [r.by.uid, r.by])).values()]
+    const actions = [...new Set(rows.map((r) => r.action))].sort()
+    const entries = rows.filter((r) => (!by || r.by.uid === by) && (!action || r.action === action) && (!target || r.target.id === target)).slice(0, 300)
+    return c.json({ entries, people, actions })
+  })
+
+  /** one draft's (or published model's) history, for the reviewer deciding on it */
+  app.get('/v1/review/history/:id', async (c) => {
+    await requireReviewer(c)
+    const id = libraryId(c.req.param('id'))
+    const rows = (await db.list<AuditDoc>('audit', { limit: 5000 })).map((r) => r.data).filter((r) => r.target.id === id)
+    return c.json({ entries: rows.sort(newestFirst) })
   })
 
   /** the reviewer list, for admins */
@@ -791,7 +864,11 @@ export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision
     requireAdmin(c)
     const { emails } = await body(c, z.object({ emails: z.array(z.string().trim().toLowerCase().email().max(200)).max(100) }))
     const unique = [...new Set(emails)]
+    const before = await getReviewers()
     await db.set('settings/reviewers', { emails: unique })
+    const by = await whoIs(requireAdmin(c))
+    for (const e of unique.filter((x) => !before.includes(x))) await audit(by, 'added a reviewer', { type: 'reviewers' }, e)
+    for (const e of before.filter((x) => !unique.includes(x))) await audit(by, 'removed a reviewer', { type: 'reviewers' }, e)
     return c.json({ emails: unique })
   })
 
@@ -811,33 +888,43 @@ export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision
   })
 
   app.delete('/v1/library/:id', async (c) => {
-    requireAdmin(c)
-    await db.delete(`library/${libraryId(c.req.param('id'))}`)
+    const u = requireAdmin(c)
+    const id = libraryId(c.req.param('id'))
+    const item = await db.get<LibraryDoc>(`library/${id}`)
+    await db.delete(`library/${id}`)
     dropIndex()
+    if (item) await audit(await whoIs(u), 'unpublished', { type: 'library', id, title: item.title })
     return c.json({ ok: true })
   })
 
   /** an admin publishes a model straight to the library (from the workspace), skipping the queue */
   app.post('/v1/library', async (c) => {
-    requireAdmin(c)
+    const u = requireAdmin(c)
     const d = await body(c, libraryInput)
     if (JSON.stringify(d.spec).length > 300_000) throw fail(413, 'This model is too large to save.')
     const id = randomId()
-    const published = { ...d, parts: Array.isArray(d.spec.parts) ? d.spec.parts.length : 0, createdAt: now(), publishedAt: now() }
+    const by = await whoIs(u)
+    const published = { ...d, parts: Array.isArray(d.spec.parts) ? d.spec.parts.length : 0, reviewedBy: { uid: by.uid, name: by.name }, createdAt: now(), publishedAt: now() }
     await db.set(`library/${id}`, published)
+    await audit(by, 'published directly', { type: 'library', id, title: d.title }, `score ${d.score}`)
     await embedOne(id, published)
     return c.json({ id }, 201)
   })
 
   /** retitle or re-topic a published model */
   app.put('/v1/library/:id', async (c) => {
-    requireAdmin(c)
+    const u = requireAdmin(c)
     const id = libraryId(c.req.param('id'))
     const item = await db.get<LibraryDoc>(`library/${id}`)
     if (!item) throw fail(404, 'Not found.')
     const patch = await body(c, z.object({ title: libraryInput.shape.title, topic: z.string().trim().max(60), thumbnail: libraryInput.shape.thumbnail }).partial())
     const next = { ...item, ...patch }
     await db.set(`library/${id}`, next)
+    const changed = [
+      patch.title && patch.title !== item.title ? `title: ${item.title} → ${patch.title}` : '',
+      patch.topic !== undefined && patch.topic !== (item.topic ?? '') ? `subject: ${item.topic ?? '—'} → ${patch.topic || '—'}` : '',
+    ].filter(Boolean)
+    if (changed.length) await audit(await whoIs(u), 'edited a published model', { type: 'library', id, title: next.title }, changed.join('; '))
     // a new title or subject changes what it matches
     if (patch.title || patch.topic !== undefined) await embedOne(id, next)
     return c.json({ ok: true })
