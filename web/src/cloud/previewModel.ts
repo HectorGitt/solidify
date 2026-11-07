@@ -9,6 +9,8 @@ export interface PreviewModel {
   explanation?: string
   /** where "back" goes (the admin page tab it came from) */
   backTo: string
+  /** a draft under review: changes made in the workspace can be saved back to it */
+  draftId?: string
 }
 
 let preview: PreviewModel | null = null

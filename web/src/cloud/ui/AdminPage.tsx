@@ -18,6 +18,9 @@ import {
   approveDraft,
   costOf,
   getAdminSettings,
+  getReviewers,
+  saveReviewers,
+  type ReviewChecklist,
   nextTopics,
   getLibraryItem,
   listLibrary,
@@ -50,7 +53,7 @@ import {
 import { ghostBtn, inputCls, primaryBtn } from './Modal'
 import { ThumbnailMaker } from './ThumbnailMaker'
 
-type Tab = 'quality' | 'review' | 'library' | 'feedback' | 'waitlist' | 'settings'
+type Tab = 'quality' | 'review' | 'library' | 'reviewers' | 'feedback' | 'waitlist' | 'settings'
 
 /** scores a build made from the admin page with the nightly run's own checks */
 function scoreReply(prompt: string, reply: BuildReply, caseId?: string) {
@@ -553,12 +556,35 @@ function Quality() {
 
 /* ------------------------------------------------------------------ review queue */
 
-function DraftCard({ d, onDone, onChanged }: { d: LibraryDraft; onDone: (approved: boolean) => void; onChanged: (d: LibraryDraft) => void }) {
+const CHECKS: [keyof ReviewChecklist, string][] = [
+  ['calculations', 'Calculations and graphs checked'],
+  ['model', 'Model looks right: every part in place and held'],
+  ['text', 'Title, labels and explanation clear'],
+]
+
+function DraftCard({ d, onDone, onChanged, backTo }: { d: LibraryDraft; onDone: (approved: boolean) => void; onChanged: (d: LibraryDraft) => void; backTo: string }) {
   const navigate = useNavigate()
   const [title, setTitle] = useState(d.title)
   const [busy, setBusy] = useState<null | 'open' | 'approve' | 'reject' | 'fix' | 'rebuild'>(null)
   const [fixing, setFixing] = useState(false)
   const [note, setNote] = useState('')
+  // the review: what has been checked, and the reviewer's notes (kept on the draft)
+  const [checklist, setChecklist] = useState<ReviewChecklist>(d.checklist ?? {})
+  const [notes, setNotes] = useState(d.reviewNotes ?? '')
+  const [rejecting, setRejecting] = useState(false)
+  const [reason, setReason] = useState('')
+  const allChecked = CHECKS.every(([k]) => checklist[k])
+  const tick = (k: keyof ReviewChecklist, v: boolean) => {
+    const next = { ...checklist, [k]: v }
+    setChecklist(next)
+    void updateDraft(d.id, { checklist: next }).catch(() => toast('Couldn’t save that tick.', { tone: 'warn' }))
+  }
+  const saveNotes = () => {
+    if ((d.reviewNotes ?? '') === notes.trim()) return
+    void updateDraft(d.id, { reviewNotes: notes.trim() })
+      .then(() => onChanged({ ...d, reviewNotes: notes.trim() }))
+      .catch(() => toast('Couldn’t save the notes.', { tone: 'warn' }))
+  }
 
   /** a change asked of Gemini (or a fresh build), scored again and saved over the draft */
   const remake = async (kind: 'fix' | 'rebuild') => {
@@ -586,12 +612,12 @@ function DraftCard({ d, onDone, onChanged }: { d: LibraryDraft; onDone: (approve
     try {
       if (kind === 'open') {
         // the full workspace, as a preview: nothing is saved to My models
-        setPreviewModel({ title: d.title, prompt: d.prompt, spec: d.spec, explanation: d.explanation, backTo: '/admin?tab=review' })
+        setPreviewModel({ title: d.title, prompt: d.prompt, spec: d.spec, explanation: d.explanation, backTo, draftId: d.id })
         navigate('/create/preview')
         return
       }
       if (kind === 'approve') await approveDraft(d.id, title.trim() && title.trim() !== d.title ? title.trim() : undefined)
-      else await rejectDraft(d.id)
+      else await rejectDraft(d.id, reason.trim() || undefined)
       toast(kind === 'approve' ? `Published “${title.trim() || d.title}”.` : 'Draft rejected.')
       onDone(kind === 'approve')
     } catch (e) {
@@ -621,6 +647,43 @@ function DraftCard({ d, onDone, onChanged }: { d: LibraryDraft; onDone: (approve
         {d.parts} parts · drafted {dateTime(d.createdAt)}
       </p>
       {d.checks ? <FailedChecks checks={d.checks} /> : null}
+      <fieldset className="rounded-xl border border-line px-3 py-2.5">
+        <legend className="px-1 text-[11px] font-medium uppercase tracking-wide text-dim">Review</legend>
+        {CHECKS.map(([k, label]) => (
+          <label key={k} className="flex cursor-pointer items-center gap-2 py-0.5 text-[12.5px] text-ink/90">
+            <input type="checkbox" checked={!!checklist[k]} onChange={(e) => tick(k, e.target.checked)} className="h-3.5 w-3.5 accent-[var(--color-accent)]" />
+            {label}
+          </label>
+        ))}
+        <textarea
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          onBlur={saveNotes}
+          rows={2}
+          maxLength={2000}
+          placeholder="Notes: what you checked, what you changed"
+          className={`${inputCls} mt-2 text-[12.5px]`}
+        />
+      </fieldset>
+      {rejecting ? (
+        <form
+          className="flex flex-col gap-2"
+          onSubmit={(e) => {
+            e.preventDefault()
+            void act('reject')
+          }}
+        >
+          <input autoFocus value={reason} onChange={(e) => setReason(e.target.value)} maxLength={500} placeholder="Why? e.g. the rods don’t reach the crank" className={`${inputCls} text-[12.5px]`} />
+          <div className="flex gap-2">
+            <button type="submit" disabled={!!busy} className={`${smallBtn} bg-warn/15 text-warn hover:bg-warn/25`}>
+              {busy === 'reject' ? 'Rejecting…' : 'Reject the draft'}
+            </button>
+            <button type="button" disabled={!!busy} onClick={() => setRejecting(false)} className={`${smallBtn} text-mute hover:text-ink`}>
+              Keep it
+            </button>
+          </div>
+        </form>
+      ) : null}
       {fixing ? (
         <form
           className="flex flex-col gap-2"
@@ -644,7 +707,13 @@ function DraftCard({ d, onDone, onChanged }: { d: LibraryDraft; onDone: (approve
         <button type="button" disabled={!!busy} onClick={() => void act('open')} className={`${smallBtn} border border-line-2 text-ink/90 hover:border-ink/40`}>
           {busy === 'open' ? 'Opening…' : 'Open in 3D'}
         </button>
-        <button type="button" disabled={!!busy} onClick={() => void act('approve')} className={`${smallBtn} bg-accent text-accent-ink hover:opacity-90`}>
+        <button
+          type="button"
+          disabled={!!busy || !allChecked}
+          onClick={() => void act('approve')}
+          title={allChecked ? 'Publish it to the library' : 'Tick all three checks first'}
+          className={`${smallBtn} bg-accent text-accent-ink hover:opacity-90`}
+        >
           {busy === 'approve' ? 'Publishing…' : 'Approve'}
         </button>
         {fixing ? null : (
@@ -655,9 +724,11 @@ function DraftCard({ d, onDone, onChanged }: { d: LibraryDraft; onDone: (approve
         <button type="button" disabled={!!busy} onClick={() => void remake('rebuild')} className={`${smallBtn} border border-line-2 text-ink/90 hover:border-ink/40`}>
           {busy === 'rebuild' ? BUILD_NOTE : 'Rebuild'}
         </button>
-        <button type="button" disabled={!!busy} onClick={() => void act('reject')} className={`${smallBtn} ml-auto text-mute hover:bg-panel-2 hover:text-warn`}>
-          {busy === 'reject' ? 'Rejecting…' : 'Reject'}
-        </button>
+        {rejecting ? null : (
+          <button type="button" disabled={!!busy} onClick={() => setRejecting(true)} className={`${smallBtn} ml-auto text-mute hover:bg-panel-2 hover:text-warn`}>
+            Reject…
+          </button>
+        )}
       </div>
     </article>
   )
@@ -704,7 +775,8 @@ function NewDraft({ onAdded }: { onAdded: () => void }) {
   )
 }
 
-function Review() {
+/** the review queue: on the admin page (with drafting) and on the reviewers' page */
+export function ReviewQueue({ canDraft = true, backTo = '/admin?tab=review' }: { canDraft?: boolean; backTo?: string }) {
   const { data, setData, error, reload } = useLoad(getDrafts)
   // drafts without a picture get one drawn, one at a time (each uses the page's one 3D view)
   const tried = useRef(new Set<string>())
@@ -726,7 +798,7 @@ function Review() {
           }}
         />
       ) : null}
-      <NewDraft onAdded={reload} />
+      {canDraft ? <NewDraft onAdded={reload} /> : null}
       <Loading error={error} onRetry={reload}>
         {data ? (
           data.drafts.length ? (
@@ -739,6 +811,7 @@ function Review() {
                   <DraftCard
                     key={d.id}
                     d={d}
+                    backTo={backTo}
                     onDone={() => setData({ drafts: data.drafts.filter((x) => x.id !== d.id) })}
                     onChanged={(u) => setData({ drafts: data.drafts.map((x) => (x.id === d.id ? { ...x, ...u } : x)) })}
                   />
@@ -876,6 +949,68 @@ function Library() {
         ) : (
           <Empty>Nothing published yet. Approve a draft in the Review queue, or use Publish in the workspace on any model you build.</Empty>
         )
+      ) : null}
+    </Loading>
+  )
+}
+
+/* ------------------------------------------------------------------ reviewers */
+
+/** who may review drafts and publish them (admins always can) */
+function Reviewers() {
+  const { data, setData, error, reload } = useLoad(getReviewers)
+  const [email, setEmail] = useState('')
+  const [busy, setBusy] = useState(false)
+  const save = async (emails: string[]) => {
+    setBusy(true)
+    try {
+      setData(await saveReviewers(emails))
+    } catch (e) {
+      toast(e instanceof ApiError ? e.message : 'Couldn’t save the reviewers.', { tone: 'warn' })
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <Loading error={error} onRetry={reload}>
+      {data ? (
+        <section className={`${card} space-y-4 p-5`}>
+          <div>
+            <h2 className="text-[15px] font-semibold">Reviewers</h2>
+            <p className="mt-1 text-[12.5px] text-mute">
+              They check drafts (calculations, model, notes), fix or rebuild them, and publish them to the library, from the Review queue in their account menu. They can’t see settings, costs, feedback or the waitlist. They sign in with the Google account of the email you add.
+            </p>
+          </div>
+          <form
+            className="flex flex-wrap gap-2"
+            onSubmit={(e) => {
+              e.preventDefault()
+              const v = email.trim().toLowerCase()
+              if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) return toast('That doesn’t look like an email address.', { tone: 'warn' })
+              setEmail('')
+              void save([...data.emails, v])
+            }}
+          >
+            <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" placeholder="reviewer@example.com" className={`${inputCls} max-w-xs`} />
+            <button type="submit" disabled={busy || !email.trim()} className={primaryBtn}>
+              Add reviewer
+            </button>
+          </form>
+          {data.emails.length ? (
+            <ul className="divide-y divide-line rounded-xl border border-line">
+              {data.emails.map((e) => (
+                <li key={e} className="flex items-center justify-between gap-3 px-3.5 py-2.5 text-[13px]">
+                  <span className="truncate text-ink">{e}</span>
+                  <button type="button" disabled={busy} onClick={() => void save(data.emails.filter((x) => x !== e))} className={`${smallBtn} text-mute hover:text-warn`}>
+                    Remove
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-[12.5px] text-dim">No reviewers yet.</p>
+          )}
+        </section>
       ) : null}
     </Loading>
   )
@@ -1117,6 +1252,7 @@ const TABS: { value: Tab; label: string }[] = [
   { value: 'quality', label: 'Quality' },
   { value: 'review', label: 'Review queue' },
   { value: 'library', label: 'Library' },
+  { value: 'reviewers', label: 'Reviewers' },
   { value: 'feedback', label: 'Feedback' },
   { value: 'waitlist', label: 'Waitlist' },
   { value: 'settings', label: 'Settings' },
@@ -1146,7 +1282,7 @@ export default function AdminPage() {
         <div className="mb-5">
           <Pills label="Section" value={tab} onChange={(t) => setParams(t === 'quality' ? {} : { tab: t }, { replace: true })} options={TABS} />
         </div>
-        {tab === 'quality' ? <Quality /> : tab === 'review' ? <Review /> : tab === 'library' ? <Library /> : tab === 'feedback' ? <Feedback /> : tab === 'waitlist' ? <Waitlist /> : <Settings />}
+        {tab === 'quality' ? <Quality /> : tab === 'review' ? <ReviewQueue /> : tab === 'library' ? <Library /> : tab === 'reviewers' ? <Reviewers /> : tab === 'feedback' ? <Feedback /> : tab === 'waitlist' ? <Waitlist /> : <Settings />}
       </>
     )
 

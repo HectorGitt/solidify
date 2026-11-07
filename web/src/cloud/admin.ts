@@ -55,6 +55,15 @@ export interface LibraryDraft {
   parts: number
   createdAt: number
   thumbnail?: string
+  reviewNotes?: string
+  checklist?: ReviewChecklist
+}
+
+/** what a reviewer has checked on a draft */
+export interface ReviewChecklist {
+  calculations?: boolean
+  model?: boolean
+  text?: boolean
 }
 
 export interface LibraryCard {
@@ -67,6 +76,7 @@ export interface LibraryCard {
   createdAt: number
   publishedAt?: number
   thumbnail?: string
+  reviewedBy?: { uid: string; name: string }
 }
 
 export interface LibraryItem extends LibraryCard {
@@ -103,7 +113,9 @@ export const getAiUsage = () => api<{ days: ({ day: string } & Record<string, nu
 export const getEventSummary = () => api<{ days: EventDay[]; notes: EventNote[] }>('/v1/events/summary')
 export const getDrafts = () => api<{ drafts: LibraryDraft[] }>('/v1/library/drafts')
 export const approveDraft = (id: string, title?: string) => api<{ ok: true }>(`/v1/library/drafts/${encodeURIComponent(id)}/approve`, { method: 'POST', body: title ? { title } : {} })
-export const rejectDraft = (id: string) => api<{ ok: true }>(`/v1/library/drafts/${encodeURIComponent(id)}`, { method: 'DELETE' })
+export const rejectDraft = (id: string, reason?: string) => api<{ ok: true }>(`/v1/library/drafts/${encodeURIComponent(id)}${reason ? `?reason=${encodeURIComponent(reason.slice(0, 500))}` : ''}`, { method: 'DELETE' })
+export const getReviewers = () => api<{ emails: string[] }>('/v1/admin/reviewers')
+export const saveReviewers = (emails: string[]) => api<{ emails: string[] }>('/v1/admin/reviewers', { method: 'PUT', body: { emails } })
 export const unpublish = (id: string) => api<{ ok: true }>(`/v1/library/${encodeURIComponent(id)}`, { method: 'DELETE' })
 export const getFeedback = () => api<{ feedback: FeedbackItem[] }>('/v1/feedback')
 export const getWaitlist = () => api<{ count: number; entries: WaitlistEntry[] }>('/v1/waitlist')
@@ -156,7 +168,7 @@ export interface DraftFields {
   thumbnail?: string
 }
 export const addDraft = (d: DraftFields) => api<{ id: string }>('/v1/library/drafts', { method: 'POST', body: d })
-export const updateDraft = (id: string, patch: Partial<DraftFields>) => api<LibraryDraft>(`/v1/library/drafts/${encodeURIComponent(id)}`, { method: 'PUT', body: patch })
+export const updateDraft = (id: string, patch: Partial<DraftFields> & { reviewNotes?: string; checklist?: ReviewChecklist }) => api<LibraryDraft>(`/v1/library/drafts/${encodeURIComponent(id)}`, { method: 'PUT', body: patch })
 
 export const publishModel = (d: DraftFields) => api<{ id: string }>('/v1/library', { method: 'POST', body: d })
 export const updateLibraryItem = (id: string, patch: { title?: string; topic?: string; thumbnail?: string }) => api<{ ok: true }>(`/v1/library/${encodeURIComponent(id)}`, { method: 'PUT', body: patch })

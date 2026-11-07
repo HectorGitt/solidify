@@ -16,6 +16,8 @@ export interface Profile {
   classes?: ClassRef[]
   /** can open the admin page (the API decides; this only shows the link) */
   isAdmin?: boolean
+  /** can review drafts and publish them (the API decides; this only shows the link) */
+  isReviewer?: boolean
 }
 
 /** The signed-in user's Solidify profile (role, display name, classes), from the API. */
