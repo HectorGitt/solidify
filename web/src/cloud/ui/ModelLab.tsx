@@ -26,6 +26,7 @@ import { getCreation, saveNewCreation, updateCreation } from '../creations'
 import { logEvent } from '../events'
 import { useProfile } from '../profile'
 import { PublishDialog } from './PublishDialog'
+import { LibraryMatches } from './LibraryMatches'
 import { clearPendingBuild, peekPendingBuild } from '../pendingBuild'
 import { peekPreviewModel } from '../previewModel'
 import { ghostBtn, inputCls, primaryBtn } from './Modal'
@@ -154,6 +155,8 @@ function StartPanel({ onBuild, signedIn }: { onBuild: (text: string, photo?: { n
             </button>
           </div>
         </form>
+        {/* checked models already in the library that match what is being typed */}
+        <LibraryMatches query={text} className="mt-3" />
         <div className="mt-4 flex flex-wrap gap-1.5">
           {EXAMPLES.map((x) => (
             <button key={x.label} type="button" onClick={() => onBuild(x.prompt)} title={x.prompt} className="rounded-full border border-line-2 bg-panel/70 px-3 py-1 text-[12.5px] text-mute backdrop-blur transition-colors hover:border-ink/40 hover:text-ink">

@@ -5,6 +5,7 @@ import { useAuth } from '@/cloud/auth'
 import { useOpenLibrary } from '@/cloud/library'
 import { setPendingBuild } from '@/cloud/pendingBuild'
 import { LibraryCardView } from '@/cloud/ui/LibraryCardView'
+import { LibraryMatches } from '@/cloud/ui/LibraryMatches'
 import { MODULES } from '@/modules/catalog'
 import type { SceneDef } from '@/modules/types'
 import { Icon } from './icons'
@@ -173,6 +174,7 @@ export function BuildYourOwn() {
             Build it
           </button>
         </form>
+        <LibraryMatches query={prompt} className="mt-3" />
         <div className="mt-3 flex flex-wrap gap-1.5">
           {EXAMPLES.map((x) => (
             <button key={x} type="button" onClick={() => setPrompt(x)} className="rounded-full border border-line-2 px-3 py-1 text-[12px] text-mute hover:border-ink/40 hover:text-ink">
