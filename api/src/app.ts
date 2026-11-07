@@ -203,20 +203,43 @@ export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision
 
   app.get('/health', (c) => c.json({ ok: true }))
 
-  const isAdmin = (u: { email?: string | null }) => !!u.email && config.adminEmails.includes(u.email.toLowerCase())
-  const requireAdmin = (c: Context<Env>) => {
-    const u = requireUser(c)
-    if (!isAdmin(u)) throw fail(403, 'Admins only.')
-    return u
-  }
-  /** reviewers check drafts and publish them; admins name them on the admin page, and are reviewers too */
+  /*
+   * Staff roles. Admins run everything; curators run the library (drafting, topics, publishing, editing);
+   * reviewers check drafts and publish them; support answers feedback and the waitlist. Roles are given by
+   * email (before the person has even signed in) on the admin page's Users tab and kept in `roles`; the
+   * emails in ADMIN_EMAILS are owners, always admins, and cannot be changed from the app.
+   */
+  const STAFF_ROLES = ['admin', 'curator', 'reviewer', 'support'] as const
+  type StaffRole = (typeof STAFF_ROLES)[number]
+  /** what each permission needs: any one of these roles */
+  const PERMS = {
+    admin: ['admin'],
+    curate: ['admin', 'curator'],
+    review: ['admin', 'curator', 'reviewer'],
+    support: ['admin', 'support'],
+  } as const satisfies Record<string, readonly StaffRole[]>
+  type Perm = keyof typeof PERMS
+  const roleKey = (email: string) => encodeURIComponent(email.trim().toLowerCase())
+  const isOwner = (email?: string | null) => !!email && config.adminEmails.includes(email.toLowerCase())
+  /** reviewers named before roles existed (settings/reviewers) still count as reviewers */
   const getReviewers = async () => (await db.get<{ emails: string[] }>('settings/reviewers'))?.emails ?? []
-  const isReviewer = async (u: { email?: string | null }) => isAdmin(u) || (!!u.email && (await getReviewers()).includes(u.email.toLowerCase()))
-  const requireReviewer = async (c: Context<Env>) => {
+  const rolesOfEmail = async (email?: string | null): Promise<StaffRole[]> => {
+    if (!email) return []
+    const out = new Set<StaffRole>()
+    if (isOwner(email)) out.add('admin')
+    for (const r of (await db.get<{ roles: StaffRole[] }>(`roles/${roleKey(email)}`))?.roles ?? []) out.add(r)
+    if ((await getReviewers()).includes(email.toLowerCase())) out.add('reviewer')
+    return STAFF_ROLES.filter((r) => out.has(r))
+  }
+  const can = (roles: StaffRole[], perm: Perm) => roles.some((r) => (PERMS[perm] as readonly StaffRole[]).includes(r))
+  const requirePerm = async (c: Context<Env>, perm: Perm) => {
     const u = requireUser(c)
-    if (!(await isReviewer(u))) throw fail(403, 'Reviewers only.')
+    if (!can(await rolesOfEmail(u.email), perm)) throw fail(403, perm === 'admin' ? 'Admins only.' : 'Your role doesn’t allow this.')
     return u
   }
+  const requireAdmin = (c: Context<Env>) => requirePerm(c, 'admin')
+  const requireReviewer = (c: Context<Env>) => requirePerm(c, 'review')
+  const isAdmin = async (u: { email?: string | null }) => can(await rolesOfEmail(u.email), 'admin')
 
   /*
    * The audit trail: who did what to the library, the review queue and the admin settings, and when. Every
@@ -253,7 +276,8 @@ export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision
     const u = requireUser(c)
     const p = await profile(u)
     const classes = await db.list<{ name: string; role: Role }>(`users/${u.uid}/classes`)
-    return c.json({ uid: u.uid, ...p, isAdmin: isAdmin(u) || undefined, isReviewer: (await isReviewer(u)) || undefined, classes: classes.map((r) => ({ id: r.id, ...r.data })) })
+    const roles = await rolesOfEmail(u.email)
+    return c.json({ uid: u.uid, ...p, roles, isAdmin: can(roles, 'admin') || undefined, isReviewer: can(roles, 'review') || undefined, classes: classes.map((r) => ({ id: r.id, ...r.data })) })
   })
 
   app.patch('/v1/me', async (c) => {
@@ -470,7 +494,7 @@ export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision
   /** a run's results: from the nightly job (token), or from a run an admin started on the admin page */
   app.post('/v1/evals/runs', async (c) => {
     if (c.req.header('x-eval-token')) requireEval(c)
-    else requireAdmin(c)
+    else await requirePerm(c, 'curate')
     const run = await body(c, evalRun)
     await db.set(`evalRuns/${run.runAt}`, run)
     return c.json({ ok: true }, 201)
@@ -478,7 +502,7 @@ export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision
 
   /** the trend and the latest run in full, for the quality page */
   app.get('/v1/evals', async (c) => {
-    requireAdmin(c)
+    await requirePerm(c, 'curate')
     const rows = await db.list<z.infer<typeof evalRun>>('evalRuns')
     const runs = rows.map((r) => r.data).sort((a, b) => b.runAt - a.runAt)
     return c.json({ runs: runs.slice(0, 90).map(({ runAt, label, summary }) => ({ runAt, label, summary })), latest: runs[0] ?? null, price: await priceNow() })
@@ -486,7 +510,7 @@ export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision
 
   /** the last 30 days of AI actions by kind (count and tokens), and the model's price if configured */
   app.get('/v1/ai-usage', async (c) => {
-    requireAdmin(c)
+    await requireAdmin(c)
     const days = Array.from({ length: 30 }, (_, i) => day(now() - i * 86_400_000)).reverse()
     const rows = await Promise.all(days.map(async (d) => ({ day: d, ...((await db.get<Record<string, number>>(`aiUsage/${d}`)) ?? {}) })))
     return c.json({ days: rows, price: await priceNow() })
@@ -559,18 +583,18 @@ export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision
 
   /** the same, for a batch drafted from the admin page */
   app.post('/v1/admin/topics/next', async (c) => {
-    requireAdmin(c)
+    await requirePerm(c, 'curate')
     const { want, fallback } = await body(c, nextTopicsInput)
     return c.json(await nextTopics(want, fallback))
   })
 
   app.get('/v1/admin/settings', async (c) => {
-    requireAdmin(c)
+    await requirePerm(c, 'curate')
     return c.json({ settings: await getSettings(), topics: await getTopics() })
   })
 
   app.put('/v1/admin/settings', async (c) => {
-    const u = requireAdmin(c)
+    const u = await requireAdmin(c)
     const patch = await body(c, settingsSchema.partial())
     const before = await getSettings()
     await db.set('settings/quality', { ...before, ...patch })
@@ -582,7 +606,7 @@ export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision
   })
 
   app.put('/v1/admin/topics', async (c) => {
-    const u = requireAdmin(c)
+    const u = await requirePerm(c, 'curate')
     const { items } = await body(c, z.object({ items: z.array(topicItem).min(1).max(300) }))
     const had = (await getTopics())?.length
     await db.set('settings/topics', { items })
@@ -592,7 +616,7 @@ export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision
 
   /** back to the built-in list */
   app.delete('/v1/admin/topics', async (c) => {
-    const u = requireAdmin(c)
+    const u = await requirePerm(c, 'curate')
     await db.delete('settings/topics')
     await audit(await whoIs(u), 'went back to the built-in topic list', { type: 'topics' })
     return c.json({ topics: null })
@@ -608,7 +632,7 @@ export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision
   app.post('/v1/admin/build', async (c) => {
     const u = await requireReviewer(c)
     const req = await body(c, create3dRequest)
-    if (isAdmin(u)) await spend('admin', 'adminBuildUsage', 100, 'admin builds')
+    if (await isAdmin(u)) await spend('admin', 'adminBuildUsage', 100, 'admin builds')
     else await spend(u.uid, 'reviewBuildUsage', 40, 'review builds')
     const t0 = now()
     const out = await model(() => noteVision.createOrEdit3D(req))
@@ -638,7 +662,7 @@ export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision
 
   /** the last 14 days of counts, and the latest notes, for the quality page */
   app.get('/v1/events/summary', async (c) => {
-    requireAdmin(c)
+    await requireAdmin(c)
     const days = Array.from({ length: 14 }, (_, i) => day(now() - i * 86_400_000)).reverse()
     const counts = await Promise.all(days.map(async (d) => ({ day: d, ...((await db.get<Record<string, number>>(`eventCounts/${d}`)) ?? {}) })))
     const notes = (await db.list<{ kind: string; subject: string; detail: string; day: string }>('eventNotes')).slice(-40).reverse().map((r) => r.data)
@@ -758,7 +782,7 @@ export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision
   app.post('/v1/library/drafts', async (c) => {
     let by = NIGHTLY
     if (c.req.header('x-eval-token')) requireEval(c)
-    else by = await whoIs(requireAdmin(c))
+    else by = await whoIs(await requirePerm(c, 'curate'))
     const d = await body(c, libraryInput)
     if (JSON.stringify(d.spec).length > 300_000) throw fail(413, 'This model is too large to save.')
     const id = randomId()
@@ -835,7 +859,7 @@ export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision
 
   /** the audit trail, newest first, for admins: optionally one person's, one action's, or one model's */
   app.get('/v1/admin/audit', async (c) => {
-    requireAdmin(c)
+    await requireAdmin(c)
     const by = c.req.query('by')
     const action = c.req.query('action')
     const target = c.req.query('target')
@@ -854,19 +878,75 @@ export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision
     return c.json({ entries: rows.sort(newestFirst) })
   })
 
+  /** staff and their roles, for admins: owners (ADMIN_EMAILS), everyone given a role, and older reviewers */
+  app.get('/v1/admin/people', async (c) => {
+    await requireAdmin(c)
+    const rows = await db.list<{ email: string; roles: StaffRole[]; at?: number; by?: Who }>('roles', { limit: 1000 })
+    const emails = new Set([...config.adminEmails, ...rows.map((r) => r.data.email), ...(await getReviewers())])
+    const people = await Promise.all(
+      [...emails].map(async (email) => {
+        const account = (await db.where<UserDoc>('users', 'email', email, { limit: 1 }))[0]
+        return { email, roles: await rolesOfEmail(email), owner: isOwner(email), name: account?.data.displayName, uid: account?.id, joined: account?.data.createdAt }
+      }),
+    )
+    return c.json({ people: people.filter((p) => p.roles.length).sort((a, b) => Number(b.owner) - Number(a.owner) || a.email.localeCompare(b.email)), roles: STAFF_ROLES })
+  })
+
+  /** give someone roles (by email, signed up or not), or take them away; an owner stays an admin */
+  app.put('/v1/admin/people', async (c) => {
+    const u = await requireAdmin(c)
+    const { email, roles } = await body(c, z.object({ email: z.string().trim().toLowerCase().email().max(200), roles: z.array(z.enum(STAFF_ROLES)).max(4) }))
+    const before = await rolesOfEmail(email)
+    const wanted = [...new Set(roles)].filter((r) => !(r === 'admin' && isOwner(email)))
+    if (isOwner(email) && !roles.includes('admin')) throw fail(400, 'This is an owner (set on the server): they are always an admin.')
+    if (email === u.email?.toLowerCase() && can(before, 'admin') && !roles.includes('admin')) throw fail(400, 'You can’t remove your own admin role.')
+    if (wanted.length) await db.set(`roles/${roleKey(email)}`, { email, roles: wanted, at: now(), by: await whoIs(u) })
+    else await db.delete(`roles/${roleKey(email)}`)
+    // older reviewer entries move into roles once someone's roles are set here
+    const legacy = await getReviewers()
+    if (legacy.includes(email)) await db.set('settings/reviewers', { emails: legacy.filter((e) => e !== email) })
+    const after = await rolesOfEmail(email)
+    if (after.join() !== before.join()) await audit(await whoIs(u), 'changed roles', { type: 'reviewers', title: email }, `${email}: ${before.join(', ') || 'none'} → ${after.join(', ') || 'none'}`)
+    return c.json({ email, roles: after })
+  })
+
+  /** an account by email: profile, roles and today's use, for admins */
+  app.get('/v1/admin/people/lookup', async (c) => {
+    await requireAdmin(c)
+    const email = (c.req.query('email') ?? '').trim().toLowerCase()
+    if (!email) throw fail(400, 'Give an email.')
+    const account = (await db.where<UserDoc>('users', 'email', email, { limit: 1 }))[0]
+    const roles = await rolesOfEmail(email)
+    if (!account) return c.json({ email, found: false, roles })
+    const d = day(now())
+    const used = async (bucket: string) => (await db.get<{ count: number }>(`${bucket}/${account.id}_${d}`))?.count ?? 0
+    const models = (await db.list(`users/${account.id}/creations`, { limit: 100 })).length
+    return c.json({
+      email,
+      found: true,
+      roles,
+      uid: account.id,
+      name: account.data.displayName,
+      role: account.data.role,
+      joined: account.data.createdAt,
+      today: { builds: await used('createUsage'), notePages: await used('noteUsage'), tutor: await used('tutorUsage') },
+      models,
+    })
+  })
+
   /** the reviewer list, for admins */
   app.get('/v1/admin/reviewers', async (c) => {
-    requireAdmin(c)
+    await requireAdmin(c)
     return c.json({ emails: await getReviewers() })
   })
 
   app.put('/v1/admin/reviewers', async (c) => {
-    requireAdmin(c)
+    await requireAdmin(c)
     const { emails } = await body(c, z.object({ emails: z.array(z.string().trim().toLowerCase().email().max(200)).max(100) }))
     const unique = [...new Set(emails)]
     const before = await getReviewers()
     await db.set('settings/reviewers', { emails: unique })
-    const by = await whoIs(requireAdmin(c))
+    const by = await whoIs(await requireAdmin(c))
     for (const e of unique.filter((x) => !before.includes(x))) await audit(by, 'added a reviewer', { type: 'reviewers' }, e)
     for (const e of before.filter((x) => !unique.includes(x))) await audit(by, 'removed a reviewer', { type: 'reviewers' }, e)
     return c.json({ emails: unique })
@@ -888,7 +968,7 @@ export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision
   })
 
   app.delete('/v1/library/:id', async (c) => {
-    const u = requireAdmin(c)
+    const u = await requirePerm(c, 'curate')
     const id = libraryId(c.req.param('id'))
     const item = await db.get<LibraryDoc>(`library/${id}`)
     await db.delete(`library/${id}`)
@@ -899,7 +979,7 @@ export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision
 
   /** an admin publishes a model straight to the library (from the workspace), skipping the queue */
   app.post('/v1/library', async (c) => {
-    const u = requireAdmin(c)
+    const u = await requirePerm(c, 'curate')
     const d = await body(c, libraryInput)
     if (JSON.stringify(d.spec).length > 300_000) throw fail(413, 'This model is too large to save.')
     const id = randomId()
@@ -913,7 +993,7 @@ export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision
 
   /** retitle or re-topic a published model */
   app.put('/v1/library/:id', async (c) => {
-    const u = requireAdmin(c)
+    const u = await requirePerm(c, 'curate')
     const id = libraryId(c.req.param('id'))
     const item = await db.get<LibraryDoc>(`library/${id}`)
     if (!item) throw fail(404, 'Not found.')
@@ -1345,13 +1425,13 @@ export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision
 
 
   app.get('/v1/waitlist', async (c) => {
-    requireAdmin(c)
+    await requirePerm(c, 'support')
     const rows = await db.list<Record<string, unknown> & { createdAt: number }>('waitlist', { limit: 5000 })
     return c.json({ count: rows.length, entries: rows.map((r) => r.data).sort((a, b) => a.createdAt - b.createdAt) })
   })
 
   app.get('/v1/waitlist.csv', async (c) => {
-    requireAdmin(c)
+    await requirePerm(c, 'support')
     const rows = (await db.list<Record<string, unknown> & { createdAt: number }>('waitlist', { limit: 5000 })).map((r) => r.data).sort((a, b) => a.createdAt - b.createdAt)
     const esc = (v: unknown) => {
       const s = Array.isArray(v) ? v.join('; ') : String(v ?? '')
@@ -1391,8 +1471,20 @@ export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision
     return c.json({ ok: true }, 201)
   })
 
+  /** support marks a message as dealt with (or back to new) */
+  app.put('/v1/feedback/:id', async (c) => {
+    const u = await requirePerm(c, 'support')
+    const id = c.req.param('id')
+    if (!/^[0-9]+_[a-z0-9]+$/.test(id)) throw fail(404, 'Not found.')
+    const item = await db.get<Record<string, unknown>>(`feedback/${id}`)
+    if (!item) throw fail(404, 'Not found.')
+    const { status } = await body(c, z.object({ status: z.enum(['new', 'done']) }))
+    await db.set(`feedback/${id}`, { status, statusBy: u.uid, statusAt: now() }, { merge: true })
+    return c.json({ ok: true })
+  })
+
   app.get('/v1/feedback', async (c) => {
-    requireAdmin(c)
+    await requirePerm(c, 'support')
     const rows = await db.list(`feedback`, { limit: 500 })
     return c.json({ feedback: rows.map((r) => ({ id: r.id, ...r.data })).reverse() })
   })

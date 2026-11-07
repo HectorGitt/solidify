@@ -302,3 +302,58 @@ describe('the audit trail', () => {
     expect((await req('GET', '/v1/admin/audit', undefined, rita)).status).toBe(403)
   })
 })
+
+describe('people and roles', () => {
+  const boss = { Authorization: 'Bearer user:boss:Boss' }
+  const cara = { Authorization: 'Bearer user:cara:Cara' }
+  const sue = { Authorization: 'Bearer user:sue:Sue' }
+  const setRoles = (email: string, roles: string[], who = boss) => req('PUT', '/v1/admin/people', { email, roles }, who)
+
+  it('gives curators the library, support the inbox, and neither the rest', async () => {
+    expect((await setRoles('cara@example.test', ['curator'])).status).toBe(200)
+    expect((await setRoles('sue@example.test', ['support'])).status).toBe(200)
+    expect(((await (await req('GET', '/v1/me', undefined, cara)).json()) as { roles: string[]; isReviewer?: boolean })).toMatchObject({ roles: ['curator'], isReviewer: true })
+
+    // curator: drafts, the topic list, publishing and editing the library, the night scores
+    expect((await req('POST', '/v1/library/drafts', { title: 'Cam', prompt: 'A cam and follower', spec: { parts: [] }, score: 90 }, cara)).status).toBe(201)
+    expect((await req('PUT', '/v1/admin/topics', { items: [{ topic: 'Gears', prompt: 'A rack and pinion' }] }, cara)).status).toBe(200)
+    expect((await req('POST', '/v1/library', { title: 'Pump', prompt: 'A pump', spec: { parts: [] }, score: 100 }, cara)).status).toBe(201)
+    expect((await req('GET', '/v1/evals', undefined, cara)).status).toBe(200)
+    // but not the settings, costs, inbox, audit or people
+    for (const [m, p, b] of [['PUT', '/v1/admin/settings', { paused: true }], ['GET', '/v1/ai-usage'], ['GET', '/v1/feedback'], ['GET', '/v1/admin/audit'], ['GET', '/v1/admin/people']] as const)
+      expect((await req(m, p, b, cara)).status).toBe(403)
+
+    // support: the inbox only
+    await req('POST', '/v1/feedback', { kind: 'bug', message: 'The beam vanished' })
+    const fb = (await (await req('GET', '/v1/feedback', undefined, sue)).json()) as { feedback: { id: string }[] }
+    expect((await req('PUT', `/v1/feedback/${fb.feedback[0].id}`, { status: 'done' }, sue)).status).toBe(200)
+    expect(((await (await req('GET', '/v1/feedback', undefined, sue)).json()) as { feedback: { status: string }[] }).feedback[0].status).toBe('done')
+    expect((await req('GET', '/v1/waitlist', undefined, sue)).status).toBe(200)
+    for (const [m, p] of [['GET', '/v1/library/drafts'], ['GET', '/v1/evals'], ['GET', '/v1/admin/settings']] as const) expect((await req(m, p, undefined, sue)).status).toBe(403)
+  })
+
+  it('lists staff, keeps owners admins, records every change, and looks accounts up', async () => {
+    await req('GET', '/v1/me', undefined, cara) // cara has an account now
+    await setRoles('cara@example.test', ['curator', 'support'])
+    const { people } = (await (await req('GET', '/v1/admin/people', undefined, boss)).json()) as { people: { email: string; roles: string[]; owner: boolean; name?: string }[] }
+    expect(people[0]).toMatchObject({ email: 'boss@example.test', roles: ['admin'], owner: true })
+    expect(people.find((p) => p.email === 'cara@example.test')).toMatchObject({ roles: ['curator', 'support'], name: 'Cara' })
+    // an owner cannot be demoted from the app
+    expect((await setRoles('boss@example.test', ['reviewer'])).status).toBe(400)
+    // taking every role away removes them
+    await setRoles('cara@example.test', [])
+    expect(((await (await req('GET', '/v1/admin/people', undefined, boss)).json()) as { people: { email: string }[] }).people.map((p) => p.email)).not.toContain('cara@example.test')
+    // each change is in the trail
+    const trail = (await (await req('GET', '/v1/admin/audit?action=changed%20roles', undefined, boss)).json()) as { entries: { detail: string }[] }
+    expect(trail.entries[0].detail).toBe('cara@example.test: curator, support → none')
+    // look someone up
+    const found = (await (await req('GET', '/v1/admin/people/lookup?email=cara@example.test', undefined, boss)).json()) as Record<string, unknown>
+    expect(found).toMatchObject({ found: true, name: 'Cara', role: 'student', roles: [], today: { builds: 0, notePages: 0, tutor: 0 } })
+    expect(((await (await req('GET', '/v1/admin/people/lookup?email=nobody@example.test', undefined, boss)).json()) as { found: boolean }).found).toBe(false)
+  })
+
+  it('still counts reviewers named before roles existed', async () => {
+    await req('PUT', '/v1/admin/reviewers', { emails: ['rita@example.test'] }, boss)
+    expect((await req('GET', '/v1/library/drafts', undefined, { Authorization: 'Bearer user:rita:Rita' })).status).toBe(200)
+  })
+})
