@@ -204,9 +204,11 @@ export interface Lookup {
   name?: string
   role?: 'student' | 'teacher'
   joined?: number
-  today?: { builds: number; notePages: number; tutor: number }
+  today?: { builds: number; notePages: number; tutor: number; libraryModels?: number }
   models?: number
 }
+/** requests without a valid App Check token, by day */
+export const getAppCheckStats = () => api<{ mode: 'off' | 'monitor' | 'enforce'; days: ({ day: string } & Record<string, number | string>)[] }>('/v1/admin/app-check')
 export const getPeople = () => api<{ people: Person[]; roles: StaffRole[] }>('/v1/admin/people')
 export const setRoles = (email: string, roles: StaffRole[]) => api<{ email: string; roles: StaffRole[] }>('/v1/admin/people', { method: 'PUT', body: { email, roles } })
 export const lookupPerson = (email: string) => api<Lookup>(`/v1/admin/people/lookup?email=${encodeURIComponent(email)}`)

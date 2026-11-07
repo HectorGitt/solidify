@@ -1,4 +1,5 @@
 import { useAuth } from './auth'
+import { appCheckToken } from './appCheck'
 import { API_URL } from './config'
 
 /** An error the API answered with; `message` is written for the user. */
@@ -14,8 +15,9 @@ export class ApiError extends Error {
 async function headers(json: boolean): Promise<Record<string, string>> {
   const h: Record<string, string> = {}
   if (json) h['Content-Type'] = 'application/json'
-  const token = await useAuth.getState().token()
+  const [token, check] = await Promise.all([useAuth.getState().token(), appCheckToken()])
   if (token) h.Authorization = `Bearer ${token}`
+  if (check) h['X-Firebase-AppCheck'] = check
   return h
 }
 

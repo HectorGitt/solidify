@@ -22,6 +22,7 @@ import {
   setRoles,
   lookupPerson,
   setFeedbackStatus,
+  getAppCheckStats,
   type Lookup,
   getAudit,
   getHistory,
@@ -1181,6 +1182,7 @@ function Users() {
                   <span className="rounded-lg border border-line px-2.5 py-1.5">3D builds today: <b className="tabular-nums">{found.today.builds}</b></span>
                   <span className="rounded-lg border border-line px-2.5 py-1.5">Note pages today: <b className="tabular-nums">{found.today.notePages}</b></span>
                   <span className="rounded-lg border border-line px-2.5 py-1.5">Tutor questions today: <b className="tabular-nums">{found.today.tutor}</b></span>
+                  <span className="rounded-lg border border-line px-2.5 py-1.5">Library models today: <b className="tabular-nums">{found.today.libraryModels ?? 0}</b> of 100</span>
                 </div>
               ) : null}
               <div>
@@ -1220,6 +1222,41 @@ const textToTopics = (text: string): DraftTopic[] => {
     else if (line.length >= 3) items.push({ topic, prompt: line.slice(0, 400) })
   }
   return items
+}
+
+/** App Check: which mode the API is in, and how many requests a day arrive without proof they came from the app */
+function AppCheckPanel() {
+  const { data, error, reload } = useLoad(getAppCheckStats)
+  const total = (d: Record<string, number | string>) => (Number(d.missing) || 0) + (Number(d.invalid) || 0)
+  return (
+    <Loading error={error} onRetry={reload}>
+      {data ? (
+        <section className={`${card} space-y-3 p-5`}>
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <h2 className="text-[15px] font-semibold">Scraping protection</h2>
+            <span className={`rounded-full px-2.5 py-0.5 text-[11.5px] font-medium ${data.mode === 'enforce' ? 'bg-accent/15 text-accent' : data.mode === 'monitor' ? 'bg-warn/15 text-warn' : 'bg-panel-3 text-mute'}`}>App Check: {data.mode}</span>
+          </div>
+          <p className="text-[12.5px] text-mute">
+            Full library models need sign-in (100 a day each, staff not counted); each address has limits per minute. App Check proves a request came from the app, not a script: run it in
+            <b> monitor</b> for a few days and enforce it once the count below is only scripts (set APP_CHECK on the API).
+          </p>
+          {data.mode === 'off' ? (
+            <p className="text-[12.5px] text-dim">Off: requests are not checked yet.</p>
+          ) : (
+            <ul className="grid grid-cols-7 gap-1.5 text-center text-[11px]">
+              {data.days.map((d) => (
+                <li key={String(d.day)} className="rounded-lg border border-line px-1 py-1.5">
+                  <div className="text-dim">{String(d.day).slice(5)}</div>
+                  <div className="mt-0.5 font-mono text-[13px] tabular-nums text-ink">{total(d)}</div>
+                </li>
+              ))}
+            </ul>
+          )}
+          {data.mode !== 'off' ? <p className="text-[11.5px] text-dim">Requests a day without a valid App Check token{data.mode === 'enforce' ? ', refused' : ', let through'}.</p> : null}
+        </section>
+      ) : null}
+    </Loading>
+  )
 }
 
 function Settings({ admin }: { admin: boolean }) {
@@ -1274,6 +1311,7 @@ function Settings({ admin }: { admin: boolean }) {
     <Loading error={error} onRetry={reload}>
       {data && form ? (
         <div className="space-y-5">
+          {admin ? <AppCheckPanel /> : null}
           {admin ? (
           <section className={`${card} space-y-4 p-5`}>
             <h2 className="text-[15px] font-semibold">Nightly run</h2>
