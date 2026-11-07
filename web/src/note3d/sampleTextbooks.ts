@@ -32,6 +32,8 @@ export interface TextbookDocument {
   sourceLabel: string
   courseCode: string
   pages: RenderedTextbookPage[]
+  /** an uploaded PDF: how many pages it has, so more can be read later */
+  pageCount?: number
 }
 
 /* -------------------------------------------------------------------------- */

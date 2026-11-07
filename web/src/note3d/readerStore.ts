@@ -5,6 +5,7 @@ import { useAuth } from '@/cloud/auth'
 import { toast } from '@/ui/toast'
 import { startTask } from '@/ui/tasks'
 import { analyzeTextbookPage, buildFigureFromPage, loadUploadedDocument } from './pdfPageRenderer'
+export { MAX_PAGES_PER_READ, isPdf, pdfPageCount } from './pdfPageRenderer'
 import { SAMPLE_TEXTBOOKS, type TextbookDocument } from './sampleTextbooks'
 import { CONFIDENCE_THRESHOLD, type DetectedPageFigure } from './schema'
 
@@ -103,12 +104,32 @@ export function showReaderError(e: unknown, otherwise: string) {
   else toast(e instanceof Error ? e.message : otherwise, { tone: 'warn' })
 }
 
-/** reads an uploaded PDF or page, as a background task, and opens it when done */
-export async function readDocument(file: File) {
+/**
+ * reads an uploaded PDF (the pages asked for) or page, as a background task, and opens it when done; with
+ * `into`, the pages are added to that document instead (more pages of the same PDF)
+ */
+export async function readDocument(file: File, range?: { from: number; to: number }, into?: string) {
   useReader.setState({ reading: { kind: 'document', name: file.name } })
-  const task = startTask(`Reading ${file.name}`, '/read')
+  const task = startTask(range ? `Reading ${file.name}, pages ${range.from} to ${range.to}` : `Reading ${file.name}`, '/read')
   try {
-    const loaded = await loadUploadedDocument(file, (page, total) => task.update(`Reading page ${page} of ${total}`, page - 1, total))
+    const read = await loadUploadedDocument(file, (page, total) => task.update(`Reading page ${page} of ${total}`, page - 1, total), range)
+    if (into) {
+      // more pages of a document already open: added in page order, any page read again replaced
+      let merged: TextbookDocument | null = null
+      setDocuments((prev) =>
+        prev.map((d) => {
+          if (d.id !== into) return d
+          const fresh = new Set(read.pages.map((p) => p.pageNumber))
+          const pages = [...d.pages.filter((p) => !fresh.has(p.pageNumber)), ...read.pages].sort((a, b) => a.pageNumber - b.pageNumber)
+          merged = { ...d, pages, pageCount: read.pageCount ?? d.pageCount, subtitle: `PDF Textbook Extract (${pages.length} ${pages.length === 1 ? 'page' : 'pages'})` }
+          return merged
+        }),
+      )
+      setActiveDoc(into)
+      task.finish({ href: '/read', message: `Read ${read.pages.length} more ${read.pages.length === 1 ? 'page' : 'pages'} of ${read.title}.` })
+      return merged
+    }
+    const loaded = read
     setDocuments((prev) => [loaded, ...prev])
     setActiveDoc(loaded.id)
     const figures = loaded.pages.reduce((n, p) => n + p.figures.length, 0)

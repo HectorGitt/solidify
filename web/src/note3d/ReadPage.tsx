@@ -5,7 +5,8 @@ import { findModule } from '@/modules/catalog'
 import type { SceneDef } from '@/modules/types'
 import { useView } from '@/render/view'
 import { StudyShell } from '@/study/ui/StudyShell'
-import { primaryBtn } from '@/cloud/ui/Modal'
+import { Field, Modal, ghostBtn, inputCls, primaryBtn } from '@/cloud/ui/Modal'
+import { toast } from '@/ui/toast'
 import { PartCard } from '@/ui/PartCard'
 import { PartsTree } from '@/ui/PartsTree'
 import { OrientationGizmo, Stage } from '@/ui/Stage'
@@ -15,7 +16,7 @@ import { Tex } from '@/ui/Tex'
 import { Toolbar } from '@/ui/Toolbar'
 import { InlineFigure3D } from './InlineFigure3D'
 import { createSceneDefFromSpec } from './NoteSceneRenderer'
-import { buildPicked, convertAll, convertTodo, loadReader, readDocument, removeDocument, setActiveDoc, stopConverting, useReader } from './readerStore'
+import { MAX_PAGES_PER_READ, buildPicked, convertAll, convertTodo, isPdf, loadReader, pdfPageCount, readDocument, removeDocument, setActiveDoc, stopConverting, useReader } from './readerStore'
 import { SAMPLE_TEXTBOOKS } from './sampleTextbooks'
 import { CONFIDENCE_THRESHOLD, type DetectedPageFigure } from './schema'
 
@@ -240,10 +241,46 @@ export default function ReadPage() {
     setActiveFigureId((firstHighConf ?? currentPage.figures[0])?.id ?? null)
   }, [activeDoc.id, currentPage.pageNumber, currentPage.figures])
 
+  /** a PDF opens the page picker first (which pages to read); a photo is read straight away */
+  const [picking, setPicking] = useState<{ file: File; count: number; from: number; to: number; into?: string } | null>(null)
+  /** "Read more pages": the next file chosen is the same PDF again, for this document */
+  const moreFor = useRef<string | null>(null)
+  const [openingPdf, setOpeningPdf] = useState(false)
   const handleFileUpload = async (file: File | undefined) => {
     if (!file) return
-    const loaded = await readDocument(file)
-    if (loaded) setPageIdx(0)
+    const into = moreFor.current
+    moreFor.current = null
+    if (!isPdf(file)) {
+      const loaded = await readDocument(file)
+      if (loaded) setPageIdx(0)
+      return
+    }
+    let count: number
+    setOpeningPdf(true)
+    try {
+      count = await pdfPageCount(file)
+    } catch (e) {
+      toast(e instanceof Error ? e.message : 'Couldn’t open this PDF.', { tone: 'warn' })
+      return
+    } finally {
+      setOpeningPdf(false)
+    }
+    const target = into ? documents.find((d) => d.id === into) : undefined
+    if (target?.pageCount && target.pageCount !== count) {
+      toast(`That PDF has ${count} pages; ${target.title} has ${target.pageCount}. Choose the same file to read more of it.`, { tone: 'warn' })
+      return
+    }
+    // a new document starts at page 1; more of one starts after the last page read
+    const after = target ? Math.max(...target.pages.map((pg) => pg.pageNumber)) + 1 : 1
+    const from = Math.min(count, after)
+    setPicking({ file, count, from, to: Math.min(count, from + 5), into: target?.id })
+  }
+  const readPicked = async () => {
+    if (!picking) return
+    const { file, from, to, into } = picking
+    setPicking(null)
+    const loaded = await readDocument(file, { from, to }, into)
+    if (loaded && !into) setPageIdx(0)
   }
 
   const toNormCoords = (e: MouseEvent<HTMLDivElement>): [number, number] => {
@@ -288,6 +325,57 @@ export default function ReadPage() {
     'inline-flex items-center gap-1.5 rounded-full border border-line-2 bg-panel-2 px-3 py-1.5 text-[12.5px] font-medium text-ink/90 transition-colors hover:border-ink/40 hover:text-ink disabled:cursor-not-allowed disabled:opacity-40'
 
   return (
+    <>
+    <Modal open={!!picking} onClose={() => setPicking(null)} title={picking?.into ? 'Read more pages' : 'Which pages should Solidify read?'} width={440}>
+      {picking ? (
+        <form
+          onSubmit={(e) => {
+            e.preventDefault()
+            void readPicked()
+          }}
+        >
+          <p className="mb-4 text-[13px] leading-relaxed text-mute">
+            <span className="font-medium text-ink">{picking.file.name}</span> has {picking.count} {picking.count === 1 ? 'page' : 'pages'}. Pick the ones with the figures you want in 3D: up to {MAX_PAGES_PER_READ} at a time, and each counts towards your note pages for the day.
+          </p>
+          <div className="mb-2 flex items-end gap-3">
+            <Field label="From page">
+              <input
+                type="number"
+                min={1}
+                max={picking.count}
+                value={picking.from}
+                onChange={(e) => {
+                  const from = Math.max(1, Math.min(picking.count, Math.round(Number(e.target.value) || 1)))
+                  setPicking({ ...picking, from, to: Math.max(from, Math.min(picking.to, from + MAX_PAGES_PER_READ - 1)) })
+                }}
+                className={inputCls}
+              />
+            </Field>
+            <Field label="To page">
+              <input
+                type="number"
+                min={picking.from}
+                max={Math.min(picking.count, picking.from + MAX_PAGES_PER_READ - 1)}
+                value={picking.to}
+                onChange={(e) => setPicking({ ...picking, to: Math.max(picking.from, Math.min(picking.count, picking.from + MAX_PAGES_PER_READ - 1, Math.round(Number(e.target.value) || picking.from))) })}
+                className={inputCls}
+              />
+            </Field>
+          </div>
+          <p className="mb-4 text-[12px] text-dim">
+            {picking.to - picking.from + 1} {picking.to === picking.from ? 'page' : 'pages'}. You can read more of it later with Read more pages.
+          </p>
+          <div className="flex justify-end gap-2">
+            <button type="button" onClick={() => setPicking(null)} className={ghostBtn}>
+              Cancel
+            </button>
+            <button type="submit" className={primaryBtn}>
+              Read {picking.to === picking.from ? `page ${picking.from}` : `pages ${picking.from} to ${picking.to}`}
+            </button>
+          </div>
+        </form>
+      ) : null}
+    </Modal>
     <StudyShell
       title="Read notes in 3D"
       lead="Upload a PDF or a photo of a note page. The page stays as it is: figures Solidify recognises become 3D models you can turn and test, and any it isn't sure of stay as the original drawing."
@@ -303,9 +391,9 @@ export default function ReadPage() {
               e.target.value = ''
             }}
           />
-          <button type="button" onClick={() => fileInputRef.current?.click()} disabled={uploading} className={primaryBtn}>
+          <button type="button" onClick={() => fileInputRef.current?.click()} disabled={uploading || openingPdf} className={primaryBtn}>
             <Icon.upload width={16} height={16} />
-            {uploading ? 'Reading the page…' : 'Upload a PDF or page'}
+            {openingPdf ? 'Opening the PDF…' : uploading ? 'Reading the page…' : 'Upload a PDF or page'}
           </button>
         </>
       }
@@ -393,6 +481,21 @@ export default function ReadPage() {
               >
                 <Icon.build width={14} height={14} />
                 Make every figure 3D ({todo.kept.length + todo.toBuild.length})
+              </button>
+            ) : null}
+            {activeDoc.pageCount && activeDoc.pages.length < activeDoc.pageCount ? (
+              <button
+                type="button"
+                disabled={uploading}
+                onClick={() => {
+                  moreFor.current = activeDoc.id
+                  fileInputRef.current?.click()
+                }}
+                className={smallGhost}
+                title={`${activeDoc.pages.length} of ${activeDoc.pageCount} pages read. Choose the same PDF again to read more.`}
+              >
+                <Icon.upload width={14} height={14} />
+                Read more pages
               </button>
             ) : null}
             {readingMode === 'page-overlay' && (
@@ -579,5 +682,6 @@ export default function ReadPage() {
         />
       )}
     </StudyShell>
+    </>
   )
 }

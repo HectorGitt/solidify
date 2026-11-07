@@ -133,7 +133,28 @@ export async function refineFigureSpec(
   return res.spec
 }
 
-export async function loadUploadedDocument(file: File, onPage?: (page: number, total: number) => void): Promise<TextbookDocument> {
+/** pages read in one go: the daily allowance of note pages */
+export const MAX_PAGES_PER_READ = 20
+
+async function openPdf(file: File) {
+  // bundled with the app (loaded only when a PDF is opened), so it works on networks that block CDNs
+  const [pdfjs, worker] = await Promise.all([import('pdfjs-dist'), import('pdfjs-dist/build/pdf.worker.min.mjs?url')])
+  pdfjs.GlobalWorkerOptions.workerSrc = worker.default
+  return pdfjs.getDocument({ data: await file.arrayBuffer() }).promise
+}
+
+export const isPdf = (file: File) => file.type === 'application/pdf' || /\.pdf$/i.test(file.name)
+
+/** how many pages a PDF has (to ask which to read) */
+export async function pdfPageCount(file: File): Promise<number> {
+  try {
+    return (await openPdf(file)).numPages
+  } catch {
+    throw new Error('Couldn’t open this PDF. Try another file, or upload a photo of the page.')
+  }
+}
+
+export async function loadUploadedDocument(file: File, onPage?: (page: number, total: number) => void, range?: { from: number; to: number }): Promise<TextbookDocument> {
   const baseTitle = file.name.replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ')
 
   // Case 1: Image file (PNG, JPG, WEBP, SVG) — e.g. screenshot of a textbook page or scan of notes
@@ -191,20 +212,15 @@ export async function loadUploadedDocument(file: File, onPage?: (page: number, t
   }
 
   // Case 2: PDF file — render each page with PDF.js, then find its figures with the API
-  const buffer = await file.arrayBuffer()
   try {
-    // bundled with the app (loaded only when a PDF is opened), so it works on networks that block CDNs
-    const [pdfjs, worker] = await Promise.all([
-      import('pdfjs-dist'),
-      import('pdfjs-dist/build/pdf.worker.min.mjs?url'),
-    ])
-    pdfjs.GlobalWorkerOptions.workerSrc = worker.default
-    const doc = await pdfjs.getDocument({ data: buffer }).promise
-    const maxPages = Math.min(doc.numPages, 6)
+    const doc = await openPdf(file)
+    // the pages asked for (the first 6 if none were), at most a day's allowance at a time
+    const from = Math.max(1, Math.min(doc.numPages, range?.from ?? 1))
+    const to = Math.max(from, Math.min(doc.numPages, range?.to ?? from + 5, from + MAX_PAGES_PER_READ - 1))
     const pages: RenderedTextbookPage[] = []
 
-    for (let p = 1; p <= maxPages; p++) {
-      onPage?.(p, maxPages)
+    for (let p = from; p <= to; p++) {
+      onPage?.(p - from + 1, to - from + 1)
       const page = await doc.getPage(p)
       const viewport = page.getViewport({ scale: 1.75 })
       const canvas = document.createElement('canvas')
@@ -254,6 +270,7 @@ export async function loadUploadedDocument(file: File, onPage?: (page: number, t
       sourceLabel: file.name,
       courseCode: pages[0]?.figures[0]?.courseTag ?? 'ENG',
       pages,
+      pageCount: doc.numPages,
     }
   } catch (e) {
     // sign-in, allowance and connection problems are shown as they are
