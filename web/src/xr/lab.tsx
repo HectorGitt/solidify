@@ -58,15 +58,41 @@ const place = {
   placingSince: 0,
 }
 
+/*
+ * The first visit: three tips on the panel, each gone once it has been done (turn it, touch a part, take it
+ * apart). Remembered on this headset, so later visits go straight to the rig.
+ */
+const GUIDE_KEY = 'solidify.xr.guided'
+const guidedBefore = () => {
+  try {
+    return localStorage.getItem(GUIDE_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+const TIPS = [
+  { done: 'turned', text: 'Tip 1 of 3: pinch the green ring and drag to turn it' },
+  { done: 'touched', text: 'Tip 2 of 3: point at a part and pinch to see what it is' },
+  { done: 'apart', text: 'Tip 3 of 3: Take apart shows how it fits together' },
+] as const
+
 interface LabUi {
   placing: boolean
   full: boolean
+  /** what the student has tried, for the first-visit tips */
+  tried: { turned: boolean; touched: boolean; apart: boolean }
+  guided: boolean
+  /** when the rig came back to the remembered spot (a note shows for a few seconds) */
+  restoredAt: number
   /** a surface was found under the student's gaze */
   surface: boolean
   setPlacing: (v: boolean) => void
 }
 const useLab = create<LabUi>((set) => ({
   placing: true,
+  tried: { turned: false, touched: false, apart: false },
+  guided: guidedBefore(),
+  restoredAt: 0,
   full: false,
   surface: false,
   setPlacing: (placing) => {
@@ -206,12 +232,19 @@ function Lab({ scene }: { scene: SceneDef }) {
     'viewer',
   )
 
-  // a pinch anywhere puts it down
+  // a pinch anywhere puts it down; once down, a pinch names the part the hand is pointing at (a natural pinch
+  // is too slow to count as a click on the part itself)
   useXRInputSourceEvent(
     'all',
     'select',
     () => {
-      if (useLab.getState().placing && performance.now() - place.placingSince > 700) useLab.getState().setPlacing(false)
+      const lab = useLab.getState()
+      if (lab.placing) {
+        if (performance.now() - place.placingSince > 700) lab.setPlacing(false)
+        return
+      }
+      const v = useView.getState()
+      if (v.hoveredId && !useBuild.getState().def) v.select(v.hoveredId)
     },
     [],
   )
@@ -240,7 +273,7 @@ function Lab({ scene }: { scene: SceneDef }) {
         place.at.set(pose.transform.position.x, pose.transform.position.y, pose.transform.position.z)
         if (useLab.getState().placing) {
           // back where it was left: no placing needed
-          useLab.setState({ placing: false })
+          useLab.setState({ placing: false, restoredAt: performance.now() })
         }
       }
       // building it by hand: thumb and index fingertip coming together on a loose part pick it up; it moves
@@ -327,6 +360,7 @@ function Lab({ scene }: { scene: SceneDef }) {
       if (da > Math.PI) da -= Math.PI * 2
       if (da < -Math.PI) da += Math.PI * 2
       place.turn -= da
+      if (!useLab.getState().tried.turned) useLab.setState((s) => ({ tried: { ...s.tried, turned: true } }))
       d.last = a
     },
     onPointerUp: (e: ThreeEvent<PointerEvent>) => {
@@ -461,6 +495,33 @@ function Panel({ scene, placing }: { scene: SceneDef; placing: boolean }) {
   const part = useParts((s) => (selected ? s.parts[selected] : undefined))
   const full = useLab((s) => s.full)
   const surface = useLab((s) => s.surface)
+  const tried = useLab((s) => s.tried)
+  const guided = useLab((s) => s.guided)
+  const restoredAt = useLab((s) => s.restoredAt)
+  const [, tick] = useState(0)
+  // touching a part, and taking it apart, count as tried
+  useEffect(() => {
+    if (selected && !tried.touched) useLab.setState((s) => ({ tried: { ...s.tried, touched: true } }))
+    if (explode > 0 && !tried.apart) useLab.setState((s) => ({ tried: { ...s.tried, apart: true } }))
+  }, [selected, explode, tried])
+  const tip = guided || placing ? null : TIPS.find((t) => !tried[t.done])
+  // all three done: not shown again on this headset
+  useEffect(() => {
+    if (guided || placing || tip) return
+    try {
+      localStorage.setItem(GUIDE_KEY, '1')
+    } catch {
+      /* storage off: the tips show again next time */
+    }
+    useLab.setState({ guided: true })
+  }, [guided, placing, tip])
+  const restoredNote = restoredAt > 0 && performance.now() - restoredAt < 5000
+  // the note goes after five seconds
+  useEffect(() => {
+    if (!restoredAt) return
+    const t = window.setTimeout(() => tick((n) => n + 1), 5100)
+    return () => window.clearTimeout(t)
+  }, [restoredAt])
   const building = useBuild((s) => s.def)
   const fitted = useBuild((s) => s.placed.length)
   const buildMsg = useBuild((s) => s.message)
@@ -502,7 +563,7 @@ function Panel({ scene, placing }: { scene: SceneDef; placing: boolean }) {
   const last = useRef(0)
   useEffect(() => {
     dirty.current = true
-  }, [version, playing, selected, explode, xray, cutOn, preset, part, full, surface, placing, page, hover, dom.groups, building, fitted, buildMsg])
+  }, [version, playing, selected, explode, xray, cutOn, preset, part, full, surface, placing, page, hover, dom.groups, building, fitted, buildMsg, tip, restoredNote])
   useFrame(() => {
     const t = performance.now()
     if (!dirty.current || t - last.current < 66) return
@@ -510,15 +571,18 @@ function Panel({ scene, placing }: { scene: SceneDef; placing: boolean }) {
     last.current = t
     const g = canvas.getContext('2d')!
     const all = [...items.entries()]
+    const drawnHint = placing
+      ? surface
+        ? 'Pinch to put it on this surface'
+        : 'Look at your table, then pinch'
+      : building
+        ? `${fitted}/${building.steps.length} · ${buildMsg?.text ?? 'Pinch a part on the table, put it where it goes'}`
+        : restoredNote
+          ? 'Back where you left it. Move puts it somewhere else'
+          : (tip?.text ?? null)
     const drawn = drawPanel(g, {
       title: scene.title,
-      hint: placing
-        ? surface
-          ? 'Pinch to put it on this surface'
-          : 'Look at your table, then pinch'
-        : building
-          ? `${fitted}/${building.steps.length} · ${buildMsg?.text ?? 'Pinch a part on the table, put it where it goes'}`
-          : null,
+      hint: drawnHint,
       buttons,
       part: part ? { name: part.name, summary: part.info?.summary } : null,
       controls: [...dom.groups, ...all.filter(([, m]) => m.kind !== 'readout')],
@@ -529,7 +593,7 @@ function Panel({ scene, placing }: { scene: SceneDef; placing: boolean }) {
     hits.current = drawn.hits
     pageCount.current = drawn.pages
     // development only: where things are on the panel, for the headset tests
-    if (import.meta.env.DEV) (window as unknown as { __xrPanel?: unknown }).__xrPanel = { hits: drawn.hits, mesh: mesh.current }
+    if (import.meta.env.DEV) (window as unknown as { __xrPanel?: unknown }).__xrPanel = { hits: drawn.hits, mesh: mesh.current, hint: drawnHint }
     tex.needsUpdate = true
   })
 
