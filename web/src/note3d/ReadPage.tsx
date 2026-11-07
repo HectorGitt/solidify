@@ -5,8 +5,6 @@ import { findModule } from '@/modules/catalog'
 import type { SceneDef } from '@/modules/types'
 import { useView } from '@/render/view'
 import { StudyShell } from '@/study/ui/StudyShell'
-import { ApiError } from '@/cloud/api'
-import { useAuth } from '@/cloud/auth'
 import { primaryBtn } from '@/cloud/ui/Modal'
 import { PartCard } from '@/ui/PartCard'
 import { PartsTree } from '@/ui/PartsTree'
@@ -14,12 +12,11 @@ import { OrientationGizmo, Stage } from '@/ui/Stage'
 import { BuildScreen } from '@/ui/BuildScreen'
 import { Icon } from '@/ui/icons'
 import { Tex } from '@/ui/Tex'
-import { toast } from '@/ui/toast'
 import { Toolbar } from '@/ui/Toolbar'
 import { InlineFigure3D } from './InlineFigure3D'
 import { createSceneDefFromSpec } from './NoteSceneRenderer'
-import { analyzeTextbookPage, buildFigureFromPage, loadUploadedDocument } from './pdfPageRenderer'
-import { SAMPLE_TEXTBOOKS, type TextbookDocument } from './sampleTextbooks'
+import { buildPicked, convertAll, convertTodo, loadReader, readDocument, removeDocument, setActiveDoc, stopConverting, useReader } from './readerStore'
+import { SAMPLE_TEXTBOOKS } from './sampleTextbooks'
 import { CONFIDENCE_THRESHOLD, type DetectedPageFigure } from './schema'
 
 function ExpandedFigureModal({
@@ -202,13 +199,18 @@ const READ_TIPS = [
 ]
 
 export default function ReadPage() {
-  const [documents, setDocuments] = useState<TextbookDocument[]>(SAMPLE_TEXTBOOKS)
-  const [activeDocId, setActiveDocId] = useState<string>(SAMPLE_TEXTBOOKS[0].id)
+  // documents and long jobs live in the reader store: they carry on (and are saved) when the student leaves
+  const documents = useReader((s) => s.documents)
+  const activeDocId = useReader((s) => s.activeDocId)
+  const reading = useReader((s) => s.reading)
+  const converting = useReader((s) => s.converting)
+  const uploading = !!reading
+  useEffect(() => {
+    void loadReader()
+  }, [])
+  const setActiveDocId = setActiveDoc
   const [pageIdx, setPageIdx] = useState(0)
   const [readingMode, setReadingMode] = useState<'page-overlay' | 'reflow'>('page-overlay')
-  const [uploading, setUploading] = useState(false)
-  /** what is being read right now, for the build screen */
-  const [reading, setReading] = useState<{ kind: 'document' | 'figure'; name?: string } | null>(null)
   const [lassoActive, setLassoActive] = useState(false)
   const [lassoStart, setLassoStart] = useState<[number, number] | null>(null)
   const [lassoCurrent, setLassoCurrent] = useState<[number, number] | null>(null)
@@ -238,48 +240,11 @@ export default function ReadPage() {
     setActiveFigureId((firstHighConf ?? currentPage.figures[0])?.id ?? null)
   }, [activeDoc.id, currentPage.pageNumber, currentPage.figures])
 
-  /** problems are shown as a toast; a missing sign-in offers to sign in */
-  const showError = (e: unknown, otherwise: string) => {
-    if (e instanceof ApiError && e.status === 401)
-      toast('Sign in to read your own pages in 3D. Pages are read by Solidify’s AI, which needs an account.', { tone: 'warn', action: { label: 'Sign in', run: () => useAuth.getState().openDialog() } })
-    else toast(e instanceof Error ? e.message : otherwise, { tone: 'warn' })
-  }
-
   const handleFileUpload = async (file: File | undefined) => {
     if (!file) return
-    setUploading(true)
-    setReading({ kind: 'document', name: file.name })
-    try {
-      const loaded = await loadUploadedDocument(file)
-      setDocuments((prev) => [loaded, ...prev])
-      setActiveDocId(loaded.id)
-      setPageIdx(0)
-    } catch (e) {
-      showError(e, 'Couldn’t read that document.')
-    } finally {
-      setUploading(false)
-      setReading(null)
-    }
+    const loaded = await readDocument(file)
+    if (loaded) setPageIdx(0)
   }
-
-  /** adds figures to a page (replacing any with the same id), and drops the candidates they came from */
-  const putFigures = (docId: string, pageNumber: number, figs: DetectedPageFigure[], usedCandidates: string[] = []) =>
-    setDocuments((prev) =>
-      prev.map((doc) =>
-        doc.id !== docId
-          ? doc
-          : {
-              ...doc,
-              pages: doc.pages.map((p) => {
-                if (p.pageNumber !== pageNumber) return p
-                const ids = new Set(figs.map((f) => f.id))
-                const kept = p.figures.filter((f) => !ids.has(f.id))
-                const newSlots = figs.filter((f) => !p.figures.some((x) => x.id === f.id)).map((nf) => ({ kind: 'figure-slot' as const, figureId: nf.id }))
-                return { ...p, figures: [...kept, ...figs], blocks: [...p.blocks, ...newSlots], candidates: (p.candidates ?? []).filter((c) => !usedCandidates.includes(c.id)) }
-              }),
-            },
-      ),
-    )
 
   const toNormCoords = (e: MouseEvent<HTMLDivElement>): [number, number] => {
     const rect = pageSheetRef.current?.getBoundingClientRect()
@@ -305,73 +270,14 @@ export default function ReadPage() {
 
     if (xmax - xmin < 80 || ymax - ymin < 80) return
     const cropBox: [number, number, number, number] = [ymin, xmin, ymax, xmax]
-    setUploading(true)
-    setReading({ kind: 'figure' })
-    try {
-      // a lab rig the reader recognises is used as it is (with the figure's values)
-      const found = await analyzeTextbookPage({
-        pageNumber: currentPage.pageNumber,
-        pageImageUrl: currentPage.pageImageUrl,
-        pageText: currentPage.pageText,
-        fileName: activeDoc.title,
-        cropBox,
-      })
-      const rigs = found.filter((f) => f.visualization.kind === 'catalog').map((f) => ({ ...f, chosen: true }))
-      // anything else is built from the picture of the box, the way Create in 3D builds from a photo
-      const figs = rigs.length
-        ? rigs
-        : [await buildFigureFromPage({ pageNumber: currentPage.pageNumber, pageImageUrl: currentPage.pageImageUrl, pageText: currentPage.pageText, box: cropBox, title: found[0]?.title, caption: found[0]?.caption })].filter(
-            (f): f is DetectedPageFigure => !!f,
-          )
-      if (figs.length) {
-        putFigures(activeDoc.id, currentPage.pageNumber, figs)
-        setActiveFigureId(figs[0].id)
-      } else {
-        toast('Solidify couldn’t build that part of the page. Try a box tighter around the drawing.', { tone: 'warn' })
-      }
-    } catch (e) {
-      showError(e, 'Couldn’t read that part of the page.')
-    } finally {
-      setUploading(false)
-      setReading(null)
-    }
+    // carries on (as a background task) if the student leaves the page
+    const fig = await buildPicked(activeDoc.id, currentPage.pageNumber, cropBox)
+    if (fig) setActiveFigureId(fig.id)
   }
 
   /* "Make every figure 3D": builds each drawing the reader found but could not show, and shows the ones kept as drawings */
-  const [converting, setConverting] = useState<{ done: number; total: number } | null>(null)
-  const stopConvert = useRef(false)
-  const todo = useMemo(() => {
-    const kept = activeDoc.pages.flatMap((p) => p.figures.filter((f) => !f.chosen && (f.confidence ?? 0) < CONFIDENCE_THRESHOLD).map((f) => ({ page: p, figure: f })))
-    const toBuild = activeDoc.pages.flatMap((p) => (p.candidates ?? []).map((c) => ({ page: p, candidate: c })))
-    return { kept, toBuild }
-  }, [activeDoc])
-  const convertAll = async () => {
-    const docId = activeDoc.id
-    // drawings kept for low confidence: shown in 3D now (each can still be switched back to the drawing)
-    for (const { page, figure } of todo.kept) putFigures(docId, page.pageNumber, [{ ...figure, chosen: true }])
-    const list = todo.toBuild
-    if (!list.length) return
-    stopConvert.current = false
-    setConverting({ done: 0, total: list.length })
-    let built = 0
-    for (let i = 0; i < list.length && !stopConvert.current; i++) {
-      const { page, candidate } = list[i]
-      try {
-        const fig = await buildFigureFromPage({ pageNumber: page.pageNumber, pageImageUrl: page.pageImageUrl, pageText: page.pageText, box: candidate.box, title: candidate.title, caption: candidate.caption })
-        if (fig) {
-          putFigures(docId, page.pageNumber, [fig], [candidate.id])
-          built++
-        }
-      } catch (e) {
-        showError(e, 'Couldn’t build one of the figures.')
-        // out of builds for today, or signed out: no point going on
-        if (e instanceof ApiError && (e.status === 429 || e.status === 401)) break
-      }
-      setConverting({ done: i + 1, total: list.length })
-    }
-    setConverting(null)
-    toast(`Built ${built} of ${list.length} figures in 3D.`)
-  }
+  const todo = useMemo(() => convertTodo(activeDoc), [activeDoc])
+  const convertingHere = converting && converting.docId === activeDoc.id ? converting : null
 
   const highConfCount = currentPage.figures.filter((f) => f.chosen || (f.confidence ?? 0) >= CONFIDENCE_THRESHOLD).length
   const gatedCount = currentPage.figures.length - highConfCount
@@ -410,21 +316,27 @@ export default function ReadPage() {
           <div className="-mx-4 flex min-w-0 items-center gap-1.5 overflow-x-auto px-4 text-[12.5px] scrollbar-none sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0" role="group" aria-label="Documents">
             {documents.map((doc) => {
               const active = doc.id === activeDoc.id
+              const uploaded = !SAMPLE_TEXTBOOKS.some((x) => x.id === doc.id)
               return (
-                <button
-                  key={doc.id}
-                  type="button"
-                  aria-pressed={active}
-                  onClick={() => {
-                    setActiveDocId(doc.id)
-                    setPageIdx(0)
-                  }}
-                  className={`max-w-[240px] shrink-0 truncate rounded-full border px-3 py-1.5 font-medium transition-colors ${
-                    active ? 'border-ink bg-ink text-bg' : 'border-line-2 text-ink/80 hover:border-ink/40 hover:text-ink'
-                  }`}
-                >
-                  {doc.title}
-                </button>
+                <span key={doc.id} className={`inline-flex max-w-[260px] shrink-0 items-center rounded-full border transition-colors ${active ? 'border-ink bg-ink text-bg' : 'border-line-2 text-ink/80 hover:border-ink/40 hover:text-ink'}`}>
+                  <button
+                    type="button"
+                    aria-pressed={active}
+                    onClick={() => {
+                      setActiveDocId(doc.id)
+                      setPageIdx(0)
+                    }}
+                    className={`min-w-0 truncate py-1.5 font-medium ${uploaded ? 'pl-3 pr-1' : 'px-3'}`}
+                  >
+                    {doc.title}
+                  </button>
+                  {/* uploaded notes are kept in this browser until removed */}
+                  {uploaded ? (
+                    <button type="button" aria-label={`Remove ${doc.title}`} title="Remove from this browser" onClick={() => removeDocument(doc.id)} className="shrink-0 rounded-full px-2 py-1 text-[11px] opacity-60 hover:opacity-100">
+                      ✕
+                    </button>
+                  ) : null}
+                </span>
               )
             })}
           </div>
@@ -463,19 +375,19 @@ export default function ReadPage() {
                 {gatedCount} kept as {gatedCount === 1 ? 'a drawing' : 'drawings'}
               </span>
             )}
-            <span className="hidden text-dim xl:inline">Pages are sent only to find figures and are never saved.</span>
+            <span className="hidden text-dim xl:inline">Pages go to Solidify’s AI only to find and build figures; your notes are kept in this browser, not on our servers.</span>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            {converting ? (
-              <button type="button" onClick={() => (stopConvert.current = true)} className={smallGhost} title="Stop after the figure being built">
-                Building {converting.done + 1} of {converting.total}… Stop
+            {convertingHere ? (
+              <button type="button" onClick={stopConverting} className={smallGhost} title="Stop after the figure being built; what is built is kept">
+                Building {convertingHere.done + 1} of {convertingHere.total}… Stop
               </button>
             ) : todo.kept.length + todo.toBuild.length > 0 ? (
               <button
                 type="button"
-                onClick={() => void convertAll()}
-                disabled={uploading}
+                onClick={() => void convertAll(activeDoc.id)}
+                disabled={uploading || !!converting}
                 className={smallGhost}
                 title={todo.toBuild.length ? `Builds ${todo.toBuild.length} more ${todo.toBuild.length === 1 ? 'drawing' : 'drawings'} in 3D (one 3D build each)` : 'Shows the figures kept as drawings in 3D'}
               >

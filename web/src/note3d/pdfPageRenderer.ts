@@ -133,7 +133,7 @@ export async function refineFigureSpec(
   return res.spec
 }
 
-export async function loadUploadedDocument(file: File): Promise<TextbookDocument> {
+export async function loadUploadedDocument(file: File, onPage?: (page: number, total: number) => void): Promise<TextbookDocument> {
   const baseTitle = file.name.replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ')
 
   // Case 1: Image file (PNG, JPG, WEBP, SVG) — e.g. screenshot of a textbook page or scan of notes
@@ -145,6 +145,7 @@ export async function loadUploadedDocument(file: File): Promise<TextbookDocument
       reader.readAsDataURL(file)
     })
 
+    onPage?.(1, 1)
     const dims = await new Promise<{ w: number; h: number }>((resolve) => {
       const img = new Image()
       img.onload = () => resolve({ w: img.width || 850, h: img.height || 1100 })
@@ -203,6 +204,7 @@ export async function loadUploadedDocument(file: File): Promise<TextbookDocument
     const pages: RenderedTextbookPage[] = []
 
     for (let p = 1; p <= maxPages; p++) {
+      onPage?.(p, maxPages)
       const page = await doc.getPage(p)
       const viewport = page.getViewport({ scale: 1.75 })
       const canvas = document.createElement('canvas')
