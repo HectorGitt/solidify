@@ -4,7 +4,7 @@ import { startTask } from '@/ui/tasks'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { EVAL_CASES } from '@/evals/cases'
 import { scoreBuild } from '@/evals/score'
-import { DRAFT_TOPICS, topicsFor, type DraftTopic } from '@/evals/topics'
+import { DRAFT_TOPICS, type DraftTopic } from '@/evals/topics'
 import { Pills, StudyShell } from '@/study/ui/StudyShell'
 import { ListSkeleton } from '@/ui/Skeleton'
 import { toast } from '@/ui/toast'
@@ -18,6 +18,7 @@ import {
   approveDraft,
   costOf,
   getAdminSettings,
+  nextTopics,
   getLibraryItem,
   listLibrary,
   unpublish,
@@ -357,7 +358,18 @@ function RunNow({ onFinished }: { onFinished: () => void }) {
     const settings = admin.data?.settings
     const n = limit ? Math.min(EVAL_CASES.length, Number(limit)) : EVAL_CASES.length
     const d = drafts === '' ? (settings?.draftsPerNight ?? 0) : Number(drafts)
-    const topics = topicsFor(Math.floor(Date.now() / 86_400_000), d, admin.data?.topics?.length ? admin.data.topics : DRAFT_TOPICS)
+    // from the drafting pool: each topic once, topped up by Gemini when the list runs low
+    let topics: DraftTopic[] = []
+    if (d > 0) {
+      try {
+        const got = await nextTopics(Math.min(100, d), admin.data?.topics?.length ? admin.data.topics : DRAFT_TOPICS)
+        topics = got.topics
+        if (got.added) toast(`${got.added} new topics were suggested and added to the list.`)
+      } catch (e) {
+        toast(e instanceof ApiError ? e.message : 'Couldn’t get topics to draft.', { tone: 'warn' })
+        return
+      }
+    }
     const list: LiveCase[] = [
       ...EVAL_CASES.slice(0, n).map((c) => ({ id: c.id, prompt: c.prompt, kind: 'case' as const, state: 'waiting' as const })),
       ...topics.map((t, i) => ({ id: `draft-${i}`, prompt: t.prompt, topic: t.topic, kind: 'draft' as const, state: 'waiting' as const })),
@@ -960,7 +972,8 @@ function Settings() {
             <div className="flex flex-wrap gap-5">
               <label className="text-[12px] text-mute">
                 Drafts per night
-                <input type="number" min={0} max={20} value={form.draftsPerNight} onChange={(e) => set({ draftsPerNight: Math.max(0, Math.min(20, Math.round(Number(e.target.value) || 0))) })} className={num} />
+                <input type="number" min={0} max={100} value={form.draftsPerNight} onChange={(e) => set({ draftsPerNight: Math.max(0, Math.min(100, Math.round(Number(e.target.value) || 0))) })} className={num} />
+                <span className="mt-1 block text-[11px] text-dim">{form.draftsPerNight} builds a night on top of the tests; the Quality tab shows what each one really costs</span>
               </label>
               <label className="text-[12px] text-mute">
                 Minimum score for the queue
