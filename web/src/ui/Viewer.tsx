@@ -36,6 +36,7 @@ import { SceneMark } from '@/study/ui/badges'
 import { InSceneExam, questionsForScene } from '@/study/ui/InSceneExam'
 import { SceneMenu } from './SceneMenu'
 import { TutorButton, TutorPanel } from '@/cloud/ui/Tutor'
+import { checkXRSupport, enterXR, useXRSession } from '@/xr/session'
 
 function useMediaQuery(q: string) {
   const [m, setM] = useState(() => window.matchMedia(q).matches)
@@ -59,6 +60,15 @@ export function Viewer() {
   const [leftOpen, setLeftOpen] = useState(wide)
   const [rightOpen, setRightOpen] = useState(wide)
   const [rightTab, setRightTab] = useState<'controls' | 'exam'>('controls')
+  // in a headset: the rig's panel must be showing, as the panel in the headset copies its controls
+  const xrSupported = useXRSession((s) => s.supported)
+  const xrActive = useXRSession((s) => s.active)
+  useEffect(() => void checkXRSupport(), [])
+  useEffect(() => {
+    if (!xrActive) return
+    setRightOpen(true)
+    setRightTab('controls')
+  }, [xrActive])
   const tourActive = useTour((s) => s.active)
   const academic = useAcademic()
   const startTour = useTour((s) => s.start)
@@ -309,6 +319,20 @@ export function Viewer() {
               <span className="hidden sm:inline">{tourActive ? 'End tour' : 'Guided tour'}</span>
             </button>
           ) : null}
+          {scene && xrSupported ? (
+            <button
+              onClick={() => void enterXR()}
+              className="flex items-center gap-1.5 rounded-md bg-accent px-2.5 py-1 text-[12.5px] font-semibold text-accent-ink hover:brightness-110"
+              title={xrSupported === 'ar' ? 'Put this rig on your real table, and work it with your hands' : 'Open this rig in VR, and work it with your hands'}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                <path d="M3 8a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-3.5l-2-2.5h-3l-2 2.5H5a2 2 0 0 1-2-2z" />
+                <circle cx="8" cy="11.5" r="1.5" />
+                <circle cx="16" cy="11.5" r="1.5" />
+              </svg>
+              <span>{xrSupported === 'ar' ? 'On your table' : 'In VR'}</span>
+            </button>
+          ) : null}
           {scene ? <TutorButton /> : null}
           <span className="mx-0.5 hidden h-5 w-px bg-line sm:block" aria-hidden />
           <button aria-label="Toggle parts panel" aria-pressed={leftOpen} onClick={() => setLeftOpen((o) => !o)} className={`grid h-8 w-8 place-items-center rounded-md ${leftOpen ? 'text-accent' : 'text-mute'} hover:bg-panel-3`}>
@@ -367,7 +391,7 @@ export function Viewer() {
         ) : null}
 
         <main className="relative min-w-0 flex-1 bg-bg">
-          {scene ? <Stage key={scene.id} scene={scene} loadingLabel="Building the model" /> : null}
+          {scene ? <Stage key={scene.id} scene={scene} loadingLabel="Building the model" xr /> : null}
           {!scene && !error ? (
             entry?.load ? <Loader label="Building the model" className="absolute inset-0" /> : <div className="absolute inset-0 grid place-items-center text-[13px] text-mute">This scene is coming soon.</div>
           ) : null}
