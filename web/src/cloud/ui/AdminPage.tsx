@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
+import { create } from 'zustand'
+import { startTask } from '@/ui/tasks'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { EVAL_CASES } from '@/evals/cases'
 import { scoreBuild } from '@/evals/score'
@@ -330,13 +332,18 @@ interface LiveCase {
  * run, three builds at a time, with each score appearing as it lands. The run is saved with the nightly ones,
  * and drafts that reach the minimum score go to the review queue.
  */
+const useLiveRun = create<{ rows: LiveCase[] | null; running: boolean }>(() => ({ rows: null, running: false }))
+const liveRunStop = { current: false }
+
 function RunNow({ onFinished }: { onFinished: () => void }) {
   const admin = useLoad(getAdminSettings)
   const [limit, setLimit] = useState('3')
   const [drafts, setDrafts] = useState('0')
-  const [rows, setRows] = useState<LiveCase[] | null>(null)
-  const [running, setRunning] = useState(false)
-  const stopRef = useRef(false)
+  // the run lives outside the page, so it carries on (and is shown again) when the admin comes back
+  const { rows, running } = useLiveRun()
+  const setRows = (r: LiveCase[] | null) => useLiveRun.setState({ rows: r })
+  const setRunning = (v: boolean) => useLiveRun.setState({ running: v })
+  const stopRef = liveRunStop
 
   // leaving mid-run loses the builds still going: ask first
   useEffect(() => {
@@ -359,10 +366,13 @@ function RunNow({ onFinished }: { onFinished: () => void }) {
     stopRef.current = false
     setRows(list)
     setRunning(true)
+    const task = startTask(`Test run: ${list.length} builds`, '/admin')
     const done: LiveCase[] = list.map((r) => ({ ...r }))
     const update = (i: number, patch: Partial<LiveCase>) => {
       Object.assign(done[i], patch)
       setRows(done.map((r) => ({ ...r })))
+      const finished = done.filter((r) => r.state === 'done' || r.state === 'failed').length
+      task.update(`${finished} of ${done.length} built`, finished, done.length)
     }
     let next = 0
     await Promise.all(
@@ -417,7 +427,7 @@ function RunNow({ onFinished }: { onFinished: () => void }) {
     }
     setRunning(false)
     const queued = done.filter((r) => r.queued).length
-    toast(`Run finished${stopRef.current ? ' (stopped early)' : ''}.${queued ? ` ${queued} draft${queued > 1 ? 's' : ''} in the review queue.` : ''}`)
+    task.finish({ message: `Test run finished${stopRef.current ? ' (stopped early)' : ''}.${queued ? ` ${queued} draft${queued > 1 ? 's' : ''} in the review queue.` : ''}` })
   }
 
   const finished = rows?.filter((r) => r.state === 'done' || r.state === 'failed').length ?? 0
