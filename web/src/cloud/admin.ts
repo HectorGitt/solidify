@@ -211,5 +211,29 @@ export interface Lookup {
 export const getAppCheckStats = () => api<{ mode: 'off' | 'monitor' | 'enforce'; days: ({ day: string } & Record<string, number | string>)[] }>('/v1/admin/app-check')
 export const getPeople = () => api<{ people: Person[]; roles: StaffRole[] }>('/v1/admin/people')
 export const setRoles = (email: string, roles: StaffRole[]) => api<{ email: string; roles: StaffRole[] }>('/v1/admin/people', { method: 'PUT', body: { email, roles } })
+/** every account, a page at a time */
+export interface Account {
+  uid: string
+  email: string
+  name: string
+  type: 'student' | 'teacher'
+  joined: number
+  lastSeen: number | null
+  roles: StaffRole[]
+  owner: boolean
+  referredBy: string | null
+}
+export interface AccountFilter {
+  q: string
+  type: 'all' | 'student' | 'teacher'
+  role: 'all' | 'staff' | 'none' | StaffRole
+  active: 'all' | '7' | '30' | 'inactive'
+  sort: 'joined' | 'seen' | 'name' | 'email'
+  dir: 'asc' | 'desc'
+  page: number
+}
+export const accountQuery = (f: AccountFilter) => new URLSearchParams(Object.entries(f).map(([k, v]) => [k, String(v)])).toString()
+export const getAccounts = (f: AccountFilter) =>
+  api<{ accounts: Account[]; total: number; page: number; pages: number; size: number; counts: { all: number; students: number; teachers: number; staff: number; active7: number; new7: number } }>(`/v1/admin/accounts?${accountQuery(f)}`)
 export const lookupPerson = (email: string) => api<Lookup>(`/v1/admin/people/lookup?email=${encodeURIComponent(email)}`)
 export const setFeedbackStatus = (id: string, status: 'new' | 'done') => api<{ ok: true }>(`/v1/feedback/${encodeURIComponent(id)}`, { method: 'PUT', body: { status } })
