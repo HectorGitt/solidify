@@ -1,0 +1,7 @@
+# what gcloud run deploy --source uploads: the source only (the build installs its own packages)
+.gcloudignore
+node_modules/
+dist/
+test/
+*.log
+.env*
