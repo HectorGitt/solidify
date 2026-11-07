@@ -43,8 +43,13 @@ const shuffleKey = (id: string) => [...id].reduce((h, c) => (h * 31 + c.charCode
  * Hands in a headset (set while build mode is on): pick up the loose part at a point (fingers pinched on
  * it), carry it, and let it go, with the same rules as dragging it with a mouse. Points are in the scene.
  */
-/** which side of the machine the tray goes, as seen by the viewer: 1 right, -1 left (the headset panel is on the right) */
-export const buildTray = { side: 1 }
+/**
+ * The tray's layout: which side of the machine it goes, as seen by the viewer (1 right, -1 left: the headset
+ * panel is on the right), and how long a row is (× the machine's size; short in a headset, so every part is
+ * within reach of someone sitting at the table), and whether the rows run back from the viewer or, starting
+ * level with the back of the machine, towards them (in a headset: the parts come to hand)
+ */
+export const buildTray = { side: 1, row: 1.7, toward: false }
 
 export const buildHands: {
   grab?: (p: THREE.Vector3, reach: number) => string | null
@@ -101,7 +106,7 @@ export function BuildController({ floorY = 0 }: { floorY?: number }) {
     front.normalize()
     const across = new THREE.Vector3(front.z, 0, -front.x).multiplyScalar(buildTray.side)
     const gap = 0.14 * big
-    const rowW = 1.7 * big
+    const rowW = buildTray.row * big
     const ids = [...m.keys()].sort((a, b) => shuffleKey(a) - shuffleKey(b))
     const rows: string[][] = [[]]
     let w = 0
@@ -117,20 +122,22 @@ export function BuildController({ floorY = 0 }: { floorY?: number }) {
     }
     const next = new Map<string, Slot>()
     const side = 0.5 * (Math.abs(S.x * across.x) + Math.abs(S.z * across.z)) + 0.3 * big
-    // first row level with the front of the machine, the rest stepping back
-    let dist = 0.5 * (Math.abs(S.x * front.x) + Math.abs(S.z * front.z))
+    // first row level with the front of the machine, the rest stepping back (or level with its back, the rest
+    // stepping towards the viewer)
+    const toward = buildTray.toward
+    let dist = (toward ? -0.5 : 0.5) * (Math.abs(S.x * front.x) + Math.abs(S.z * front.z))
     for (const row of rows) {
       const widths = row.map((id) => { const sz = m.get(id)!.size; return Math.abs(sz.x * across.x) + Math.abs(sz.z * across.z) + gap })
       const depth = Math.max(...row.map((id) => { const sz = m.get(id)!.size; return Math.abs(sz.x * front.x) + Math.abs(sz.z * front.z) }))
       let x = side
       row.forEach((id, i) => {
         const { centre, size } = m.get(id)!
-        const t = C.clone().addScaledVector(front, dist - depth / 2).addScaledVector(across, x + widths[i] / 2)
+        const t = C.clone().addScaledVector(front, toward ? dist + depth / 2 : dist - depth / 2).addScaledVector(across, x + widths[i] / 2)
         t.y = floorY + size.y / 2 + 0.002
         next.set(id, { home: centre, size, tray: t, at: t.clone() })
         x += widths[i]
       })
-      dist -= depth + gap
+      dist += toward ? depth + gap : -(depth + gap)
     }
     slots.current = next
     // frame the machine and the tray together

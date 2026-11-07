@@ -54,6 +54,12 @@ export async function checkXRSupport() {
         const device = new XRDevice(metaQuest3)
         device.primaryInputMode = 'hand'
         device.installRuntime()
+        // ?xrtest=room: with a synthetic room around it (for recording a demo)
+        if (/[?&]xrtest=room/.test(location.search)) {
+          const { SyntheticEnvironmentModule } = await import('@iwer/sem')
+          device.installSEM(SyntheticEnvironmentModule as never)
+          device.sem?.loadDefaultEnvironment('office_small')
+        }
         ;(window as unknown as { __xrDevice?: unknown }).__xrDevice = device
       }
       await loadXR()
