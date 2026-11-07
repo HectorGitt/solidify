@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { Link, NavLink, useLocation } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import { AccountMenu } from '@/cloud/ui/AccountMenu'
-import { useAcademic } from '@/ui/audience'
 import { AudienceSwitch } from '@/ui/AudienceSwitch'
 import { Icon } from '@/ui/icons'
 import { Logo } from '@/ui/Logo'
@@ -10,23 +9,43 @@ import { ThemeToggle } from '@/ui/ThemeToggle'
 interface NavItem {
   to: string
   label: string
+  /** a line under the label in the menu */
+  hint?: string
 }
 
-/** the main tools, the same on every page */
-const MAIN: NavItem[] = [
-  { to: '/labs', label: 'Labs' },
-  { to: '/create', label: 'Create in 3D' },
-  { to: '/library', label: 'Library' },
-  { to: '/read', label: 'Read notes in 3D' },
-  { to: '/challenges', label: 'Challenges' },
-]
+interface NavGroup {
+  label: string
+  /** a group with one item is a plain link */
+  items: NavItem[]
+  /** the paths that count as being in this section */
+  match: (path: string) => boolean
+}
 
-/** study tools, shown in Academic mode */
-const STUDY: NavItem[] = [
-  { to: '/exam', label: 'Exam practice' },
-  { to: '/progress', label: 'Progress' },
-  { to: '/formulas', label: 'Formula sheet' },
-  { to: '/classes', label: 'Classes' },
+/** the site's sections, the same on every page and in both views */
+const NAV: NavGroup[] = [
+  { label: 'Labs', items: [{ to: '/labs', label: 'Labs' }], match: (p) => p === '/labs' || p.startsWith('/m/') },
+  {
+    label: 'Create',
+    items: [
+      { to: '/create/new', label: 'Build a new model', hint: 'Describe it or upload a photo' },
+      { to: '/create', label: 'Create in 3D', hint: 'Samples and your recent models' },
+      { to: '/create/lab', label: 'My models', hint: 'Everything you have built' },
+      { to: '/library', label: 'Library', hint: 'Models checked by the team' },
+    ],
+    match: (p) => p.startsWith('/create') || p === '/library',
+  },
+  { label: 'Read notes', items: [{ to: '/read', label: 'Read notes in 3D' }], match: (p) => p === '/read' },
+  {
+    label: 'Study',
+    items: [
+      { to: '/exam', label: 'Exam practice', hint: 'Worked problems, checked live' },
+      { to: '/formulas', label: 'Formula sheet' },
+      { to: '/challenges', label: 'Challenges', hint: 'Goals set inside the labs' },
+      { to: '/progress', label: 'Progress' },
+      { to: '/classes', label: 'Classes' },
+    ],
+    match: (p) => ['/exam', '/formulas', '/challenges', '/progress', '/classes'].some((x) => p === x || p.startsWith(`${x}/`)),
+  },
 ]
 
 const pill = (active: boolean) =>
@@ -51,23 +70,27 @@ function useDismiss(open: boolean, close: () => void) {
   return ref
 }
 
-function StudyMenu() {
+/** exact match for an item, so "Create in 3D" is not lit on "My models" */
+const itemActive = (path: string, to: string) => path === to
+
+/** a section with several pages: a pill that opens its menu */
+function GroupMenu({ group }: { group: NavGroup }) {
   const [open, setOpen] = useState(false)
   const ref = useDismiss(open, () => setOpen(false))
   const { pathname } = useLocation()
-  const active = STUDY.some((s) => pathname.startsWith(s.to))
   return (
     <div ref={ref} className="relative">
-      <button type="button" aria-expanded={open} aria-haspopup="menu" onClick={() => setOpen((o) => !o)} className={`${pill(active)} inline-flex items-center gap-1`}>
-        Study
+      <button type="button" aria-expanded={open} aria-haspopup="menu" onClick={() => setOpen((o) => !o)} className={`${pill(group.match(pathname))} inline-flex items-center gap-1`}>
+        {group.label}
         <Icon.chevron width={12} height={12} className={`transition-transform ${open ? '-rotate-90' : 'rotate-90'}`} />
       </button>
       {open ? (
-        <div role="menu" className="absolute left-0 top-full z-50 mt-2 w-48 rounded-2xl border border-line bg-panel p-1.5 shadow-xl">
-          {STUDY.map((s) => (
-            <NavLink key={s.to} role="menuitem" to={s.to} className={({ isActive }) => `block rounded-xl px-3 py-2 text-[13px] ${isActive ? 'bg-ink text-bg' : 'text-ink hover:bg-panel-2'}`}>
-              {s.label}
-            </NavLink>
+        <div role="menu" className="absolute left-0 top-full z-50 mt-2 w-64 rounded-2xl border border-line bg-panel p-1.5 shadow-xl">
+          {group.items.map((it) => (
+            <Link key={it.to} role="menuitem" to={it.to} className={`block rounded-xl px-3 py-2 ${itemActive(pathname, it.to) ? 'bg-ink text-bg' : 'text-ink hover:bg-panel-2'}`}>
+              <span className="block text-[13px] font-medium">{it.label}</span>
+              {it.hint ? <span className={`block text-[11.5px] ${itemActive(pathname, it.to) ? 'text-bg/70' : 'text-mute'}`}>{it.hint}</span> : null}
+            </Link>
           ))}
         </div>
       ) : null}
@@ -75,11 +98,12 @@ function StudyMenu() {
   )
 }
 
-/** below laptop width every link folds into one menu, so the header never wraps */
-function MobileMenu({ academic }: { academic: boolean }) {
+/** below laptop width every section folds into one menu, so the header never wraps */
+function MobileMenu() {
   const [open, setOpen] = useState(false)
   const ref = useDismiss(open, () => setOpen(false))
-  const link = ({ isActive }: { isActive: boolean }) => `block rounded-xl px-3 py-2 text-[13.5px] ${isActive ? 'bg-ink text-bg' : 'text-ink hover:bg-panel-2'}`
+  const { pathname } = useLocation()
+  const link = (active: boolean) => `block rounded-xl px-3 py-2 text-[13.5px] ${active ? 'bg-ink text-bg' : 'text-ink hover:bg-panel-2'}`
   return (
     <div ref={ref} className="relative lg:hidden">
       <button
@@ -93,23 +117,25 @@ function MobileMenu({ academic }: { academic: boolean }) {
         Menu
       </button>
       {open ? (
-        <div role="menu" className="absolute left-0 top-full z-50 mt-2 w-60 rounded-2xl border border-line bg-panel p-1.5 shadow-xl">
-          {MAIN.map((m) => (
-            <NavLink key={m.to} role="menuitem" to={m.to} end={m.to === '/'} className={link}>
-              {m.label}
-            </NavLink>
-          ))}
-          {academic ? (
-            <>
-              <div className="mx-3 my-1.5 border-t border-line" />
-              <p className="px-3 pb-1 pt-0.5 text-[11px] font-medium uppercase tracking-wider text-dim">Study</p>
-              {STUDY.map((s) => (
-                <NavLink key={s.to} role="menuitem" to={s.to} className={link}>
-                  {s.label}
-                </NavLink>
-              ))}
-            </>
-          ) : null}
+        <div role="menu" className="absolute left-0 top-full z-50 mt-2 max-h-[80vh] w-64 overflow-y-auto rounded-2xl border border-line bg-panel p-1.5 shadow-xl">
+          {NAV.map((g, i) =>
+            g.items.length === 1 ? (
+              <Link key={g.label} role="menuitem" to={g.items[0].to} className={link(g.match(pathname))}>
+                {g.items[0].label}
+              </Link>
+            ) : (
+              <div key={g.label}>
+                {i > 0 ? <div className="mx-3 my-1.5 border-t border-line" /> : null}
+                <p className="px-3 pb-1 pt-0.5 text-[11px] font-medium uppercase tracking-wider text-dim">{g.label}</p>
+                {g.items.map((it) => (
+                  <Link key={it.to} role="menuitem" to={it.to} className={link(itemActive(pathname, it.to))}>
+                    {it.label}
+                  </Link>
+                ))}
+                {i < NAV.length - 1 ? <div className="mx-3 my-1.5 border-t border-line" /> : null}
+              </div>
+            ),
+          )}
           <div className="mx-3 my-1.5 border-t border-line sm:hidden" />
           <div className="flex items-center justify-between gap-2 px-2 py-1 sm:hidden">
             <AudienceSwitch compact />
@@ -126,7 +152,7 @@ function MobileMenu({ academic }: { academic: boolean }) {
  * page scrolls; everywhere else it is a sticky band.
  */
 export function SiteHeader({ floating = false, scrolled = false, width = 'max-w-7xl' }: { floating?: boolean; scrolled?: boolean; width?: string }) {
-  const academic = useAcademic()
+  const { pathname } = useLocation()
   const frosted = !floating || scrolled
   return (
     <header
@@ -139,15 +165,18 @@ export function SiteHeader({ floating = false, scrolled = false, width = 'max-w-
           <Logo />
         </Link>
         <div className="pointer-events-auto">
-          <MobileMenu academic={academic} />
+          <MobileMenu />
         </div>
         <nav aria-label="Main" className="pointer-events-auto hidden items-center gap-0.5 rounded-full border border-line-2 bg-[var(--color-scrim)] p-1 text-[13px] font-medium backdrop-blur-xl lg:flex">
-          {MAIN.map((m) => (
-            <NavLink key={m.to} to={m.to} end={m.to === '/'} className={({ isActive }) => pill(isActive && m.to !== '/')}>
-              {m.label}
-            </NavLink>
-          ))}
-          {academic ? <StudyMenu /> : null}
+          {NAV.map((g) =>
+            g.items.length === 1 ? (
+              <Link key={g.label} to={g.items[0].to} className={pill(g.match(pathname))}>
+                {g.label}
+              </Link>
+            ) : (
+              <GroupMenu key={g.label} group={g} />
+            ),
+          )}
         </nav>
         <div className="pointer-events-auto ml-auto flex shrink-0 items-center gap-2">
           <div className="hidden sm:block">

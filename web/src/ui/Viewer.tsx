@@ -11,12 +11,10 @@ import { MODULES, findModule } from '@/modules/catalog'
 import type { SceneDef } from '@/modules/types'
 import { DEFAULT_CUT_PRESETS, useView } from '@/render/view'
 import { useAcademic } from './audience'
-import { AudienceSwitch } from './AudienceSwitch'
 import { Loader } from './Loader'
-import { ThemeToggle } from './ThemeToggle'
 import { Badge } from './controls'
-import { LogoMark } from './Logo'
 import { Icon } from './icons'
+import { SiteHeader } from './SiteHeader'
 import { PartCard } from './PartCard'
 import { PartsTree } from './PartsTree'
 import { OrientationGizmo, Stage } from './Stage'
@@ -36,7 +34,6 @@ import { currentPose, flyTo, focusPart } from './camera'
 import { onSceneReady } from '@/study/bridge'
 import { SceneMark } from '@/study/ui/badges'
 import { InSceneExam, questionsForScene } from '@/study/ui/InSceneExam'
-import { AccountMenu } from '@/cloud/ui/AccountMenu'
 import { SceneMenu } from './SceneMenu'
 import { TutorButton, TutorPanel } from '@/cloud/ui/Tutor'
 
@@ -254,12 +251,13 @@ export function Viewer() {
 
   return (
     <div className="flex h-full flex-col">
-      <header className="flex shrink-0 flex-wrap items-center gap-1 border-b border-line bg-panel px-1.5 py-1 sm:h-12 sm:flex-nowrap sm:gap-2 sm:px-2 sm:py-0">
-        <Link to="/" className="flex items-center gap-1.5 rounded-md px-2 py-1 text-[13px] font-semibold text-ink hover:bg-panel-3" aria-label="All modules">
-          <LogoMark size={20} />
-          <span className="hidden sm:inline">Solidify</span>
+      {/* the site's own header, as on every page; the rig's bar sits under it */}
+      <SiteHeader width="max-w-none" />
+      <header className="flex shrink-0 flex-wrap items-center gap-1 border-b border-line bg-panel px-1.5 py-1 sm:h-11 sm:flex-nowrap sm:gap-2 sm:px-3 sm:py-0">
+        <Link to="/labs" className="rounded-md px-1.5 py-1 text-[13px] font-medium text-mute hover:bg-panel-3 hover:text-ink">
+          Labs
         </Link>
-        <span className="hidden text-line-2 sm:inline">/</span>
+        <span className="text-line-2" aria-hidden>›</span>
         <span className="hidden text-[13px] text-mute md:inline">
           <select
             aria-label="Module"
@@ -278,7 +276,7 @@ export function Viewer() {
             ))}
           </select>
         </span>
-        <span className="hidden text-line-2 md:inline">/</span>
+        <span className="hidden text-line-2 md:inline" aria-hidden>›</span>
         <select
           aria-label="Scene"
           className="order-last min-w-0 basis-full truncate rounded-md border border-line-2 bg-panel-2 px-2 py-1.5 text-[13px] text-ink sm:order-none sm:max-w-[50vw] sm:basis-auto sm:py-1"
@@ -302,12 +300,6 @@ export function Viewer() {
             <Icon.target width={16} height={16} />
           </button>
           {scene && entry ? <SceneMenu scene={scene} moduleId={mod.id} sceneId={entry.id} onPower={() => setPower(true)} onShare={copyShareLink} /> : null}
-          <div className="hidden md:block">
-            <AudienceSwitch compact />
-          </div>
-          <div className="hidden md:block">
-            <ThemeToggle />
-          </div>
           {scene?.tour?.length ? (
             <button
               onClick={() => (tourActive ? stopTour() : startTour())}
@@ -325,7 +317,6 @@ export function Viewer() {
           <button aria-label="Toggle controls panel" aria-pressed={rightOpen} onClick={() => setRightOpen((o) => !o)} className={`grid h-8 w-8 place-items-center rounded-md ${rightOpen ? 'text-accent' : 'text-mute'} hover:bg-panel-3`}>
             <Icon.sliders />
           </button>
-          <AccountMenu compact />
         </div>
       </header>
 

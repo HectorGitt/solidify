@@ -89,11 +89,11 @@ export function AccountMenu({ compact = false }: { compact?: boolean }) {
             </div>
           </div>
           <div className="py-1 text-[13px]">
+            <Link to="/create/lab" onClick={() => setOpen(false)} className="block px-3.5 py-2 text-ink/90 hover:bg-panel-3">
+              My models
+            </Link>
             <Link to="/classes" onClick={() => setOpen(false)} className="block px-3.5 py-2 text-ink/90 hover:bg-panel-3">
               {isTeacher ? 'My classes' : 'Classes'}
-            </Link>
-            <Link to="/progress" onClick={() => setOpen(false)} className="block px-3.5 py-2 text-ink/90 hover:bg-panel-3">
-              Progress
             </Link>
             {profile?.isAdmin ? (
               <Link to="/admin" onClick={() => setOpen(false)} className="block px-3.5 py-2 text-ink/90 hover:bg-panel-3">
