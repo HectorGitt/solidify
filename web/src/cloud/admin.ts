@@ -172,3 +172,15 @@ export const updateDraft = (id: string, patch: Partial<DraftFields> & { reviewNo
 
 export const publishModel = (d: DraftFields) => api<{ id: string }>('/v1/library', { method: 'POST', body: d })
 export const updateLibraryItem = (id: string, patch: { title?: string; topic?: string; thumbnail?: string }) => api<{ ok: true }>(`/v1/library/${encodeURIComponent(id)}`, { method: 'PUT', body: patch })
+
+/** a line in the audit trail: who did what, to what, and when */
+export interface AuditEntry {
+  at: number
+  by: { uid: string; name: string; email?: string }
+  action: string
+  target: { type: 'draft' | 'library' | 'settings' | 'reviewers' | 'topics'; id?: string; title?: string }
+  detail: string
+}
+export const getAudit = (f: { by?: string; action?: string } = {}) =>
+  api<{ entries: AuditEntry[]; people: AuditEntry['by'][]; actions: string[] }>(`/v1/admin/audit?${new URLSearchParams(Object.entries(f).filter(([, v]) => !!v) as [string, string][]).toString()}`)
+export const getHistory = (id: string) => api<{ entries: AuditEntry[] }>(`/v1/review/history/${encodeURIComponent(id)}`)

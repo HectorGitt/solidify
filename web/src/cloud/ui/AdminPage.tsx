@@ -19,6 +19,9 @@ import {
   costOf,
   getAdminSettings,
   getReviewers,
+  getAudit,
+  getHistory,
+  type AuditEntry,
   saveReviewers,
   type ReviewChecklist,
   nextTopics,
@@ -53,7 +56,7 @@ import {
 import { ghostBtn, inputCls, primaryBtn } from './Modal'
 import { ThumbnailMaker } from './ThumbnailMaker'
 
-type Tab = 'quality' | 'review' | 'library' | 'reviewers' | 'feedback' | 'waitlist' | 'settings'
+type Tab = 'quality' | 'review' | 'library' | 'reviewers' | 'activity' | 'feedback' | 'waitlist' | 'settings'
 
 /** scores a build made from the admin page with the nightly run's own checks */
 function scoreReply(prompt: string, reply: BuildReply, caseId?: string) {
@@ -556,6 +559,32 @@ function Quality() {
 
 /* ------------------------------------------------------------------ review queue */
 
+/** one line of the trail: when, who, what, and the detail */
+function AuditLine({ e, showTarget = false }: { e: AuditEntry; showTarget?: boolean }) {
+  return (
+    <li className="flex flex-wrap gap-x-2 py-1.5 text-[12px]">
+      <span className="w-28 shrink-0 tabular-nums text-dim">{dateTime(e.at)}</span>
+      <span className="min-w-0 flex-1">
+        <span className="font-medium text-ink">{e.by.name}</span> <span className="text-ink/85">{e.action}</span>
+        {showTarget && e.target.title ? <span className="text-ink/85"> “{e.target.title}”</span> : null}
+        {e.detail ? <span className="block text-mute">{e.detail}</span> : null}
+      </span>
+    </li>
+  )
+}
+
+function DraftHistory({ id }: { id: string }) {
+  const load = useCallback(() => getHistory(id), [id])
+  const { data, error, reload } = useLoad(load)
+  return (
+    <div className="rounded-xl border border-line px-3 py-1">
+      <Loading error={error} onRetry={reload}>
+        {data ? data.entries.length ? <ul className="divide-y divide-line">{data.entries.map((e, i) => <AuditLine key={i} e={e} />)}</ul> : <p className="py-2 text-[12px] text-dim">Nothing recorded yet.</p> : null}
+      </Loading>
+    </div>
+  )
+}
+
 const CHECKS: [keyof ReviewChecklist, string][] = [
   ['calculations', 'Calculations and graphs checked'],
   ['model', 'Model looks right: every part in place and held'],
@@ -572,6 +601,7 @@ function DraftCard({ d, onDone, onChanged, backTo }: { d: LibraryDraft; onDone: 
   const [checklist, setChecklist] = useState<ReviewChecklist>(d.checklist ?? {})
   const [notes, setNotes] = useState(d.reviewNotes ?? '')
   const [rejecting, setRejecting] = useState(false)
+  const [showHistory, setShowHistory] = useState(false)
   const [reason, setReason] = useState('')
   const allChecked = CHECKS.every(([k]) => checklist[k])
   const tick = (k: keyof ReviewChecklist, v: boolean) => {
@@ -644,8 +674,12 @@ function DraftCard({ d, onDone, onChanged, backTo }: { d: LibraryDraft; onDone: 
       </div>
       <p className="text-[12.5px] leading-snug text-mute">{d.prompt}</p>
       <p className="text-[11.5px] text-dim">
-        {d.parts} parts · drafted {dateTime(d.createdAt)}
+        {d.parts} parts · drafted {dateTime(d.createdAt)} ·{' '}
+        <button type="button" onClick={() => setShowHistory((v) => !v)} className="text-mute underline-offset-2 hover:text-ink hover:underline">
+          {showHistory ? 'Hide history' : 'History'}
+        </button>
       </p>
+      {showHistory ? <DraftHistory id={d.id} /> : null}
       {d.checks ? <FailedChecks checks={d.checks} /> : null}
       <fieldset className="rounded-xl border border-line px-3 py-2.5">
         <legend className="px-1 text-[11px] font-medium uppercase tracking-wide text-dim">Review</legend>
@@ -868,7 +902,8 @@ function LibraryRow({ item, onChanged, onRemoved }: { item: LibraryCard; onChang
         <input aria-label="Title" value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120} className={`${inputCls} py-1.5! font-semibold`} />
         <input aria-label="Topic" value={topic} onChange={(e) => setTopic(e.target.value)} maxLength={60} placeholder="Topic" className={`${inputCls} py-1.5!`} />
         <p className="truncate text-[11.5px] text-dim sm:col-span-2">
-          {item.parts} parts · score {item.score} · published {item.publishedAt ? date(item.publishedAt) : '—'} · {item.prompt}
+          {item.parts} parts · score {item.score} · published {item.publishedAt ? date(item.publishedAt) : '—'}
+          {item.reviewedBy ? ` by ${item.reviewedBy.name}` : ''} · {item.prompt}
         </p>
       </div>
       <div className="flex flex-wrap items-center gap-2">
@@ -951,6 +986,50 @@ function Library() {
         )
       ) : null}
     </Loading>
+  )
+}
+
+/* ------------------------------------------------------------------ activity */
+
+/** the audit trail: who did what to drafts, the library and the settings, filterable by person and action */
+function Activity() {
+  const [by, setBy] = useState('')
+  const [action, setAction] = useState('')
+  const load = useCallback(() => getAudit({ by, action }), [by, action])
+  const { data, error, reload } = useLoad(load)
+  const select = 'rounded-lg border border-line-2 bg-panel-2 px-2.5 py-1.5 text-[12.5px] text-ink outline-none focus:border-accent/60'
+  return (
+    <section className={`${card} p-5`}>
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h2 className="text-[15px] font-semibold">Activity</h2>
+          <p className="mt-1 text-[12.5px] text-mute">Everything done to drafts, the library, reviewers and settings, newest first. Nothing here can be edited.</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <select aria-label="Person" value={by} onChange={(e) => setBy(e.target.value)} className={select}>
+            <option value="">Everyone</option>
+            {data?.people.map((p) => (
+              <option key={p.uid} value={p.uid}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+          <select aria-label="Action" value={action} onChange={(e) => setAction(e.target.value)} className={select}>
+            <option value="">Every action</option>
+            {data?.actions.map((a) => (
+              <option key={a} value={a}>
+                {a}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+      <div className="mt-3">
+        <Loading error={error} onRetry={reload}>
+          {data ? data.entries.length ? <ul className="divide-y divide-line">{data.entries.map((e, i) => <AuditLine key={i} e={e} showTarget />)}</ul> : <Empty>Nothing recorded yet.</Empty> : null}
+        </Loading>
+      </div>
+    </section>
   )
 }
 
@@ -1253,6 +1332,7 @@ const TABS: { value: Tab; label: string }[] = [
   { value: 'review', label: 'Review queue' },
   { value: 'library', label: 'Library' },
   { value: 'reviewers', label: 'Reviewers' },
+  { value: 'activity', label: 'Activity' },
   { value: 'feedback', label: 'Feedback' },
   { value: 'waitlist', label: 'Waitlist' },
   { value: 'settings', label: 'Settings' },
@@ -1282,7 +1362,7 @@ export default function AdminPage() {
         <div className="mb-5">
           <Pills label="Section" value={tab} onChange={(t) => setParams(t === 'quality' ? {} : { tab: t }, { replace: true })} options={TABS} />
         </div>
-        {tab === 'quality' ? <Quality /> : tab === 'review' ? <ReviewQueue /> : tab === 'library' ? <Library /> : tab === 'reviewers' ? <Reviewers /> : tab === 'feedback' ? <Feedback /> : tab === 'waitlist' ? <Waitlist /> : <Settings />}
+        {tab === 'quality' ? <Quality /> : tab === 'review' ? <ReviewQueue /> : tab === 'library' ? <Library /> : tab === 'reviewers' ? <Reviewers /> : tab === 'activity' ? <Activity /> : tab === 'feedback' ? <Feedback /> : tab === 'waitlist' ? <Waitlist /> : <Settings />}
       </>
     )
 
