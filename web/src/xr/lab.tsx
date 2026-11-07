@@ -30,6 +30,7 @@ export const xrStore = createXRStore({
   // on a developer's machine without a headset: an emulated Quest 3, with hands, for testing
   emulate: local && !(window as unknown as { __xrDevice?: unknown }).__xrDevice ? { type: 'metaQuest3', primaryInputMode: 'hand' } : false,
   hitTest: true,
+  anchors: true,
   handTracking: true,
   frameRate: 'high',
   foveation: 1,
@@ -67,7 +68,12 @@ const useLab = create<LabUi>((set) => ({
   full: false,
   surface: false,
   setPlacing: (placing) => {
-    if (placing) place.placingSince = performance.now()
+    if (placing) {
+      place.placingSince = performance.now()
+      anchorState.anchor = null
+    }
+    // put down by the student: remember the spot (made on the next frame, which has the pose)
+    else anchorState.want = true
     set({ placing })
   },
 }))
@@ -80,6 +86,8 @@ xrStore.subscribe((s, p) => {
   if (on) {
     useLab.setState({ full: false, surface: false })
     useLab.getState().setPlacing(true)
+    anchorState.anchor = null
+    void restoreSpot(s.session as AnchorSession)
     useView.setState({ explode: 0 })
   }
 })
@@ -90,6 +98,60 @@ export function XRLayer({ scene }: { scene: SceneDef }) {
 }
 
 const UP = new THREE.Vector3(0, 1, 0)
+
+/*
+ * The student's spot on their desk, remembered between visits with a persistent anchor (Quest keeps it tied
+ * to the real room): next time any rig appears there at once, without placing. One spot for every rig.
+ */
+const SPOT_KEY = 'solidify.xr.spot'
+type AnchorSession = XRSession & { restorePersistentAnchor?: (uuid: string) => Promise<XRAnchor>; deletePersistentAnchor?: (uuid: string) => Promise<void> }
+type PersistentAnchor = XRAnchor & { requestPersistentHandle?: () => Promise<string> }
+const readSpot = (): { uuid: string; face: number } | null => {
+  try {
+    return JSON.parse(localStorage.getItem(SPOT_KEY) ?? 'null')
+  } catch {
+    return null
+  }
+}
+const anchorState: { anchor: XRAnchor | null; want: boolean; restoring: boolean } = { anchor: null, want: false, restoring: false }
+
+/** after a session starts: the remembered spot, if the headset still knows it */
+async function restoreSpot(session: AnchorSession) {
+  const spot = readSpot()
+  if (!spot || !session.restorePersistentAnchor) return
+  anchorState.restoring = true
+  try {
+    anchorState.anchor = await session.restorePersistentAnchor(spot.uuid)
+    place.face = spot.face
+  } catch {
+    // forgotten (another room, or cleared): place it again
+    try {
+      localStorage.removeItem(SPOT_KEY)
+    } catch {
+      /* storage off */
+    }
+  } finally {
+    anchorState.restoring = false
+  }
+}
+
+/** a new spot chosen: the old one is let go and this one remembered */
+async function saveSpot(frame: XRFrame, space: XRReferenceSpace) {
+  const session = frame.session as AnchorSession
+  const old = readSpot()
+  if (old && session.deletePersistentAnchor) await session.deletePersistentAnchor(old.uuid).catch(() => {})
+  if (!frame.createAnchor) return
+  const a = (await frame.createAnchor(new XRRigidTransform({ x: place.at.x, y: place.at.y, z: place.at.z }), space).catch(() => undefined)) as PersistentAnchor | undefined
+  if (!a) return
+  anchorState.anchor = a
+  const uuid = await a.requestPersistentHandle?.().catch(() => undefined)
+  if (!uuid) return
+  try {
+    localStorage.setItem(SPOT_KEY, JSON.stringify({ uuid, face: place.face }))
+  } catch {
+    /* storage off: it just isn't remembered */
+  }
+}
 
 function Lab({ scene }: { scene: SceneDef }) {
   const origin = useRef<THREE.Group>(null)
@@ -157,9 +219,26 @@ function Lab({ scene }: { scene: SceneDef }) {
   }, [gl])
   const head = useMemo(() => new THREE.Vector3(), [])
   const fwd = useMemo(() => new THREE.Vector3(), [])
-  useFrame(({ camera }) => {
+  useFrame(({ camera }, _dt, frame?: XRFrame) => {
     const o = origin.current
     if (!o) return
+    const space = gl.xr.getReferenceSpace()
+    if (frame && space) {
+      if (anchorState.want) {
+        anchorState.want = false
+        void saveSpot(frame, space)
+      }
+      // on the remembered (or just made) spot: follow it, as the headset refines where it is
+      const a = anchorState.anchor
+      const pose = a && frame.trackedAnchors?.has(a) ? frame.getPose(a.anchorSpace, space) : undefined
+      if (pose) {
+        place.at.set(pose.transform.position.x, pose.transform.position.y, pose.transform.position.z)
+        if (useLab.getState().placing) {
+          // back where it was left: no placing needed
+          useLab.setState({ placing: false })
+        }
+      }
+    }
     o.updateMatrixWorld()
     camera.getWorldPosition(head)
     o.worldToLocal(head)
