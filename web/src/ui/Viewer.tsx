@@ -477,7 +477,12 @@ export function Viewer() {
               ) : (
                 <>
                   <ComparePanel key={scene.id} scene={scene} />
-                  {scene.Panel ? <scene.Panel /> : null}
+                  {/* data-xr-panel: the headset panel also offers this panel's own buttons (levers, tests, modes) */}
+                  {scene.Panel ? (
+                    <div data-xr-panel>
+                      <scene.Panel />
+                    </div>
+                  ) : null}
                 </>
               )}
             </div>

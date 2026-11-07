@@ -250,6 +250,64 @@ function Lab({ scene }: { scene: SceneDef }) {
   )
 }
 
+/**
+ * The rig panel's own buttons (gear levers, Start test, mode pickers), which are not shared controls: read
+ * from the page's panel, grouped by the label above them, and pressed for real when touched in the headset.
+ */
+function useDomButtons(active: boolean) {
+  const els = useRef(new Map<string, HTMLButtonElement>())
+  const [groups, setGroups] = useState<[string, Mirrored & { kind: 'segmented' }][]>([])
+  const sig = useRef('')
+  useEffect(() => {
+    if (!active) return
+    const read = () => {
+      const root = document.querySelector('[data-xr-panel]')
+      const out: [string, Mirrored & { kind: 'segmented' }][] = []
+      els.current.clear()
+      if (root) {
+        const byParent = new Map<Element, HTMLButtonElement[]>()
+        root.querySelectorAll('button').forEach((b) => {
+          // shared controls (choices, switches) are already copied; skip disabled and empty ones
+          if (b.disabled || b.getAttribute('role') === 'radio' || b.getAttribute('role') === 'switch') return
+          if (!b.textContent?.trim() || b.offsetParent === null) return
+          const p = b.parentElement!
+          byParent.set(p, [...(byParent.get(p) ?? []), b])
+        })
+        let n = 0
+        for (const [p, bs] of byParent) {
+          const prev = p.previousElementSibling?.textContent?.trim() ?? ''
+          const sectionTitle = p.closest('section')?.querySelector('h3')?.textContent?.trim() ?? ''
+          const label = prev && prev.length <= 40 ? prev : sectionTitle
+          // six to a row at most
+          for (let i = 0; i < bs.length; i += 6) {
+            const row = bs.slice(i, i + 6)
+            const id = `dom:${n++}`
+            const options = row.map((b, j) => {
+              const key = `${id}:${j}`
+              els.current.set(key, b)
+              return { value: key, label: b.textContent!.trim().replace(/\s+/g, ' ') }
+            })
+            const on = row.findIndex(
+              (b) => b.getAttribute('aria-pressed') === 'true' || b.getAttribute('aria-checked') === 'true' || b.getAttribute('aria-selected') === 'true' || /(^|\s)bg-accent(\s|$)/.test(b.className),
+            )
+            out.push([id, { kind: 'segmented', label: i === 0 ? label : '', value: on >= 0 ? `${id}:${on}` : '', options }])
+          }
+        }
+      }
+      const s = JSON.stringify(out)
+      if (s !== sig.current) {
+        sig.current = s
+        setGroups(out)
+      }
+    }
+    read()
+    const t = window.setInterval(read, 400)
+    return () => window.clearInterval(t)
+  }, [active])
+  const press = (key: string) => els.current.get(key)?.click()
+  return { groups, press }
+}
+
 /** the panel beside the rig */
 function Panel({ scene, placing }: { scene: SceneDef; placing: boolean }) {
   const mesh = useRef<THREE.Mesh>(null)
@@ -269,6 +327,7 @@ function Panel({ scene, placing }: { scene: SceneDef; placing: boolean }) {
 
   const [page, setPage] = useState(0)
   const [hover, setHover] = useState<string | null>(null)
+  const dom = useDomButtons(!placing)
   const version = useMirror((s) => s.version)
   const playing = useSim((s) => s.playing)
   const selected = useView((s) => s.selectedId)
@@ -305,7 +364,7 @@ function Panel({ scene, placing }: { scene: SceneDef; placing: boolean }) {
   const last = useRef(0)
   useEffect(() => {
     dirty.current = true
-  }, [version, playing, selected, explode, xray, cutOn, preset, part, full, surface, placing, page, hover])
+  }, [version, playing, selected, explode, xray, cutOn, preset, part, full, surface, placing, page, hover, dom.groups])
   useFrame(() => {
     const t = performance.now()
     if (!dirty.current || t - last.current < 66) return
@@ -318,7 +377,7 @@ function Panel({ scene, placing }: { scene: SceneDef; placing: boolean }) {
       hint: placing ? (surface ? 'Pinch to put it on this surface' : 'Look at your table, then pinch') : null,
       buttons,
       part: part ? { name: part.name, summary: part.info?.summary } : null,
-      controls: all.filter(([, m]) => m.kind !== 'readout'),
+      controls: [...dom.groups, ...all.filter(([, m]) => m.kind !== 'readout')],
       readouts: all.filter((e): e is [string, Mirrored & { kind: 'readout' }] => e[1].kind === 'readout'),
       page,
       hover,
@@ -392,7 +451,7 @@ function Panel({ scene, placing }: { scene: SceneDef; placing: boolean }) {
         lastTap.current = t
         if (hit.kind === 'button') act(hit.id)
         else if (hit.kind === 'page') setPage((p) => Math.max(0, Math.min(pageCount.current - 1, p + hit.dir)))
-        else if (hit.kind === 'option') mirrorChange(hit.id, hit.value)
+        else if (hit.kind === 'option') hit.id.startsWith('dom:') ? dom.press(hit.value) : mirrorChange(hit.id, hit.value)
         else if (hit.kind === 'toggle' && handlers.has(hit.id)) mirrorChange(hit.id, !hit.checked)
         dirty.current = true
       }}
