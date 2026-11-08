@@ -14,6 +14,7 @@ import { markAnswers } from '../marking'
 import { dueQuestions } from '../review'
 import { ExplainMistake } from './ExplainMistake'
 import { instantiate, randomSeed, type Seed } from '../variants'
+import { RigView } from './RigView'
 import { Bar, CourseLabel, Pills, StudyShell } from './StudyShell'
 
 type Inputs = Record<string, string>
@@ -160,7 +161,10 @@ function Practice({ list, start, fresh = false }: { list: Question[]; start?: st
   }
   const stat = qp[q.id]
   return (
-    <div className="rounded-3xl border border-line bg-panel p-5">
+    // the problem beside its rig, live in 3D with the problem's numbers (new numbers move the rig too)
+    <div className="grid gap-4 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)] lg:items-start">
+    <RigView moduleId={q.moduleId} sceneId={q.sceneId} params={q.params} className="h-[300px] sm:h-[420px] lg:sticky lg:top-4 lg:h-[calc(100vh-8rem)] lg:min-h-[480px]" />
+    <div className="min-w-0 rounded-3xl border border-line bg-panel p-5">
       <QuestionHead q={q} index={i} total={list.length} />
       <div className="mt-4">
         <AnswerInputs q={q} inputs={inputs} setInputs={setInputs} results={results} />
@@ -174,7 +178,7 @@ function Practice({ list, start, fresh = false }: { list: Question[]; start?: st
           {reveal ? 'Hide working' : 'Show working'}
         </button>
         <button onClick={() => open3d(q)} className="rounded-lg border border-accent/50 px-3 py-1.5 text-[13px] text-accent hover:bg-accent/10">
-          Open in 3D{q.params ? ' with this data' : ''}
+          Open the full rig{q.params ? ' with this data' : ''}
         </button>
         {q.vary ? (
           <button
@@ -210,6 +214,7 @@ function Practice({ list, start, fresh = false }: { list: Question[]; start?: st
       </div>
       {results ? <ExplainMistake q={q} results={results} inputs={inputs} /> : null}
       {reveal ? <Solution q={q} /> : null}
+    </div>
     </div>
   )
 }
