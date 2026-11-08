@@ -26,6 +26,30 @@ export function cleanCut(raw: unknown): NonNullable<NoteSceneSpec['recommendedCu
   return { enabled: c.enabled !== false, normal: n, pos: typeof c.pos === 'number' && Number.isFinite(c.pos) ? c.pos : 0 }
 }
 
+/**
+ * A part's motion as the renderer reads it: kind rotate / oscillate / translate, axis x / y / z. The model
+ * sometimes gives the axis as a vector ([0, 1, 0]) or a signed letter ("-z"): that becomes its main letter.
+ * Anything else unusable drops the motion (the part then moves only by its mount, or not at all).
+ */
+export function cleanMotion(m: unknown): NotePartSpec['motion'] {
+  if (!m || typeof m !== 'object') return undefined
+  const o = m as Record<string, unknown>
+  if (o.kind !== 'rotate' && o.kind !== 'oscillate' && o.kind !== 'translate') return undefined
+  let axis: 'x' | 'y' | 'z' | undefined
+  if (Array.isArray(o.axis) && o.axis.length === 3 && o.axis.every((v) => typeof v === 'number' && Number.isFinite(v))) {
+    const a = (o.axis as number[]).map(Math.abs)
+    if (Math.max(...a) > 0) axis = (['x', 'y', 'z'] as const)[a.indexOf(Math.max(...a))]
+  } else if (typeof o.axis === 'string') {
+    const l = o.axis.trim().toLowerCase().replace(/^[+-]/, '')
+    if (l === 'x' || l === 'y' || l === 'z') axis = l
+  }
+  const speed = typeof o.speed === 'number' || typeof o.speed === 'string' ? o.speed : 1
+  const out: NonNullable<NotePartSpec['motion']> = { kind: o.kind, axis: axis ?? 'y', speed }
+  if (typeof o.amplitude === 'number' || typeof o.amplitude === 'string') out.amplitude = o.amplitude
+  if (typeof o.phase === 'number' && Number.isFinite(o.phase)) out.phase = o.phase
+  return out
+}
+
 export function sanitizeGeneratedSpec(raw: Record<string, unknown>, fallbackTitle: string): NoteSceneSpec | null {
   try {
     const candidate = (raw.spec ?? raw) as Record<string, unknown>
@@ -76,6 +100,7 @@ export function sanitizeGeneratedSpec(raw: Record<string, unknown>, fallbackTitl
           children: pt.children ? usable(pt.children) : undefined,
           // a relation that is not well formed is dropped; the part falls back to its position
           mount: pt.mount && noteMountSchema.safeParse(pt.mount).success ? pt.mount : undefined,
+          motion: cleanMotion(pt.motion),
         }))
         .filter((pt) => pt.shapes.length > 0 || (pt.children?.length ?? 0) > 0)
     spec.parts = usable(spec.parts)
