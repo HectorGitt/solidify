@@ -245,6 +245,17 @@ function Lab({ scene }: { scene: SceneDef }) {
 
   // a pinch anywhere puts it down; once down, a pinch names the part the hand is pointing at (a natural pinch
   // is too slow to count as a click on the part itself)
+  // only the part the hand was on when the pinch began: a pinch on a panel button that changes the scene
+  // (Full size) must not pick whatever ends up under the hand when it lets go
+  const pinchedOn = useRef<string | null>(null)
+  useXRInputSourceEvent(
+    'all',
+    'selectstart',
+    () => {
+      pinchedOn.current = useView.getState().hoveredId
+    },
+    [],
+  )
   useXRInputSourceEvent(
     'all',
     'select',
@@ -255,7 +266,8 @@ function Lab({ scene }: { scene: SceneDef }) {
         return
       }
       const v = useView.getState()
-      if (v.hoveredId && !useBuild.getState().def) v.select(v.hoveredId)
+      if (v.hoveredId && v.hoveredId === pinchedOn.current && !useBuild.getState().def) v.select(v.hoveredId)
+      pinchedOn.current = null
     },
     [],
   )
@@ -604,7 +616,7 @@ function Panel({ scene, placing }: { scene: SceneDef; placing: boolean }) {
     hits.current = drawn.hits
     pageCount.current = drawn.pages
     // development only: where things are on the panel, for the headset tests
-    if (import.meta.env.DEV) (window as unknown as { __xrPanel?: unknown }).__xrPanel = { hits: drawn.hits, mesh: mesh.current, hint: drawnHint }
+    if (import.meta.env.DEV) (window as unknown as { __xrPanel?: unknown }).__xrPanel = { hits: drawn.hits, mesh: mesh.current, hint: drawnHint, controls: [...dom.groups, ...all] }
     tex.needsUpdate = true
   })
 
