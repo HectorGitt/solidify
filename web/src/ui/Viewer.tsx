@@ -36,6 +36,7 @@ import { SceneMark } from '@/study/ui/badges'
 import { InSceneExam, questionsForScene } from '@/study/ui/InSceneExam'
 import { SceneMenu } from './SceneMenu'
 import { TutorButton, TutorPanel } from '@/cloud/ui/Tutor'
+import { FoldChevron, usePersisted } from './usePersisted'
 
 function useMediaQuery(q: string) {
   const [m, setM] = useState(() => window.matchMedia(q).matches)
@@ -59,6 +60,7 @@ export function Viewer() {
   const [leftOpen, setLeftOpen] = useState(wide)
   const [rightOpen, setRightOpen] = useState(wide)
   const [rightTab, setRightTab] = useState<'controls' | 'exam'>('controls')
+  const [detailsOpen, setDetailsOpen] = usePersisted('solidify.panel.details', true)
   const tourActive = useTour((s) => s.active)
   const academic = useAcademic()
   const startTour = useTour((s) => s.start)
@@ -418,13 +420,30 @@ export function Viewer() {
         {rightOpen && scene ? (
           <aside className={`${wide ? 'relative' : 'absolute inset-y-0 right-0 z-20 shadow-2xl'} flex w-[min(380px,100vw)] shrink-0 flex-col border-l border-line bg-panel`}>
             <div className="border-b border-line px-4 py-3">
-              <h1 className="text-[15px] font-semibold leading-snug text-ink">{scene.title}</h1>
-              <p className="mt-1 text-[12.5px] leading-relaxed text-mute">{scene.summary}</p>
-              {mod && entry ? <SeenIn route={`${mod.id}/${entry.id}`} /> : null}
-              {academic && entry?.exam ? (
-                <div className="mt-2">
-                  <Badge tone="warn">Frequently examined</Badge>
-                </div>
+              <div className="flex items-start gap-2">
+                <h1 className="min-w-0 flex-1 text-[15px] font-semibold leading-snug text-ink">{scene.title}</h1>
+                {/* the description folds away, so the live readings sit higher */}
+                <button
+                  type="button"
+                  onClick={() => setDetailsOpen(!detailsOpen)}
+                  aria-expanded={detailsOpen}
+                  aria-label={detailsOpen ? 'Hide the description' : 'Show the description'}
+                  title={detailsOpen ? 'Hide the description' : 'Show the description'}
+                  className="-mr-1 grid h-7 w-7 shrink-0 place-items-center rounded-md text-mute hover:bg-panel-3 hover:text-ink"
+                >
+                  <FoldChevron open={detailsOpen} />
+                </button>
+              </div>
+              {detailsOpen ? (
+                <>
+                  <p className="mt-1 text-[12.5px] leading-relaxed text-mute">{scene.summary}</p>
+                  {mod && entry ? <SeenIn route={`${mod.id}/${entry.id}`} /> : null}
+                  {academic && entry?.exam ? (
+                    <div className="mt-2">
+                      <Badge tone="warn">Frequently examined</Badge>
+                    </div>
+                  ) : null}
+                </>
               ) : null}
               {sceneQuestions.length > 0 ? (
                 <div className="mt-3 grid grid-cols-2 gap-1 rounded-xl border border-line bg-panel-2 p-1">

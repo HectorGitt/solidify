@@ -20,6 +20,7 @@ import { SiteHeader } from '@/ui/SiteHeader'
 import { OrientationGizmo, Stage } from '@/ui/Stage'
 import { Toolbar } from '@/ui/Toolbar'
 import { Readout, Section, Slider } from '@/ui/controls'
+import { FoldChevron, usePersisted } from '@/ui/usePersisted'
 import { Tex } from '@/ui/Tex'
 import { toast } from '@/ui/toast'
 import { ApiError } from '../api'
@@ -404,6 +405,7 @@ export default function ModelLab() {
   const chatEndRef = useRef<HTMLDivElement>(null)
 
   const selectedId = useView((s) => s.selectedId)
+  const [detailsOpen, setDetailsOpen] = usePersisted('solidify.panel.details', true)
   const hiddenParts = useView((s) => s.hidden)
   const isolatedId = useView((s) => s.isolatedId)
 
@@ -1146,8 +1148,22 @@ export default function ModelLab() {
             <>
               <div className="min-h-0 flex-1 overflow-y-auto">
                 <div className="border-b border-line px-4 py-3">
-                  <h2 className="text-[15px] font-semibold leading-snug text-ink">{shownSpec.title}</h2>
-                  {shownSpec.summary ? <p className="mt-1 text-[12.5px] leading-relaxed text-mute">{shownSpec.summary}</p> : null}
+                  <div className="flex items-start gap-2">
+                    <h2 className="min-w-0 flex-1 text-[15px] font-semibold leading-snug text-ink">{shownSpec.title}</h2>
+                    {shownSpec.summary ? (
+                      <button
+                        type="button"
+                        onClick={() => setDetailsOpen(!detailsOpen)}
+                        aria-expanded={detailsOpen}
+                        aria-label={detailsOpen ? 'Hide the description' : 'Show the description'}
+                        title={detailsOpen ? 'Hide the description' : 'Show the description'}
+                        className="-mr-1 grid h-7 w-7 shrink-0 place-items-center rounded-md text-mute hover:bg-panel-2 hover:text-ink"
+                      >
+                        <FoldChevron open={detailsOpen} />
+                      </button>
+                    ) : null}
+                  </div>
+                  {shownSpec.summary && detailsOpen ? <p className="mt-1 text-[12.5px] leading-relaxed text-mute">{shownSpec.summary}</p> : null}
                 </div>
                 {calcResults.length ? (
                   <Section title="Live">
