@@ -13,6 +13,8 @@ export interface EvalCase {
   arrows?: boolean
   /** the subject alone, without test beds, grips or gauges */
   noRig?: boolean
+  /** a pasted problem: it must come back solved, step by step, with the asked results marked */
+  solve?: boolean
   /** a result with a known answer: a calculation whose label matches, within a relative tolerance */
   answer?: { label: RegExp; value: number; tol: number }
 }
@@ -49,6 +51,17 @@ export const EVAL_CASES: EvalCase[] = [
   // mechanisms and machines
   { id: 'slider-crank', prompt: 'A slider-crank mechanism with a 50 mm crank and a 200 mm connecting rod', parts: [3, 6] },
   { id: 'cam', prompt: 'A cam and roller follower on a shaft', parts: [2, 6] },
+  // a pasted exam problem: built as its setup and solved step by step
+  {
+    id: 'solve-beam',
+    prompt: 'Solve this problem in 3D, step by step:\n\nA simply supported beam of span 6 m carries a point load of 20 kN at 2 m from A and a uniformly distributed load of 5 kN/m over its whole length. Determine the reactions at A and B and the maximum bending moment.',
+    parts: [1, 5],
+    charts: true,
+    arrows: true,
+    noRig: true,
+    solve: true,
+    answer: { label: /reaction at b|R_?B/i, value: 21.67, tol: 0.02 },
+  },
   // mechanisms whose motion must come from their mounts (the "mechanism moves right" check)
   { id: 'compound-train', prompt: 'A three-shaft compound gear train, 4 : 1 then 3 : 1, 12 : 1 overall', parts: [5, 10], answer: { label: /overall|total|ratio/i, value: 12, tol: 0.05 } },
   { id: 'rack-pinion', prompt: 'A rack and pinion, module 3 mm, 20-tooth pinion turned by a handwheel', parts: [3, 7] },

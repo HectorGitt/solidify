@@ -124,6 +124,17 @@ export function scoreBuild(c: EvalCase, reply: Record<string, unknown>, seconds:
     const loose = loads.filter((a) => !a.anchor)
     add('loads as attached arrows', loads.length > 0 && loose.length === 0, loads.length ? (loose.length ? `${loose.length} of ${loads.length} not attached to a part` : undefined) : 'no load arrows')
   }
+  if (c.solve) {
+    const steps = spec.calculations ?? []
+    const q = spec.question
+    const answers = steps.filter((s) => s.answer)
+    const ok = !!q && q.find.length > 0 && steps.length >= 2 && steps.every((s) => s.step) && answers.length > 0
+    add(
+      'solved step by step',
+      ok,
+      ok ? undefined : !q ? 'not set up as a question' : !q.find.length ? 'what is asked is not listed' : steps.length < 2 ? 'fewer than two steps' : !answers.length ? 'no result marked as the answer' : 'a step has no explanation',
+    )
+  }
   if (c.noRig) {
     const rig = spec.parts.filter((p) => RIG.test(p.name))
     add('no test rig', rig.length === 0, rig.length ? `has ${rig.map((p) => p.name).join(', ')}` : undefined)
