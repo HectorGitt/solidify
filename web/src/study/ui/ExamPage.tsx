@@ -9,7 +9,7 @@ import { Working, n } from '@/ui/Working'
 import { queueParams } from '../bridge'
 import { useProgress } from '../progress'
 import { QUESTIONS, findQuestion } from '../questions'
-import { COURSES, parseAnswer, type Course, type Question } from '../types'
+import { COURSES, courseTitle, parseAnswer, type Course, type Question } from '../types'
 import { markAnswers } from '../marking'
 import { dueQuestions } from '../review'
 import { ExplainMistake } from './ExplainMistake'
@@ -18,6 +18,8 @@ import { RigView } from './RigView'
 import { Bar, CourseLabel, Pills, StudyShell } from './StudyShell'
 
 type Inputs = Record<string, string>
+
+const chooser = 'w-full min-w-0 rounded-xl border border-line-2 bg-bg px-3 py-2 text-[13px] text-ink outline-none focus:border-accent'
 
 function fieldResults(q: Question, inputs: Inputs) {
   const given = Object.fromEntries(q.answers.map((a) => [a.key, parseAnswer(inputs[a.key] ?? '')]))
@@ -163,7 +165,8 @@ function Practice({ list, start, fresh = false }: { list: Question[]; start?: st
   return (
     // the problem beside its rig, live in 3D with the problem's numbers (new numbers move the rig too)
     <div className="grid gap-4 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)] lg:items-start">
-    <RigView moduleId={q.moduleId} sceneId={q.sceneId} params={q.params} className="h-[300px] sm:h-[420px] lg:sticky lg:top-4 lg:h-[calc(100vh-8rem)] lg:min-h-[480px]" />
+    {/* a new rig is a new view: loading one rig into the view of another left a 3D label to be removed twice */}
+    <RigView key={`${q.moduleId}/${q.sceneId}`} moduleId={q.moduleId} sceneId={q.sceneId} params={q.params} className="h-[300px] sm:h-[420px] lg:sticky lg:top-4 lg:h-[calc(100vh-8rem)] lg:min-h-[480px]" />
     <div className="min-w-0 rounded-3xl border border-line bg-panel p-5">
       <QuestionHead q={q} index={i} total={list.length} />
       <div className="mt-4">
@@ -429,21 +432,50 @@ export function ExamPage() {
       }
     >
       {mode !== 'review' ? (
-      <div className="mb-4 space-y-2 rounded-3xl border border-line bg-panel-2/50 p-3">
-        <Pills
-          label="Subject"
-          value={course}
-          onChange={(v) => {
-            setCourse(v)
-            setTopic('all')
-          }}
-          options={[{ value: 'all' as const, label: 'All subjects' }, ...COURSES.map((c) => ({ value: c.id, label: <CourseLabel course={c.id} /> }))]}
-        />
-        <Pills label="Topic" value={topic} onChange={setTopic} options={[{ value: 'all', label: 'All topics' }, ...topics.map((t) => ({ value: t, label: t }))]} />
-        <div className="flex items-center gap-3 pt-1 text-[12px] text-mute">
-          <span className="shrink-0">
-            {solved}/{list.length} solved
-          </span>
+      <div className="mb-4 grid items-end gap-3 rounded-3xl border border-line bg-panel-2/50 p-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.8fr)]">
+        {/* two choosers, not walls of buttons: ten subjects and forty-odd topics read better as lists */}
+        <label className="block min-w-0">
+          <span className="mb-1 block px-1 text-[11.5px] font-medium text-mute">Subject</span>
+          <select
+            value={course}
+            onChange={(e) => {
+              setCourse(e.target.value as Course | 'all')
+              setTopic('all')
+            }}
+            className={chooser}
+          >
+            <option value="all">All subjects ({QUESTIONS.length})</option>
+            {COURSES.map((c) => {
+              const qs = QUESTIONS.filter((q) => q.course === c.id)
+              if (!qs.length) return null
+              const done = qs.filter((q) => (qp[q.id]?.correct ?? 0) > 0).length
+              return (
+                <option key={c.id} value={c.id}>
+                  {courseTitle(c.id)} ({done ? `${done}/` : ''}{qs.length})
+                </option>
+              )
+            })}
+          </select>
+        </label>
+        <label className="block min-w-0">
+          <span className="mb-1 block px-1 text-[11.5px] font-medium text-mute">Topic</span>
+          <select value={topic} onChange={(e) => setTopic(e.target.value)} className={chooser}>
+            <option value="all">All topics ({byCourse.length})</option>
+            {topics.map((t) => {
+              const qs = byCourse.filter((q) => q.topic === t)
+              const done = qs.filter((q) => (qp[q.id]?.correct ?? 0) > 0).length
+              return (
+                <option key={t} value={t}>
+                  {t} ({done ? `${done}/` : ''}{qs.length})
+                </option>
+              )
+            })}
+          </select>
+        </label>
+        <div className="min-w-0 px-1 pb-2 text-[12px] text-mute">
+          <div className="mb-1.5">
+            <span className="font-semibold text-ink">{solved}</span> of {list.length} solved
+          </div>
           <Bar value={solved} total={list.length} />
         </div>
       </div>

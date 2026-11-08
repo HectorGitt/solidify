@@ -61,7 +61,7 @@ export function RigView({ moduleId, sceneId, params, className = '' }: { moduleI
   return (
     <div className={`relative overflow-hidden rounded-3xl border border-line bg-[var(--color-stage)] ${className}`}>
       {scene ? (
-        <ErrorBoundary label="3D model" resetKey={scene.id}>
+        <ErrorBoundary key={scene.id} label="3D model" resetKey={scene.id}>
           {/* further back than on the rig's own page: this view is narrower, and the whole machine should show */}
           <Stage scene={scene} frame={{ back: 1.3, lift: 0 }} loadingLabel="Building the rig" poster={`scenes/${moduleId}--${sceneId}`} />
         </ErrorBoundary>

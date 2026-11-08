@@ -456,55 +456,61 @@ Every entry is numbered (in the order they appear, top to bottom) and set out th
 - **Cause:** a rig's camera and toolbar are set up for the rig's own, wider page; the toolbar caps its width at the screen, not at its container.
 - **Solution:** the side view frames the rig further back (`Stage frame`), and its toolbar is capped at the view's width (it scrolls sideways if needed). On a phone the toolbar is left to the full rig, a link away (`study/ui/RigView.tsx`). Checked in Edge at 1366 and 390 px: the whole engine shows, and New numbers and Next reload the rig with the problem's numbers.
 - **Lesson:** a component borrowed from a full page into a smaller box needs its framing and its size limits checked in that box.
+
+### 82. Switching to a problem on another rig threw "removeChild: not a child of this node" (2026-11-08)
+- **Problem:** in Exam practice, choosing a subject whose first problem uses a different rig (engine → tensile test) raised an uncaught React error in the browser, in about two runs of three.
+- **Cause:** the rig view loaded the new rig into the same view: it emptied it, then built the new one. One of the old rig's 3D labels (drawn as a page overlay with its own React root) was then cleaned up after its container had already gone. The rig pages never hit it, because each rig there gets a new view.
+- **Solution:** a new rig gets a new view (`key` per rig on `RigView` in `ExamPage.tsx`), as on the rig pages. Checked by bisecting in Edge: with the 3D off, no error; without the key, the error in 2 of 3 runs; with it, 7 of 7 clean.
+- **Lesson:** when a view holds things with their own lifetimes (3D labels, canvases), swap the whole view rather than its contents; and repeat an intermittent check several times before trusting a pass or a fail.
 ## Nightly tests, admin and labs pages (2026-11-06)
 
-### 82. A propped-cantilever model crashed the whole workspace
+### 83. A propped-cantilever model crashed the whole workspace
 - **Problem:** `Cannot read properties of undefined (reading '0')`, blank page.
 - **Cause:** Gemini sent a `recommendedCut` without a `normal`; the cleaner passed the object through unchecked and an effect read `normal[0]`.
 - **Solution:** `cleanCut` in `note3d/sanitize.ts` checks every field (also applied when opening saved models and in the notes reader), and error boundaries round the 3D view, the side panel and each page.
 - **Lesson:** validate every nested field of model output, not just its presence; and no page should be one bad value away from blank.
 
-### 83. Nightly builds failed with "Something went wrong on the server" (500)
+### 84. Nightly builds failed with "Something went wrong on the server" (500)
 - **Problem:** Nightly builds failed with "Something went wrong on the server" (500).
 - **Cause:** Gemini answered 429 RESOURCE_EXHAUSTED when three builds ran at once, and the API gave up on the first refusal.
 - **Solution:** `api/src/retry.ts` waits and retries (2, 6, 15 s) on 429/503, streamed builds retry if refused before their first word, the final failure says the model is busy (503), and the runner tries once more after 30 s.
 - **Lesson:** treat rate limits as normal for a hosted model; read the service's logs before guessing.
 
-### 84. A draft scored 100 while visibly broken
+### 85. A draft scored 100 while visibly broken
 - **Problem:** (rods not reaching the crank, a tilted flywheel through the casing, labels on top of each other).
 - **Cause:** the checks only covered layout overlap, drawability and calculations.
 - **Solution:** checks for moving parts joined by relation and for overlapping labels, and the prompt states the same rules.
 - **Lesson:** a score is only as good as its checks; look at high scorers before trusting the number.
 
-### 85. Deploy failed: "Build failed; check build logs"
+### 86. Deploy failed: "Build failed; check build logs"
 - **Problem:** Deploy failed: "Build failed; check build logs".
 - **Cause:** `gcloud run deploy --source .` run from the repo root, which has no Dockerfile.
 - **Solution:** run it from `api/`.
 - **Lesson:** `--source .` uploads the current folder; check where you are.
 
-### 86. Rig thumbnails came out blank, and with a stray `_` in their names
+### 87. Rig thumbnails came out blank, and with a stray `_` in their names
 - **Problem:** Rig thumbnails came out blank, and with a stray `_` in their names.
 - **Cause:** two scenes photographed before they had drawn in a reused tab; and the rig list written by Python on Windows had CRLF line endings, so each id ended in `\r`.
 - **Solution:** retook those two in a fresh tab (`SHOT_COLD=1`); renamed the files and strip `\r` when reading lists.
 - **Lesson:** check the smallest output files of a batch capture, and strip `\r` from lists made on Windows.
 
-### 87. Inline scripts lost their backslashes
+### 88. Inline scripts lost their backslashes
 - **Problem:** A `node -e` / heredoc script through the shell turned `C:\Program Files` into `C:\Program Files`, so the browser path was not found.
 - **Solution:** forward slashes in Windows paths in scripts, and the editor rather than the shell for code containing escapes.
 - **Lesson:** don't pass escape-heavy code through the shell.
 
-### 88. Prettier reformatted a file into another style
+### 89. Prettier reformatted a file into another style
 - **Problem:** With no project config it used its defaults (double quotes, semicolons).
 - **Solution:** re-run with the project's settings (`--no-semi --single-quote --print-width 220`).
 - **Lesson:** don't run a formatter the project doesn't configure.
 
-### 89. The Labs page was wider than a phone
+### 90. The Labs page was wider than a phone
 - **Problem:** The Labs page was wider than a phone.
 - **Cause:** one-line rig names in a grid item set its minimum width.
 - **Solution:** `min-w-0` on the card.
 - **Lesson:** any `truncate` text inside a grid or flex child needs `min-w-0` on that child.
 
-### 90. Gearbox levers hung in the air, and the reverse idler had no shaft
+### 91. Gearbox levers hung in the air, and the reverse idler had no shaft
 - **Problem:** Gearbox levers hung in the air, and the reverse idler had no shaft.
 - **Cause:** the cut-away removed the half of the casing the lever towers stood on (moving parts are not cut, so the levers stayed); the idler's shaft was defined but never drawn, and a full-length pin would have run through third gear and the range gears.
 - **Solution:** a shift cover the towers stand on; a stub shaft and wall boss for the idler; and the cut now removes the other half, with the cameras moved to that side, so everything kept is attached to something.
