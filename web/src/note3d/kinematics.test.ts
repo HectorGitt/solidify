@@ -225,6 +225,32 @@ describe('motion from the mounts', () => {
     expect(mechanismProblems({ parts: [{ id: 'plate', name: 'plate', shapes: [{ kind: 'box', sx: 1, sy: 0.01, sz: 1 }] }] }, {}).checked).toBe(false)
   })
 
+  it('a lever aims at the crank pin as drawn (a die block on it), not at the angle its mount states', () => {
+    const parts: NotePartSpec[] = [
+      crank(),
+      { id: 'block', name: 'die block', role: 'moving', shapes: [{ kind: 'box', sx: 0.02, sy: 0.02, sz: 0.02 }], mount: { kind: 'coaxial', target: 'crank', shift: [0.05, 0, 0] } },
+      { id: 'pivot', name: 'pivot pin', role: 'static', position: [0, -0.3, 0], rotation: [Math.PI / 2, 0, 0], shapes: [{ kind: 'cylinder', r: 0.01, h: 0.03 }] },
+      // the mount says the pin is at the top (angle 0); the block was drawn at +x
+      { id: 'lever', name: 'slotted lever', role: 'moving', shapes: [{ kind: 'box', sx: 0.03, sy: 0.5, sz: 0.01 }], mount: { kind: 'lever', target: 'crank', pivot: 'pivot', throw: 0.05, angle: 0 } },
+    ]
+    const kin = buildKinematics({ parts }, {})
+    const P = resolveAssembly({ parts }, {}).poses
+    for (const t of [0, 0.8, 2.1, 4]) {
+      kin.update(t)
+      const at = (id: string, local: THREE.Vector3) => {
+        const b = P.get(id)!
+        const m = kin.move(id) ?? { quat: new THREE.Quaternion(), pos: new THREE.Vector3() }
+        return local.clone().applyQuaternion(m.quat).add(m.pos).applyQuaternion(b.quat).add(b.pos)
+      }
+      const block = at('block', new THREE.Vector3())
+      const pivot = new THREE.Vector3(0, -0.3, 0)
+      const along = at('lever', new THREE.Vector3(0, 1, 0)).sub(at('lever', new THREE.Vector3()))
+      const toBlock = block.clone().sub(pivot)
+      // the block lies on the lever's line
+      expect(toBlock.clone().cross(along.normalize()).length()).toBeLessThan(1e-6)
+    }
+  })
+
   it('parts in no mechanism are left to their own motion', () => {
     const parts: NotePartSpec[] = [{ id: 'fan', name: 'fan', role: 'moving', shapes: [{ kind: 'box', sx: 0.1, sy: 0.01, sz: 0.01 }], motion: turn(2) }]
     expect(buildKinematics({ parts }, {}).derived.size).toBe(0)

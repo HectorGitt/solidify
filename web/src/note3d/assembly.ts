@@ -152,7 +152,55 @@ export function resolveAssembly(
 
   // a crank's angle: where it was drawn (`angle`, degrees) plus how far it has turned since
   const crankAngle = (m: { angle?: unknown }, crankId: string) => (evalDim(m.angle as never, scope, 0) * Math.PI) / 180 + (opts.angles?.get(crankId) ?? 0)
+  /**
+   * The crank pin as drawn, if the model drew one: a part mounted on the crank off its axis (a die block, a
+   * slide block), else a round shape on the crank off its axis (the pin itself). Its offset from the crank's
+   * axis, at rest. A lever or rod aimed at this always goes through the block, whatever throw and angle the
+   * mount says (they can disagree with the drawing).
+   */
+  const drawnPins = new Map<string, THREE.Vector3 | null>()
+  const drawnPin = (crank: NotePartSpec, ti: LocalInfo, T: { pos: THREE.Vector3; quat: THREE.Quaternion }) => {
+    if (drawnPins.has(crank.id)) return drawnPins.get(crank.id)!
+    drawnPins.set(crank.id, null)
+    const axis = canonical(ti.axis.clone().applyQuaternion(T.quat).normalize())
+    const center = ti.center.clone().applyQuaternion(T.quat).add(T.pos)
+    const radial = (w: THREE.Vector3) => {
+      const v = w.clone().sub(center)
+      return v.addScaledVector(axis, -v.dot(axis))
+    }
+    const minR = Math.max(0.004, 0.08 * Math.max(...ti.box.getSize(new THREE.Vector3()).toArray()))
+    let found: THREE.Vector3 | null = null
+    for (const q of spec.parts) {
+      if (q.id === crank.id || q.mount?.kind !== 'coaxial' || q.mount.target !== crank.id || visiting.has(q.id)) continue
+      place(q)
+      const Q = done.get(q.id)!
+      const v = radial(localInfo(q, scope).center.clone().applyQuaternion(Q.quat).add(Q.pos))
+      if (v.length() > minR) {
+        found = v
+        break
+      }
+    }
+    if (!found) {
+      const adds = crank.shapes.filter((s) => s.op !== 'subtract' && ROUND.has(s.kind))
+      for (const s of adds.slice(1)) {
+        const v = radial(new THREE.Vector3(...evalVec3(s.position, scope, [0, 0, 0])).applyQuaternion(T.quat).add(T.pos))
+        if (v.length() > minR && v.length() < 0.9 * Math.max(...ti.box.getSize(new THREE.Vector3()).toArray())) {
+          found = v
+          break
+        }
+      }
+    }
+    drawnPins.set(crank.id, found)
+    return found
+  }
   const crankPin = (ti: LocalInfo, T: { pos: THREE.Vector3; quat: THREE.Quaternion }, m: { throw?: unknown; angle?: unknown; direction?: AxisDir }, crankId: string) => {
+    const crank = byId.get(crankId)
+    const drawn = crank ? drawnPin(crank, ti, T) : null
+    if (drawn) {
+      const axis = canonical(ti.axis.clone().applyQuaternion(T.quat).normalize())
+      const center = ti.center.clone().applyQuaternion(T.quat).add(T.pos)
+      return center.add(drawn.clone().applyAxisAngle(axis, opts.angles?.get(crankId) ?? 0))
+    }
     const { center, slide, across } = crankFrame(ti, T, m.direction)
     const r = evalDim(m.throw as never, scope, 0.04)
     const th = crankAngle(m, crankId)
@@ -219,11 +267,14 @@ export function resolveAssembly(
       point = tCenter.clone().addScaledVector(side, ring ? radial(ti) - radial(si) : radial(si) + radial(ti))
     } else if (m.kind === 'slider') {
       // piston position for crank radius r, rod length l, crank angle θ from top dead centre
-      const { center, slide } = crankFrame(ti, T, m.direction)
-      const r = evalDim(m.throw, scope, 0.04)
+      // (from the pin: r cos θ along the line, r sin θ across it; the pin as drawn when there is one)
+      const { center, slide, across } = crankFrame(ti, T, m.direction)
+      const pin = crankPin(ti, T, m, target.id).sub(center)
+      const along = pin.dot(slide)
+      const off = pin.dot(across)
+      const r = Math.hypot(along, off)
       const l = Math.max(r * 1.05, evalDim(m.rod, scope, 0.15))
-      const th = crankAngle(m, target.id)
-      point = center.clone().addScaledVector(slide, r * Math.cos(th) + Math.sqrt(l * l - r * r * Math.sin(th) ** 2))
+      point = center.clone().addScaledVector(slide, along + Math.sqrt(l * l - off * off))
     } else if (m.kind === 'link') {
       // a connecting rod from the crank pin to the centre of the part it drives
       const toPart = byId.get(m.to)

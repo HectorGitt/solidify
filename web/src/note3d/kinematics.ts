@@ -66,6 +66,7 @@ type Link =
 
 const SWINGS = /slotted lever|rocker|rocking lever|quick.?return lever/i
 const RIDES = /\bram\b|slotted yoke|scotch.?yoke|yoke slide|\bslide block|tool slide/i
+const FIXTURE = /(pin|pivot|bearing|bush|bracket|shaft|frame|guide|column|housing|base)/i
 const LINKAGE_MEMBER = /lever|rocker|\bram\b|yoke|slider|piston|crosshead|rack|follower|rod\b|link\b/i
 
 /**
@@ -131,7 +132,8 @@ export function mechanismProblems(spec: Pick<NoteSceneSpec, 'parts'>, scope: Rec
     if (!kin.derived.has(g.id) && !g.motion) problems.push(`${g.name} does not turn: it is not meshed with, or on, anything that turns`)
   }
   // linkages driven by their crank, not animated on their own (one message per part)
-  for (const p of parts.filter((x) => SWINGS.test(x.name)))
+  // a lever is a moving part; its pivot pin, bearing or bracket ("rocker pivot pin") is not
+  for (const p of parts.filter((x) => SWINGS.test(x.name) && (x.role === 'moving' || !!x.motion) && !FIXTURE.test(x.name)))
     if (p.mount?.kind !== 'lever') {
       problems.push(`${p.name} is not a lever on its crank, so it cannot swing with it`)
       named.add(p.id)
@@ -298,6 +300,13 @@ export function buildKinematics(spec: Pick<NoteSceneSpec, 'parts'> | null, scope
     if (spinning.has(id) && a && !onLine(id, a)) carrier.set(id, a)
   }
   const centers = new Map([...new Set(carrier.values())].map((a) => [a, centerOf(a)]))
+  /** die blocks: a part carried off its crank's axis, on a crank that drives a lever (block id → lever id) */
+  const dieBlocks = new Map<string, string>()
+  for (const l of parts) {
+    if (l.mount?.kind !== 'lever') continue
+    const crankId = l.mount.target
+    for (const [id, a] of carrier) if (a === crankId || anchor.get(crankId) === a) if (byId.get(id)?.mount?.target === crankId) dieBlocks.set(id, l.id)
+  }
 
   // parts the assembly re-places as the mechanism turns: linkages, and anything mounted on one
   const linkage = parts.filter((p) => p.mount && LINKAGE.has(p.mount.kind))
@@ -366,6 +375,25 @@ export function buildKinematics(spec: Pick<NoteSceneSpec, 'parts'> | null, scope
           m.pos = n.pos.clone().sub(b.pos).applyQuaternion(inv)
           moves.set(p.id, m)
           derived.add(p.id)
+        }
+        // a block on a crank pin that a lever slides over (a die block) goes round with the pin but stays lined
+        // up with the lever's slot: it turns as the lever turns, about its own centre
+        for (const [blockId, leverId] of dieBlocks) {
+          const b = base.get(blockId)
+          const lb = base.get(leverId)
+          const ln = now.get(leverId)
+          const a = carrier.get(blockId)
+          if (!b || !lb || !ln || !a) continue
+          const turn = ln.quat.clone().multiply(lb.quat.clone().invert())
+          const R = new THREE.Quaternion().setFromAxisAngle(worldAxis.get(a)!, angles.get(a) ?? 0)
+          const c = centers.get(a)!
+          const local = info.get(blockId)!.center
+          const centre0 = local.clone().applyQuaternion(b.quat).add(b.pos)
+          const centre = centre0.sub(c).applyQuaternion(R).add(c)
+          const q = turn.multiply(b.quat)
+          const origin = centre.sub(local.clone().applyQuaternion(q))
+          const inv = b.quat.clone().invert()
+          moves.set(blockId, { quat: inv.clone().multiply(q), pos: origin.sub(b.pos).applyQuaternion(inv), spin: 0 })
         }
       }
     },

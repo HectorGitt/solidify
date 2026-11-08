@@ -378,55 +378,79 @@ Every entry is numbered (in the order they appear, top to bottom) and set out th
 - **Cause:** the Parts list was folded, so the name was in the page but not visible. The text locator's count did not match the notes reliably at phone width.
 - **Solution:** select parts through the app's own store (`useView.select`). Count from the page text (`document.body.innerText`), then scroll to the element and look at the screenshot (`scripts/look32.mjs`, `look33.mjs`).
 - **Lesson:** when a browser check says something is missing, confirm it with a screenshot before believing it.
+
+### 69. In the rebuilt quick return, the lever swung a quarter turn away from its die block (2026-11-08)
+- **Problem:** the first draft built with the new prompt used the lever and follower mounts correctly, yet looked wrong as it turned: the slotted lever swung while the die block went round outside its slot, and the block tumbled with the gear.
+- **Cause:** the lever aimed at a crank pin worked out from its mount's numbers (`throw`, `angle: 0`, meaning straight up from the crank centre). The model drew the pin, and the block on it, at +x, a quarter turn away. The block was carried round with the gear, so it also turned with the gear rather than with the lever whose slot it slides in.
+- **Solution:** the crank pin is taken from the drawing when there is one: a part mounted on the crank off its axis (a die or slide block), else an off-axis round shape on the crank (the pin itself). That point is turned with the crank, and the mount's throw and angle are only a fallback. Sliders, links, levers and pin followers all use it (`assembly.ts`, `drawnPin`). A block on the pin of a crank that drives a lever is carried round with the pin but turns with the lever (`kinematics.ts`, `dieBlocks`). Test: a lever whose mount says angle 0 still passes through a block drawn at +x, at every crank angle. Checked in Edge frame by frame: the lever's x tracks the block's to the millimetre, the block stays in the slot, and the ram strokes ±0.15 m (calculated stroke 0.3 m).
+- **Lesson:** when the model states a quantity twice (a pin it drew and an angle it wrote), trust the geometry it drew; it is what the student sees.
+
+### 70. A fixed pivot pin was flagged "not a lever on its crank" (2026-11-08)
+- **Problem:** the rebuilt quick return, correct in every mount, was flagged "Moves wrongly: Rocker pivot pin is not a lever on its crank".
+- **Cause:** the check looked for levers by name, and "rocker" matched the rocker's fixed pivot pin.
+- **Solution:** only moving parts can be levers, and pins, pivots, bearings, bushes, brackets, shafts, frames, guides and bases are never taken for one (`mechanismProblems`). The draft now passes, and the old drafts are still flagged.
+- **Lesson:** a check that goes by names must exclude the parts named after what they hold; test it on a good draft as well as on bad ones.
+
+### 71. A motion axis given as a vector reached the renderer uncleaned (2026-11-08)
+- **Problem:** the rebuilt quick return gave its bull gear `"axis": [0, 1, 0]` where the schema says "x", "y" or "z".
+- **Cause:** the cleaning step checked each part's mount but passed `motion` through untouched; the fallback animation would have read `rotation["0,1,0"]`.
+- **Solution:** `cleanMotion` (`sanitize.ts`): an axis given as a vector or a signed letter becomes its main letter, a missing speed becomes 1, and an unknown kind drops the motion. Tests in `cleanMotion.test.ts`.
+- **Lesson:** "clean every field the model returns" includes the fields that usually come back right.
+
+### 72. A draft's card and its workspace disagreed about what was wrong (2026-11-08)
+- **Problem:** some drafts showed no error on their review card until opened (then "parts look out of place"); others showed an error on the card that was gone once opened.
+- **Cause:** the card showed the checks stored when the draft was made, plus the live mechanism check. The workspace ran only its own live layout check. Each showed problems the other didn't.
+- **Solution:** both run the same checks live. The card runs the draft's full check set again (keeping only the stored build time) and shows that score, with the score when drafted on hover (`AdminPage.tsx`, `draftLive`). The workspace strip lists layout and mechanism problems together, and its button asks Gemini to fix both (`ModelLab.tsx`). Checked in Edge: the rebuilt quick return is clear on both, and the three broken drafts are flagged on both.
+- **Lesson:** one question ("is this draft right?") should have one answer, computed by one function, wherever it is shown.
 ## Nightly tests, admin and labs pages (2026-11-06)
 
-### 69. A propped-cantilever model crashed the whole workspace
+### 73. A propped-cantilever model crashed the whole workspace
 - **Problem:** `Cannot read properties of undefined (reading '0')`, blank page.
 - **Cause:** Gemini sent a `recommendedCut` without a `normal`; the cleaner passed the object through unchecked and an effect read `normal[0]`.
 - **Solution:** `cleanCut` in `note3d/sanitize.ts` checks every field (also applied when opening saved models and in the notes reader), and error boundaries round the 3D view, the side panel and each page.
 - **Lesson:** validate every nested field of model output, not just its presence; and no page should be one bad value away from blank.
 
-### 70. Nightly builds failed with "Something went wrong on the server" (500)
+### 74. Nightly builds failed with "Something went wrong on the server" (500)
 - **Problem:** Nightly builds failed with "Something went wrong on the server" (500).
 - **Cause:** Gemini answered 429 RESOURCE_EXHAUSTED when three builds ran at once, and the API gave up on the first refusal.
 - **Solution:** `api/src/retry.ts` waits and retries (2, 6, 15 s) on 429/503, streamed builds retry if refused before their first word, the final failure says the model is busy (503), and the runner tries once more after 30 s.
 - **Lesson:** treat rate limits as normal for a hosted model; read the service's logs before guessing.
 
-### 71. A draft scored 100 while visibly broken
+### 75. A draft scored 100 while visibly broken
 - **Problem:** (rods not reaching the crank, a tilted flywheel through the casing, labels on top of each other).
 - **Cause:** the checks only covered layout overlap, drawability and calculations.
 - **Solution:** checks for moving parts joined by relation and for overlapping labels, and the prompt states the same rules.
 - **Lesson:** a score is only as good as its checks; look at high scorers before trusting the number.
 
-### 72. Deploy failed: "Build failed; check build logs"
+### 76. Deploy failed: "Build failed; check build logs"
 - **Problem:** Deploy failed: "Build failed; check build logs".
 - **Cause:** `gcloud run deploy --source .` run from the repo root, which has no Dockerfile.
 - **Solution:** run it from `api/`.
 - **Lesson:** `--source .` uploads the current folder; check where you are.
 
-### 73. Rig thumbnails came out blank, and with a stray `_` in their names
+### 77. Rig thumbnails came out blank, and with a stray `_` in their names
 - **Problem:** Rig thumbnails came out blank, and with a stray `_` in their names.
 - **Cause:** two scenes photographed before they had drawn in a reused tab; and the rig list written by Python on Windows had CRLF line endings, so each id ended in `\r`.
 - **Solution:** retook those two in a fresh tab (`SHOT_COLD=1`); renamed the files and strip `\r` when reading lists.
 - **Lesson:** check the smallest output files of a batch capture, and strip `\r` from lists made on Windows.
 
-### 74. Inline scripts lost their backslashes
+### 78. Inline scripts lost their backslashes
 - **Problem:** A `node -e` / heredoc script through the shell turned `C:\Program Files` into `C:\Program Files`, so the browser path was not found.
 - **Solution:** forward slashes in Windows paths in scripts, and the editor rather than the shell for code containing escapes.
 - **Lesson:** don't pass escape-heavy code through the shell.
 
-### 75. Prettier reformatted a file into another style
+### 79. Prettier reformatted a file into another style
 - **Problem:** With no project config it used its defaults (double quotes, semicolons).
 - **Solution:** re-run with the project's settings (`--no-semi --single-quote --print-width 220`).
 - **Lesson:** don't run a formatter the project doesn't configure.
 
-### 76. The Labs page was wider than a phone
+### 80. The Labs page was wider than a phone
 - **Problem:** The Labs page was wider than a phone.
 - **Cause:** one-line rig names in a grid item set its minimum width.
 - **Solution:** `min-w-0` on the card.
 - **Lesson:** any `truncate` text inside a grid or flex child needs `min-w-0` on that child.
 
-### 77. Gearbox levers hung in the air, and the reverse idler had no shaft
+### 81. Gearbox levers hung in the air, and the reverse idler had no shaft
 - **Problem:** Gearbox levers hung in the air, and the reverse idler had no shaft.
 - **Cause:** the cut-away removed the half of the casing the lever towers stood on (moving parts are not cut, so the levers stayed); the idler's shaft was defined but never drawn, and a full-length pin would have run through third gear and the range gears.
 - **Solution:** a shift cover the towers stand on; a stub shaft and wall boss for the idler; and the cut now removes the other half, with the cameras moved to that side, so everything kept is attached to something.
