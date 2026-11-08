@@ -23,6 +23,7 @@ import { Readout, Section, Slider } from '@/ui/controls'
 import { FoldChevron, usePersisted } from '@/ui/usePersisted'
 import { Tex } from '@/ui/Tex'
 import { WorkedSolution } from './WorkedSolution'
+import { freshNumbers } from '@/note3d/freshNumbers'
 import { toast } from '@/ui/toast'
 import { ApiError } from '../api'
 import { useAuth } from '../auth'
@@ -180,7 +181,7 @@ function StartPanel({ onBuild, signedIn }: { onBuild: (text: string, photo?: { n
 }
 
 const IDENT = /[A-Za-z_][A-Za-z0-9_]*/g
-const FUNCS = new Set(['pi', 'PI', 'sqrt', 'sin', 'cos', 'tan', 'atan', 'exp', 'log', 'abs', 'min', 'max', 'step', 'mac'])
+const FUNCS = new Set(['pi', 'PI', 'sqrt', 'sin', 'cos', 'tan', 'atan', 'asin', 'acos', 'atan2', 'exp', 'log', 'ln', 'log10', 'pow', 'sinh', 'cosh', 'tanh', 'hypot', 'floor', 'ceil', 'round', 'abs', 'min', 'max', 'step', 'mac'])
 
 function CalcCard({
   result,
@@ -1241,6 +1242,17 @@ export default function ModelLab() {
                       results={calcResults}
                       disabled={!!live}
                       onExplain={(label) => void send(`Explain how the ${label.toLowerCase()} is worked out, step by step with this problem's numbers.`)}
+                      practiceId={`own:${creationId ?? shownSpec.id}`}
+                      onNewNumbers={() => {
+                        const v = freshNumbers(shownSpec)
+                        if (!v) {
+                          toast('No other numbers keep this problem workable; move the givens yourself.', { tone: 'warn' })
+                          return false
+                        }
+                        setViewMode('parametric')
+                        setParams(v)
+                        return true
+                      }}
                     />
                   </Section>
                 ) : null}
