@@ -217,27 +217,47 @@ function Lab({ scene }: { scene: SceneDef }) {
   // the rig's base point in its own scene
   // sized and centred by the machine itself, not the scene round it: flat ground (a strip of soil, a floor
   // plate) doesn't count, so a tractor is as big on the table as a gearbox is
-  const fit = useMemo(() => {
+  // measured once the machine is drawn (in the first frames of a session it may not be yet)
+  const measure = () => {
     const parts = useParts.getState().parts
     const boxes: THREE.Box3[] = []
     for (const p of Object.values(parts)) {
       if (p.parentId && parts[p.parentId]) continue
       const o = partObjects.get(p.id)
       if (!o) continue
-      const b = new THREE.Box3().setFromObject(o)
+      // what is drawn only: a part can hold hidden helpers (an effect's sphere, a metre or two across)
+      const b = new THREE.Box3()
+      const g = new THREE.Box3()
+      o.updateWorldMatrix(true, true)
+      o.traverseVisible((m) => {
+        const geo = (m as THREE.Mesh).geometry
+        if (!(m as THREE.Mesh).isMesh || !geo) return
+        if (!geo.boundingBox) geo.computeBoundingBox()
+        b.union(g.copy(geo.boundingBox!).applyMatrix4(m.matrixWorld))
+      })
       if (!b.isEmpty()) boxes.push(b)
     }
     const tallest = Math.max(0, ...boxes.map((b) => b.max.y - b.min.y))
     const box = new THREE.Box3()
     for (const b of boxes) if (b.max.y - b.min.y > tallest * 0.05) box.union(b)
-    if (box.isEmpty()) return { size: Math.max(scene.extent, 0.05), foot: Math.max(scene.extent, 0.05), x: scene.camera.target[0], z: scene.camera.target[2] }
+    if (box.isEmpty()) return null
     const s = box.getSize(new THREE.Vector3())
     const c = box.getCenter(new THREE.Vector3())
     return { size: Math.max(s.x, s.y, s.z), foot: Math.max(s.x, s.z), x: c.x, z: c.z }
-  }, [scene])
+  }
+  const [measured, setMeasured] = useState<ReturnType<typeof measure>>(null)
+  const tries = useRef(0)
+  useFrame(() => {
+    if (measured || tries.current > 240) return
+    tries.current++
+    const m = measure()
+    if (m) setMeasured(m)
+  })
+  const fit = useMemo(() => measured ?? { size: Math.max(scene.extent, 0.05), foot: Math.max(scene.extent, 0.05), x: scene.camera.target[0], z: scene.camera.target[2] }, [measured, scene])
   // everything at its real size: on the table if it fits there, standing on the floor if not (a tractor);
   // a big machine can be made a table model to turn in the hands
   const big = fit.size > BIG
+  if (import.meta.env.DEV) (window as unknown as { __xrFit?: unknown }).__xrFit = fit
   useEffect(() => useLab.setState({ big, full: big }), [big])
   const base = useMemo(() => new THREE.Vector3(fit.x, scene.floorY ?? 0, fit.z), [fit, scene])
   const scale = big && !full ? fit.size / TABLE_SIZE : 1
