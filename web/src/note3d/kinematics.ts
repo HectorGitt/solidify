@@ -64,6 +64,93 @@ type Link =
   /** Hooke's joint, input → output (or back) */
   | { kind: 'hooke'; beta: number; forward: boolean }
 
+const SWINGS = /slotted lever|rocker|rocking lever|quick.?return lever/i
+const RIDES = /\bram\b|slotted yoke|scotch.?yoke|yoke slide|\bslide block|tool slide/i
+const LINKAGE_MEMBER = /lever|rocker|\bram\b|yoke|slider|piston|crosshead|rack|follower|rod\b|link\b/i
+
+/**
+ * Whether a mechanism will move right in the 3D view, from how it is put together: gears that mesh have the
+ * same tooth size, a rack meshes with its pinion, every gear is driven by something, and levers, rams and
+ * yokes are driven by their crank (a mount), not animated on their own. `about` is the request (or title), for
+ * the mechanisms that need a particular relation (a universal joint, a quick return, a scotch yoke).
+ * `checked` is false when the model has no gears or linkages.
+ */
+export function mechanismProblems(spec: Pick<NoteSceneSpec, 'parts'>, scope: Record<string, number>, about = ''): { checked: boolean; problems: string[] } {
+  const problems: string[] = []
+  const parts = spec.parts ?? []
+  const byId = new Map(parts.map((p) => [p.id, p]))
+  const gearOf = (p: NotePartSpec) => {
+    const l = lead(p)
+    return l && GEARS.has(l.kind) ? l : undefined
+  }
+  const isRack = (p: NotePartSpec) => p.shapes.some((s) => s.kind === 'rack' && s.op !== 'subtract')
+  const gears = parts.filter((p) => gearOf(p))
+  const racks = parts.filter(isRack)
+  const members = parts.filter((p) => p.role === 'moving' && LINKAGE_MEMBER.test(p.name))
+  const wants = { hooke: /universal joint|hooke|cardan/i.test(about), lever: /quick.?return|slotted.?lever|whitworth|shaper/i.test(about), yoke: /scotch.?yoke/i.test(about) }
+  const checked = gears.length > 0 || racks.length > 0 || members.length > 0 || wants.hooke || wants.lever || wants.yoke
+  if (!checked) return { checked, problems }
+
+  let kin: Kinematics
+  try {
+    kin = buildKinematics(spec, scope)
+  } catch {
+    return { checked, problems: ['the mechanism could not be worked out from its mounts'] }
+  }
+
+  // meshed gears: the same tooth size
+  for (const p of parts) {
+    if (p.mount?.kind !== 'mesh') continue
+    const t = byId.get(p.mount.target)
+    if (!t) continue
+    const a = gearOf(p)
+    const b = gearOf(t)
+    const toothless = [p, t].filter((x) => !gearOf(x) && !isRack(x) && !/worm|screw|spline/i.test(x.name))
+    if (toothless.length) {
+      // a pulley or plain disc given a mesh is only a placing aid when neither side has teeth
+      if (toothless.length === 1) problems.push(`${p.name} meshes with ${t.name}, but ${toothless[0].name} has no teeth`)
+    } else if (a && b && a.kind !== 'sprocket' && b.kind !== 'sprocket') {
+      const ma = evalDim(a.module, scope, 0.003)
+      const mb = evalDim(b.module, scope, 0.003)
+      if (Math.abs(ma - mb) > 0.03 * Math.max(ma, mb)) problems.push(`${p.name} and ${t.name} have different tooth sizes (module ${+(ma * 1000).toFixed(2)} and ${+(mb * 1000).toFixed(2)} mm), so they cannot mesh`)
+    }
+  }
+  /** parts already named in a problem */
+  const named = new Set<string>()
+  // a rack meshes with its pinion
+  for (const r of racks) {
+    const meshed = r.mount?.kind === 'mesh' || parts.some((p) => p.mount?.kind === 'mesh' && p.mount.target === r.id)
+    if (!meshed) {
+      problems.push(`${r.name} is not meshed with its pinion, so it cannot slide with it`)
+      named.add(r.id)
+    }
+  }
+  // every moving gear is driven by something
+  for (const g of gears) {
+    if (g.role !== 'moving' && !g.motion) continue
+    if (!kin.derived.has(g.id) && !g.motion) problems.push(`${g.name} does not turn: it is not meshed with, or on, anything that turns`)
+  }
+  // linkages driven by their crank, not animated on their own (one message per part)
+  for (const p of parts.filter((x) => SWINGS.test(x.name)))
+    if (p.mount?.kind !== 'lever') {
+      problems.push(`${p.name} is not a lever on its crank, so it cannot swing with it`)
+      named.add(p.id)
+    }
+  for (const p of parts.filter((x) => RIDES.test(x.name) && x.role === 'moving'))
+    if (!kin.derived.has(p.id) && !named.has(p.id)) {
+      problems.push(`${p.name} is not driven: make it a follower of the crank pin or the lever's tip`)
+      named.add(p.id)
+    }
+  for (const p of members) {
+    if (kin.derived.has(p.id) || named.has(p.id)) continue
+    if (p.motion && p.motion.kind !== 'rotate') problems.push(`${p.name} moves on its own (${p.motion.kind}), not from the part that drives it`)
+  }
+  if (wants.hooke && !parts.some((p) => p.mount?.kind === 'hooke')) problems.push('the output shaft is not on a universal joint (hooke mount), so it cannot turn by Hooke’s law')
+  if (wants.lever && !named.size && !parts.some((p) => p.mount?.kind === 'lever')) problems.push('no slotted lever on the crank (lever mount), so the quick return cannot work')
+  if (wants.yoke && !named.size && !parts.some((p) => p.mount?.kind === 'follower' || p.mount?.kind === 'slider')) problems.push('the yoke does not follow the crank pin (follower mount)')
+  return { checked, problems: [...new Set(problems)] }
+}
+
 export function buildKinematics(spec: Pick<NoteSceneSpec, 'parts'> | null, scope: Record<string, number>): Kinematics {
   const empty: Kinematics = { derived: new Set(), drivers: new Set(), update: () => {}, move: () => null }
   if (!spec?.parts?.length) return empty

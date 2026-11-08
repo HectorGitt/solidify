@@ -4,6 +4,9 @@ import { startTask } from '@/ui/tasks'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { EVAL_CASES } from '@/evals/cases'
 import { scoreBuild } from '@/evals/score'
+import { mechanismProblems } from '@/note3d/kinematics'
+import { sanitizeGeneratedSpec } from '@/note3d/sanitize'
+import { evaluateCalculations } from '@/note3d/schema'
 import { DRAFT_TOPICS, type DraftTopic } from '@/evals/topics'
 import { Pills, StudyShell } from '@/study/ui/StudyShell'
 import { ListSkeleton } from '@/ui/Skeleton'
@@ -90,6 +93,25 @@ function FailedChecks({ checks }: { checks: EvalCheck[] }) {
 }
 
 const BUILD_NOTE = 'Building… about a minute'
+
+/** what is wrong with a draft's mechanism, checked now with today's rules (a draft may predate them) */
+const mechCache = new WeakMap<object, string[]>()
+function draftMechanism(d: LibraryDraft): string[] {
+  const hit = mechCache.get(d.spec)
+  if (hit) return hit
+  let out: string[] = []
+  try {
+    const spec = sanitizeGeneratedSpec({ spec: d.spec }, d.title)
+    if (spec) {
+      const { scope } = evaluateCalculations(spec.calculations, Object.fromEntries(spec.parameters.map((p) => [p.id, p.value])))
+      out = mechanismProblems(spec, scope, `${d.prompt} ${d.title}`).problems
+    }
+  } catch {
+    out = []
+  }
+  mechCache.set(d.spec, out)
+  return out
+}
 
 const date = (t: number) => new Date(t).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })
 const dateTime = (t: number) => new Date(t).toLocaleString(undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
@@ -652,6 +674,7 @@ function DraftCard({ d, onDone, onChanged, backTo }: { d: LibraryDraft; onDone: 
   const [showHistory, setShowHistory] = useState(false)
   const [reason, setReason] = useState('')
   const allChecked = CHECKS.every(([k]) => checklist[k])
+  const mech = draftMechanism(d)
   const tick = (k: keyof ReviewChecklist, v: boolean) => {
     const next = { ...checklist, [k]: v }
     setChecklist(next)
@@ -728,7 +751,17 @@ function DraftCard({ d, onDone, onChanged, backTo }: { d: LibraryDraft; onDone: 
         </button>
       </p>
       {showHistory ? <DraftHistory id={d.id} /> : null}
-      {d.checks ? <FailedChecks checks={d.checks} /> : null}
+      {mech.length ? (
+        <div className="rounded-xl border border-warn/40 bg-warn/10 px-3 py-2 text-[11.5px] leading-snug">
+          <div className="font-medium text-warn">Moves wrongly: rebuild it</div>
+          <ul className="mt-0.5 space-y-0.5 text-ink/80">
+            {mech.map((m) => (
+              <li key={m}>· {m}</li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+      {d.checks ? <FailedChecks checks={d.checks.filter((x) => x.name !== 'mechanism moves right')} /> : null}
       <fieldset className="rounded-xl border border-line px-3 py-2.5">
         <legend className="px-1 text-[11px] font-medium uppercase tracking-wide text-dim">Review</legend>
         {CHECKS.map(([k, label]) => (
@@ -869,6 +902,79 @@ function NewDraft({ onAdded }: { onAdded: () => void }) {
 }
 
 /** the review queue: on the admin page (with drafting) and on the reviewers' page */
+/** one run at a time across the page (it carries on as a background task when the page is left) */
+let rebuilding = false
+
+/**
+ * Rebuilds every draft whose mechanism the current checks flag (a fresh build from its request, with today's
+ * prompt), one after another, as a background task; each is scored again and saved over the draft. Each
+ * rebuild is a Gemini build, so it asks first.
+ */
+function RebuildFlagged({ flagged, onChanged }: { flagged: LibraryDraft[]; onChanged: (d: LibraryDraft) => void }) {
+  const [asking, setAsking] = useState(false)
+  const [running, setRunning] = useState(rebuilding)
+  if (!flagged.length) return null
+  const run = async () => {
+    setAsking(false)
+    if (rebuilding) return
+    rebuilding = true
+    setRunning(true)
+    const list = [...flagged]
+    const task = startTask(`Rebuilding ${list.length} flagged draft${list.length === 1 ? '' : 's'}`, '/admin?tab=review')
+    let ok = 0
+    let fixed = 0
+    try {
+      for (let i = 0; i < list.length; i++) {
+        const d = list[i]
+        task.update(`“${d.title}”`, i, list.length)
+        try {
+          const reply = await adminBuild({ prompt: d.prompt })
+          const { score, checks, spec } = scoreReply(d.prompt, reply)
+          const updated = await updateDraft(d.id, { thumbnail: undefined, spec, explanation: reply.explanation.slice(0, 4000), score, checks })
+          const next = { ...d, ...updated, thumbnail: undefined }
+          onChanged(next)
+          ok++
+          if (!draftMechanism(next).length) fixed++
+        } catch {
+          // one failed build doesn't stop the rest
+        }
+      }
+      task.update(undefined, list.length, list.length)
+      if (ok) task.finish({ message: `Rebuilt ${ok} of ${list.length} drafts; ${fixed} now move right.` })
+      else task.fail('none of the rebuilds worked')
+    } finally {
+      rebuilding = false
+      setRunning(false)
+    }
+  }
+  return (
+    <div className="mb-3 flex flex-wrap items-center gap-2 rounded-2xl border border-warn/40 bg-warn/10 px-3 py-2 text-[12.5px]">
+      <span className="text-ink/90">
+        <b className="font-semibold text-warn">{flagged.length}</b> draft{flagged.length === 1 ? '' : 's'} move{flagged.length === 1 ? 's' : ''} wrongly by today’s checks.
+      </span>
+      {running ? (
+        <span className="text-mute">Rebuilding: see the task tray.</span>
+      ) : asking ? (
+        <>
+          <span className="text-mute">
+            {flagged.length} new Gemini build{flagged.length === 1 ? '' : 's'}, about a minute each.
+          </span>
+          <button type="button" onClick={() => void run()} className={`${smallBtn} bg-warn/20 text-warn hover:bg-warn/30`}>
+            Rebuild {flagged.length}
+          </button>
+          <button type="button" onClick={() => setAsking(false)} className={`${smallBtn} text-mute hover:text-ink`}>
+            Cancel
+          </button>
+        </>
+      ) : (
+        <button type="button" onClick={() => setAsking(true)} className={`${smallBtn} border border-warn/50 text-warn hover:bg-warn/15`}>
+          Rebuild all flagged
+        </button>
+      )}
+    </div>
+  )
+}
+
 export function ReviewQueue({ canDraft = true, backTo = '/admin?tab=review' }: { canDraft?: boolean; backTo?: string }) {
   const { data, setData, error, reload } = useLoad(getDrafts)
   // drafts without a picture get one drawn, one at a time (each uses the page's one 3D view)
@@ -896,6 +1002,10 @@ export function ReviewQueue({ canDraft = true, backTo = '/admin?tab=review' }: {
         {data ? (
           data.drafts.length ? (
             <>
+              <RebuildFlagged
+                flagged={data.drafts.filter((d) => draftMechanism(d).length)}
+                onChanged={(u) => setData((cur) => (cur ? { drafts: cur.drafts.map((x) => (x.id === u.id ? { ...x, ...u } : x)) } : cur))}
+              />
               <p className="mb-3 text-[12.5px] text-mute">
                 Scored by the same checks as the test set. Approved models appear on the Create page for everyone; open one first to look round it in the workspace (a preview: nothing is saved), or ask Gemini to fix
                 what’s wrong.

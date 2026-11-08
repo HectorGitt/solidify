@@ -1,7 +1,7 @@
 import * as THREE from 'three'
 import { describe, expect, it } from 'vitest'
 import { resolveAssembly } from './assembly'
-import { buildKinematics } from './kinematics'
+import { buildKinematics, mechanismProblems } from './kinematics'
 import type { NotePartSpec } from './schema'
 
 const M = 0.004
@@ -200,6 +200,29 @@ describe('motion from the mounts', () => {
     const now = mv.pos.clone().applyQuaternion(b.quat).add(b.pos)
     expect(now.distanceTo(c)).toBeCloseTo(b.pos.distanceTo(c), 6)
     expect(now.distanceTo(b.pos)).toBeGreaterThan(0.05)
+  })
+
+  it('the mechanism check passes a sound train and names what is wrong in a bad one', () => {
+    const good: NotePartSpec[] = [gear('input_pinion', 20, { motion: turn(1) }), gear('g2', 40, { mount: { kind: 'mesh', target: 'input_pinion' } })]
+    expect(mechanismProblems({ parts: good }, {}, 'a gear pair')).toEqual({ checked: true, problems: [] })
+
+    const bad: NotePartSpec[] = [
+      gear('input_pinion', 20, { motion: turn(1) }),
+      { ...gear('g2', 40, { mount: { kind: 'mesh', target: 'input_pinion' } }), shapes: [{ kind: 'gear', teeth: 40, module: 0.006, h: 0.02 }] },
+      gear('idler', 30),
+      { id: 'rack', name: 'rack bar', role: 'moving', shapes: [{ kind: 'rack', sx: 0.3, sy: 0.02, sz: 0.02 }], motion: { kind: 'oscillate', axis: 'x', speed: 1, amplitude: 0.05 } },
+      { id: 'lever', name: 'slotted lever', role: 'moving', shapes: [{ kind: 'box', sx: 0.02, sy: 0.4, sz: 0.01 }], motion: { kind: 'oscillate', axis: 'z', speed: 1, amplitude: 0.3 } },
+    ]
+    const { problems } = mechanismProblems({ parts: bad }, {}, 'a quick-return mechanism')
+    expect(problems.some((p) => /different tooth sizes/.test(p))).toBe(true)
+    expect(problems.some((p) => /idler does not turn/.test(p))).toBe(true)
+    expect(problems.some((p) => /rack bar is not meshed/.test(p))).toBe(true)
+    expect(problems.some((p) => /slotted lever is not a lever/.test(p))).toBe(true)
+    // one message per part
+    expect(problems.filter((p) => p.startsWith('rack bar')).length).toBe(1)
+    expect(problems.filter((p) => p.startsWith('slotted lever')).length).toBe(1)
+
+    expect(mechanismProblems({ parts: [{ id: 'plate', name: 'plate', shapes: [{ kind: 'box', sx: 1, sy: 0.01, sz: 1 }] }] }, {}).checked).toBe(false)
   })
 
   it('parts in no mechanism are left to their own motion', () => {

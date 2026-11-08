@@ -1,5 +1,6 @@
 import * as THREE from 'three'
 import { resolveAnnotation, resolveAssembly, type PartFrame } from '@/note3d/assembly'
+import { mechanismProblems } from '@/note3d/kinematics'
 import { sanitizeGeneratedSpec } from '@/note3d/sanitize'
 import { evalVec3, evaluateCalculations, evaluateChart, type NoteSceneSpec } from '@/note3d/schema'
 import type { EvalCase } from './cases'
@@ -101,6 +102,8 @@ export function scoreBuild(c: EvalCase, reply: Record<string, unknown>, seconds:
 
   const loose = looseMovingParts(spec)
   if (loose.checked) add('moving parts connected', loose.problems.length === 0, loose.problems.join('; ') || undefined)
+  const mech = mechanismProblems(spec, scope, `${c.prompt} ${spec.title ?? ''}`)
+  if (mech.checked) add('mechanism moves right', mech.problems.length === 0, mech.problems.join('; ') || undefined)
 
   const clash = overlappingLabels(spec, frames, scope)
   add('labels clear', clash.length === 0, clash.length ? `${clash.join('; ')} overlap` : undefined)
