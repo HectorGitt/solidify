@@ -1088,16 +1088,37 @@ export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision
   })
 
   /** the published models: cards only, anyone may read */
+  /*
+   * Some models are free to view signed out: those a curator marks so, or (until any is marked) the six best
+   * scored. Opening any other one, or keeping a copy of any, needs an account.
+   */
+  const FREE_BY_DEFAULT = 6
+  const freeIds = (rows: { id: string; data: LibraryDoc }[]) => {
+    if (rows.some((r) => r.data.open === true)) return new Set(rows.filter((r) => r.data.open === true).map((r) => r.id))
+    return new Set(
+      rows
+        .filter((r) => r.data.open !== false)
+        .sort((a, b) => (b.data.score ?? 0) - (a.data.score ?? 0) || (b.data.publishedAt ?? 0) - (a.data.publishedAt ?? 0))
+        .slice(0, FREE_BY_DEFAULT)
+        .map((r) => r.id),
+    )
+  }
   app.get('/v1/library', async (c) => {
     const rows = await db.list<LibraryDoc>('library', { limit: 500 })
-    return c.json({ items: rows.map((r) => libraryCard(r.data, r.id)).sort((a, b) => (b.publishedAt ?? 0) - (a.publishedAt ?? 0)) })
+    const free = freeIds(rows)
+    return c.json({ items: rows.map((r) => ({ ...libraryCard(r.data, r.id), free: free.has(r.id) })).sort((a, b) => (b.publishedAt ?? 0) - (a.publishedAt ?? 0)) })
   })
 
   app.get('/v1/library/:id', async (c) => {
-    // the cards are public; the full model is for people signed in, up to a day's worth (staff are not counted)
-    const u = requireUser(c)
-    if (!can(await rolesOfEmail(u.email), 'review')) await spend(u.uid, 'libraryFetchUsage', 100, 'library models')
-    const item = await db.get<LibraryDoc>(`library/${libraryId(c.req.param('id'))}`)
+    // the cards are public; the full model is for people signed in, up to a day's worth (staff are not counted),
+    // except the few free to view, which anyone may open (a shared daily allowance for everyone signed out)
+    const id = libraryId(c.req.param('id'))
+    const u = c.get('user')
+    if (!u) {
+      if (!freeIds(await db.list<LibraryDoc>('library', { limit: 500 })).has(id)) throw fail(401, 'Sign in to open this model.')
+      await spend('everyone', 'libraryPublicUsage', 3000, 'free library views')
+    } else if (!can(await rolesOfEmail(u.email), 'review')) await spend(u.uid, 'libraryFetchUsage', 100, 'library models')
+    const item = await db.get<LibraryDoc>(`library/${id}`)
     if (!item) throw fail(404, 'Not found.')
     const { checks: _c, embedding: _v, ...rest } = item
     void _c
@@ -1135,12 +1156,13 @@ export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision
     const id = libraryId(c.req.param('id'))
     const item = await db.get<LibraryDoc>(`library/${id}`)
     if (!item) throw fail(404, 'Not found.')
-    const patch = await body(c, z.object({ title: libraryInput.shape.title, topic: z.string().trim().max(60), thumbnail: libraryInput.shape.thumbnail }).partial())
+    const patch = await body(c, z.object({ title: libraryInput.shape.title, topic: z.string().trim().max(60), thumbnail: libraryInput.shape.thumbnail, open: z.boolean() }).partial())
     const next = { ...item, ...patch }
     await db.set(`library/${id}`, next)
     const changed = [
       patch.title && patch.title !== item.title ? `title: ${item.title} → ${patch.title}` : '',
       patch.topic !== undefined && patch.topic !== (item.topic ?? '') ? `subject: ${item.topic ?? '—'} → ${patch.topic || '—'}` : '',
+      patch.open !== undefined && patch.open !== item.open ? (patch.open ? 'free to view signed out' : 'sign-in only') : '',
     ].filter(Boolean)
     if (changed.length) await audit(await whoIs(u), 'edited a published model', { type: 'library', id, title: next.title }, changed.join('; '))
     // a new title or subject changes what it matches
