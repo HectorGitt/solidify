@@ -148,6 +148,8 @@ export function XRLayer({ scene }: { scene: SceneDef }) {
 }
 
 const UP = new THREE.Vector3(0, 1, 0)
+/** when the panel or turntable was last pressed: that pinch is theirs, not a part's */
+let uiPressedAt = 0
 
 /*
  * The student's spot on their desk, remembered between visits with a persistent anchor (Quest keeps it tied
@@ -265,6 +267,11 @@ function Lab({ scene }: { scene: SceneDef }) {
     (results, getWorldMatrix) => {
       const o = origin.current
       if (!o || !useLab.getState().placing) return
+      // development: window.__xrNoHit ignores surfaces (a recording places things at the usual distance)
+      if (import.meta.env.DEV && (window as unknown as { __xrNoHit?: boolean }).__xrNoHit) {
+        hit.current = null
+        return
+      }
       let found = false
       for (const r of results) {
         if (!getWorldMatrix(m4, r)) continue
@@ -287,11 +294,13 @@ function Lab({ scene }: { scene: SceneDef }) {
   // only the part the hand was on when the pinch began: a pinch on a panel button that changes the scene
   // (Full size) must not pick whatever ends up under the hand when it lets go
   const pinchedOn = useRef<string | null>(null)
+  const pinchedAt = useRef(0)
   useXRInputSourceEvent(
     'all',
     'selectstart',
     () => {
       pinchedOn.current = useView.getState().hoveredId
+      pinchedAt.current = performance.now()
     },
     [],
   )
@@ -305,7 +314,8 @@ function Lab({ scene }: { scene: SceneDef }) {
         return
       }
       const v = useView.getState()
-      if (v.hoveredId && v.hoveredId === pinchedOn.current && !useBuild.getState().def) v.select(v.hoveredId)
+      const onUi = uiPressedAt >= pinchedAt.current - 150
+      if (!onUi && v.hoveredId && v.hoveredId === pinchedOn.current && !useBuild.getState().def) v.select(v.hoveredId)
       pinchedOn.current = null
     },
     [],
@@ -381,11 +391,12 @@ function Lab({ scene }: { scene: SceneDef }) {
         // a big machine at real size: it stands where the student looks on the floor (or a little way off);
         // the panel comes to rest in front of them, within reach
         const onFloor = hit.current && hit.current.y < head.y - 0.9 ? hit.current : null
-        const target = onFloor ? tmp.copy(onFloor).setY(0) : tmp.copy(head).addScaledVector(fwd, fit.size * 0.55 + 1.1).setY(0)
+        const target = onFloor ? tmp.copy(onFloor).setY(0) : tmp.copy(head).addScaledVector(fwd, fit.size * 0.75 + 1.3).setY(0)
         if (!place.floor) place.floor = target.clone()
         place.floor.lerp(target, 0.35)
+        // low, at desk height, so it never stands between the student and the machine
         tmp2.copy(head).addScaledVector(fwd, 0.45)
-        tmp2.y = head.y - 0.42
+        tmp2.y = head.y - 0.62
         place.at.lerp(tmp2, 0.35)
       } else {
         // on the surface looked at, or far enough ahead to see it whole (half a metre for a small one), a
@@ -430,6 +441,7 @@ function Lab({ scene }: { scene: SceneDef }) {
   const turnHandlers = {
     onPointerDown: (e: ThreeEvent<PointerEvent>) => {
       e.stopPropagation()
+      uiPressedAt = performance.now()
       ;(e.target as unknown as Element).setPointerCapture?.(e.pointerId)
       drag.current = { id: e.pointerId, last: angleOf(e.point) }
     },
@@ -678,7 +690,7 @@ function Panel({ scene, placing }: { scene: SceneDef; placing: boolean }) {
     hits.current = drawn.hits
     pageCount.current = drawn.pages
     // development only: where things are on the panel, for the headset tests
-    if (import.meta.env.DEV) (window as unknown as { __xrPanel?: unknown }).__xrPanel = { hits: drawn.hits, mesh: mesh.current, hint: drawnHint, controls: [...dom.groups, ...all] }
+    if (import.meta.env.DEV) (window as unknown as { __xrPanel?: unknown }).__xrPanel = { hits: drawn.hits, mesh: mesh.current, hint: drawnHint, controls: [...dom.groups, ...all], ring, full }
     tex.needsUpdate = true
   })
 
@@ -741,6 +753,7 @@ function Panel({ scene, placing }: { scene: SceneDef; placing: boolean }) {
       rotation={[-0.18, -0.42, 0, 'YXZ']}
       onPointerDown={(e) => {
         e.stopPropagation()
+        uiPressedAt = performance.now()
         const { x, y } = toPx(e.point)
         const hit = hitAt(hits.current, x, y)
         if (!hit) return
@@ -761,6 +774,8 @@ function Panel({ scene, placing }: { scene: SceneDef; placing: boolean }) {
         dirty.current = true
       }}
       onPointerMove={(e) => {
+        // pointing at the panel: no part is under the hand
+        if (useView.getState().hoveredId) useView.getState().hover(null)
         const { x, y } = toPx(e.point)
         const s = sliding.current
         if (s && s.id === e.pointerId) return setSlider(s.hit, x)
