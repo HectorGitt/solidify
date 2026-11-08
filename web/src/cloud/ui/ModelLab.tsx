@@ -543,8 +543,15 @@ export default function ModelLab() {
     const token = ++buildSeq.current
     const attached = () => mountedRef.current && buildSeq.current === token
     const startId = creationIdRef.current
+    // a draft opened from the review queue: a change asked here goes back into that draft (scored and pictured
+    // again), not into a new model of the reviewer's own
+    const reviewing = routeId === 'preview' ? peekPreviewModel() : null
+    const draftId = reviewing?.draftId
     const short = asked.length > 48 ? `${asked.slice(0, 46)}…` : asked
-    const task = startTask(isNew ? `Building: ${short}` : `Changing ${spec?.title ?? 'your model'}`, startId ? `/create/${startId}` : '/create/new')
+    const task = startTask(
+      isNew ? `Building: ${short}` : draftId ? `Changing the draft ${spec?.title ?? ''}`.trim() : `Changing ${spec?.title ?? 'your model'}`,
+      draftId ? '/create/preview' : startId ? `/create/${startId}` : '/create/new',
+    )
     setInput('')
     setAttached(null)
     setLive({ prompt: asked, photoUrl: withPhoto?.url, isNew, progress: null })
@@ -575,6 +582,31 @@ export default function ModelLab() {
         // an answer is quick: only worth a notice if the student has moved on
         if (attached()) dismissTask(task.id)
         else task.finish({ message: 'Your answer is ready.' })
+        return
+      }
+      if (draftId && reviewing) {
+        const next = [{ id: `t-${Date.now()}`, prompt: asked, response: res.explanation, kind: 'build' as const, photoUrl: withPhoto?.url }, ...turns]
+        const p = Object.fromEntries(res.spec.parameters.map((x) => [x.id, x.value]))
+        if (attached()) {
+          setTurns(next)
+          setSpec(res.spec)
+          setParams(p)
+          setViewMode('parametric')
+        }
+        const { score, checks } = scoreBuild({ id: 'draft', prompt: reviewing.prompt }, { spec: res.spec, explanation: res.explanation }, 0)
+        const explanation = res.explanation.slice(0, 4000)
+        await updateDraft(draftId, { spec: res.spec as unknown as Record<string, unknown>, explanation, score, checks: checks.filter((c) => c.name !== 'under two minutes') })
+        setPreviewModel({ ...reviewing, spec: res.spec as unknown as Record<string, unknown>, explanation })
+        if (attached()) draftBaseRef.current = JSON.stringify([res.spec, p])
+        // its picture once the new model has drawn (the queue draws one itself if this page has been left)
+        window.setTimeout(() => {
+          if (!attached()) return
+          void requestSnapshot({ width: 480 }).then((thumbnail) => {
+            if (thumbnail) void updateDraft(draftId, { thumbnail }).catch(() => {})
+          })
+        }, 1800)
+        task.finish({ href: '/create/preview', message: `Saved to the draft: ${res.spec.title || 'the model'} now scores ${score}.` })
+        if (attached()) toast(`Saved to the draft: now scores ${score}.`, { tone: 'ok' })
         return
       }
       const asNew = isNew || res.isNewMachine || !startId
@@ -895,7 +927,7 @@ export default function ModelLab() {
           </button>
         )}
         <span className="text-[12px] text-dim">
-          {live ? (live.progress?.title || spec ? 'Building…' : '') : routeId === 'preview' && !creationId ? 'Preview, not saved' : creationId ? (saveState === 'saving' ? 'Saving…' : saveState === 'error' ? 'Not saved: check your connection' : 'Saved') : ''}
+          {live ? (live.progress?.title || spec ? 'Building…' : '') : routeId === 'preview' && !creationId ? (viewing?.draftId ? (savingDraft ? 'Saving to the draft…' : draftChanged ? 'Draft under review: changes not saved yet' : 'Draft under review: saved') : 'Preview, not saved') : creationId ? (saveState === 'saving' ? 'Saving…' : saveState === 'error' ? 'Not saved: check your connection' : 'Saved') : ''}
         </span>
         <div className="ml-auto flex items-center gap-2">
           {spec && matchedCatalog && loadedCatalogScene && !live ? (

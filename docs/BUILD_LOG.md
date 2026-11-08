@@ -408,55 +408,61 @@ Every entry is numbered (in the order they appear, top to bottom) and set out th
 - **Cause:** the flag was built for the motion check alone, when every engineering fault deserves a rebuild.
 - **Solution:** a draft is flagged when any engineering check fails today: builds, every shape drawable, layout (floating or buried parts), moving parts connected, mechanism moves right, calculations work. The bar names how many of each ("5 drafts fail today's checks (4 parts out of place, 1 moving parts not connected, 3 move wrongly)"). Overlapping labels, build time and the like still show on the card but don't call for a rebuild (`AdminPage.tsx`, `SERIOUS`, `draftFaults`). Checked in Edge at desktop and phone width on the downloaded drafts. On the way, an edit by line number overwrote a closing `</button>` in the form above (the file had shifted); the type-check caught it and it was restored before commit.
 - **Lesson:** a flag for "needs work" must cover every way the work is broken; and never edit by line number after the file has changed.
+
+### 74. A change asked of Gemini while reviewing a draft never reached the draft (2026-11-08)
+- **Problem:** opening a draft from the review queue (Open in 3D) and asking for a change there (the chat box, Fix it, Fix the layout) built the change, but the draft in the queue stayed as it was.
+- **Cause:** the workspace treated an opened draft as an unsaved preview with no model of its own, so the build was saved as a brand-new model in the reviewer's My models and the page moved to it, losing its link to the draft. Only changes by hand could go back, through Save changes to the draft. The header also said "Preview, not saved" either way.
+- **Solution:** while a draft is open, a change asked of Gemini goes back into that draft: the new model, its explanation, score and checks are saved to it, then a fresh picture once it has drawn. Nothing is saved to My models, and the page stays on the draft (`ModelLab.tsx`, `send`). The header says "Draft under review: saved" or "changes not saved yet" (for changes by hand, still saved with the button). Checked in Edge against a stubbed API: queue (card flagged) → Open in 3D → ask for a change → the draft received the new model, score and checks, then its picture → back in the queue the card scores 100 and is no longer flagged. A slider change saved with the button reached the draft too (r = 0.08). Same at phone width.
+- **Lesson:** when a page can be opened for different things (your model, a library model, a draft under review), every way of changing it must know which one it is writing to; test the whole trip, not the page alone.
 ## Nightly tests, admin and labs pages (2026-11-06)
 
-### 74. A propped-cantilever model crashed the whole workspace
+### 75. A propped-cantilever model crashed the whole workspace
 - **Problem:** `Cannot read properties of undefined (reading '0')`, blank page.
 - **Cause:** Gemini sent a `recommendedCut` without a `normal`; the cleaner passed the object through unchecked and an effect read `normal[0]`.
 - **Solution:** `cleanCut` in `note3d/sanitize.ts` checks every field (also applied when opening saved models and in the notes reader), and error boundaries round the 3D view, the side panel and each page.
 - **Lesson:** validate every nested field of model output, not just its presence; and no page should be one bad value away from blank.
 
-### 75. Nightly builds failed with "Something went wrong on the server" (500)
+### 76. Nightly builds failed with "Something went wrong on the server" (500)
 - **Problem:** Nightly builds failed with "Something went wrong on the server" (500).
 - **Cause:** Gemini answered 429 RESOURCE_EXHAUSTED when three builds ran at once, and the API gave up on the first refusal.
 - **Solution:** `api/src/retry.ts` waits and retries (2, 6, 15 s) on 429/503, streamed builds retry if refused before their first word, the final failure says the model is busy (503), and the runner tries once more after 30 s.
 - **Lesson:** treat rate limits as normal for a hosted model; read the service's logs before guessing.
 
-### 76. A draft scored 100 while visibly broken
+### 77. A draft scored 100 while visibly broken
 - **Problem:** (rods not reaching the crank, a tilted flywheel through the casing, labels on top of each other).
 - **Cause:** the checks only covered layout overlap, drawability and calculations.
 - **Solution:** checks for moving parts joined by relation and for overlapping labels, and the prompt states the same rules.
 - **Lesson:** a score is only as good as its checks; look at high scorers before trusting the number.
 
-### 77. Deploy failed: "Build failed; check build logs"
+### 78. Deploy failed: "Build failed; check build logs"
 - **Problem:** Deploy failed: "Build failed; check build logs".
 - **Cause:** `gcloud run deploy --source .` run from the repo root, which has no Dockerfile.
 - **Solution:** run it from `api/`.
 - **Lesson:** `--source .` uploads the current folder; check where you are.
 
-### 78. Rig thumbnails came out blank, and with a stray `_` in their names
+### 79. Rig thumbnails came out blank, and with a stray `_` in their names
 - **Problem:** Rig thumbnails came out blank, and with a stray `_` in their names.
 - **Cause:** two scenes photographed before they had drawn in a reused tab; and the rig list written by Python on Windows had CRLF line endings, so each id ended in `\r`.
 - **Solution:** retook those two in a fresh tab (`SHOT_COLD=1`); renamed the files and strip `\r` when reading lists.
 - **Lesson:** check the smallest output files of a batch capture, and strip `\r` from lists made on Windows.
 
-### 79. Inline scripts lost their backslashes
+### 80. Inline scripts lost their backslashes
 - **Problem:** A `node -e` / heredoc script through the shell turned `C:\Program Files` into `C:\Program Files`, so the browser path was not found.
 - **Solution:** forward slashes in Windows paths in scripts, and the editor rather than the shell for code containing escapes.
 - **Lesson:** don't pass escape-heavy code through the shell.
 
-### 80. Prettier reformatted a file into another style
+### 81. Prettier reformatted a file into another style
 - **Problem:** With no project config it used its defaults (double quotes, semicolons).
 - **Solution:** re-run with the project's settings (`--no-semi --single-quote --print-width 220`).
 - **Lesson:** don't run a formatter the project doesn't configure.
 
-### 81. The Labs page was wider than a phone
+### 82. The Labs page was wider than a phone
 - **Problem:** The Labs page was wider than a phone.
 - **Cause:** one-line rig names in a grid item set its minimum width.
 - **Solution:** `min-w-0` on the card.
 - **Lesson:** any `truncate` text inside a grid or flex child needs `min-w-0` on that child.
 
-### 82. Gearbox levers hung in the air, and the reverse idler had no shaft
+### 83. Gearbox levers hung in the air, and the reverse idler had no shaft
 - **Problem:** Gearbox levers hung in the air, and the reverse idler had no shaft.
 - **Cause:** the cut-away removed the half of the casing the lever towers stood on (moving parts are not cut, so the levers stayed); the idler's shaft was defined but never drawn, and a full-length pin would have run through third gear and the range gears.
 - **Solution:** a shift cover the towers stand on; a stub shaft and wall boss for the idler; and the cut now removes the other half, with the cameras moved to that side, so everything kept is attached to something.
