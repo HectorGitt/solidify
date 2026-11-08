@@ -11,7 +11,7 @@ import { useProgress } from '../progress'
  * My models), beside the checked problems. Each opens in the model view, as practice (answers first) or at its
  * worked solution; tries are recorded in Progress like any other problem.
  */
-export function YourQuestions() {
+export function YourQuestions({ showSolve = true }: { showSolve?: boolean }) {
   const status = useAuth((s) => s.status)
   const [items, setItems] = useState<CreationSummary[] | null>(null)
   const [error, setError] = useState('')
@@ -35,10 +35,14 @@ export function YourQuestions() {
       <p className="max-w-2xl text-[12.5px] leading-relaxed text-mute">
         Questions you have pasted (or photographed) and had solved in 3D. Try one again, answers first, or with new numbers; each try counts in Progress.
       </p>
-      <button type="button" onClick={() => setSolving(true)} className="rounded-full bg-accent px-4 py-2 text-[13px] font-semibold text-accent-ink hover:brightness-110">
-        Solve a new question
-      </button>
-      <SolveQuestionDialog open={solving} onClose={() => setSolving(false)} />
+      {showSolve ? (
+        <>
+          <button type="button" onClick={() => setSolving(true)} className="rounded-full bg-accent px-4 py-2 text-[13px] font-semibold text-accent-ink hover:brightness-110">
+            Solve a new question
+          </button>
+          <SolveQuestionDialog open={solving} onClose={() => setSolving(false)} />
+        </>
+      ) : null}
     </div>
   )
 

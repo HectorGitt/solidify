@@ -19,6 +19,7 @@ import { PageSkeleton, WorkspaceSkeleton } from './ui/Skeleton'
 
 // study pages (loaded on demand)
 const ExamPage = lazy(() => import('./study/ui/ExamPage'))
+const QuestionsPage = lazy(() => import('./study/ui/QuestionsPage'))
 const ProgressPage = lazy(() => import('./study/ui/ProgressPage'))
 const FormulasPage = lazy(() => import('./study/ui/FormulasPage'))
 const ChallengesPage = lazy(() => import('./challenges/ChallengesPage'))
@@ -59,6 +60,7 @@ export default function App() {
         <Route path="/" element={<Landing />} />
         <Route path="/about" element={<About />} />
         <Route path="/exam" element={page(<ExamPage />)} />
+        <Route path="/questions" element={page(<QuestionsPage />)} />
         <Route path="/progress" element={page(<ProgressPage />)} />
         <Route path="/formulas" element={page(<FormulasPage />)} />
         <Route path="/challenges" element={page(<ChallengesPage />)} />

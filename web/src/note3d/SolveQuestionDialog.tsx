@@ -22,6 +22,16 @@ export function solvePrompt(text: string, hasImage: boolean) {
  * 3D with its worked solution: it opens the model view, which builds it as a background task.
  */
 export function SolveQuestionDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
+  return (
+    <Modal open={open} onClose={onClose} title="Solve a question in 3D" width={560}>
+      <SolveQuestionForm onDone={onClose} />
+    </Modal>
+  )
+}
+
+/** the question box itself: in the pop-up, and on the Solve a question page (`autoFocus` there too) */
+export function SolveQuestionForm({ onDone, intro = true }: { onDone?: () => void; intro?: boolean }) {
+  const onClose = () => onDone?.()
   const navigate = useNavigate()
   const [text, setText] = useState('')
   const [image, setImage] = useState<{ name: string; url: string } | null>(null)
@@ -77,7 +87,6 @@ export function SolveQuestionDialog({ open, onClose }: { open: boolean; onClose:
   }
 
   return (
-    <Modal open={open} onClose={onClose} title="Solve a question in 3D" width={560}>
       <form
         onSubmit={(e) => {
           e.preventDefault()
@@ -91,9 +100,11 @@ export function SolveQuestionDialog({ open, onClose }: { open: boolean; onClose:
         onDrop={onDrop}
         className="space-y-3"
       >
-        <p className="text-[12.5px] leading-relaxed text-mute">
-          Paste an exam, tutorial or textbook problem, or a screenshot of it. Solidify builds its setup in 3D and works it out step by step; move the givens to see how the answer changes.
-        </p>
+        {intro ? (
+          <p className="text-[12.5px] leading-relaxed text-mute">
+            Paste an exam, tutorial or textbook problem, or a screenshot of it. Solidify builds its setup in 3D and works it out step by step; move the givens to see how the answer changes.
+          </p>
+        ) : null}
         <textarea
           autoFocus
           value={text}
@@ -144,6 +155,5 @@ export function SolveQuestionDialog({ open, onClose }: { open: boolean; onClose:
         </div>
         <p className="text-[11px] text-dim">Uses one 3D build from today’s allowance.</p>
       </form>
-    </Modal>
   )
 }

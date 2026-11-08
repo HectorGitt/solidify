@@ -31,6 +31,7 @@ const NAV: NavGroup[] = [
       { to: '/create', label: 'Create in 3D', hint: 'Samples and your recent models' },
       { to: '/create/lab', label: 'My models', hint: 'Everything you have built' },
       { to: '/library', label: 'Library', hint: 'Models checked by the team' },
+      { to: '/questions', label: 'Solve a question', hint: 'Paste a problem or a screenshot; get it in 3D, worked out' },
     ],
     match: (p) => p.startsWith('/create') || p === '/library',
   },
@@ -38,13 +39,14 @@ const NAV: NavGroup[] = [
   {
     label: 'Study',
     items: [
+      { to: '/questions', label: 'Solve a question', hint: 'Paste a problem or a screenshot; get it in 3D, worked out' },
       { to: '/exam', label: 'Exam practice', hint: 'Worked problems, checked live' },
       { to: '/formulas', label: 'Formula sheet' },
       { to: '/challenges', label: 'Challenges', hint: 'Goals set inside the labs' },
       { to: '/progress', label: 'Progress' },
       { to: '/classes', label: 'Classes' },
     ],
-    match: (p) => ['/exam', '/formulas', '/challenges', '/progress', '/classes'].some((x) => p === x || p.startsWith(`${x}/`)),
+    match: (p) => ['/questions', '/exam', '/formulas', '/challenges', '/progress', '/classes'].some((x) => p === x || p.startsWith(`${x}/`)),
   },
 ]
 
