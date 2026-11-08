@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
 import { fmtNum } from '@/note3d/ChartView'
+import { exprTex, nameTex } from '@/note3d/exprTex'
+import { RichText } from '@/ui/RichText'
 import type { EvaluatedCalculation, NoteParameterSpec, NoteQuestionSpec } from '@/note3d/schema'
 import { useProgress } from '@/study/progress'
 import { checkAnswer, parseAnswer } from '@/study/types'
@@ -16,6 +18,9 @@ export function workedFormula(formula: string, scope: Record<string, number>) {
     .replace(/\s+/g, ' ')
     .trim()
 }
+
+/** a symbol as written in an equation: one that is already LaTeX ("\beta_{rad}") as it is, else R_B → R_{B} */
+const symTex = (s: string) => (/[\\{}]/.test(s) ? s : nameTex(s))
 
 /** a given as the question states it: its own unit, not converted */
 const given = (v: number, unit: string) => `${Number(v.toPrecision(6))}${unit ? ` ${unit}` : ''}`
@@ -66,6 +71,15 @@ export function WorkedSolution({
   const stat = useProgress((s) => s.questions[practiceId])
   const answers = results.some((r) => r.spec.answer) ? results.filter((r) => r.spec.answer) : results.slice(-1)
   const usable = answers.filter((r) => !r.broken)
+  // how each name is written in an equation (a calculation by its symbol), and the numbers to put in
+  const symbols = Object.fromEntries([...parameters.map((p) => [p.id, p.symbol || p.id]), ...results.map((r) => [r.spec.id, r.spec.symbol || r.spec.id])])
+  // a negative number put in is bracketed: 6 − (−2), not 6 − −2
+  // an earlier result goes in exactly as it is shown in its own step (21.67, not 21.7)
+  const shown = new Map(results.map((r) => [r.spec.id, r.formatted]))
+  const values = Object.fromEntries(Object.entries(scope).map(([k, v]) => {
+    const s = shown.get(k) ?? fmtNum(v)
+    return [k, s.startsWith('-') ? `\\left(${s}\\right)` : s]
+  }))
 
   // new givens: the old answers and marks no longer apply
   const key = parameters.map((p) => scope[p.id]).join('|')
@@ -212,14 +226,23 @@ export function WorkedSolution({
                       <div className="flex gap-2.5">
                         <span className={`mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full text-[11px] font-semibold ${c.answer ? 'bg-accent text-accent-ink' : 'bg-panel-2 text-mute'}`}>{i + 1}</span>
                         <div className="min-w-0 flex-1">
-                          <p className="text-[12.5px] leading-snug text-ink">{c.step ?? c.label}</p>
-                          {c.latex ? (
-                            <div className="mt-1.5 overflow-x-auto text-[12px] text-ink/85">
-                              <Tex tex={c.latex} />
+                          {/* the step's sentence may name symbols in LaTeX ($R_B$) */}
+                          <RichText text={c.step ?? c.label} className="text-[12.5px] leading-snug text-ink" />
+                          {/* the equation: as the model wrote it, else its formula written out as maths */}
+                          {c.latex || exprTex(c.formula, { symbols }) ? (
+                            <div className="mt-1.5 overflow-x-auto text-[12.5px] text-ink/85">
+                              {/* full-size fractions, as a textbook writes a working step */}
+                              <Tex tex={`\\displaystyle ${c.latex || `${symTex(c.symbol || c.label)} = ${exprTex(c.formula, { symbols })}`}`} />
                             </div>
                           ) : null}
-                          <p className="mt-1 overflow-x-auto font-mono text-[11.5px] leading-relaxed text-mute">
-                            {c.symbol || c.label} = {workedFormula(c.formula, scope)} = <span className="font-semibold text-ink">{r.formatted}</span> {r.broken ? null : c.unit}
+                          {/* the same with the numbers put in, then the result */}
+                          <p className="mt-1 overflow-x-auto text-[12px] leading-relaxed text-mute">
+                            {exprTex(c.formula, { values }) ? (
+                              <Tex tex={`\\displaystyle = ${exprTex(c.formula, { values })} = \\mathbf{${r.broken ? '—' : r.formatted}}`} />
+                            ) : (
+                              <span className="font-mono">= {workedFormula(c.formula, scope)} = <span className="font-semibold text-ink">{r.formatted}</span></span>
+                            )}{' '}
+                            {r.broken ? null : <span className="text-ink/80">{c.unit}</span>}
                           </p>
                           {r.broken ? <p className="mt-1 text-[11.5px] text-warn">This step can’t be worked out with these numbers (a root of a negative, a division by zero, or something it doesn’t know).</p> : null}
                           <div className="mt-1 flex items-center gap-3">

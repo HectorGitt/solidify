@@ -23,6 +23,8 @@ import { Readout, Section, Slider } from '@/ui/controls'
 import { FoldChevron, usePersisted } from '@/ui/usePersisted'
 import { Tex } from '@/ui/Tex'
 import { WorkedSolution } from './WorkedSolution'
+import { RichText } from '@/ui/RichText'
+import { exprTex, nameTex } from '@/note3d/exprTex'
 import { freshNumbers } from '@/note3d/freshNumbers'
 import { toast } from '@/ui/toast'
 import { ApiError } from '../api'
@@ -211,6 +213,9 @@ function CalcCard({
     .replace(IDENT, (id) => (FUNCS.has(id) ? id : scope[id] !== undefined ? fmtNum(scope[id]) : id))
     .replace(/\*/g, ' × ')
     .replace(/\s+/g, ' ')
+  // the same as equations: names by their symbols, then with the numbers put in (a negative bracketed)
+  const formulaTex = exprTex(c.formula, { symbols: Object.fromEntries(parameters.map((p) => [p.id, p.symbol || p.id])) })
+  const numbersTex = exprTex(c.formula, { values: Object.fromEntries(Object.entries(scope).map(([k, v]) => [k, v < 0 ? `\\left(${fmtNum(v)}\\right)` : fmtNum(v)])) })
   return (
     <div className={`bp-fade rounded-2xl border transition-colors ${status === 'warn' ? 'border-warn/50 bg-warn/5' : open ? 'border-ink/30' : 'border-line-2'}`}>
       <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} className="w-full p-3 text-left">
@@ -221,16 +226,17 @@ function CalcCard({
           </span>
         </div>
         {status === 'warn' && c.limit ? <p className="mt-1 text-[11.5px] text-warn">Over the limit: {c.limit.label ?? 'check this value'}</p> : null}
-        {c.latex ? (
-          <div className="mt-1.5 overflow-x-auto text-[11.5px] text-mute">
-            <Tex tex={c.latex} />
+        {/* the equation: as the model wrote it, else its formula written out as maths */}
+        {c.latex || formulaTex ? (
+          <div className="mt-1.5 overflow-x-auto text-[12px] text-mute">
+            <Tex tex={`\\displaystyle ${c.latex || `${/[\\{}]/.test(c.symbol) ? c.symbol : nameTex(c.symbol || c.id)} = ${formulaTex}`}`} />
           </div>
         ) : null}
       </button>
       {open ? (
         <div className="space-y-3 border-t border-line px-3 pb-3 pt-2.5">
-          <p className="font-mono text-[11.5px] leading-relaxed text-mute">
-            = {worked} = <span className="text-ink">{formatted}</span> {c.unit}
+          <p className="overflow-x-auto text-[12px] leading-relaxed text-mute">
+            {numbersTex ? <Tex tex={`\\displaystyle = ${numbersTex} = \\mathbf{${formatted}}`} /> : <span className="font-mono">= {worked} = <span className="text-ink">{formatted}</span></span>} <span className="text-ink/80">{c.unit}</span>
           </p>
           {inputs.map((p) => {
             const v = scope[p.id] ?? p.value
@@ -480,7 +486,7 @@ export default function ModelLab() {
 
   /* ----------------------------------------------------------------- saving */
 
-  const savedHistory = (list: Turn[]) => list.filter((t) => t.kind !== 'error').slice(0, 30).map(({ prompt, response }) => ({ prompt: prompt.slice(0, 2000), response: response.slice(0, 2000) }))
+  const savedHistory = (list: Turn[]) => list.filter((t) => t.kind !== 'error').slice(0, 30).map(({ prompt, response }) => ({ prompt: prompt.slice(0, 2000), response: response.slice(0, 4000) }))
 
   const saveThumbnail = (id: string) => {
     window.setTimeout(() => {
@@ -983,7 +989,8 @@ export default function ModelLab() {
                 <UserBubble text={m.prompt} photoUrl={m.photoUrl} />
                 <div className={`mr-6 rounded-2xl rounded-bl-md border px-3.5 py-2.5 text-[13px] leading-relaxed ${m.kind === 'error' ? 'border-warn/50 bg-warn/5 text-ink' : 'border-line bg-panel text-ink'}`}>
                   {m.kind === 'answer' ? <p className="mb-1 text-[11px] font-medium uppercase tracking-wider text-accent">Answer</p> : null}
-                  {m.response}
+                  {/* answers and derivations carry equations: drawn as maths, with lists and paragraphs */}
+                  {m.kind === 'error' ? m.response : <RichText text={m.response} />}
                   {m.kind === 'error' ? (
                     <button type="button" onClick={() => void send(m.prompt)} className="mt-2 block text-[12px] font-medium text-accent hover:underline">
                       Try again

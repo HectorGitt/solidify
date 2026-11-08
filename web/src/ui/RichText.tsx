@@ -17,7 +17,7 @@ export type Inline =
 export type Block =
   | { t: 'p'; v: Inline[] }
   | { t: 'h'; level: number; v: Inline[] }
-  | { t: 'ul' | 'ol'; items: Inline[][] }
+  | { t: 'ul' | 'ol'; items: Inline[][]; start?: number }
   | { t: 'math'; v: string }
 
 /** Split text into inline tokens. Unclosed markers are kept as plain text. */
@@ -137,7 +137,8 @@ export function parseBlocks(text: string): Block[] {
       const last = blocks[blocks.length - 1]
       const item = parseInline((b ?? n)![1])
       if (last && last.t === kind) last.items.push(item)
-      else blocks.push({ t: kind, items: [item] })
+      // a numbered list keeps the number written, so steps split by a displayed equation go 1, 2, 3, 4
+      else blocks.push({ t: kind, items: [item], ...(n ? { start: Number(/\d+/.exec(line)![0]) } : {}) })
       continue
     }
     para.push(trimmed)
@@ -185,8 +186,12 @@ function Inlines({ items }: { items: Inline[] }) {
   )
 }
 
+/** LaTeX's own delimiters, as Gemini sometimes writes them: \[ … \] for a displayed equation, \( … \) inline */
+export const toDollars = (t: string) =>
+  t.replace(/\\\[([\s\S]+?)\\\]/g, (_, m: string) => `\n$$${m.trim()}$$\n`).replace(/\\\(([\s\S]+?)\\\)/g, (_, m: string) => `$${m.trim()}$`)
+
 export function RichText({ text, className = '' }: { text: string; className?: string }) {
-  const blocks = parseBlocks(text)
+  const blocks = parseBlocks(toDollars(text))
   const out: ReactNode[] = blocks.map((b, i) => {
     switch (b.t) {
       case 'p':
@@ -211,7 +216,7 @@ export function RichText({ text, className = '' }: { text: string; className?: s
       case 'ol': {
         const L = b.t === 'ul' ? 'ul' : 'ol'
         return (
-          <L key={i} className={`space-y-1 pl-5 ${b.t === 'ul' ? 'list-disc' : 'list-decimal'}`}>
+          <L key={i} start={b.t === 'ol' && b.start && b.start > 1 ? b.start : undefined} className={`space-y-1 pl-5 ${b.t === 'ul' ? 'list-disc' : 'list-decimal'}`}>
             {b.items.map((it, j) => (
               <li key={j}>
                 <Inlines items={it} />
