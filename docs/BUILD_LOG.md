@@ -205,6 +205,30 @@ Each entry: **Symptom** · **Cause** · **Fix** · **Lesson**.
 - **`destroy is not a function` on opening the workspace.** Cause: an effect written as `() => el.scrollIntoView({ behavior: 'smooth' })` returned a promise, because recent Chromium returns one from smooth scrolling. Fix: effects with block bodies. Lesson: never let an arrow effect return a call's result.
 - **The loading cover hid the live assembly.** Each streamed part makes a new scene, and the viewer's build cover is keyed on the scene, so it reappeared on every part. Fix: no cover while a build streams, or after one has streamed in that workspace.
 
+## Generated mechanisms that move wrongly (2026-11-08)
+
+- **Gears and shafts in library drafts turn wrongly or don't mate.** Symptom: in the review queue most mechanism drafts
+  struggle with rotation: a shaft turns differently from the gear on it, meshed gears turn at the wrong ratio or the
+  same way, gears wobble about the wrong line, teeth run through each other. Examples: "Universal (Hooke's) joint at
+  30° deflection", "Three-shaft compound gear train (12 : 1)", "Crank & slotted-lever quick-return mechanism",
+  "Stepped transmission shaft & gear assembly". Cause: every moving part's spin is Gemini's own guess
+  (`motion: { kind, axis, speed }` per part, turned as written by `NoteSceneRenderer`). The assembly places a gear by
+  its mesh, but nothing ties its speed, direction or axis to its partner or its shaft; the axis is a bare x / y / z
+  in the part's own frame, which need not be its real axis once mounted; and meshed gears start at whatever angle,
+  so teeth can sit in teeth. Two of the four can't be right at all: a Hooke's joint's output turns at a varying
+  speed (ω₂/ω₁ = cos β / (1 − sin²β cos²θ)) and a slotted lever swings unevenly (θ = atan(r sin φ / (d + r cos φ))),
+  which a constant `rotate` or a sine `oscillate` cannot express. The quality checks only looked at whether moving
+  parts were mounted ("moving parts connected"), not whether they move consistently, so these drafts scored well.
+  Fix (in progress): Gemini names only the driving part and its speed; Solidify derives every other motion from the
+  mounts (on a shaft: same speed and axis; external mesh: ω₂ = −ω₁·T₁/T₂; ring gear: same sense; belt/chain: same
+  sense, ratio of diameters; casings still), takes axes from the geometry, and starts each driven gear where its
+  teeth interleave (φ₂ = −(T₁/T₂)·φ₁ + π/T₂). New relations for a universal joint and a slotted lever drive those
+  with their exact equations. Then checks: per meshed pair, equal module, parallel axes, centre distance
+  m(T₁+T₂)/2, ratio and sense; a sweep through a turn testing for teeth or moving parts passing through each other;
+  failed checks shown on the draft in the review queue; the four requests added to the nightly test set.
+  Lesson: never let the model state a quantity the mechanism already determines; derive it. And a check of "is it
+  connected" is not a check of "does it move right".
+
 ## Nightly tests, admin and labs pages (2026-11-06)
 
 - **A propped-cantilever model crashed the whole workspace.** Symptom: `Cannot read properties of undefined (reading '0')`, blank page. Cause: Gemini sent a `recommendedCut` without a `normal`; the cleaner passed the object through unchecked and an effect read `normal[0]`. Fix: `cleanCut` in `note3d/sanitize.ts` checks every field (also applied when opening saved models and in the notes reader), and error boundaries round the 3D view, the side panel and each page. Lesson: validate every nested field of model output, not just its presence; and no page should be one bad value away from blank.
