@@ -1366,11 +1366,19 @@ export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision
   }
 
   /** the list leaves out each model's spec and history, so it stays small */
+  /** a solved question's short form for lists (Exam practice's "Your questions"): the start of it and what it asks */
+  const questionSummary = (spec: unknown) => {
+    const q = (spec as { question?: { text?: unknown; find?: unknown } } | undefined)?.question
+    if (!q || typeof q.text !== 'string' || !q.text.trim()) return undefined
+    const find = Array.isArray(q.find) ? q.find.filter((f): f is string => typeof f === 'string').slice(0, 4).map((f) => f.slice(0, 120)) : []
+    return { text: q.text.trim().slice(0, 240), find }
+  }
+
   app.get('/v1/creations', async (c) => {
     const u = requireUser(c)
     const rows = await db.list<CreationDoc>(`users/${u.uid}/creations`)
     const items = rows
-      .map(({ id, data: d }) => ({ id, title: d.title, prompt: d.prompt, fromPhoto: d.fromPhoto, thumbnail: d.thumbnail, parts: d.parts, createdAt: d.createdAt, updatedAt: d.updatedAt }))
+      .map(({ id, data: d }) => ({ id, title: d.title, prompt: d.prompt, fromPhoto: d.fromPhoto, thumbnail: d.thumbnail, parts: d.parts, createdAt: d.createdAt, updatedAt: d.updatedAt, question: questionSummary(d.spec) }))
       .sort((a, b) => b.updatedAt - a.updatedAt)
     return c.json({ items, limit: CREATION_LIMIT })
   })
