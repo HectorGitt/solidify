@@ -118,6 +118,26 @@ function draftMechanism(d: LibraryDraft): string[] {
  * from when it was drafted, before later checks and fixes), keeping only the build time from then. The card
  * then agrees with what the workspace shows when the draft is opened.
  */
+/**
+ * The checks that make a draft worth rebuilding: the engineering is broken (it doesn't build, parts are dropped,
+ * floating or buried, moving parts aren't joined or move wrongly, sums don't work). Overlapping labels, build
+ * time and the like show on the card but don't call for a rebuild.
+ */
+const SERIOUS: Record<string, string> = {
+  builds: 'do not build',
+  'every shape drawable': 'shapes dropped',
+  layout: 'parts out of place',
+  'moving parts connected': 'moving parts not connected',
+  'mechanism moves right': 'move wrongly',
+  'calculations work': 'calculations broken',
+}
+/** what makes a draft worth rebuilding, by today's checks */
+function draftFaults(d: LibraryDraft): string[] {
+  return draftLive(d)
+    .checks.filter((x) => !x.ok && x.name in SERIOUS)
+    .map((x) => SERIOUS[x.name])
+}
+
 const liveCache = new WeakMap<object, { score: number; checks: EvalCheck[] }>()
 function draftLive(d: LibraryDraft): { score: number; checks: EvalCheck[] } {
   const hit = liveCache.get(d.spec)
@@ -931,7 +951,7 @@ function NewDraft({ onAdded }: { onAdded: () => void }) {
 let rebuilding = false
 
 /**
- * Rebuilds every draft whose mechanism the current checks flag (a fresh build from its request, with today's
+ * Rebuilds every draft that fails a serious check today (broken layout or motion, dropped shapes, broken sums; a fresh build from its request, with today's
  * prompt), one after another, as a background task; each is scored again and saved over the draft. Each
  * rebuild is a Gemini build, so it asks first.
  */
@@ -959,13 +979,13 @@ function RebuildFlagged({ flagged, onChanged }: { flagged: LibraryDraft[]; onCha
           const next = { ...d, ...updated, thumbnail: undefined }
           onChanged(next)
           ok++
-          if (!draftMechanism(next).length) fixed++
+          if (!draftFaults(next).length) fixed++
         } catch {
           // one failed build doesn't stop the rest
         }
       }
       task.update(undefined, list.length, list.length)
-      if (ok) task.finish({ message: `Rebuilt ${ok} of ${list.length} drafts; ${fixed} now move right.` })
+      if (ok) task.finish({ message: `Rebuilt ${ok} of ${list.length} drafts; ${fixed} now pass today’s checks.` })
       else task.fail('none of the rebuilds worked')
     } finally {
       rebuilding = false
@@ -975,7 +995,13 @@ function RebuildFlagged({ flagged, onChanged }: { flagged: LibraryDraft[]; onCha
   return (
     <div className="mb-3 flex flex-wrap items-center gap-2 rounded-2xl border border-warn/40 bg-warn/10 px-3 py-2 text-[12.5px]">
       <span className="text-ink/90">
-        <b className="font-semibold text-warn">{flagged.length}</b> draft{flagged.length === 1 ? '' : 's'} move{flagged.length === 1 ? 's' : ''} wrongly by today’s checks.
+        <b className="font-semibold text-warn">{flagged.length}</b> draft{flagged.length === 1 ? '' : 's'} fail{flagged.length === 1 ? 's' : ''} today’s checks
+        {(() => {
+          const counts = new Map<string, number>()
+          for (const d of flagged) for (const f of new Set(draftFaults(d))) counts.set(f, (counts.get(f) ?? 0) + 1)
+          return counts.size ? ` (${[...counts].map(([f, n]) => `${n} ${f}`).join(', ')})` : ''
+        })()}
+        .
       </span>
       {running ? (
         <span className="text-mute">Rebuilding: see the task tray.</span>
@@ -1028,7 +1054,7 @@ export function ReviewQueue({ canDraft = true, backTo = '/admin?tab=review' }: {
           data.drafts.length ? (
             <>
               <RebuildFlagged
-                flagged={data.drafts.filter((d) => draftMechanism(d).length)}
+                flagged={data.drafts.filter((d) => draftFaults(d).length)}
                 onChanged={(u) => setData((cur) => (cur ? { drafts: cur.drafts.map((x) => (x.id === u.id ? { ...x, ...u } : x)) } : cur))}
               />
               <p className="mb-3 text-[12.5px] text-mute">
