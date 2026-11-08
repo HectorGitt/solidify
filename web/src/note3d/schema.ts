@@ -108,8 +108,9 @@ export interface NoteShapeSpec {
   // Gear / Sprocket / Rack
   teeth?: DimExpr
   module?: DimExpr
-  pressureAngle?: number
-  helixAngle?: number
+  /** degrees; a number or an expression of the model's values (a helix angle slider: "beta") */
+  pressureAngle?: DimExpr
+  helixAngle?: DimExpr
   pitch?: DimExpr
   // Hex nut / hex bolt: thread diameter (bolt shank length is h)
   d?: DimExpr
@@ -673,8 +674,8 @@ export const noteShapeSchema = z.object({
   tubeRadius: dimExprSchema.optional(),
   teeth: dimExprSchema.optional(),
   module: dimExprSchema.optional(),
-  pressureAngle: z.number().optional(),
-  helixAngle: z.number().optional(),
+  pressureAngle: dimExprSchema.optional(),
+  helixAngle: dimExprSchema.optional(),
   pitch: dimExprSchema.optional(),
   d: dimExprSchema.optional(),
   turns: dimExprSchema.optional(),

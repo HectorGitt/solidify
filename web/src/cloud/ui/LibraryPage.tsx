@@ -22,7 +22,7 @@ export default function LibraryPage() {
   const load = () => {
     setError(null)
     listLibrary()
-      .then((r) => setItems(r.items))
+      .then((r) => setItems(Array.isArray(r?.items) ? r.items : []))
       .catch((e) => setError(e instanceof ApiError ? e.message : 'Couldn’t load the library.'))
   }
   useEffect(load, [])

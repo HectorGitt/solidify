@@ -102,8 +102,10 @@ function buildSingleShapeGeometry(
         module: m,
         width,
         bore,
-        pressureAngleDeg: spec.pressureAngle ?? 20,
-        helixDeg: spec.helixAngle ?? 0,
+        // angles may be expressions of the model's values; anything that isn't a sensible number falls back,
+        // never reaching the geometry as NaN (which blanks the whole gear)
+        pressureAngleDeg: angleIn(evalDim(spec.pressureAngle, params, 20), 14.5, 30, 20),
+        helixDeg: angleIn(evalDim(spec.helixAngle, params, 0), -45, 45, 0),
       })
     }
     case 'sprocket': {
@@ -183,6 +185,10 @@ function shapeMatrix(
  * Compiles a list of `NoteShapeSpec` primitives and CSG boolean operations (`add`, `subtract`, `intersect`)
  * into a single watertight `THREE.BufferGeometry`.
  */
+
+/** a finite angle within its range, or the fallback */
+const angleIn = (v: number, min: number, max: number, fallback: number) => (Number.isFinite(v) ? Math.min(max, Math.max(min, v)) : fallback)
+
 export function buildPartGeometry(
   shapes: NoteShapeSpec[],
   params: Record<string, number>,

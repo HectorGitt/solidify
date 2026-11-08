@@ -8,7 +8,7 @@ import type { SceneDef } from '@/modules/types'
 import { MATERIALS, type MaterialKey } from '@/render/materials'
 import { Part, PartMesh } from '@/render/Part'
 import { useView } from '@/render/view'
-import { resolveAnnotation, resolveAssembly, type Placement } from './assembly'
+import { GEARS, ROUND, resolveAnnotation, resolveAssembly, type Placement } from './assembly'
 import { buildPartGeometry } from './builder'
 import { fitView } from './fitView'
 import {
@@ -72,6 +72,23 @@ function LocalPartNode({
       (bb.min.z + bb.max.z) * 0.5,
     ]
   }, [geometry])
+  /*
+   * A turning round part (a gear, a shaft, a pulley) spins about its own axis, centred on that shape, whatever
+   * axis letter the model gave: a model often names x or z for a part whose shape stands along y, which made
+   * it wobble round the wrong line.
+   */
+  const spin = useMemo(() => {
+    if (part.motion?.kind !== 'rotate') return null
+    const adds = part.shapes.filter((sh) => sh.op !== 'subtract')
+    const lead = adds.find((sh) => GEARS.has(sh.kind)) ?? adds.find((sh) => ROUND.has(sh.kind))
+    if (!lead) return null
+    const r = evalVec3(lead.rotation, params, [0, 0, 0])
+    const axis = new THREE.Vector3(0, 1, 0).applyEuler(new THREE.Euler(r[0], r[1], r[2], 'XYZ')).normalize()
+    // one way round for every axis (as the assembly takes it), so a positive speed turns the same way as before
+    const big = Math.abs(axis.x) >= Math.abs(axis.y) && Math.abs(axis.x) >= Math.abs(axis.z) ? axis.x : Math.abs(axis.y) >= Math.abs(axis.z) ? axis.y : axis.z
+    if (big < 0) axis.negate()
+    return { axis, pivot: new THREE.Vector3(...evalVec3(lead.position, params, [0, 0, 0])) }
+  }, [part.motion?.kind, part.shapes, params])
   const basePos = useMemo(() => placed?.position ?? evalVec3(part.position, params, [0, 0, 0]), [placed, part.position, params])
   const baseRot = useMemo(() => placed?.rotation ?? evalVec3(part.rotation, params, [0, 0, 0]), [placed, part.rotation, params])
 
@@ -104,7 +121,11 @@ function LocalPartNode({
     g.position.set(0, 0, 0)
     g.rotation.set(0, 0, 0)
 
-    if (kind === 'rotate') {
+    if (kind === 'rotate' && spin) {
+      // about the shape's own axis through its centre: turn, then move back so the centre stays put
+      g.quaternion.setFromAxisAngle(spin.axis, t * speed + phase)
+      g.position.copy(spin.pivot).sub(spin.pivot.clone().applyQuaternion(g.quaternion))
+    } else if (kind === 'rotate') {
       g.rotation[axis] = t * speed + phase
     } else if (kind === 'oscillate') {
       g.rotation[axis] = Math.sin(t * speed * Math.PI * 2 + phase) * amplitude
@@ -450,7 +471,7 @@ export function NoteSceneViewport({
       <LocalClippingEnabler />
       <group>
         {spec.parts.map((part) => (
-          <LocalPartNode key={part.id} part={part} params={params} clipPlane={clipPlane} placed={part.mount ? assembly.placements.get(part.id) : undefined} />
+          <LocalPartNode key={part.id} part={part} params={scope} clipPlane={clipPlane} placed={part.mount ? assembly.placements.get(part.id) : undefined} />
         ))}
         {annotations.map((ann) => (
           <Annotation3D key={ann.id} ann={ann} params={scope} />
