@@ -600,6 +600,17 @@ function AuditLine({ e, showTarget = false }: { e: AuditEntry; showTarget?: bool
   )
 }
 
+/** a draft as a JSON file (request, score, checks, explanation and the model itself), to look at or send on */
+function downloadDraft(d: LibraryDraft) {
+  const { thumbnail: _t, ...rest } = d
+  void _t
+  const slug = d.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60) || 'draft'
+  const url = URL.createObjectURL(new Blob([JSON.stringify(rest, null, 2)], { type: 'application/json' }))
+  const a = Object.assign(document.createElement('a'), { href: url, download: `${slug}.json` })
+  a.click()
+  setTimeout(() => URL.revokeObjectURL(url), 1000)
+}
+
 function DraftHistory({ id }: { id: string }) {
   const load = useCallback(() => getHistory(id), [id])
   const { data, error, reload } = useLoad(load)
@@ -802,6 +813,9 @@ function DraftCard({ d, onDone, onChanged, backTo }: { d: LibraryDraft; onDone: 
         )}
         <button type="button" disabled={!!busy} onClick={() => void remake('rebuild')} className={`${smallBtn} border border-line-2 text-ink/90 hover:border-ink/40`}>
           {busy === 'rebuild' ? BUILD_NOTE : 'Rebuild'}
+        </button>
+        <button type="button" onClick={() => downloadDraft(d)} title="The draft as a file: its request, score, checks and model" className={`${smallBtn} border border-line-2 text-ink/90 hover:border-ink/40`}>
+          Download
         </button>
         {rejecting ? null : (
           <button type="button" disabled={!!busy} onClick={() => setRejecting(true)} className={`${smallBtn} ml-auto text-mute hover:bg-panel-2 hover:text-warn`}>
