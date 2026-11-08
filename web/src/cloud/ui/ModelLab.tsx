@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent, type KeyboardEvent, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent, type KeyboardEvent } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useSim } from '@/core/sim'
 import type { SceneDef } from '@/modules/types'
@@ -17,7 +17,9 @@ import { useView } from '@/render/view'
 import { BuildScreen } from '@/ui/BuildScreen'
 import { Icon } from '@/ui/icons'
 import { SiteHeader } from '@/ui/SiteHeader'
-import { Stage } from '@/ui/Stage'
+import { OrientationGizmo, Stage } from '@/ui/Stage'
+import { Toolbar } from '@/ui/Toolbar'
+import { Readout, Section, Slider } from '@/ui/controls'
 import { Tex } from '@/ui/Tex'
 import { toast } from '@/ui/toast'
 import { ApiError } from '../api'
@@ -62,20 +64,6 @@ const BUILD_TIPS = [
 const selectCls = 'rounded-lg border border-line-2 bg-bg px-2 py-1 text-[12px] text-ink focus:border-accent focus:outline-none'
 const fmt = (v: number, unit?: string) => (unit === 'm' ? `${(v * 1000).toFixed(1)} mm` : `${Number(v.toPrecision(4))}${unit ? ` ${unit}` : ''}`)
 
-/** a toolbar toggle in the app's own style */
-function Tool({ on, onClick, children, title }: { on?: boolean; onClick: () => void; children: ReactNode; title?: string }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      title={title}
-      aria-pressed={on}
-      className={`whitespace-nowrap rounded-full px-3 py-1 text-[12px] font-medium transition-colors ${on ? 'bg-ink text-bg' : 'text-mute hover:bg-panel-2 hover:text-ink'}`}
-    >
-      {children}
-    </button>
-  )
-}
 
 /** where a live build has got to, from what has actually arrived */
 function liveStage(p: LiveProgress | null) {
@@ -392,7 +380,7 @@ export default function ModelLab() {
   /** a photo attached to the next message */
   const [attached, setAttached] = useState<{ name: string; url: string } | null>(null)
   const attachRef = useRef<HTMLInputElement>(null)
-  const [tab, setTab] = useState<Tab>('calculations')
+  const [, setTab] = useState<Tab>('calculations')
   const [mobilePane, setMobilePane] = useState<'chat' | 'engineering'>('chat')
   const [matchedCatalog, setMatchedCatalog] = useState<CatalogSceneMatch | null>(null)
   const [loadedCatalogScene, setLoadedCatalogScene] = useState<SceneDef | null>(null)
@@ -415,16 +403,9 @@ export default function ModelLab() {
   const abortRef = useRef<AbortController | null>(null)
   const chatEndRef = useRef<HTMLDivElement>(null)
 
-  const cut = useView((s) => s.cut)
-  const explode = useView((s) => s.explode)
-  const xray = useView((s) => s.xray)
-  const labels = useView((s) => s.labels)
-  const caliperMode = useView((s) => s.caliperMode)
   const selectedId = useView((s) => s.selectedId)
-  const playing = useSim((s) => s.playing)
-  const timeScale = useSim((s) => s.timeScale)
-  const [cutAxis, setCutAxis] = useState<'x' | 'y' | 'z'>('z')
-  const [cutPos, setCutPos] = useState(0.02)
+  const hiddenParts = useView((s) => s.hidden)
+  const isolatedId = useView((s) => s.isolatedId)
 
   useEffect(() => {
     document.title = `${spec?.title ?? 'Model'} · Solidify`
@@ -436,12 +417,13 @@ export default function ModelLab() {
     // saved models may hold a section plane written before it was checked
     const rec = spec.recommendedCut ? cleanCut(spec.recommendedCut) : undefined
     if (rec) {
-      setCutAxis(Math.abs(rec.normal[0]) > 0.5 ? 'x' : Math.abs(rec.normal[1]) > 0.5 ? 'y' : 'z')
-      setCutPos(rec.pos)
       useView.getState().setCut({ enabled: rec.enabled, planes: [{ normal: rec.normal, pos: rec.pos }] })
     } else useView.getState().setCut({ enabled: false, planes: [{ normal: [0, 0, 1], pos: 0 }] })
     useView.getState().setExplode(0)
     useView.getState().setXray(false)
+    useView.getState().showAll()
+    // generated motion is in real time: open at 1×, running (slow motion is one click away on the toolbar)
+    useSim.setState({ playing: true, timeScale: 1 })
     setTab(spec.charts?.length ? 'graphs' : 'calculations')
     useView.getState().select(null)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -477,10 +459,6 @@ export default function ModelLab() {
   /** each build's number: a build only writes to the screen while it is still this page's current one */
   const buildSeq = useRef(0)
 
-  const applyCutPlane = (enabled: boolean, axis: 'x' | 'y' | 'z', pos: number) => {
-    const normal: [number, number, number] = axis === 'x' ? [1, 0, 0] : axis === 'y' ? [0, 1, 0] : [0, 0, 1]
-    useView.getState().setCut({ enabled, planes: [{ normal, pos }] })
-  }
 
   /* ----------------------------------------------------------------- saving */
 
@@ -859,7 +837,6 @@ export default function ModelLab() {
   // one viewport for the page, fed the latest model: parts and arrows update in place as sizes change and parts stream in
   const parametricScene = useLiveSceneDef(shownSpec, shownParams)
   const scene = viewMode === 'catalog' && loadedCatalogScene && !live ? loadedCatalogScene : parametricScene
-  const extent = scene?.extent ?? 0.45
   const firstBuild = !!live && live.isNew && !preview
   /** a new, empty workspace: the start panel takes the input */
   const blank = routeId === 'new' && !spec && !live && !turns.length
@@ -1029,39 +1006,6 @@ export default function ModelLab() {
             </div>
           ) : scene ? (
             <>
-              <div className="flex items-center gap-1 overflow-x-auto border-b border-line px-3 py-1.5 scrollbar-none">
-                <Tool on={cut.enabled} onClick={() => applyCutPlane(!cut.enabled, cutAxis, cutPos)}>Section</Tool>
-                <Tool on={explode > 0.05} onClick={() => useView.getState().setExplode(explode > 0.05 ? 0 : 0.7)}>Take apart</Tool>
-                <Tool on={xray} onClick={() => useView.getState().setXray(!xray)}>X-ray</Tool>
-                <Tool on={labels} onClick={() => useView.getState().setLabels(!labels)}>Labels</Tool>
-                <Tool on={caliperMode} onClick={() => useView.getState().setCaliperMode(!caliperMode)} title="Click two points on the model to measure between them">Measure</Tool>
-                <span className="mx-1 h-4 w-px shrink-0 bg-line" />
-                <Tool onClick={() => useSim.getState().toggle()}>{playing ? 'Pause' : 'Play'}</Tool>
-                {[0.5, 1, 2].map((spd) => (
-                  <Tool key={spd} on={Math.abs(timeScale - spd) < 0.05} onClick={() => useSim.getState().setTimeScale(spd)}>{spd}×</Tool>
-                ))}
-              </div>
-              {cut.enabled || explode > 0.05 ? (
-                <div className="flex flex-wrap items-center gap-x-5 gap-y-2 border-b border-line bg-panel-2/40 px-4 py-2 text-[12px] text-mute">
-                  {cut.enabled ? (
-                    <div className="flex min-w-55 flex-1 items-center gap-2" role="group" aria-label="Section plane">
-                      Section through
-                      {(['x', 'y', 'z'] as const).map((ax) => (
-                        <button key={ax} type="button" aria-label={`Section across ${ax}`} aria-pressed={cutAxis === ax} onClick={() => { setCutAxis(ax); applyCutPlane(true, ax, cutPos) }} className={`rounded px-1.5 font-mono uppercase ${cutAxis === ax ? 'bg-ink text-bg' : 'hover:text-ink'}`}>
-                          {ax}
-                        </button>
-                      ))}
-                      <input type="range" aria-label="Section position" min={-extent * 0.6} max={extent * 0.6} step={extent / 100} value={cutPos} onChange={(e) => { const v = parseFloat(e.target.value); setCutPos(v); applyCutPlane(true, cutAxis, v) }} className="slider flex-1" />
-                    </div>
-                  ) : null}
-                  {explode > 0.05 ? (
-                    <label className="flex min-w-45 flex-1 items-center gap-2">
-                      Apart
-                      <input type="range" aria-label="How far apart" min={0} max={1} step={0.02} value={explode} onChange={(e) => useView.getState().setExplode(parseFloat(e.target.value))} className="slider flex-1" />
-                    </label>
-                  ) : null}
-                </div>
-              ) : null}
               {layoutIssues.length > 0 && layoutDismissed !== layoutKey ? (
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-line bg-warn/10 px-4 py-2 text-[12.5px]">
                   <span className="min-w-0 flex-1 text-ink">
@@ -1088,6 +1032,14 @@ export default function ModelLab() {
                 <ErrorBoundary label="3D model" resetKey={scene}>
                 <Stage scene={scene} cover={!live && !builtHereRef.current} viewKey={viewMode === 'catalog' && loadedCatalogScene && !live ? undefined : viewKey} />
                 </ErrorBoundary>
+                {/* the same controls as the lab rigs: views, play and step, slow motion, cuts, taking apart, x-ray,
+                    labels, measuring */}
+                <div className="pointer-events-none absolute right-3 top-3 z-10 hidden sm:block">
+                  <OrientationGizmo scene={scene} />
+                </div>
+                <div className="pointer-events-none absolute inset-x-0 bottom-3 z-10 hidden justify-center px-2 sm:flex">
+                  <Toolbar scene={scene} />
+                </div>
                 {live ? (
                   <div className="pointer-events-none absolute left-1/2 top-3 z-30 -translate-x-1/2">
                     <div className="flex items-center gap-2 rounded-full border border-line bg-panel/95 px-3.5 py-1.5 text-[12.5px] text-ink shadow-lg backdrop-blur">
@@ -1100,7 +1052,7 @@ export default function ModelLab() {
                   </div>
                 ) : null}
                 {spec && !live && !selectedPart && viewMode === 'parametric' ? (
-                  <div className="pointer-events-none absolute bottom-3 right-3 z-20 rounded-full border border-line bg-panel/90 px-3 py-1 text-[11.5px] text-mute shadow-sm backdrop-blur">
+                  <div className="pointer-events-none absolute left-3 top-3 z-20 rounded-full border border-line bg-panel/90 px-3 py-1 text-[11.5px] text-mute shadow-sm backdrop-blur">
                     Click a part to inspect it
                   </div>
                 ) : null}
@@ -1113,6 +1065,10 @@ export default function ModelLab() {
                     </div>
                   </div>
                 ) : null}
+              </div>
+              {/* phones: the toolbar under the view, so it never covers the model */}
+              <div className="flex justify-center border-t border-line px-2 py-2 sm:hidden">
+                <Toolbar scene={scene} />
               </div>
             </>
           ) : (
@@ -1188,32 +1144,64 @@ export default function ModelLab() {
             <p className="p-4 text-[13px] text-mute">{live ? 'Sizes and calculations appear here as they are worked out.' : blank ? 'Calculations, sizes and parts appear here once the model is built.' : ''}</p>
           ) : (
             <>
-              <div className="flex gap-1 border-b border-line p-2" role="tablist" aria-label="Model details">
-                {(
-                  [
-                    ...(charts.length ? [['graphs', 'Graphs'] as const] : []),
-                    ['calculations', `Calculations`],
-                    ['dimensions', 'Dimensions'],
-                    ['parts', `Parts (${shownSpec.parts.length})`],
-                  ] as const
-                ).map(([id, label]) => (
-                  <button key={id} type="button" role="tab" aria-selected={tab === id} onClick={() => setTab(id)} className={`flex-1 whitespace-nowrap rounded-full px-2 py-1.5 text-[12.5px] font-medium transition-colors ${tab === id ? 'bg-ink text-bg' : 'text-mute hover:text-ink'}`}>
-                    {label}
-                  </button>
-                ))}
-              </div>
-
-              <div className="min-h-0 flex-1 overflow-y-auto p-4">
-                {tab === 'graphs' && charts.length ? (
+              <div className="min-h-0 flex-1 overflow-y-auto">
+                <div className="border-b border-line px-4 py-3">
+                  <h2 className="text-[15px] font-semibold leading-snug text-ink">{shownSpec.title}</h2>
+                  {shownSpec.summary ? <p className="mt-1 text-[12.5px] leading-relaxed text-mute">{shownSpec.summary}</p> : null}
+                </div>
+                {calcResults.length ? (
+                  <Section title="Live">
+                    <div className="grid grid-cols-2 gap-2 xl:grid-cols-3">
+                      {calcResults.slice(0, 9).map((r) => (
+                        <Readout key={r.spec.id} label={r.spec.label} value={r.formatted} unit={r.spec.unit} tone={r.status === 'warn' ? 'warn' : 'ink'} />
+                      ))}
+                    </div>
+                  </Section>
+                ) : null}
+                {shownSpec.parameters.length ? (
+                  <Section title="Dimensions">
+                    {shownSpec.parameters.map((p) => {
+                      const val = shownParams[p.id] ?? p.value
+                      // lengths in millimetres, as on the rigs
+                      const mm = p.unit === 'm'
+                      const k = mm ? 1000 : 1
+                      return (
+                        <Slider
+                          key={p.id}
+                          label={p.label}
+                          value={val * k}
+                          min={p.min * k}
+                          max={p.max * k}
+                          step={p.step * k}
+                          unit={mm ? 'mm' : p.unit}
+                          digits={4}
+                          onChange={(v) => {
+                            if (live) return
+                            setViewMode('parametric')
+                            setParams((prev) => ({ ...prev, [p.id]: v / k }))
+                          }}
+                        />
+                      )
+                    })}
+                    {spec && !live ? (
+                      <button type="button" onClick={() => setParams(Object.fromEntries(spec.parameters.map((p) => [p.id, p.value])))} className={`${ghostBtn} text-[12px]`}>
+                        Reset dimensions
+                      </button>
+                    ) : null}
+                  </Section>
+                ) : null}
+                {charts.length ? (
+                  <Section title="Graphs">
                   <div className="space-y-3">
                     {charts.map((ch) => (
                       <ChartView key={ch.spec.id} chart={ch} />
                     ))}
                     <p className="text-[11.5px] text-dim">Graphs redraw as you change the sizes. Hover or tap a graph to read any point.</p>
                   </div>
+                  </Section>
                 ) : null}
-                {tab === 'calculations' || (tab === 'graphs' && !charts.length) ? (
-                  calcResults.length ? (
+                <Section title="Working">
+                  {calcResults.length ? (
                     <div className="space-y-2">
                       {calcResults.map((r) => (
                         <CalcCard
@@ -1234,44 +1222,11 @@ export default function ModelLab() {
                     </div>
                   ) : (
                     <p className="text-[13px] text-mute">{live ? 'Working out the engineering…' : 'This model has no calculations yet. Ask for some in the chat.'}</p>
-                  )
-                ) : null}
+                  )}
+                </Section>
 
-                {tab === 'dimensions' ? (
-                  <div className="space-y-3">
-                    {shownSpec.parameters.map((p) => {
-                      const val = shownParams[p.id] ?? p.value
-                      return (
-                        <label key={p.id} className="block">
-                          <div className="mb-1 flex items-baseline justify-between gap-2 text-[12.5px]">
-                            <span className="text-ink">{p.label}</span>
-                            <span className="font-mono text-mute">{fmt(val, p.unit)}</span>
-                          </div>
-                          <input
-                            type="range"
-                            min={p.min}
-                            max={p.max}
-                            step={p.step}
-                            value={val}
-                            disabled={!!live}
-                            onChange={(e) => {
-                              setViewMode('parametric')
-                              setParams((prev) => ({ ...prev, [p.id]: parseFloat(e.target.value) }))
-                            }}
-                            className="slider w-full"
-                          />
-                        </label>
-                      )
-                    })}
-                    {spec && !live ? (
-                      <button type="button" onClick={() => setParams(Object.fromEntries(spec.parameters.map((p) => [p.id, p.value])))} className={`${ghostBtn} text-[12px]`}>
-                        Reset dimensions
-                      </button>
-                    ) : null}
-                  </div>
-                ) : null}
 
-                {tab === 'parts' ? (
+                <Section title={`Parts (${shownSpec.parts.length})`}>
                   <div className="space-y-2">
                     {shownSpec.parts.map((pt) => (
                       <div
@@ -1280,9 +1235,33 @@ export default function ModelLab() {
                         className={`bp-fade flex cursor-pointer items-center gap-2 rounded-2xl border px-3 py-2 transition-colors ${selectedId === pt.id ? 'border-accent bg-accent/10' : 'border-line-2 hover:border-ink/30'}`}
                       >
                         <div className="min-w-0 flex-1">
-                          <div className="truncate text-[13px] font-medium text-ink">{pt.name}</div>
+                          <div className={`truncate text-[13px] font-medium ${hiddenParts.includes(pt.id) ? 'text-dim line-through' : 'text-ink'}`}>{pt.name}</div>
                           {pt.info?.summary ? <div className="truncate text-[11.5px] text-mute">{pt.info.summary}</div> : null}
                         </div>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            useView.getState().toggleHidden(pt.id)
+                          }}
+                          aria-label={hiddenParts.includes(pt.id) ? `Show ${pt.name}` : `Hide ${pt.name}`}
+                          title={hiddenParts.includes(pt.id) ? 'Show' : 'Hide'}
+                          className="rounded-full px-1.5 text-[11.5px] text-dim hover:text-ink"
+                        >
+                          {hiddenParts.includes(pt.id) ? 'Show' : 'Hide'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            useView.getState().isolate(isolatedId === pt.id ? null : pt.id)
+                          }}
+                          aria-pressed={isolatedId === pt.id}
+                          title="Show only this part"
+                          className={`rounded-full px-1.5 text-[11.5px] ${isolatedId === pt.id ? 'text-accent' : 'text-dim hover:text-ink'}`}
+                        >
+                          Only
+                        </button>
                         {spec && !live ? (
                           <>
                             <select
@@ -1360,7 +1339,7 @@ export default function ModelLab() {
                       )
                     ) : null}
                   </div>
-                ) : null}
+                </Section>
               </div>
             </>
           )}
