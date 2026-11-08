@@ -114,7 +114,7 @@ xrStore.subscribe((s, p) => {
   useMirror.getState().setOn(on)
   // in the headset the panel is to the right of the rig, so a build tray goes to the left
   buildTray.side = on ? -1 : 1
-  buildTray.row = on ? 0.75 : 1.7
+  buildTray.row = on ? 1.1 : 1.7
   buildTray.toward = on
   if (on) {
     // a big machine (a whole tractor) opens closed in a headset: drawing it cut open, insides and all, is

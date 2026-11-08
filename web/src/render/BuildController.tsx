@@ -47,7 +47,7 @@ const shuffleKey = (id: string) => [...id].reduce((h, c) => (h * 31 + c.charCode
  * The tray's layout: which side of the machine it goes, as seen by the viewer (1 right, -1 left: the headset
  * panel is on the right), and how long a row is (× the machine's size; short in a headset, so every part is
  * within reach of someone sitting at the table), and whether the rows run back from the viewer or, starting
- * level with the back of the machine, towards them (in a headset: the parts come to hand)
+ * level with the front of the machine, towards them (in a headset: the parts come to hand)
  */
 export const buildTray = { side: 1, row: 1.7, toward: false }
 
@@ -101,34 +101,48 @@ export function BuildController({ floorY = 0 }: { floorY?: number }) {
     onMachine.current = all.clone().expandByScalar(0.08 * big)
     // the tray lies on the floor beside the machine (to the right as seen from the camera), in rows
     // running back from the camera, so nothing on it hides the machine being built
-    const front = camera.position.clone().sub(C).setY(0)
+    // where the eyes are in the scene (a headset's camera has its pose in its world matrix)
+    const eye = camera.getWorldPosition(new THREE.Vector3())
+    const front = eye.clone().sub(C).setY(0)
     if (front.lengthSq() < 1e-6) front.set(0, 0, 1)
     front.normalize()
     const across = new THREE.Vector3(front.z, 0, -front.x).multiplyScalar(buildTray.side)
-    const gap = 0.14 * big
-    const rowW = buildTray.row * big
+    const toward = buildTray.toward
+    // a headset tray packs tighter, beside the machine, and only as deep as the table between it and the viewer
+    const gap = (toward ? 0.07 : 0.14) * big
     const ids = [...m.keys()].sort((a, b) => shuffleKey(a) - shuffleKey(b))
-    const rows: string[][] = [[]]
-    let w = 0
-    for (const id of ids) {
-      const sz = m.get(id)!.size
-      const pw = Math.abs(sz.x * across.x) + Math.abs(sz.z * across.z) + gap
-      if (w + pw > rowW && rows[rows.length - 1].length) {
-        rows.push([])
-        w = 0
+    const wide = (id: string) => { const sz = m.get(id)!.size; return Math.abs(sz.x * across.x) + Math.abs(sz.z * across.z) + gap }
+    const deep = (id: string) => { const sz = m.get(id)!.size; return Math.abs(sz.x * front.x) + Math.abs(sz.z * front.z) }
+    const pack = (rowW: number) => {
+      const rows: string[][] = [[]]
+      let w = 0
+      for (const id of ids) {
+        if (w + wide(id) > rowW && rows[rows.length - 1].length) {
+          rows.push([])
+          w = 0
+        }
+        rows[rows.length - 1].push(id)
+        w += wide(id)
       }
-      rows[rows.length - 1].push(id)
-      w += pw
+      return { rows, depth: rows.reduce((a, r) => a + Math.max(...r.map(deep)) + gap, 0) }
+    }
+    let rowW = buildTray.row * big
+    let { rows } = pack(rowW)
+    if (toward) {
+      // from level with the machine's middle to nearly the table's edge in front of the viewer (a seated reach);
+      // wider rows only if it won't fit
+      const room = 0.88 * Math.max(0.01, eye.clone().sub(C).dot(front))
+      for (let i = 0; i < 12 && pack(rowW).depth > room; i++) rowW *= 1.2
+      rows = pack(rowW).rows
     }
     const next = new Map<string, Slot>()
-    const side = 0.5 * (Math.abs(S.x * across.x) + Math.abs(S.z * across.z)) + 0.3 * big
-    // first row level with the front of the machine, the rest stepping back (or level with its back, the rest
-    // stepping towards the viewer)
-    const toward = buildTray.toward
-    let dist = (toward ? -0.5 : 0.5) * (Math.abs(S.x * front.x) + Math.abs(S.z * front.z))
+    const side = 0.5 * (Math.abs(S.x * across.x) + Math.abs(S.z * across.z)) + (toward ? 0.1 : 0.3) * big
+    // first row level with the front of the machine, the rest stepping back from the viewer (in a headset: level
+    // with its middle, the rest coming towards the viewer)
+    let dist = toward ? 0 : 0.5 * (Math.abs(S.x * front.x) + Math.abs(S.z * front.z))
     for (const row of rows) {
-      const widths = row.map((id) => { const sz = m.get(id)!.size; return Math.abs(sz.x * across.x) + Math.abs(sz.z * across.z) + gap })
-      const depth = Math.max(...row.map((id) => { const sz = m.get(id)!.size; return Math.abs(sz.x * front.x) + Math.abs(sz.z * front.z) }))
+      const widths = row.map(wide)
+      const depth = Math.max(...row.map(deep))
       let x = side
       row.forEach((id, i) => {
         const { centre, size } = m.get(id)!
@@ -291,7 +305,9 @@ export function BuildController({ floorY = 0 }: { floorY?: number }) {
       if (useBuild.getState().finishedAt) return null
       const placed = useBuild.getState().placed
       const box = new THREE.Box3()
-      let best: { id: string; size: number } | null = null
+      // the part the fingers are on (the nearest, if they are on several or just short of one); among parts
+      // they are inside of, the smallest, so a small part lying in a big one's box can still be picked
+      let best: { id: string; size: number; gap: number } | null = null
       for (const id of slots.current.keys()) {
         if (placed.includes(id) || held.has(id)) continue
         const o = partObjects.get(id)
@@ -299,8 +315,9 @@ export function BuildController({ floorY = 0 }: { floorY?: number }) {
         box.setFromObject(o)
         if (box.isEmpty()) continue
         const size = box.getSize(_v).length()
-        box.expandByScalar(Math.max(reach, size * 0.1))
-        if (box.containsPoint(p) && (!best || size < best.size)) best = { id, size }
+        const gap = box.distanceToPoint(p)
+        if (gap > Math.max(reach, size * 0.1)) continue
+        if (!best || gap < best.gap - 1e-6 || (Math.abs(gap - best.gap) <= 1e-6 && size < best.size)) best = { id, size, gap }
       }
       if (!best) return null
       const slot = slots.current.get(best.id)!
