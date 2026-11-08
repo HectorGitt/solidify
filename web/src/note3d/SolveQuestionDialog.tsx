@@ -1,9 +1,11 @@
-import { useState, type ClipboardEvent, type DragEvent } from 'react'
+import { useEffect, useState, type ClipboardEvent, type DragEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { setPendingBuild } from '@/cloud/pendingBuild'
 import { Modal, ghostBtn, inputCls, primaryBtn } from '@/cloud/ui/Modal'
 import { Icon } from '@/ui/icons'
 import { toast } from '@/ui/toast'
+import type { QuestionMatch } from '@/study/matchQuestion'
+import { courseTitle } from '@/study/types'
 
 const MAX_TEXT = 3800
 const MAX_IMAGE = 8_000_000
@@ -24,6 +26,26 @@ export function SolveQuestionDialog({ open, onClose }: { open: boolean; onClose:
   const [text, setText] = useState('')
   const [image, setImage] = useState<{ name: string; url: string } | null>(null)
   const [over, setOver] = useState(false)
+  // one of Solidify's own checked problems? (the problem bank loads only once something is typed)
+  const [match, setMatch] = useState<QuestionMatch | null>(null)
+  useEffect(() => {
+    if (text.trim().length < 30) return setMatch(null)
+    let alive = true
+    const t = window.setTimeout(() => {
+      void import('@/study/matchQuestion').then(({ matchQuestion }) => alive && setMatch(matchQuestion(text)))
+    }, 350)
+    return () => {
+      alive = false
+      window.clearTimeout(t)
+    }
+  }, [text])
+  const openChecked = () => {
+    if (!match) return
+    onClose()
+    setText('')
+    setImage(null)
+    navigate(`/exam?q=${encodeURIComponent(match.question.id)}`)
+  }
 
   const take = (file: File | null | undefined) => {
     if (!file || !file.type.startsWith('image/')) return false
@@ -83,6 +105,22 @@ export function SolveQuestionDialog({ open, onClose }: { open: boolean; onClose:
           placeholder={'e.g. A simply supported beam of span 6 m carries a point load of 20 kN at 2 m from A and a uniformly distributed load of 5 kN/m over its whole length. Determine the reactions at A and B and the maximum bending moment.\n\nOr paste a screenshot here (Ctrl+V).'}
           className={`${inputCls} min-h-[150px] resize-y text-[13px] leading-relaxed ${over ? 'border-accent' : ''}`}
         />
+        {match ? (
+          <div className="rounded-2xl border border-accent/50 bg-accent/5 px-3.5 py-3 text-[12.5px] leading-relaxed">
+            <p className="text-ink">
+              {match.exact ? 'This is one of Solidify’s checked problems: ' : 'This looks like one of Solidify’s checked problems, with other numbers: '}
+              <b className="font-semibold">{match.question.title}</b> <span className="text-mute">({courseTitle(match.question.course)})</span>.
+            </p>
+            <p className="mt-0.5 text-mute">
+              {match.exact
+                ? 'Open it beside its rig in 3D: its answers are worked by Solidify’s tested calculations, and it doesn’t use a 3D build.'
+                : 'Open that one beside its rig (its own numbers, worked by Solidify’s tested calculations, no build used), or solve yours as written.'}
+            </p>
+            <button type="button" onClick={openChecked} className={`${primaryBtn} mt-2 px-3.5 py-1.5 text-[12.5px]`}>
+              Open the checked problem
+            </button>
+          </div>
+        ) : null}
         <div className="flex flex-wrap items-center gap-2">
           {image ? (
             <div className="flex min-w-0 items-center gap-2 rounded-xl border border-line-2 p-1.5 pr-2">
@@ -100,8 +138,8 @@ export function SolveQuestionDialog({ open, onClose }: { open: boolean; onClose:
             </label>
           )}
           <span className="text-[11.5px] text-dim">or paste or drop one here</span>
-          <button type="submit" disabled={!text.trim() && !image} className={`${primaryBtn} ml-auto px-4 py-2 text-[13px]`}>
-            Solve in 3D
+          <button type="submit" disabled={!text.trim() && !image} className={`${match?.exact ? ghostBtn : primaryBtn} ml-auto px-4 py-2 text-[13px]`}>
+            {match ? 'Build mine in 3D anyway' : 'Solve in 3D'}
           </button>
         </div>
         <p className="text-[11px] text-dim">Uses one 3D build from today’s allowance.</p>
