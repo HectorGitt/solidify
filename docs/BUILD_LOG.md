@@ -315,58 +315,76 @@ Every entry is numbered (in the order they appear, top to bottom) and set out th
 ### 58. Gears and linkages in library drafts move wrongly or don't mate (2026-11-08) (in progress)
 - **Problem:** in the review queue most mechanism drafts struggle with motion: a shaft turns differently from the gear on it, meshed gears turn at the wrong ratio or the same way, gears wobble about the wrong line, teeth run through each other, and linked parts (a slotted lever and its crank, a scotch yoke, a rack and its pinion) each swing on their own; some layouts float (the helical pair stands above its base plate). Examples: "Universal (Hooke's) joint at 30° deflection", "Three-shaft compound gear train (12 : 1)", "Crank & slotted-lever quick-return mechanism", "Stepped transmission shaft & gear assembly", "Scotch yoke", "Rack and pinion".
 - **Cause:** every moving part's spin is Gemini's own guess (`motion: { kind, axis, speed }` per part, played as written). Nothing ties a part's speed, direction or axis to the gear it meshes with or the shaft it sits on; meshed gears start at whatever angle, so teeth can sit in teeth. Two kinds can't be right at all with per-part motion: a Hooke's joint's output turns at a varying speed (ω₂/ω₁ = cos β / (1 − sin²β cos²θ)) and a slotted lever swings unevenly (θ = atan(r sin φ / (d + r cos φ))), which a constant `rotate` or a sine `oscillate` cannot express. The quality checks only looked at whether moving parts were mounted, not whether they move consistently, so these drafts scored well. Entries 53, 54, 55 and 57 were further causes found on the way.
-- **Solution:** done so far: entries 53, 54, 55 and 57. In progress: Gemini names only the driving part and its speed, and Solidify derives every other motion from the mounts (on a shaft: same speed and axis; external mesh: ω₂ = −ω₁·T₁/T₂; ring gear: same sense; a rack: pitch radius × angle; crank-slider and connecting rod from the crank's real angle), with new relations for a slotted lever (it points from its pivot through the crank pin), a follower (a ram or scotch-yoke slide moving with a pin or lever tip along its guide) and a universal joint (exact Hooke's law); driven gears start where their teeth interleave (φ₂ = −(T₁/T₂)·φ₁ + π/T₂). Then checks per meshed pair (module, parallel axes, centre distance m(T₁+T₂)/2, ratio and sense), a sweep through a turn for parts passing through each other, failed checks shown in the review queue, and these requests added to the nightly tests. Drafts needing the new relations are rebuilt; the rest are fixed when drawn.
+- **Solution:** entries 53, 54, 55 and 57, then motion from the mounts (`note3d/kinematics.ts`): one part drives each mechanism (the part named like a motor, input, crank or handwheel, else the first given a speed) and every other part follows by its relation, on one clock for the whole machine (it also steps with the step button). On a shaft: the same angle; external mesh: θ₂ = −(T₁/T₂)·θ₁ + φ; inside a ring gear the same way round; a rack slides r·θ; a part fixed off its carrier's axis (a pin, a sliding block) is carried round that axis; a part given a clearly different speed runs free on a bearing (a differential's side gears) and, off the axis, is carried round as well. New mounts (`schema.ts`, `assembly.ts`): a slotted lever (points from its pivot through the crank pin), a follower (a ram or scotch-yoke slide moving with a pin or lever tip along its guide) and a universal joint (exact Hooke's law, θ₂ = atan2(sin θ₁, cos θ₁ cos β), kept continuous); cranks, sliders, links, levers and followers are re-placed by the assembly solver every frame from the crank's real angle. Driven gears start with their teeth interleaved (φ = ψₚ − π/Tₚ − k·ψₜ). Tests: `note3d/kinematics.test.ts` (ratio and sense, one driver, interleave, rack, piston, lever and ram, Hooke, bored gear vs ring gear, carried block, free gear). Checked on the downloaded drafts in Edge, part by part, frame by frame: compound train 12 : 1, helical pair 2 : 1 opposite, worm reducer 30 : 1, the differential keeps its 270 / 330 rpm split. Still to do: the prompt (name only the driver, use the new mounts), checks per meshed pair and a sweep for parts passing through each other shown in the review queue, and a "Rebuild all flagged" button; the scotch yoke, quick-return and rack drafts never mounted their parts to each other, so they are rebuilt rather than fixed.
 - **Lesson:** never let the model state a quantity the mechanism already determines; derive it. And a check of "is it connected" is not a check of "does it move right".
+
+### 59. A helical gear with a bore turned the same way as its pinion (2026-11-08)
+- **Problem:** while deriving motion, the helical pair's driven gear turned the same way as the pinion it meshes with.
+- **Cause:** a gear was taken for a ring gear (whose mate turns the same way) whenever it was "hollow", and hollow included any round hole cut through it; nearly every real gear has a bore.
+- **Solution:** a ring gear is told by geometry: the mate's centre sits inside it (closer than the bigger pitch radius). The mesh mount also places a gear inside a part named like a ring gear or annulus (at the difference of the radii) instead of always outside. Test: a bored gear runs opposite, a planet in a ring the same way; the helical draft measured 2 : 1 opposite in Edge.
+- **Lesson:** decide what a part is by where it sits and how it is shaped as a whole, not by one feature (a hole) many parts share.
+
+### 60. Parts on a crank pin spun on the spot instead of going round with the crank (2026-11-08)
+- **Problem:** the quick-return's sliding block (mounted on the bull gear's pin) and the differential's spider gears turned about their own centres while the crank or carrier went round.
+- **Cause:** "fixed to a turning part" was modelled as turning by the same angle about the part's own axis, which is only the same thing when that axis is the carrier's axis.
+- **Solution:** a part fixed off its carrier's axis is carried round the carrier's line (P₀⁻¹ · R · P₀); a non-round part (a block, a cam) fixed to a turning part is carried too. Test: a block on a crank pin keeps its distance from the crank centre and moves round it.
+- **Lesson:** a rigid joint means the whole pose follows, not just the angle.
+
+### 61. The quick-return lever whipped round at 70 rad/s (2026-11-08)
+- **Problem:** the slotted lever of the quick-return draft swung wildly.
+- **Cause:** its swing was written `asin(r / c) * 180 / pi`: degrees, where radians are expected, so 22 degrees became 22 radians.
+- **Solution:** a swing of more than half a turn each way is read as degrees (`NoteSceneRenderer`); measured afterwards at a sane rate. New drafts use the lever mount, which needs no swing at all.
+- **Lesson:** check units at the boundary where the model's numbers come in; a value outside any sensible range in one unit is usually another unit.
 
 ## Nightly tests, admin and labs pages (2026-11-06)
 
-### 59. A propped-cantilever model crashed the whole workspace
+### 62. A propped-cantilever model crashed the whole workspace
 - **Problem:** `Cannot read properties of undefined (reading '0')`, blank page.
 - **Cause:** Gemini sent a `recommendedCut` without a `normal`; the cleaner passed the object through unchecked and an effect read `normal[0]`.
 - **Solution:** `cleanCut` in `note3d/sanitize.ts` checks every field (also applied when opening saved models and in the notes reader), and error boundaries round the 3D view, the side panel and each page.
 - **Lesson:** validate every nested field of model output, not just its presence; and no page should be one bad value away from blank.
 
-### 60. Nightly builds failed with "Something went wrong on the server" (500)
+### 63. Nightly builds failed with "Something went wrong on the server" (500)
 - **Problem:** Nightly builds failed with "Something went wrong on the server" (500).
 - **Cause:** Gemini answered 429 RESOURCE_EXHAUSTED when three builds ran at once, and the API gave up on the first refusal.
 - **Solution:** `api/src/retry.ts` waits and retries (2, 6, 15 s) on 429/503, streamed builds retry if refused before their first word, the final failure says the model is busy (503), and the runner tries once more after 30 s.
 - **Lesson:** treat rate limits as normal for a hosted model; read the service's logs before guessing.
 
-### 61. A draft scored 100 while visibly broken
+### 64. A draft scored 100 while visibly broken
 - **Problem:** (rods not reaching the crank, a tilted flywheel through the casing, labels on top of each other).
 - **Cause:** the checks only covered layout overlap, drawability and calculations.
 - **Solution:** checks for moving parts joined by relation and for overlapping labels, and the prompt states the same rules.
 - **Lesson:** a score is only as good as its checks; look at high scorers before trusting the number.
 
-### 62. Deploy failed: "Build failed; check build logs"
+### 65. Deploy failed: "Build failed; check build logs"
 - **Problem:** Deploy failed: "Build failed; check build logs".
 - **Cause:** `gcloud run deploy --source .` run from the repo root, which has no Dockerfile.
 - **Solution:** run it from `api/`.
 - **Lesson:** `--source .` uploads the current folder; check where you are.
 
-### 63. Rig thumbnails came out blank, and with a stray `_` in their names
+### 66. Rig thumbnails came out blank, and with a stray `_` in their names
 - **Problem:** Rig thumbnails came out blank, and with a stray `_` in their names.
 - **Cause:** two scenes photographed before they had drawn in a reused tab; and the rig list written by Python on Windows had CRLF line endings, so each id ended in `\r`.
 - **Solution:** retook those two in a fresh tab (`SHOT_COLD=1`); renamed the files and strip `\r` when reading lists.
 - **Lesson:** check the smallest output files of a batch capture, and strip `\r` from lists made on Windows.
 
-### 64. Inline scripts lost their backslashes
+### 67. Inline scripts lost their backslashes
 - **Problem:** A `node -e` / heredoc script through the shell turned `C:\Program Files` into `C:\Program Files`, so the browser path was not found.
 - **Solution:** forward slashes in Windows paths in scripts, and the editor rather than the shell for code containing escapes.
 - **Lesson:** don't pass escape-heavy code through the shell.
 
-### 65. Prettier reformatted a file into another style
+### 68. Prettier reformatted a file into another style
 - **Problem:** With no project config it used its defaults (double quotes, semicolons).
 - **Solution:** re-run with the project's settings (`--no-semi --single-quote --print-width 220`).
 - **Lesson:** don't run a formatter the project doesn't configure.
 
-### 66. The Labs page was wider than a phone
+### 69. The Labs page was wider than a phone
 - **Problem:** The Labs page was wider than a phone.
 - **Cause:** one-line rig names in a grid item set its minimum width.
 - **Solution:** `min-w-0` on the card.
 - **Lesson:** any `truncate` text inside a grid or flex child needs `min-w-0` on that child.
 
-### 67. Gearbox levers hung in the air, and the reverse idler had no shaft
+### 70. Gearbox levers hung in the air, and the reverse idler had no shaft
 - **Problem:** Gearbox levers hung in the air, and the reverse idler had no shaft.
 - **Cause:** the cut-away removed the half of the casing the lever towers stood on (moving parts are not cut, so the levers stayed); the idler's shaft was defined but never drawn, and a full-length pin would have run through third gear and the range gears.
 - **Solution:** a shift cover the towers stand on; a stub shaft and wall boss for the idler; and the cut now removes the other half, with the cameras moved to that side, so everything kept is attached to something.

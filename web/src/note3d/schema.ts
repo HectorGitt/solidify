@@ -157,6 +157,15 @@ export type NoteMountSpec =
   | { kind: 'slider'; target: string; throw: DimExpr; rod: DimExpr; angle?: DimExpr; direction?: AxisDir; shift?: Vec3Expr }
   /** a link (a connecting rod) from the crank pin of `target` to the centre of `to`, its long side along the line */
   | { kind: 'link'; target: string; to: string; throw: DimExpr; angle?: DimExpr; direction?: AxisDir; shift?: Vec3Expr }
+  /** a slotted lever: pivots on the centre of `pivot` and always points through the crank pin of `target`
+   *  (crank radius `throw`, starting `angle` degrees), so the pin stays in its slot (a quick-return mechanism) */
+  | { kind: 'lever'; target: string; pivot: string; throw: DimExpr; angle?: DimExpr; direction?: AxisDir; shift?: Vec3Expr }
+  /** a part that slides along `direction` with a point of `target`: its crank pin (a scotch yoke's slide, given
+   *  `throw`), or the far end of a lever ('tip': a shaper's ram); across that direction it stays where it is */
+  | { kind: 'follower'; target: string; direction: AxisDir; of?: 'pin' | 'tip'; throw?: DimExpr; angle?: DimExpr; offset?: DimExpr; shift?: Vec3Expr }
+  /** the output shaft of a universal (Hooke's) joint: from the end of the input shaft `target`, its axis turned
+   *  `angle` degrees off the input's; it turns by Hooke's law, tan θ₂ = tan θ₁ / cos β */
+  | { kind: 'hooke'; target: string; angle: DimExpr; shift?: Vec3Expr }
 
 export type AxisDir = '+x' | '-x' | '+y' | '-y' | '+z' | '-z'
 
@@ -625,6 +634,9 @@ export const noteMountSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('centered'), target: z.string().min(1).max(80), shift: vec3ExprSchema.optional() }),
   z.object({ kind: z.literal('slider'), target: z.string().min(1).max(80), throw: dimExprSchema, rod: dimExprSchema, angle: dimExprSchema.optional(), direction: axisDirSchema.optional(), shift: vec3ExprSchema.optional() }),
   z.object({ kind: z.literal('link'), target: z.string().min(1).max(80), to: z.string().min(1).max(80), throw: dimExprSchema, angle: dimExprSchema.optional(), direction: axisDirSchema.optional(), shift: vec3ExprSchema.optional() }),
+  z.object({ kind: z.literal('lever'), target: z.string().min(1).max(80), pivot: z.string().min(1).max(80), throw: dimExprSchema, angle: dimExprSchema.optional(), direction: axisDirSchema.optional(), shift: vec3ExprSchema.optional() }),
+  z.object({ kind: z.literal('follower'), target: z.string().min(1).max(80), direction: axisDirSchema, of: z.enum(['pin', 'tip']).optional(), throw: dimExprSchema.optional(), angle: dimExprSchema.optional(), offset: dimExprSchema.optional(), shift: vec3ExprSchema.optional() }),
+  z.object({ kind: z.literal('hooke'), target: z.string().min(1).max(80), angle: dimExprSchema, shift: vec3ExprSchema.optional() }),
 ])
 
 export const noteParameterSchema = z.object({

@@ -9,6 +9,10 @@ import { MATERIALS, type MaterialKey } from '@/render/materials'
 import { Part, PartMesh } from '@/render/Part'
 import { useView } from '@/render/view'
 import { GEARS, ROUND, resolveAnnotation, resolveAssembly, type Placement } from './assembly'
+import { buildKinematics, type Kinematics } from './kinematics'
+
+/** how the model's mechanism moves now: one clock for every part, worked out from the mounts */
+const KinCtx = createContext<{ kin: Kinematics } | null>(null)
 import { buildPartGeometry } from './builder'
 import { fitView } from './fitView'
 import {
@@ -41,6 +45,22 @@ const InlineViewCtx = createContext<InlineViewConfig | null>(null)
  * (the scene is rebuilt as each part arrives, so parts that already landed are remembered here).
  */
 export const liveAssembly = { active: false, landed: new Set<string>(), dropping: new Map<string, number>() }
+
+/** one clock for the whole mechanism, ahead of the parts each frame (a lower priority runs first) */
+function KinClock({ kin }: { kin: Kinematics }) {
+  const inline = useContext(InlineViewCtx)
+  const t = useRef(0)
+  const lastStep = useRef(useSim.getState().stepRequest)
+  useFrame((_, dt) => {
+    const sim = useSim.getState()
+    const playing = inline ? inline.playing : sim.playing
+    if (playing) t.current += Math.min(dt, 0.1) * (inline ? 1 : sim.timeScale)
+    else if (!inline && sim.stepRequest !== lastStep.current) t.current += sim.stepSize
+    lastStep.current = sim.stepRequest
+    kin.update(t.current)
+  }, -1)
+  return null
+}
 
 function LocalPartNode({
   part,
@@ -77,8 +97,10 @@ function LocalPartNode({
    * axis letter the model gave: a model often names x or z for a part whose shape stands along y, which made
    * it wobble round the wrong line.
    */
+  const kinCtx = useContext(KinCtx)
+  const derived = !!kinCtx?.kin.derived.has(part.id)
   const spin = useMemo(() => {
-    if (part.motion?.kind !== 'rotate') return null
+    if (part.motion?.kind !== 'rotate' && !derived) return null
     const adds = part.shapes.filter((sh) => sh.op !== 'subtract')
     const lead = adds.find((sh) => GEARS.has(sh.kind)) ?? adds.find((sh) => ROUND.has(sh.kind))
     if (!lead) return null
@@ -88,7 +110,7 @@ function LocalPartNode({
     const big = Math.abs(axis.x) >= Math.abs(axis.y) && Math.abs(axis.x) >= Math.abs(axis.z) ? axis.x : Math.abs(axis.y) >= Math.abs(axis.z) ? axis.y : axis.z
     if (big < 0) axis.negate()
     return { axis, pivot: new THREE.Vector3(...evalVec3(lead.position, params, [0, 0, 0])) }
-  }, [part.motion?.kind, part.shapes, params])
+  }, [part.motion?.kind, part.shapes, params, derived])
   const basePos = useMemo(() => placed?.position ?? evalVec3(part.position, params, [0, 0, 0]), [placed, part.position, params])
   const baseRot = useMemo(() => placed?.rotation ?? evalVec3(part.rotation, params, [0, 0, 0]), [placed, part.rotation, params])
 
@@ -109,6 +131,16 @@ function LocalPartNode({
       }
     }
     const g = motionRef.current
+    // moved by its relations to the rest of the mechanism: the shared clock, worked out once per frame
+    if (g && derived) {
+      const mv = kinCtx!.kin.move(part.id)
+      if (!mv) return
+      const r = spin ? new THREE.Quaternion().setFromAxisAngle(spin.axis, mv.spin) : new THREE.Quaternion()
+      g.quaternion.copy(mv.quat).multiply(r)
+      const pivot = spin ? spin.pivot.clone().sub(spin.pivot.clone().applyQuaternion(r)) : new THREE.Vector3()
+      g.position.copy(mv.pos).add(pivot.applyQuaternion(mv.quat))
+      return
+    }
     if (!g || !part.motion) return
     const playing = inline ? inline.playing : useSim.getState().playing
     if (playing) {
@@ -117,7 +149,9 @@ function LocalPartNode({
     const t = timeRef.current
     const { kind, axis, phase = 0 } = part.motion
     const speed = evalDim(part.motion.speed, params, 1)
-    const amplitude = evalDim(part.motion.amplitude, params, 0.35)
+    let amplitude = evalDim(part.motion.amplitude, params, 0.35)
+    // a swing is in radians; more than half a turn each way can only be degrees ("asin(r / c) * 180 / pi")
+    if (kind === 'oscillate' && Math.abs(amplitude) > Math.PI) amplitude = (amplitude * Math.PI) / 180
     g.position.set(0, 0, 0)
     g.rotation.set(0, 0, 0)
 
@@ -454,6 +488,8 @@ export function NoteSceneViewport({
   const scope = useMemo(() => evaluateCalculations(spec.calculations, params).scope, [spec.calculations, params])
   // parts mounted by relation: placed from the other parts' real geometry each time the sizes change
   const assembly = useMemo(() => resolveAssembly(spec, scope), [spec, scope])
+  // the mechanism: who drives what, worked out from the mounts
+  const kinValue = useMemo(() => ({ kin: buildKinematics(spec, scope) }), [spec, scope])
   // arrows and dimensions attached to a part go where the assembly put that part
   const annotations = useMemo(
     () =>
@@ -468,6 +504,8 @@ export function NoteSceneViewport({
 
   return (
     <InlineViewCtx.Provider value={inlineConfig ?? null}>
+      <KinCtx.Provider value={kinValue}>
+      <KinClock kin={kinValue.kin} />
       <LocalClippingEnabler />
       <group>
         {spec.parts.map((part) => (
@@ -478,6 +516,7 @@ export function NoteSceneViewport({
         ))}
         {projMode !== 'none' && <OrthographicGlassPlanes extent={extent} mode={projMode} />}
       </group>
+      </KinCtx.Provider>
     </InlineViewCtx.Provider>
   )
 }
