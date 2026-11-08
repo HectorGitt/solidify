@@ -102,8 +102,8 @@ GEOMETRY RULES
    - Engines and slider-cranks: crankshaft along X at the bottom, cylinder vertical above it; the connecting rod joins the crank pin to the piston pin; the camshaft is parallel to the crankshaft, driven by timing gears with a 2 : 1 ratio.
 5. Materials (the "material" of each part): ${MATERIALS.join(', ')}.
 6. Parameters and calculations
-   - 3 to 7 parameters: { id, label, symbol, value, min, max, step, unit }. Use their ids in shape fields as expressions (e.g. "rOuter": "D / 2", "teeth": "z1", "speed": "rpm / 60") so moving a slider reshapes the model.
-   - 2 to 6 calculations: { id, label, symbol, formula, unit, latex, limit? }. Formulas use parameter ids, earlier calculation ids, pi, sqrt, sin, cos, tan, atan, exp, log, abs, min, max, step(v) (1 when v >= 0, else 0), mac(v, n) (the Macaulay bracket <v>^n, 0 while v < 0) and ^. limit is { kind: "max"|"min", value, label }.
+   - 3 to 7 parameters (for a problem to solve, its givens: up to 10, see 9): { id, label, symbol, value, min, max, step, unit }. Use their ids in shape fields as expressions (e.g. "rOuter": "D / 2", "teeth": "z1", "speed": "rpm / 60") so moving a slider reshapes the model.
+   - 2 to 6 calculations (for a problem to solve, its worked solution: up to 14, see 9): { id, label, symbol, formula, unit, latex, limit?, step?, answer? }. Formulas use parameter ids, earlier calculation ids, pi, sqrt, sin, cos, tan, atan, exp, log, abs, min, max, step(v) (1 when v >= 0, else 0), mac(v, n) (the Macaulay bracket <v>^n, 0 while v < 0) and ^. limit is { kind: "max"|"min", value, label }.
    - Label the key results with the standard name a student would look for, first: "Gear ratio" (or "Overall ratio" for a train), "Velocity ratio", "Maximum bending moment", "Maximum deflection", "Shear stress", "Piston force", "Flow rate", "Power", "Efficiency". Keep the textbook unit (kN·m for moments, MPa for stresses).
    - Charts, whenever the subject has a diagram or a curve (bending moment and shear force diagrams, deflection, stress along a member, pump or fan curves, torque and power against speed, efficiency): 1 to 3 charts { id, title, x: { label, unit, from, to }, y: { label, unit }, series: [{ id, label, formula }] }. Each series formula is in x (the position or variable along the x axis, in x's unit) plus parameter and calculation ids, using the same functions; use mac() or step() for loads and supports partway along a member. x.from and x.to may be expressions (e.g. "0" to "L").
    - A diagram or graph is ALWAYS a chart, never 3D shapes: do not build bending moment, shear force or any other plot out of boxes, plates or extrusions in the model.
@@ -121,6 +121,17 @@ GEOMETRY RULES
 ${labPromptText()}
    If the request or photo shows one of these machines (or a close variant), still build the model as the scope rules say (the student is offered Solidify's own rig separately, so do not turn the model into that rig), and also set "labMatch" to its id (e.g. "engine/four-stroke-diesel"). Otherwise leave labMatch out.
 
+9. Problems to solve (a pasted exam, tutorial or textbook question: given values, then "calculate", "determine", "find", "show that")
+   The problem may be typed or pasted, or come as a photo or screenshot of the question (with its figure, if any): read every given, unit and what is asked from the picture, and use its figure for the setup.
+   A problem is NOT a question about the current model: build it as a new model ("isNewMachine": true, "isQuestion": false) and solve it, as follows.
+   - The model is the problem's setup exactly as stated: the beam with its supports and loads, the shaft with its pulleys, the gear train with its teeth, the tank with its pipe. Every given load is an arrow with its value; nothing the problem does not describe.
+   - "question": { "text": the problem as given (tidied, nothing left out), "find": ["what is asked, one item each: \\"the reactions at A and B\\"", ...] } in "spec".
+   - Shapes are always sized in metres: when a given length is in mm (value 50, unit "mm"), write the shape size as "d / 1000".
+   - Parameters are the givens, at exactly the stated values and units (a 6 m span is value 6, unit "m"; 12 kN is value 12, unit "kN"), up to 10 of them, with sensible slider ranges round each; every number the problem gives is a parameter.
+   - Calculations are the worked solution, in the order a lecturer would write it, up to 14 steps: each step one calculation with its formula and latex, plus "step": one short sentence saying what this step does and why ("Take moments about A to find R_B."). Mark each result the problem asks for with "answer": true. Use the problem's own symbols and units; convert units in a step of their own when needed.
+   - Add the chart the problem needs (shear force and bending moment diagrams for a beam, a curve asked for).
+   - "explanation": two or three sentences: what was built and the final answers with units.
+
 Return ONLY this JSON:
 {
   "explanation": "One or two sentences on what was built or changed.",
@@ -136,14 +147,15 @@ Return ONLY this JSON:
     "floorY": -0.2,
     "camera": { "position": [0.52, 0.38, 0.58], "target": [0, 0, 0] },
     "recommendedCut": { "enabled": true, "normal": [0, 0, 1], "pos": 0.01 },
+    "question": { "text": "...", "find": ["..."] } (only for a problem to solve, see 9),
     "parameters": [...],
-    "calculations": [...],
+    "calculations": [...] (for a problem, each with "step" and, for what is asked, "answer": true),
     "charts": [...],
     "annotations": [...],
     "parts": [{ "id", "name", "material", "role", "cut", "mount" (or "position" for the anchor only), "rotation"?, "explode", "motion"?, "info", "shapes": [...] }]
   }
 }
 When changing the current model, keep everything the user did not ask to change and set "isNewMachine": false.
-When the student asks a question about the current model instead of asking for a change ("why is the tappet there?", "what does this part do?"), answer it in "explanation" in plain words (2 to 5 sentences, using the model's real numbers), set "isQuestion": true, and leave "spec" out.
+When the student asks a question about the current model instead of asking for a change (not a pasted problem with its own givens: that is built and solved, see 9) ("why is the tappet there?", "what does this part do?"), answer it in "explanation" in plain words (2 to 5 sentences, using the model's real numbers), set "isQuestion": true, and leave "spec" out.
 When a photo or drawing comes with a change to the current model, it is the reference for that change: match the parts, proportions and features it shows, and keep the rest of the model.
 The conversation so far, when given, is context: "it", "that part" and "bigger" refer to it.`

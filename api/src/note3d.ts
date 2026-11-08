@@ -22,7 +22,8 @@ export const noteRefineRequest = z.object({
 export type NoteRefineRequest = z.infer<typeof noteRefineRequest>
 
 export const create3dRequest = z.object({
-  prompt: z.string().trim().min(1).max(2000),
+  /** up to 4000 characters: a pasted exam or textbook question can be long */
+  prompt: z.string().trim().min(1).max(4000),
   currentSpec: z.record(z.string(), z.unknown()).optional(),
   photoBase64: z.string().max(12_000_000).optional(),
   /** the conversation about this model so far, oldest first */
