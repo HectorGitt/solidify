@@ -49,6 +49,12 @@ export const EVAL_CASES: EvalCase[] = [
   // mechanisms and machines
   { id: 'slider-crank', prompt: 'A slider-crank mechanism with a 50 mm crank and a 200 mm connecting rod', parts: [3, 6] },
   { id: 'cam', prompt: 'A cam and roller follower on a shaft', parts: [2, 6] },
+  // mechanisms whose motion must come from their mounts (the "mechanism moves right" check)
+  { id: 'compound-train', prompt: 'A three-shaft compound gear train, 4 : 1 then 3 : 1, 12 : 1 overall', parts: [5, 10], answer: { label: /overall|total|ratio/i, value: 12, tol: 0.05 } },
+  { id: 'rack-pinion', prompt: 'A rack and pinion, module 3 mm, 20-tooth pinion turned by a handwheel', parts: [3, 7] },
+  { id: 'quick-return', prompt: 'A crank and slotted-lever quick-return mechanism for a shaping machine', parts: [4, 9] },
+  { id: 'scotch-yoke', prompt: 'A scotch yoke mechanism with a 40 mm crank', parts: [3, 6] },
+  { id: 'hooke', prompt: 'A universal (Hooke’s) joint joining two shafts at 30 degrees', parts: [3, 7] },
   { id: 'screw-jack', prompt: 'A 5-tonne screw jack with an Acme thread, nut, handle and base', parts: [3, 8] },
   { id: 'vice', prompt: 'A cast-iron workshop bench vice with a sliding jaw and lead screw', parts: [3, 8] },
   { id: 'auger', prompt: 'A helical grain screw auger conveyor with a feed hopper', parts: [3, 8] },

@@ -55,9 +55,9 @@ describe('scoring a build', () => {
     expect(scoreBuild(beamCase, { explanation: 'oops' }, 10).score).toBe(0)
   })
 
-  it('has 30 cases with unique ids', () => {
-    expect(EVAL_CASES).toHaveLength(30)
-    expect(new Set(EVAL_CASES.map((c) => c.id)).size).toBe(30)
+  it('has 35 cases with unique ids', () => {
+    expect(EVAL_CASES).toHaveLength(35)
+    expect(new Set(EVAL_CASES.map((c) => c.id)).size).toBe(35)
   })
 })
 
