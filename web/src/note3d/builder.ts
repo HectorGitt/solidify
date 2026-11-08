@@ -19,6 +19,16 @@ import { hexBolt } from '@/geometry/parts'
 import { hexNut } from '@/parts/lib/elements'
 import { evalDim, evalVec3, type NoteShapeSpec } from './schema'
 
+
+/*
+ * Every round shape turns about its local Y axis: the cylinders, tubes and pulleys are made that way, and the
+ * prompt, the assembly and the motion all count on it. The gear generator and three.js's torus make theirs about
+ * Z, so they are stood up onto Y here. (Before this, every generated gear sat 90 degrees off: turned edge-on to
+ * its shaft and spinning about the wrong line.)
+ */
+const STAND_UP = new THREE.Matrix4().makeRotationX(-Math.PI / 2)
+const standUp = (g: THREE.BufferGeometry) => xform(g, STAND_UP)
+
 function buildSingleShapeGeometry(
   spec: NoteShapeSpec,
   params: Record<string, number>,
@@ -58,7 +68,7 @@ function buildSingleShapeGeometry(
     case 'torus': {
       const r = Math.max(0.004, evalDim(spec.r ?? spec.rOuter, params, 0.05))
       const tr = Math.max(0.001, evalDim(spec.tubeRadius ?? spec.rInner, params, 0.01))
-      return finalize(new THREE.TorusGeometry(r, tr, 20, 44), Math.PI / 3)
+      return finalize(standUp(new THREE.TorusGeometry(r, tr, 20, 44)), Math.PI / 3)
     }
     case 'lathe': {
       const raw = spec.profile ?? [
@@ -97,7 +107,7 @@ function buildSingleShapeGeometry(
       const m = Math.max(0.001, evalDim(spec.module, params, 0.004))
       const width = Math.max(0.003, evalDim(spec.h ?? spec.depth, params, 0.024))
       const bore = Math.max(0, evalDim(spec.rInner, params, (teeth * m) / 6))
-      return gear({
+      return standUp(gear({
         teeth,
         module: m,
         width,
@@ -106,20 +116,22 @@ function buildSingleShapeGeometry(
         // never reaching the geometry as NaN (which blanks the whole gear)
         pressureAngleDeg: angleIn(evalDim(spec.pressureAngle, params, 20), 14.5, 30, 20),
         helixDeg: angleIn(evalDim(spec.helixAngle, params, 0), -45, 45, 0),
-      })
+      }))
     }
     case 'sprocket': {
       const teeth = Math.max(8, Math.min(80, Math.round(evalDim(spec.teeth, params, 16))))
       const m = Math.max(0.0015, evalDim(spec.module, params, 0.004))
       const width = Math.max(0.003, evalDim(spec.h ?? spec.depth, params, 0.01))
       const bore = Math.max(0, evalDim(spec.rInner, params, (teeth * m) / 5))
-      return gear({
-        teeth,
-        module: m,
-        width,
-        bore,
-        pressureAngleDeg: 28,
-      })
+      return standUp(
+        gear({
+          teeth,
+          module: m,
+          width,
+          bore,
+          pressureAngleDeg: 28,
+        }),
+      )
     }
     case 'pulley': {
       const rOuter = Math.max(0.015, evalDim(spec.rOuter ?? spec.r, params, 0.06))
