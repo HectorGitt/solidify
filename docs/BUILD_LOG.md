@@ -336,55 +336,97 @@ Every entry is numbered (in the order they appear, top to bottom) and set out th
 - **Solution:** a swing of more than half a turn each way is read as degrees (`NoteSceneRenderer`); measured afterwards at a sane rate. New drafts use the lever mount, which needs no swing at all.
 - **Lesson:** check units at the boundary where the model's numbers come in; a value outside any sensible range in one unit is usually another unit.
 
+
+### 62. Deriving motion locked a differential's side gears to the carrier (2026-11-08)
+- **Problem:** with motion derived from the mounts, the open differential's side gears turned exactly with the carrier, wiping out its 270 / 330 rpm wheel split; its spider gears then spun on the spot instead of riding round with the carrier.
+- **Cause:** the first rule treated every coaxial mount on a turning part as a rigid joint. In a differential (and for any gear on a bearing) the side gears share the carrier's axis but turn freely on it. Parts that run free but sit off the carrier's axis (spiders, planets) must both spin and be carried round, and the rule did neither.
+- **Solution:** a part written a clearly different speed (more than 2 %) from the part it sits on runs free at its own speed. Off the carrier's axis it is also carried round the carrier's line, with its own spin applied on top (`kinematics.ts`, `freeOn` and `carrier`). Tests: a free side gear keeps its own speed, and a free gear off the axis both spins and orbits. Measured in Edge: side gears 4.78 and 5.84 rad/s against a carrier at 5.31 (the 270 : 330 split). That draft's spiders still don't orbit because its cross pin lies along the carrier's axis, a layout fault fixed by rebuilding.
+- **Lesson:** "mounted on" is not "fixed to"; check a new rule against every kind of machine in the queue (the differential), not just the one it was written for.
+
+### 63. The part panel said "Does not move" for gears driven through their mounts (2026-11-08)
+- **Problem:** once only the driver carries a speed, the part panel showed "Does not move" for every gear it drives. For drafts that still write a speed on every part, the panel quoted that speed, which the 3D view no longer uses.
+- **Cause:** the panel read each part's own `motion` field, not the motion actually shown.
+- **Solution:** the panel works the mechanism out the same way the 3D view does (`PartInspector`, `buildKinematics`). It says "Drives the mechanism, N rev/min" for the driver, "Turns at N rev/min, driven through the …" for a follower, and "Moves with the …" for a carried part. Checked in Edge on the compound train: 191, 47.7 and 15.9 rev/min (12 : 1).
+- **Lesson:** when the source of a value moves, look for every place that shows it (here the panel as well as the view).
+
+### 64. Review-queue scores were stale: broken mechanisms showed 75 to 86 (2026-11-08)
+- **Problem:** the quick return, scotch yoke and rack drafts, whose parts were never joined, sat in the queue with respectable scores and nothing saying they move wrongly.
+- **Cause:** a draft's score and checks are worked out once, when it is drafted, and stored; newer checks never reach older drafts.
+- **Solution:** each card runs the mechanism check again with today's rules and shows "Moves wrongly: rebuild it" with the reasons. The queue counts the flagged drafts and offers Rebuild all flagged (`AdminPage.tsx`, `draftMechanism`, `RebuildFlagged`). Checked in Edge at 1366 and 390 px: 3 flagged, the gear trains clear. A stubbed rebuild run went through all 3 as a background task and updated the cards.
+- **Lesson:** a stored score is a snapshot; a check that can run in the browser should be run again when the item is shown.
+
+### 65. The universal-joint test expected a wrapped angle (2026-11-08)
+- **Problem:** the new Hooke's-law test failed by exactly 2π at larger angles.
+- **Cause:** the test took its expected output angle straight from atan2, which wraps at half a turn, while the code (correctly) keeps the output turning continuously.
+- **Solution:** the test unwraps its expected value to within half a turn of the input, as the code does (`kinematics.test.ts`).
+- **Lesson:** when a test and the code disagree, check which is right before changing either; here it was the test.
+
+### 66. A shell heredoc died on an apostrophe and lost two changes (2026-11-08)
+- **Problem:** one command, meant to patch the mechanism clock and write the kinematics tests, failed with "unexpected EOF while looking for matching `'`"; neither change was made.
+- **Cause:** the text contained "Hooke's", whose apostrophe closed the shell quoting partway through.
+- **Solution:** the test file was written with the file editor and the patch made with Edit; scripts with free text go in files, not inline.
+- **Lesson:** never pass prose or code through shell quoting; use the editor, or a script file (see entry 35).
+
+### 67. Checking the push failed after switching back to the owner's account (2026-11-08)
+- **Problem:** after pushing commit by commit as HectorGitt and switching back, `git fetch` said "Repository not found", which looked like a failed push.
+- **Cause:** the repository is reachable only from HectorGitt's account; the fetch ran after switching to Ola-Den.
+- **Solution:** fetch and compare (`git status -sb`) before switching back; the pushes had landed.
+- **Lesson:** do every remote check under the account that can see the remote, then switch.
+
+### 68. Browser checks gave false answers: a click timed out and a count read 0 (2026-11-08)
+- **Problem:** selecting a part by clicking its name in the Parts list timed out. Counting the "Moves wrongly" notes on the phone reported 0 when there were 3.
+- **Cause:** the Parts list was folded, so the name was in the page but not visible. The text locator's count did not match the notes reliably at phone width.
+- **Solution:** select parts through the app's own store (`useView.select`). Count from the page text (`document.body.innerText`), then scroll to the element and look at the screenshot (`scripts/look32.mjs`, `look33.mjs`).
+- **Lesson:** when a browser check says something is missing, confirm it with a screenshot before believing it.
 ## Nightly tests, admin and labs pages (2026-11-06)
 
-### 62. A propped-cantilever model crashed the whole workspace
+### 69. A propped-cantilever model crashed the whole workspace
 - **Problem:** `Cannot read properties of undefined (reading '0')`, blank page.
 - **Cause:** Gemini sent a `recommendedCut` without a `normal`; the cleaner passed the object through unchecked and an effect read `normal[0]`.
 - **Solution:** `cleanCut` in `note3d/sanitize.ts` checks every field (also applied when opening saved models and in the notes reader), and error boundaries round the 3D view, the side panel and each page.
 - **Lesson:** validate every nested field of model output, not just its presence; and no page should be one bad value away from blank.
 
-### 63. Nightly builds failed with "Something went wrong on the server" (500)
+### 70. Nightly builds failed with "Something went wrong on the server" (500)
 - **Problem:** Nightly builds failed with "Something went wrong on the server" (500).
 - **Cause:** Gemini answered 429 RESOURCE_EXHAUSTED when three builds ran at once, and the API gave up on the first refusal.
 - **Solution:** `api/src/retry.ts` waits and retries (2, 6, 15 s) on 429/503, streamed builds retry if refused before their first word, the final failure says the model is busy (503), and the runner tries once more after 30 s.
 - **Lesson:** treat rate limits as normal for a hosted model; read the service's logs before guessing.
 
-### 64. A draft scored 100 while visibly broken
+### 71. A draft scored 100 while visibly broken
 - **Problem:** (rods not reaching the crank, a tilted flywheel through the casing, labels on top of each other).
 - **Cause:** the checks only covered layout overlap, drawability and calculations.
 - **Solution:** checks for moving parts joined by relation and for overlapping labels, and the prompt states the same rules.
 - **Lesson:** a score is only as good as its checks; look at high scorers before trusting the number.
 
-### 65. Deploy failed: "Build failed; check build logs"
+### 72. Deploy failed: "Build failed; check build logs"
 - **Problem:** Deploy failed: "Build failed; check build logs".
 - **Cause:** `gcloud run deploy --source .` run from the repo root, which has no Dockerfile.
 - **Solution:** run it from `api/`.
 - **Lesson:** `--source .` uploads the current folder; check where you are.
 
-### 66. Rig thumbnails came out blank, and with a stray `_` in their names
+### 73. Rig thumbnails came out blank, and with a stray `_` in their names
 - **Problem:** Rig thumbnails came out blank, and with a stray `_` in their names.
 - **Cause:** two scenes photographed before they had drawn in a reused tab; and the rig list written by Python on Windows had CRLF line endings, so each id ended in `\r`.
 - **Solution:** retook those two in a fresh tab (`SHOT_COLD=1`); renamed the files and strip `\r` when reading lists.
 - **Lesson:** check the smallest output files of a batch capture, and strip `\r` from lists made on Windows.
 
-### 67. Inline scripts lost their backslashes
+### 74. Inline scripts lost their backslashes
 - **Problem:** A `node -e` / heredoc script through the shell turned `C:\Program Files` into `C:\Program Files`, so the browser path was not found.
 - **Solution:** forward slashes in Windows paths in scripts, and the editor rather than the shell for code containing escapes.
 - **Lesson:** don't pass escape-heavy code through the shell.
 
-### 68. Prettier reformatted a file into another style
+### 75. Prettier reformatted a file into another style
 - **Problem:** With no project config it used its defaults (double quotes, semicolons).
 - **Solution:** re-run with the project's settings (`--no-semi --single-quote --print-width 220`).
 - **Lesson:** don't run a formatter the project doesn't configure.
 
-### 69. The Labs page was wider than a phone
+### 76. The Labs page was wider than a phone
 - **Problem:** The Labs page was wider than a phone.
 - **Cause:** one-line rig names in a grid item set its minimum width.
 - **Solution:** `min-w-0` on the card.
 - **Lesson:** any `truncate` text inside a grid or flex child needs `min-w-0` on that child.
 
-### 70. Gearbox levers hung in the air, and the reverse idler had no shaft
+### 77. Gearbox levers hung in the air, and the reverse idler had no shaft
 - **Problem:** Gearbox levers hung in the air, and the reverse idler had no shaft.
 - **Cause:** the cut-away removed the half of the casing the lever towers stood on (moving parts are not cut, so the levers stayed); the idler's shaft was defined but never drawn, and a full-length pin would have run through third gear and the range gears.
 - **Solution:** a shift cover the towers stand on; a stub shaft and wall boss for the idler; and the cut now removes the other half, with the cameras moved to that side, so everything kept is attached to something.
