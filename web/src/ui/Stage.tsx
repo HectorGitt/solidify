@@ -1,4 +1,5 @@
-import { CameraControls, ContactShadows, Environment, Grid, Lightformer, Html, Line } from '@react-three/drei'
+import { CameraControls, ContactShadows, Environment, Grid, Lightformer, Line } from '@react-three/drei'
+import { Html } from '@/render/Html'
 import { BuildController } from '@/render/BuildController'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { Component, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'

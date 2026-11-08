@@ -1,4 +1,5 @@
-import { Html, Line } from '@react-three/drei'
+import { Line } from '@react-three/drei'
+import { Html } from '@/render/Html'
 import { useFrame, useThree, type ThreeEvent } from '@react-three/fiber'
 import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import { createStore, useStore } from 'zustand'

@@ -128,7 +128,7 @@ function ExpandedFigureModal({
         <div className="relative h-full w-full overflow-hidden">
           {activeSceneDef ? (
             <>
-              <Stage scene={activeSceneDef} />
+              <Stage key={activeSceneDef.id} scene={activeSceneDef} />
               <div className="pointer-events-none absolute left-3 top-3 z-20">
                 <OrientationGizmo scene={activeSceneDef} />
               </div>
@@ -583,7 +583,9 @@ export default function ReadPage() {
               const [ymin, xmin, ymax, xmax] = fig.box
               return (
                 <div
-                  key={fig.id}
+                  // document, page and figure: figure ids repeat across documents, and a 3D view reused for another
+                  // figure leaves its labels to be removed twice ("removeChild"), after which figures may not draw
+                  key={`${activeDoc.id}:${currentPage.pageNumber}:${fig.id}`}
                   style={{
                     top: `${ymin / 10}%`,
                     left: `${xmin / 10}%`,
@@ -663,7 +665,7 @@ export default function ReadPage() {
                 const fig = currentPage.figures.find((f) => f.id === block.figureId)
                 if (!fig) return null
                 return (
-                  <div key={i} className="my-6 h-[390px]">
+                  <div key={`${activeDoc.id}:${currentPage.pageNumber}:${fig.id}`} className="my-6 h-[390px]">
                     <InlineFigure3D
                       figure={fig}
                       isActive={activeFigureId === fig.id}
