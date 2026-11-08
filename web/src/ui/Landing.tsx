@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { MODULES } from '@/modules/catalog'
 import type { ModuleDef, SceneDef } from '@/modules/types'
 import { useView } from '@/render/view'
-import { useAcademic, useAudience } from './audience'
+import { AUDIENCE_SWITCH, useAcademic, useAudience } from './audience'
 import { SUPPORT_EMAIL } from '@/cloud/config'
 import { useReport } from '@/cloud/ui/ReportDialog'
 import { useSales } from '@/cloud/ui/SalesDialog'
@@ -439,6 +439,7 @@ export function Landing() {
         </div>
       </section>
 
+      {AUDIENCE_SWITCH ? (
       <section id="audiences" className="mx-auto max-w-[1360px] scroll-mt-20 px-5 pt-20 sm:px-10">
         <h2 className="text-[30px] font-semibold tracking-[-0.03em] sm:text-[38px]">The workshop and the lecture hall</h2>
         <p className="mt-1.5 max-w-2xl text-[15px] text-mute">The same models, two ways of working. Switch any time from the top bar.</p>
@@ -467,6 +468,7 @@ export function Landing() {
           />
         </div>
       </section>
+      ) : null}
 
       <Contact />
 

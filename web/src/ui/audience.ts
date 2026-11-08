@@ -9,7 +9,15 @@ export type Audience = 'professional' | 'academic'
 
 const KEY = 'agritech.audience'
 
+/**
+ * Whether the Pro / Study choice is offered. Off for now (2026-11-09): a first user didn't understand it, and
+ * the app's users are students, so everyone gets the Study view (exam marks, exam presets, progress marks) and
+ * the switch is hidden everywhere. Set true to bring the choice back.
+ */
+export const AUDIENCE_SWITCH = false
+
 function load(): Audience {
+  if (!AUDIENCE_SWITCH) return 'academic'
   try {
     const v = localStorage.getItem(KEY)
     if (v === 'professional' || v === 'academic') return v

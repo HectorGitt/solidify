@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { AccountMenu } from '@/cloud/ui/AccountMenu'
 import { AudienceSwitch } from '@/ui/AudienceSwitch'
+import { AUDIENCE_SWITCH } from '@/ui/audience'
 import { Icon } from '@/ui/icons'
 import { Logo } from '@/ui/Logo'
 import { ThemeToggle } from '@/ui/ThemeToggle'
@@ -140,7 +141,7 @@ function MobileMenu() {
           )}
           <div className="mx-3 my-1.5 border-t border-line sm:hidden" />
           <div className="flex items-center justify-between gap-2 px-2 py-1 sm:hidden">
-            <AudienceSwitch compact />
+            {AUDIENCE_SWITCH ? <AudienceSwitch compact /> : null}
             <ThemeToggle />
           </div>
         </div>
@@ -181,9 +182,11 @@ export function SiteHeader({ floating = false, scrolled = false, width = 'max-w-
           )}
         </nav>
         <div className="pointer-events-auto ml-auto flex shrink-0 items-center gap-2">
-          <div className="hidden sm:block">
-            <AudienceSwitch compact />
-          </div>
+          {AUDIENCE_SWITCH ? (
+            <div className="hidden sm:block">
+              <AudienceSwitch compact />
+            </div>
+          ) : null}
           <div className="hidden sm:block">
             <ThemeToggle />
           </div>
