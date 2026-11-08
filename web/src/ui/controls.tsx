@@ -38,6 +38,7 @@ export function Slider({
   onChange,
   digits = 3,
   hint,
+  disabled,
 }: {
   label: ReactNode
   value: number
@@ -48,10 +49,12 @@ export function Slider({
   onChange: (v: number) => void
   digits?: number
   hint?: string
+  /** locked (shown, but can't be moved): e.g. while the model is being rebuilt */
+  disabled?: boolean
 }) {
   const fill = ((value - min) / (max - min)) * 100
   return (
-    <label className="mb-2.5 block" title={hint}>
+    <label className={`mb-2.5 block ${disabled ? 'cursor-not-allowed opacity-50' : ''}`} title={hint}>
       <div className="mb-0.5 flex items-baseline justify-between text-[12.5px]">
         <span className="text-ink/90">{label}</span>
         <span className="font-mono text-[12px] text-accent">
@@ -66,6 +69,7 @@ export function Slider({
         max={max}
         step={step}
         value={value}
+        disabled={disabled}
         style={{ ['--fill' as string]: `${fill}%` }}
         onChange={(e) => onChange(parseFloat(e.target.value))}
       />

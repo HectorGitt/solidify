@@ -1232,6 +1232,7 @@ export default function ModelLab() {
                 ) : null}
                 {shownSpec.parameters.length ? (
                   <Section title="Dimensions">
+                    {live ? <p className="mb-2 text-[11.5px] text-mute">Locked while the model is being changed; they unlock when it is done.</p> : null}
                     {shownSpec.parameters.map((p) => {
                       const val = shownParams[p.id] ?? p.value
                       // lengths in millimetres, as on the rigs
@@ -1247,6 +1248,7 @@ export default function ModelLab() {
                           step={p.step * k}
                           unit={mm ? 'mm' : p.unit}
                           digits={4}
+                          disabled={!!live}
                           onChange={(v) => {
                             if (live) return
                             setViewMode('parametric')
