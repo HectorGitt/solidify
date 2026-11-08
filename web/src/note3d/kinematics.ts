@@ -34,6 +34,8 @@ export interface PartMove {
 export interface Kinematics {
   /** parts whose motion is worked out here; their own `motion` is not used */
   derived: Set<string>
+  /** the part driving each mechanism (its own speed is used) */
+  drivers: Set<string>
   /** works the mechanism out at time t (seconds of model time) */
   update(t: number): void
   /** how a part moves now (after update), or null if it doesn't move by relation */
@@ -63,7 +65,7 @@ type Link =
   | { kind: 'hooke'; beta: number; forward: boolean }
 
 export function buildKinematics(spec: Pick<NoteSceneSpec, 'parts'> | null, scope: Record<string, number>): Kinematics {
-  const empty: Kinematics = { derived: new Set(), update: () => {}, move: () => null }
+  const empty: Kinematics = { derived: new Set(), drivers: new Set(), update: () => {}, move: () => null }
   if (!spec?.parts?.length) return empty
   const parts = spec.parts
   const byId = new Map(parts.map((p) => [p.id, p]))
@@ -221,6 +223,7 @@ export function buildKinematics(spec: Pick<NoteSceneSpec, 'parts'> | null, scope
 
   const kin: Kinematics = {
     derived,
+    drivers: new Set(order.filter((o) => !o.from).map((o) => o.id)),
     update(t: number) {
       angles.clear()
       for (const o of order) {
