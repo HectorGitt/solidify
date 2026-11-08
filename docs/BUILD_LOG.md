@@ -438,55 +438,73 @@ Every entry is numbered (in the order they appear, top to bottom) and set out th
 - **Cause:** the case was written through a shell heredoc into a Python script, and the `\n` in the request became a real newline inside a single-quoted TypeScript string: the trap in entry 35 again.
 - **Solution:** fixed with the editor; the type-check caught it before anything ran.
 - **Lesson:** as entry 35: text with backslashes goes in with the file editor, never through the shell.
+
+### 79. A calculation that couldn't be worked out showed as 0 (2026-11-08)
+- **Problem:** testing new numbers for solved questions, a step that cannot be worked out (the root of a negative) came back as an ordinary 0. The nightly check "calculations work", which looks for results that aren't numbers, could therefore never fail.
+- **Cause:** the formula evaluator was written to size 3D parts, where a bad value must never stop a part drawing. So it falls back quietly: an expression that fails gives 0, √ of a negative is √0, log of zero or less is 0, a division by zero is 0, and an unknown name is 0. Calculations used the same evaluator.
+- **Solution:** a strict mode for calculations (`evalDim(…, strict)`, used by `evaluateCalculations`). There, each of these makes the step "can't be worked out": marked `broken`, shown as "—", explained in the worked solution, and failed by the nightly check. Sizes keep the forgiving behaviour. Tests in `note3d/formulaFunctions.test.ts`. None of the downloaded drafts had a broken step, so nothing that worked before changed.
+- **Lesson:** as entry 53: a value that can't be worked out must never pass for a plausible one. A fallback that suits geometry does not suit engineering answers.
+
+### 80. asin and other common functions silently returned their input (2026-11-08)
+- **Problem:** the quick-return draft's "Lever swing half-angle" read 21.91°; the right answer is 22.48°.
+- **Cause:** the evaluator knew 14 functions, and any other one returned its own argument, so `asin(r / c)` became `r / c`. Gemini uses asin, acos, ln and others because textbooks do, and nothing flagged it.
+- **Solution:** added asin, acos (outside −1…1 they can't be worked out), atan2, ln, log10, pow, sinh, cosh, tanh, hypot, floor, ceil and round. An unknown function in a calculation now can't be worked out. The list is one constant (`FORMULA_FUNCTIONS`), the prompt names exactly those, and a test checks that each one really computes and that the prompt lists every one.
+- **Lesson:** what the model is told it may use and what the code can do must come from one list, checked by a test.
+
+### 81. Exam practice's 3D view was cropped and its toolbar cut off (2026-11-08)
+- **Problem:** putting each exam problem beside its rig, the engine was cut off at the edges of the view, and the toolbar ran past the view's rounded corners. On a phone the toolbar covered most of the view.
+- **Cause:** a rig's camera and toolbar are set up for the rig's own, wider page; the toolbar caps its width at the screen, not at its container.
+- **Solution:** the side view frames the rig further back (`Stage frame`), and its toolbar is capped at the view's width (it scrolls sideways if needed). On a phone the toolbar is left to the full rig, a link away (`study/ui/RigView.tsx`). Checked in Edge at 1366 and 390 px: the whole engine shows, and New numbers and Next reload the rig with the problem's numbers.
+- **Lesson:** a component borrowed from a full page into a smaller box needs its framing and its size limits checked in that box.
 ## Nightly tests, admin and labs pages (2026-11-06)
 
-### 79. A propped-cantilever model crashed the whole workspace
+### 82. A propped-cantilever model crashed the whole workspace
 - **Problem:** `Cannot read properties of undefined (reading '0')`, blank page.
 - **Cause:** Gemini sent a `recommendedCut` without a `normal`; the cleaner passed the object through unchecked and an effect read `normal[0]`.
 - **Solution:** `cleanCut` in `note3d/sanitize.ts` checks every field (also applied when opening saved models and in the notes reader), and error boundaries round the 3D view, the side panel and each page.
 - **Lesson:** validate every nested field of model output, not just its presence; and no page should be one bad value away from blank.
 
-### 80. Nightly builds failed with "Something went wrong on the server" (500)
+### 83. Nightly builds failed with "Something went wrong on the server" (500)
 - **Problem:** Nightly builds failed with "Something went wrong on the server" (500).
 - **Cause:** Gemini answered 429 RESOURCE_EXHAUSTED when three builds ran at once, and the API gave up on the first refusal.
 - **Solution:** `api/src/retry.ts` waits and retries (2, 6, 15 s) on 429/503, streamed builds retry if refused before their first word, the final failure says the model is busy (503), and the runner tries once more after 30 s.
 - **Lesson:** treat rate limits as normal for a hosted model; read the service's logs before guessing.
 
-### 81. A draft scored 100 while visibly broken
+### 84. A draft scored 100 while visibly broken
 - **Problem:** (rods not reaching the crank, a tilted flywheel through the casing, labels on top of each other).
 - **Cause:** the checks only covered layout overlap, drawability and calculations.
 - **Solution:** checks for moving parts joined by relation and for overlapping labels, and the prompt states the same rules.
 - **Lesson:** a score is only as good as its checks; look at high scorers before trusting the number.
 
-### 82. Deploy failed: "Build failed; check build logs"
+### 85. Deploy failed: "Build failed; check build logs"
 - **Problem:** Deploy failed: "Build failed; check build logs".
 - **Cause:** `gcloud run deploy --source .` run from the repo root, which has no Dockerfile.
 - **Solution:** run it from `api/`.
 - **Lesson:** `--source .` uploads the current folder; check where you are.
 
-### 83. Rig thumbnails came out blank, and with a stray `_` in their names
+### 86. Rig thumbnails came out blank, and with a stray `_` in their names
 - **Problem:** Rig thumbnails came out blank, and with a stray `_` in their names.
 - **Cause:** two scenes photographed before they had drawn in a reused tab; and the rig list written by Python on Windows had CRLF line endings, so each id ended in `\r`.
 - **Solution:** retook those two in a fresh tab (`SHOT_COLD=1`); renamed the files and strip `\r` when reading lists.
 - **Lesson:** check the smallest output files of a batch capture, and strip `\r` from lists made on Windows.
 
-### 84. Inline scripts lost their backslashes
+### 87. Inline scripts lost their backslashes
 - **Problem:** A `node -e` / heredoc script through the shell turned `C:\Program Files` into `C:\Program Files`, so the browser path was not found.
 - **Solution:** forward slashes in Windows paths in scripts, and the editor rather than the shell for code containing escapes.
 - **Lesson:** don't pass escape-heavy code through the shell.
 
-### 85. Prettier reformatted a file into another style
+### 88. Prettier reformatted a file into another style
 - **Problem:** With no project config it used its defaults (double quotes, semicolons).
 - **Solution:** re-run with the project's settings (`--no-semi --single-quote --print-width 220`).
 - **Lesson:** don't run a formatter the project doesn't configure.
 
-### 86. The Labs page was wider than a phone
+### 89. The Labs page was wider than a phone
 - **Problem:** The Labs page was wider than a phone.
 - **Cause:** one-line rig names in a grid item set its minimum width.
 - **Solution:** `min-w-0` on the card.
 - **Lesson:** any `truncate` text inside a grid or flex child needs `min-w-0` on that child.
 
-### 87. Gearbox levers hung in the air, and the reverse idler had no shaft
+### 90. Gearbox levers hung in the air, and the reverse idler had no shaft
 - **Problem:** Gearbox levers hung in the air, and the reverse idler had no shaft.
 - **Cause:** the cut-away removed the half of the casing the lever towers stood on (moving parts are not cut, so the levers stayed); the idler's shaft was defined but never drawn, and a full-length pin would have run through third gear and the range gears.
 - **Solution:** a shift cover the towers stand on; a stub shaft and wall boss for the idler; and the cut now removes the other half, with the cameras moved to that side, so everything kept is attached to something.

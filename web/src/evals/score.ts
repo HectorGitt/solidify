@@ -112,7 +112,7 @@ export function scoreBuild(c: EvalCase, reply: Record<string, unknown>, seconds:
     add('assembled by relation', mounted >= 0.6 * (spec.parts.length - 1), `${mounted} of ${spec.parts.length - 1} non-anchor parts mounted`)
   }
 
-  const bad = results.filter((r) => !Number.isFinite(r.value))
+  const bad = results.filter((r) => r.broken || !Number.isFinite(r.value))
   add('calculations work', results.length > 0 && bad.length === 0, results.length ? (bad.length ? `${bad.map((r) => r.spec.label).join(', ')} not a number` : undefined) : 'no calculations')
 
   if (c.charts) {

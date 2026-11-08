@@ -236,7 +236,10 @@ export interface NoteCalculationSpec {
 
 export interface EvaluatedCalculation {
   spec: NoteCalculationSpec
+  /** 0 when broken (see `broken`) */
   value: number
+  /** the step could not be worked out with these numbers */
+  broken?: boolean
   formatted: string
   status: 'ok' | 'warn'
   limitValue?: number
@@ -441,10 +444,16 @@ function tokenize(expr: string): Token[] {
  * Safely evaluates a numeric literal or parametric expression string (e.g. "flangeOD / 2000", "L * 0.5")
  * against the current parameter map without `eval` or `Function`.
  */
+/** every function a formula may use (the prompt in api/src/createPrompt.ts lists the same; a test keeps them in step) */
+export const FORMULA_FUNCTIONS = ['sqrt', 'pow', 'hypot', 'sin', 'cos', 'tan', 'asin', 'acos', 'atan', 'atan2', 'sinh', 'cosh', 'tanh', 'exp', 'log', 'ln', 'log10', 'abs', 'min', 'max', 'floor', 'ceil', 'round', 'step', 'mac'] as const
+
 export function evalDim(
   expr: DimExpr | undefined,
   params: Record<string, number>,
   fallback = 0,
+  /** calculations: a root of a negative, a log of zero or less, or a name that isn't there can't be worked out
+   *  (the fallback); for sizes they are guarded to 0 so a part still draws */
+  strict = false,
 ): number {
   if (expr === undefined || expr === null) return fallback
   if (typeof expr === 'number') return Number.isFinite(expr) ? expr : fallback
@@ -486,7 +495,8 @@ export function evalDim(
         if (t?.type === 'op' && (t.op === '*' || t.op === '/')) {
           next()
           const right = parsePower()
-          left = t.op === '*' ? left * right : right === 0 ? 0 : left / right
+          // a division by zero: in a calculation it can't be worked out; in a size, 0 so the part still draws
+          left = t.op === '*' ? left * right : right === 0 ? (strict ? Number.NaN : 0) : left / right
         } else {
           break
         }
@@ -545,6 +555,7 @@ export function evalDim(
             case 'tan':
               return Math.tan(args[0] ?? 0)
             case 'sqrt':
+              if (strict && (args[0] ?? 0) < 0) return Number.NaN
               return Math.sqrt(Math.max(0, args[0] ?? 0))
             case 'abs':
               return Math.abs(args[0] ?? 0)
@@ -563,15 +574,47 @@ export function evalDim(
             case 'exp':
               return Math.exp(args[0] ?? 0)
             case 'log':
+              if (strict && !((args[0] ?? 0) > 0)) return Number.NaN
               return (args[0] ?? 0) > 0 ? Math.log(args[0] ?? 1) : 0
             case 'atan':
               return Math.atan(args[0] ?? 0)
+            case 'asin':
+            case 'acos': {
+              const x = args[0] ?? 0
+              if (Math.abs(x) > 1) return strict ? Number.NaN : name === 'asin' ? Math.asin(Math.sign(x)) : Math.acos(Math.sign(x))
+              return name === 'asin' ? Math.asin(x) : Math.acos(x)
+            }
+            case 'atan2':
+              return Math.atan2(args[0] ?? 0, args[1] ?? 1)
+            case 'ln':
+              if (strict && !((args[0] ?? 0) > 0)) return Number.NaN
+              return (args[0] ?? 0) > 0 ? Math.log(args[0] ?? 1) : 0
+            case 'log10':
+              if (strict && !((args[0] ?? 0) > 0)) return Number.NaN
+              return (args[0] ?? 0) > 0 ? Math.log10(args[0] ?? 1) : 0
+            case 'pow':
+              return Math.pow(args[0] ?? 0, args[1] ?? 1)
+            case 'sinh':
+              return Math.sinh(args[0] ?? 0)
+            case 'cosh':
+              return Math.cosh(args[0] ?? 0)
+            case 'tanh':
+              return Math.tanh(args[0] ?? 0)
+            case 'hypot':
+              return Math.hypot(...args)
+            case 'floor':
+              return Math.floor(args[0] ?? 0)
+            case 'ceil':
+              return Math.ceil(args[0] ?? 0)
+            case 'round':
+              return Math.round(args[0] ?? 0)
             default:
-              return args[0] ?? 0
+              // a function it doesn't know: in a calculation that can't be worked out; in a size, its argument
+              return strict ? Number.NaN : (args[0] ?? 0)
           }
         }
         if (name === 'PI' || name === 'pi') return Math.PI
-        return params[name] !== undefined && Number.isFinite(params[name]) ? params[name] : 0
+        return params[name] !== undefined && Number.isFinite(params[name]) ? params[name] : strict ? Number.NaN : 0
       }
       next()
       return 0
@@ -605,7 +648,11 @@ export function evaluateCalculations(
   if (!calculations?.length) return { results: [], scope }
   const results: EvaluatedCalculation[] = []
   for (const spec of calculations) {
-    const value = evalDim(spec.formula, scope, 0)
+    // a step that can't be worked out (a root of a negative, a division by zero, a name that isn't there) is
+    // marked broken and shown as such; it never passes as a plausible 0. Later steps still read it as 0.
+    const raw = evalDim(spec.formula, scope, Number.NaN, true)
+    const broken = !Number.isFinite(raw)
+    const value = broken ? 0 : raw
     scope[spec.id] = value
     if (spec.symbol && IDENT_RE.test(spec.symbol)) {
       scope[spec.symbol] = value
@@ -618,8 +665,9 @@ export function evaluateCalculations(
       if (spec.limit.kind === 'min' && value < limitValue) status = 'warn'
     }
     const abs = Math.abs(value)
-    const formatted =
-      abs === 0
+    const formatted = broken
+      ? '—'
+      : abs === 0
         ? '0'
         : abs >= 1000
           ? value.toFixed(0)
@@ -628,7 +676,7 @@ export function evaluateCalculations(
             : abs >= 1
               ? value.toFixed(2)
               : Number(value.toPrecision(3)).toString()
-    results.push({ spec, value, formatted, status, limitValue })
+    results.push({ spec, value, formatted, status, limitValue, ...(broken ? { broken } : {}) })
   }
   return { results, scope }
 }
