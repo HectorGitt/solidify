@@ -1,7 +1,9 @@
 import type { LibraryCard } from '../admin'
+import { useAuth } from '../auth'
 
 /** one library model as a card: its topic, title, what it shows and its size */
 export function LibraryCardView({ item, opening, onOpen }: { item: LibraryCard; opening: boolean; onOpen: () => void }) {
+  const signedOut = useAuth((s) => s.status) === 'signed-out'
   return (
     <button
       type="button"
@@ -21,6 +23,11 @@ export function LibraryCardView({ item, opening, onOpen }: { item: LibraryCard; 
         {opening ? 'Opening…' : `${item.parts} parts`}
         {!opening && item.reviewedBy ? ` · checked by ${item.reviewedBy.name}` : ''}
       </span>
+      {signedOut && !opening ? (
+        <span className={`mt-2 self-start rounded-full px-2 py-0.5 text-[11px] font-medium ${item.free ? 'bg-accent/15 text-accent' : 'border border-line-2 text-mute'}`}>
+          {item.free ? 'Free to open' : 'Sign in to open'}
+        </span>
+      ) : null}
     </button>
   )
 }

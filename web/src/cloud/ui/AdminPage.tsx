@@ -928,8 +928,19 @@ function LibraryRow({ item, onChanged, onRemoved }: { item: LibraryCard; onChang
   const [title, setTitle] = useState(item.title)
   const [topic, setTopic] = useState(item.topic ?? '')
   const [confirm, setConfirm] = useState(false)
-  const [busy, setBusy] = useState<null | 'save' | 'open' | 'remove'>(null)
+  const [busy, setBusy] = useState<null | 'save' | 'open' | 'remove' | 'free'>(null)
   const dirty = title.trim() !== item.title || topic.trim() !== (item.topic ?? '')
+  const toggleFree = async () => {
+    setBusy('free')
+    try {
+      await updateLibraryItem(item.id, { open: !item.free })
+      onChanged({ open: !item.free, free: !item.free })
+      toast(item.free ? `“${item.title}” now needs sign-in to open.` : `Anyone can open “${item.title}”, signed in or not.`)
+    } catch (e) {
+      toast(e instanceof ApiError ? e.message : 'That didn’t work. Please try again.', { tone: 'warn' })
+    }
+    setBusy(null)
+  }
 
   const run = async (kind: 'save' | 'open' | 'remove') => {
     setBusy(kind)
@@ -974,6 +985,16 @@ function LibraryRow({ item, onChanged, onRemoved }: { item: LibraryCard; onChang
         ) : null}
         <button type="button" disabled={!!busy} onClick={() => void run('open')} className={`${smallBtn} border border-line-2 text-ink/90 hover:border-ink/40`}>
           {busy === 'open' ? 'Opening…' : 'Open in 3D'}
+        </button>
+        <button
+          type="button"
+          disabled={!!busy}
+          aria-pressed={!!item.free}
+          onClick={() => void toggleFree()}
+          title={item.free ? 'Anyone can open it, signed in or not. Press to make it sign-in only.' : 'Only people signed in can open it. Press to let anyone open it.'}
+          className={`${smallBtn} border ${item.free ? 'border-accent/50 bg-accent/10 text-accent' : 'border-line-2 text-mute hover:border-ink/40'}`}
+        >
+          {busy === 'free' ? 'Saving…' : item.free ? 'Free to view' : 'Sign-in only'}
         </button>
         {confirm ? (
           <>
@@ -1028,7 +1049,7 @@ function Library() {
         data.items.length ? (
           <>
             <p className="mb-3 text-[12.5px] text-mute">
-              {data.items.length} published, shown to everyone on the Create page, newest first. Unpublishing removes it from the page; students who already opened it keep their own copy.
+              {data.items.length} published, shown to everyone on the Create page, newest first. Unpublishing removes it from the page; students who already opened it keep their own copy. Models free to view can be opened by anyone, signed in or not (until you choose any, the six best scored are); the rest need sign-in.
             </p>
             <ul className={`${card} divide-y divide-line`}>
               {data.items.map((item) => (

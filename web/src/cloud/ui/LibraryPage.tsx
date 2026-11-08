@@ -50,7 +50,7 @@ export default function LibraryPage() {
             <button type="button" onClick={() => useAuth.getState().openDialog()} className="font-medium text-accent hover:underline">
               Sign in
             </button>{' '}
-            to open a model as your own copy. The labs need no account: every rig runs in your browser ·{' '}
+            to open any model as your own copy. Models marked free open without an account, and so do the labs: every rig runs in your browser ·{' '}
             <Link to="/labs" className="font-medium text-accent hover:underline">
               Open the labs
             </Link>
