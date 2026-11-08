@@ -113,6 +113,28 @@ function draftMechanism(d: LibraryDraft): string[] {
   return out
 }
 
+/**
+ * A draft's checks and score as they stand today: run again on the draft as it is now (the stored ones are
+ * from when it was drafted, before later checks and fixes), keeping only the build time from then. The card
+ * then agrees with what the workspace shows when the draft is opened.
+ */
+const liveCache = new WeakMap<object, { score: number; checks: EvalCheck[] }>()
+function draftLive(d: LibraryDraft): { score: number; checks: EvalCheck[] } {
+  const hit = liveCache.get(d.spec)
+  if (hit) return hit
+  let out = { score: d.score, checks: d.checks ?? [] }
+  try {
+    const timed = (d.checks ?? []).find((x) => x.name === 'under two minutes')
+    const { checks } = scoreBuild({ id: 'draft', prompt: d.prompt }, { spec: d.spec, explanation: d.explanation ?? '' }, 0)
+    const merged = checks.map((x) => (x.name === 'under two minutes' && timed ? timed : x))
+    out = { score: Math.round((100 * merged.filter((x) => x.ok).length) / Math.max(1, merged.length)), checks: merged }
+  } catch {
+    // keep the stored ones
+  }
+  liveCache.set(d.spec, out)
+  return out
+}
+
 const date = (t: number) => new Date(t).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })
 const dateTime = (t: number) => new Date(t).toLocaleString(undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
 const smallBtn = 'rounded-full px-3 py-1.5 text-[12.5px] font-medium transition-colors disabled:opacity-50'
@@ -675,6 +697,7 @@ function DraftCard({ d, onDone, onChanged, backTo }: { d: LibraryDraft; onDone: 
   const [reason, setReason] = useState('')
   const allChecked = CHECKS.every(([k]) => checklist[k])
   const mech = draftMechanism(d)
+  const now = draftLive(d)
   const tick = (k: keyof ReviewChecklist, v: boolean) => {
     const next = { ...checklist, [k]: v }
     setChecklist(next)
@@ -739,7 +762,9 @@ function DraftCard({ d, onDone, onChanged, backTo }: { d: LibraryDraft; onDone: 
           <input aria-label="Title" value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120} className={`${inputCls} mt-1 py-1.5! font-semibold`} />
         </div>
         <div className="shrink-0 text-right">
-          <div className={`text-[22px] font-semibold leading-none tabular-nums ${scoreTone(d.score)}`}>{d.score}</div>
+          <div className={`text-[22px] font-semibold leading-none tabular-nums ${scoreTone(now.score)}`} title={now.score !== d.score ? `Scored ${d.score} when drafted` : undefined}>
+            {now.score}
+          </div>
           <div className="mt-1 text-[11px] text-dim">score</div>
         </div>
       </div>
@@ -761,7 +786,7 @@ function DraftCard({ d, onDone, onChanged, backTo }: { d: LibraryDraft; onDone: 
           </ul>
         </div>
       ) : null}
-      {d.checks ? <FailedChecks checks={d.checks.filter((x) => x.name !== 'mechanism moves right')} /> : null}
+      <FailedChecks checks={now.checks.filter((x) => x.name !== 'mechanism moves right')} />
       <fieldset className="rounded-xl border border-line px-3 py-2.5">
         <legend className="px-1 text-[11px] font-medium uppercase tracking-wide text-dim">Review</legend>
         {CHECKS.map(([k, label]) => (

@@ -34,6 +34,7 @@ import { clearPendingBuild, peekPendingBuild } from '../pendingBuild'
 import { peekPreviewModel, setPreviewModel } from '../previewModel'
 import { updateDraft } from '../admin'
 import { scoreBuild } from '@/evals/score'
+import { mechanismProblems } from '@/note3d/kinematics'
 import { ghostBtn, inputCls, primaryBtn } from './Modal'
 import { PartInspector } from './PartInspector'
 import { WorkspaceBodySkeleton } from '@/ui/Skeleton'
@@ -821,8 +822,18 @@ export default function ModelLab() {
   const charts = useMemo(() => (shownSpec?.charts ?? []).map((ch) => evaluateChart(ch, calcScope)).filter((ch): ch is EvaluatedChart => !!ch), [shownSpec?.charts, calcScope])
   // the assembly check: parts left floating or buried, which Gemini can be asked to fix
   const layoutIssues = useMemo(() => (spec && !live && viewMode === 'parametric' ? resolveAssembly(spec, calcScope).issues : []), [spec, live, viewMode, calcScope])
+  // the same mechanism check the review queue shows, so a draft reads the same on its card and here
+  const mechIssues = useMemo(() => {
+    if (!spec || live || viewMode !== 'parametric') return []
+    try {
+      return mechanismProblems(spec, calcScope, `${turns[0]?.prompt ?? ''} ${spec.title}`).problems
+    } catch {
+      return []
+    }
+  }, [spec, live, viewMode, calcScope, turns])
+  const problems = [...layoutIssues.map((i) => i.message), ...mechIssues]
   const [layoutDismissed, setLayoutDismissed] = useState('')
-  const layoutKey = layoutIssues.map((i) => i.message).join('|')
+  const layoutKey = problems.join('|')
   // each layout problem a student is shown is counted once, so the team sees which kinds of model go wrong
   useEffect(() => {
     if (!layoutKey || flaggedLayouts.has(layoutKey)) return
@@ -1008,22 +1019,35 @@ export default function ModelLab() {
             </div>
           ) : scene ? (
             <>
-              {layoutIssues.length > 0 && layoutDismissed !== layoutKey ? (
+              {problems.length > 0 && layoutDismissed !== layoutKey ? (
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-line bg-warn/10 px-4 py-2 text-[12.5px]">
                   <span className="min-w-0 flex-1 text-ink">
-                    <span className="font-semibold">{layoutIssues.length === 1 ? 'A part looks out of place' : `${layoutIssues.length} parts look out of place`}:</span>{' '}
-                    {layoutIssues.slice(0, 3).map((i) => i.message).join('; ')}
-                    {layoutIssues.length > 3 ? '…' : ''}
+                    <span className="font-semibold">
+                      {mechIssues.length && !layoutIssues.length
+                        ? 'Moves wrongly'
+                        : !mechIssues.length
+                          ? layoutIssues.length === 1
+                            ? 'A part looks out of place'
+                            : `${layoutIssues.length} parts look out of place`
+                          : `${problems.length} problems`}
+                      :
+                    </span>{' '}
+                    {problems.slice(0, 3).join('; ')}
+                    {problems.length > 3 ? '…' : ''}
                   </span>
                   <button
                     type="button"
                     onClick={() => {
-                      logEvent('fix-layout', spec?.title, layoutIssues.slice(0, 3).map((i) => i.message).join('; '))
-                      void send(`Fix the layout so every part sits where it belongs, using mounts (coaxial, mesh, against, centered) rather than coordinates. The problems: ${layoutIssues.map((i) => i.message).join('; ')}.`)
+                      logEvent('fix-layout', spec?.title, problems.slice(0, 3).join('; '))
+                      void send(
+                        mechIssues.length
+                          ? `Fix the model so every part sits where it belongs and moves from its mounts: only the driving part has a motion; levers use the lever mount, rams and yokes the follower mount, racks mesh with their pinion. The problems: ${problems.join('; ')}.`
+                          : `Fix the layout so every part sits where it belongs, using mounts (coaxial, mesh, against, centered) rather than coordinates. The problems: ${problems.join('; ')}.`,
+                      )
                     }}
                     className={`${primaryBtn} px-3.5 py-1 text-[12px]`}
                   >
-                    Fix the layout
+                    {mechIssues.length ? 'Fix it' : 'Fix the layout'}
                   </button>
                   <button type="button" onClick={() => setLayoutDismissed(layoutKey)} className="text-[12px] text-mute hover:text-ink">
                     Dismiss
