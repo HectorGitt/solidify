@@ -45,8 +45,10 @@ export async function enter(mode: 'ar' | 'vr') {
   await (mode === 'ar' ? xrStore.enterAR() : xrStore.enterVR())
 }
 
-/** how wide the rig is made on the table, in metres */
-const TABLE_SIZE = 0.42
+/** a big machine's largest size as a table model, in metres */
+const TABLE_SIZE = 0.5
+/** larger than this (largest size, metres), a machine stands on the floor at real size rather than on the table */
+const BIG = 1.3
 
 /** where the rig is in the room (real metres, the headset's own frame): changed every frame while placing, so not React state */
 const place = {
@@ -56,6 +58,8 @@ const place = {
   turn: 0,
   /** which way the panel faces (towards where the student was when it was placed) */
   face: 0,
+  /** where a big machine stands at real size, on the floor (null: worked out from the table spot) */
+  floor: null as THREE.Vector3 | null,
   placingSince: 0,
 }
 
@@ -79,7 +83,12 @@ const TIPS = [
 
 interface LabUi {
   placing: boolean
+  /** standing on the floor at real size (a big machine); otherwise on the table */
   full: boolean
+  /** too big for a table at real size (a tractor): on the floor, or as a table model */
+  big: boolean
+  /** the turntable's radius, metres in the room */
+  ring: number
   /** what the student has tried, for the first-visit tips */
   tried: { turned: boolean; touched: boolean; apart: boolean }
   guided: boolean
@@ -95,6 +104,8 @@ const useLab = create<LabUi>((set) => ({
   guided: guidedBefore(),
   restoredAt: 0,
   full: false,
+  big: false,
+  ring: 0.3,
   surface: false,
   setPlacing: (placing) => {
     if (placing) {
@@ -122,8 +133,9 @@ xrStore.subscribe((s, p) => {
     let meshes = 0
     for (const o of partObjects.values()) o.traverse((m) => void ((m as THREE.Mesh).isMesh && meshes++))
     if (meshes > 250) useView.getState().setCut({ enabled: false })
-    useLab.setState({ full: false, surface: false })
+    useLab.setState({ surface: false })
     useLab.getState().setPlacing(true)
+    place.floor = null
     anchorState.anchor = null
     void restoreSpot(s.session as AnchorSession)
     useView.setState({ explode: 0 })
@@ -201,8 +213,35 @@ function Lab({ scene }: { scene: SceneDef }) {
   const ar = useXRSession((s) => s.mode === 'ar')
 
   // the rig's base point in its own scene
-  const base = useMemo(() => new THREE.Vector3(scene.camera.target[0], scene.floorY ?? 0, scene.camera.target[2]), [scene])
-  const scale = full ? 1 : Math.max(scene.extent, 0.05) / TABLE_SIZE
+  // sized and centred by the machine itself, not the scene round it: flat ground (a strip of soil, a floor
+  // plate) doesn't count, so a tractor is as big on the table as a gearbox is
+  const fit = useMemo(() => {
+    const parts = useParts.getState().parts
+    const boxes: THREE.Box3[] = []
+    for (const p of Object.values(parts)) {
+      if (p.parentId && parts[p.parentId]) continue
+      const o = partObjects.get(p.id)
+      if (!o) continue
+      const b = new THREE.Box3().setFromObject(o)
+      if (!b.isEmpty()) boxes.push(b)
+    }
+    const tallest = Math.max(0, ...boxes.map((b) => b.max.y - b.min.y))
+    const box = new THREE.Box3()
+    for (const b of boxes) if (b.max.y - b.min.y > tallest * 0.05) box.union(b)
+    if (box.isEmpty()) return { size: Math.max(scene.extent, 0.05), foot: Math.max(scene.extent, 0.05), x: scene.camera.target[0], z: scene.camera.target[2] }
+    const s = box.getSize(new THREE.Vector3())
+    const c = box.getCenter(new THREE.Vector3())
+    return { size: Math.max(s.x, s.y, s.z), foot: Math.max(s.x, s.z), x: c.x, z: c.z }
+  }, [scene])
+  // everything at its real size: on the table if it fits there, standing on the floor if not (a tractor);
+  // a big machine can be made a table model to turn in the hands
+  const big = fit.size > BIG
+  useEffect(() => useLab.setState({ big, full: big }), [big])
+  const base = useMemo(() => new THREE.Vector3(fit.x, scene.floorY ?? 0, fit.z), [fit, scene])
+  const scale = big && !full ? fit.size / TABLE_SIZE : 1
+  // the turntable just round the machine's footprint as it is shown
+  const turntable = Math.max(0.16, (fit.foot / scale) * 0.5 * 1.18)
+  useEffect(() => useLab.setState({ ring: turntable }), [turntable])
 
   // the parts nobody can see are not drawn while the machine is closed
   useHideEnclosed(true)
@@ -333,32 +372,51 @@ function Lab({ scene }: { scene: SceneDef }) {
     camera.getWorldPosition(head)
     o.worldToLocal(head)
     if (useLab.getState().placing) {
-      // follow the gaze: on the surface looked at, or half a metre ahead and a little below the eyes
-      let target = hit.current
-      if (!target) {
-        camera.getWorldDirection(fwd)
-        fwd.transformDirection(new THREE.Matrix4().copy(o.matrixWorld).invert())
-        fwd.y = 0
-        if (fwd.lengthSq() < 1e-6) fwd.set(0, 0, -1)
-        fwd.normalize()
-        target = tmp.copy(head).addScaledVector(fwd, 0.55)
-        target.y = head.y - 0.42
+      camera.getWorldDirection(fwd)
+      fwd.transformDirection(new THREE.Matrix4().copy(o.matrixWorld).invert())
+      fwd.y = 0
+      if (fwd.lengthSq() < 1e-6) fwd.set(0, 0, -1)
+      fwd.normalize()
+      if (full) {
+        // a big machine at real size: it stands where the student looks on the floor (or a little way off);
+        // the panel comes to rest in front of them, within reach
+        const onFloor = hit.current && hit.current.y < head.y - 0.9 ? hit.current : null
+        const target = onFloor ? tmp.copy(onFloor).setY(0) : tmp.copy(head).addScaledVector(fwd, fit.size * 0.55 + 1.1).setY(0)
+        if (!place.floor) place.floor = target.clone()
+        place.floor.lerp(target, 0.35)
+        tmp2.copy(head).addScaledVector(fwd, 0.45)
+        tmp2.y = head.y - 0.42
+        place.at.lerp(tmp2, 0.35)
+      } else {
+        // on the surface looked at, or far enough ahead to see it whole (half a metre for a small one), a
+        // little below the eyes
+        let target = hit.current
+        if (!target) {
+          target = tmp.copy(head).addScaledVector(fwd, Math.max(0.55, (fit.foot / scale) * 0.6 + 0.3))
+          target.y = head.y - 0.42
+        }
+        place.at.lerp(target, 0.35)
       }
-      place.at.lerp(target, 0.35)
       place.face = Math.atan2(head.x - place.at.x, head.z - place.at.z)
     }
     // the origin, so the rig's base lands on the chosen spot, turned and scaled
     o.scale.setScalar(scale)
     o.rotation.set(0, place.turn, 0)
-    // full size: standing on the floor, set back from the table by its own size, so the student sees it whole
-    // and the panel stays within reach on the table
-    const spot = full ? tmp2.set(place.at.x - Math.sin(place.face) * (scene.extent * 0.6 + 0.4), 0, place.at.z - Math.cos(place.face) * (scene.extent * 0.6 + 0.4)) : place.at
+    // real size, on the floor: where it was put, or (coming from the table model) set back from the table by
+    // its own size so the student sees it whole, with the panel still within reach
+    if (full && !place.floor) place.floor = new THREE.Vector3(place.at.x - Math.sin(place.face) * (fit.size * 0.6 + 0.4), 0, place.at.z - Math.cos(place.face) * (fit.size * 0.6 + 0.4))
+    const spot = full && place.floor ? place.floor : place.at
     o.position.copy(base).sub(tmp.copy(spot).applyAxisAngle(UP, place.turn).multiplyScalar(scale))
     if (roomThings.current) {
       roomThings.current.position.copy(place.at)
       roomThings.current.rotation.set(0, place.face, 0)
     }
-    if (ring.current) ring.current.visible = useLab.getState().placing
+    if (ring.current) {
+      ring.current.visible = useLab.getState().placing
+      // the placing mark: where the machine will stand (the floor spot for a big one), in the panel's frame
+      if (full && place.floor) ring.current.position.copy(place.floor).sub(place.at).applyAxisAngle(UP, -place.face)
+      else ring.current.position.set(0, 0, 0)
+    }
   })
 
   // turning the rig: pinch (or poke) the turntable rim and drag round it
@@ -400,16 +458,16 @@ function Lab({ scene }: { scene: SceneDef }) {
           {full ? null : (
             <group>
               <mesh rotation-x={-Math.PI / 2} position-y={-0.002} renderOrder={-1}>
-                <circleGeometry args={[TABLE_SIZE * 0.62, 64]} />
+                <circleGeometry args={[turntable, 64]} />
                 <meshBasicMaterial color="#0c0f10" transparent opacity={ar ? 0.45 : 0.9} depthWrite={false} />
               </mesh>
               <mesh rotation-x={-Math.PI / 2} {...turnHandlers}>
-                <torusGeometry args={[TABLE_SIZE * 0.62, 0.014, 12, 96]} />
+                <torusGeometry args={[turntable, 0.014, 12, 96]} />
                 <meshBasicMaterial color="#c6f24e" transparent opacity={0.85} />
               </mesh>
               {/* arrows on the rim: it turns */}
               {[0, Math.PI].map((a) => (
-                <mesh key={a} position={[Math.sin(a) * TABLE_SIZE * 0.62, 0.012, Math.cos(a) * TABLE_SIZE * 0.62]} rotation={[0, a + Math.PI / 2, Math.PI / 2]}>
+                <mesh key={a} position={[Math.sin(a) * turntable, 0.012, Math.cos(a) * turntable]} rotation={[0, a + Math.PI / 2, Math.PI / 2]}>
                   <coneGeometry args={[0.016, 0.04, 16]} />
                   <meshBasicMaterial color="#c6f24e" />
                 </mesh>
@@ -517,6 +575,8 @@ function Panel({ scene, placing }: { scene: SceneDef; placing: boolean }) {
   const presets = useView((s) => s.cutPresets)
   const part = useParts((s) => (selected ? s.parts[selected] : undefined))
   const full = useLab((s) => s.full)
+  const big = useLab((s) => s.big)
+  const ring = useLab((s) => s.ring)
   const surface = useLab((s) => s.surface)
   const tried = useLab((s) => s.tried)
   const guided = useLab((s) => s.guided)
@@ -574,7 +634,7 @@ function Panel({ scene, placing }: { scene: SceneDef; placing: boolean }) {
         [
           { id: 'move', label: 'Move' },
           ...(scene.build ? [{ id: 'build', label: 'Build it', primary: true }] : []),
-          { id: 'size', label: full ? 'Table size' : 'Full size', on: full },
+          ...(big ? [{ id: 'size', label: full ? 'Table model' : 'Real size', on: !full }] : []),
           { id: 'reset', label: 'Reset' },
           { id: 'exit', label: 'Exit' },
         ],
@@ -586,7 +646,7 @@ function Panel({ scene, placing }: { scene: SceneDef; placing: boolean }) {
   const last = useRef(0)
   useEffect(() => {
     dirty.current = true
-  }, [version, playing, selected, explode, xray, cutOn, preset, part, full, surface, placing, page, hover, dom.groups, building, fitted, buildMsg, tip, restoredNote])
+  }, [version, playing, selected, explode, xray, cutOn, preset, part, full, big, ring, surface, placing, page, hover, dom.groups, building, fitted, buildMsg, tip, restoredNote])
   useFrame(() => {
     const t = performance.now()
     if (!dirty.current || t - last.current < 66) return
@@ -595,9 +655,11 @@ function Panel({ scene, placing }: { scene: SceneDef; placing: boolean }) {
     const g = canvas.getContext('2d')!
     const all = [...items.entries()]
     const drawnHint = placing
-      ? surface
-        ? 'Pinch to put it on this surface'
-        : 'Look at your table, then pinch'
+      ? full
+        ? 'Look at the floor where it should stand, then pinch'
+        : surface
+          ? 'Pinch to put it on this surface'
+          : 'Look at your table, then pinch'
       : building
         ? `${fitted}/${building.steps.length} · ${buildMsg?.text ?? 'Pinch a part on the table, put it where it goes'}`
         : restoredNote
@@ -631,9 +693,12 @@ function Panel({ scene, placing }: { scene: SceneDef; placing: boolean }) {
     else if (id === 'reset') {
       v.resetView()
       place.turn = 0
-    } else if (id === 'size') useLab.setState((s) => ({ full: !s.full }))
+    } else if (id === 'size') {
+      place.floor = null
+      useLab.setState((s) => ({ full: !s.full }))
+    }
     else if (id === 'build' && scene.build) {
-      useLab.setState({ full: false })
+      if (useLab.getState().big) useLab.setState({ full: false })
       v.setExplode(0)
       useBuild.getState().start(scene.build)
     } else if (id === 'hint') {
@@ -672,7 +737,7 @@ function Panel({ scene, placing }: { scene: SceneDef; placing: boolean }) {
   return (
     <mesh
       ref={mesh}
-      position={[PANEL_M * 0.5 + TABLE_SIZE * 0.55, 0.26, 0.02]}
+      position={[PANEL_M * 0.5 + (full ? 0.18 : ring + 0.05), 0.26, 0.02]}
       rotation={[-0.18, -0.42, 0, 'YXZ']}
       onPointerDown={(e) => {
         e.stopPropagation()
