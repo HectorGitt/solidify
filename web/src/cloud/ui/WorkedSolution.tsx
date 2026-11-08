@@ -41,6 +41,7 @@ export function WorkedSolution({
   disabled,
   practiceId,
   onNewNumbers,
+  startTrying = false,
 }: {
   question: NoteQuestionSpec
   parameters: NoteParameterSpec[]
@@ -52,10 +53,12 @@ export function WorkedSolution({
   practiceId: string
   /** fresh givens for the same problem; false when none could be found */
   onNewNumbers?: () => boolean
+  /** open as practice (answers first), as from Exam practice's "Your questions" */
+  startTrying?: boolean
 }) {
   const long = question.text.length > 420
   const [open, setOpen] = useState(!long)
-  const [trying, setTrying] = useState(false)
+  const [trying, setTrying] = useState(startTrying)
   const [inputs, setInputs] = useState<Record<string, string>>({})
   const [marks, setMarks] = useState<Record<string, boolean> | null>(null)
   const [stale, setStale] = useState('')

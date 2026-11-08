@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent, type KeyboardEvent } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useSim } from '@/core/sim'
 import type { SceneDef } from '@/modules/types'
 import { previewSpec, streamOrEdit3DScene } from '@/note3d/ai3dCompiler'
@@ -380,6 +380,9 @@ function LiveReply({ progress, isNew, photo }: { progress: LiveProgress | null; 
  */
 export default function ModelLab() {
   const { id: routeId } = useParams()
+  // ?try=1: a solved question opened from Exam practice's "Your questions" starts as practice
+  const [search] = useSearchParams()
+  const startTrying = search.get('try') === '1'
   const navigate = useNavigate()
   const authStatus = useAuth((s) => s.status)
   const signedIn = authStatus === 'signed-in'
@@ -1243,6 +1246,7 @@ export default function ModelLab() {
                       disabled={!!live}
                       onExplain={(label) => void send(`Explain how the ${label.toLowerCase()} is worked out, step by step with this problem's numbers.`)}
                       practiceId={`own:${creationId ?? shownSpec.id}`}
+                      startTrying={startTrying}
                       onNewNumbers={() => {
                         const v = freshNumbers(shownSpec)
                         if (!v) {

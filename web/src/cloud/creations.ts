@@ -10,6 +10,8 @@ export interface CreationSummary {
   parts: number
   createdAt: number
   updatedAt: number
+  /** a solved question: the start of it and what it asks (for Exam practice's "Your questions") */
+  question?: { text: string; find: string[] }
 }
 
 export interface CreationInput {

@@ -15,6 +15,7 @@ import { dueQuestions } from '../review'
 import { ExplainMistake } from './ExplainMistake'
 import { instantiate, randomSeed, type Seed } from '../variants'
 import { RigView } from './RigView'
+import { YourQuestions } from './YourQuestions'
 import { Bar, CourseLabel, Pills, StudyShell } from './StudyShell'
 
 type Inputs = Record<string, string>
@@ -384,7 +385,7 @@ export function ExamPage() {
   const [params] = useSearchParams()
   const start = useMemo(() => findQuestion(params.get('q') ?? ''), [params])
   const qp = useProgress((s) => s.questions)
-  const [mode, setMode] = useState<'practice' | 'mock' | 'review'>('practice')
+  const [mode, setMode] = useState<'practice' | 'mock' | 'review' | 'mine'>(() => (params.get('mode') === 'mine' ? 'mine' : 'practice'))
   // reviews due now, across every subject; frozen when a review session starts
   const dueNow = useMemo(() => dueQuestions(qp, QUESTIONS.map((q) => q.id), Date.now()), [qp])
   const [reviewList, setReviewList] = useState<Question[]>([])
@@ -427,11 +428,12 @@ export function ExamPage() {
             { value: 'practice', label: 'Practice' },
             { value: 'review', label: dueNow.length ? `Review · ${dueNow.length} due` : 'Review' },
             { value: 'mock', label: 'Mock exam' },
+            { value: 'mine', label: 'Your questions' },
           ]}
         />
       }
     >
-      {mode !== 'review' ? (
+      {mode !== 'review' && mode !== 'mine' ? (
       <div className="mb-4 grid items-end gap-3 rounded-3xl border border-line bg-panel-2/50 p-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.8fr)]">
         {/* two choosers, not walls of buttons: ten subjects and forty-odd topics read better as lists */}
         <label className="block min-w-0">
@@ -480,7 +482,9 @@ export function ExamPage() {
         </div>
       </div>
       ) : null}
-      {mode === 'review' ? (
+      {mode === 'mine' ? (
+        <YourQuestions />
+      ) : mode === 'review' ? (
         reviewList.length ? (
           <>
             <p className="mb-3 text-[12.5px] text-mute">
