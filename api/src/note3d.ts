@@ -27,7 +27,7 @@ export const create3dRequest = z.object({
   currentSpec: z.record(z.string(), z.unknown()).optional(),
   photoBase64: z.string().max(12_000_000).optional(),
   /** the conversation about this model so far, oldest first */
-  history: z.array(z.object({ prompt: z.string().max(2000), response: z.string().max(2000) })).max(12).optional(),
+  history: z.array(z.object({ prompt: z.string().max(2000), response: z.string().max(4000) })).max(12).optional(),
 })
 
 export type Create3dRequest = z.infer<typeof create3dRequest> & {

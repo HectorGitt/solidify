@@ -1318,7 +1318,7 @@ export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision
 
   /** a student's saved models: everything they build in Create in 3D, to reopen and keep changing */
   const CREATION_LIMIT = 50
-  const historyItem = z.object({ prompt: z.string().max(2000), response: z.string().max(2000) })
+  const historyItem = z.object({ prompt: z.string().max(2000), response: z.string().max(4000) })
   const creationFields = {
     title: z.string().trim().min(1).max(120),
     prompt: z.string().trim().max(2000),
