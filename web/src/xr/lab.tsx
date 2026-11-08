@@ -5,13 +5,14 @@ import * as THREE from 'three'
 import { create } from 'zustand'
 import { useSim } from '@/core/sim'
 import type { SceneDef } from '@/modules/types'
-import { useParts } from '@/parts/registry'
+import { partObjects, useParts } from '@/parts/registry'
 import { useView } from '@/render/view'
 import { useBuild } from '@/render/build'
 import { buildHands, buildHint, buildTray } from '@/render/BuildController'
 import { handlers, items, mirrorChange, useMirror, type Mirrored } from './mirror'
 import { PANEL_H, PANEL_M, PANEL_W, drawPanel, hitAt, hitKey, type Hit, type PanelButton } from './panel'
 import { useXRSession } from './session'
+import { useHideEnclosed } from './hideEnclosed'
 
 /**
  * A rig in the headset. On a Quest it sits on the student's real table (passthrough), at tabletop size,
@@ -116,6 +117,11 @@ xrStore.subscribe((s, p) => {
   buildTray.row = on ? 0.75 : 1.7
   buildTray.toward = on
   if (on) {
+    // a big machine (a whole tractor) opens closed in a headset: drawing it cut open, insides and all, is
+    // more than a headset can keep smooth; Cut opens it as usual
+    let meshes = 0
+    for (const o of partObjects.values()) o.traverse((m) => void ((m as THREE.Mesh).isMesh && meshes++))
+    if (meshes > 250) useView.getState().setCut({ enabled: false })
     useLab.setState({ full: false, surface: false })
     useLab.getState().setPlacing(true)
     anchorState.anchor = null
@@ -197,6 +203,9 @@ function Lab({ scene }: { scene: SceneDef }) {
   // the rig's base point in its own scene
   const base = useMemo(() => new THREE.Vector3(scene.camera.target[0], scene.floorY ?? 0, scene.camera.target[2]), [scene])
   const scale = full ? 1 : Math.max(scene.extent, 0.05) / TABLE_SIZE
+
+  // the parts nobody can see are not drawn while the machine is closed
+  useHideEnclosed(true)
 
   // shadows cost too much on a headset; the page gets them back afterwards
   useEffect(() => {
