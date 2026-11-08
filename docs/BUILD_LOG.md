@@ -420,55 +420,73 @@ Every entry is numbered (in the order they appear, top to bottom) and set out th
 - **Cause:** their changes were ignored during a build (the new model replaces the sizes when it lands), but the sliders were never shown as locked. The part panel, materials, adding and removing parts and renaming already locked.
 - **Solution:** the shared slider has a locked state (`controls.tsx`, `disabled`). The Dimensions sliders use it during a build, under a line saying they unlock when it is done (`ModelLab.tsx`). Checked in Edge: during a build, all 6 dimension sliders are locked (the toolbar's view controls stay usable); after it, they unlock, motion resumes, and a slider change saves to the draft.
 - **Lesson:** a control that does nothing must look like it does nothing.
+
+### 76. A solved question came back without its solution (2026-11-08)
+- **Problem:** testing "Solve a question", the model was built and the request carried the question and its screenshot, but the model view showed no worked solution, just the usual panels.
+- **Cause:** the new fields (`question`, and each step's `step` and `answer`) were added to the types and to the cleaning step, but the final schema check at the end of cleaning (`noteSceneSpecSchema`) silently drops any field it doesn't list.
+- **Solution:** the fields are in the schema too (`schema.ts`), and a worked step's LaTeX may be up to 400 characters. Checked by cleaning a sample model (the fields survive), then in Edge: the question, Given, Find, four numbered steps and the boxed answers show. They match the hand working (R_A = 28.33 kN, R_B = 21.67 kN, M = 46.67 kN·m), and moving the point load to 30 kN re-solves to 35, 25 and 60.
+- **Lesson:** a new field has to be added everywhere the data is filtered: the type, the cleaner and the schema. Test the whole path with real data, not each piece alone.
+
+### 77. The model view was wider than a phone (2026-11-08)
+- **Problem:** at 390 px the model view's page was 473 px wide: the side panel's text and the 3D toolbar ran off the right edge.
+- **Cause:** on a phone the page grid has a single column with no width set, so it grew to fit its widest child. Each Parts row's material dropdown is as wide as its longest material name.
+- **Solution:** the phone grid's column is pinned to the screen (`grid-cols-[minmax(0,1fr)]`), and the parts' material dropdowns are a fixed narrow width (`ModelLab.tsx`). Measured in Edge: 390 px wide at 390 px, nothing past the edge, desktop unchanged.
+- **Lesson:** a grid or flex column without a minimum of 0 grows to fit its content; on any page that holds model output, set it, and measure the page width at 390 px rather than trusting the screenshot.
+
+### 78. The shell turned a "\n" inside a test request into a real line break (2026-11-08)
+- **Problem:** after adding the nightly "solve-beam" case, the type-check failed with "Unterminated string literal" in `cases.ts`.
+- **Cause:** the case was written through a shell heredoc into a Python script, and the `\n` in the request became a real newline inside a single-quoted TypeScript string: the trap in entry 35 again.
+- **Solution:** fixed with the editor; the type-check caught it before anything ran.
+- **Lesson:** as entry 35: text with backslashes goes in with the file editor, never through the shell.
 ## Nightly tests, admin and labs pages (2026-11-06)
 
-### 76. A propped-cantilever model crashed the whole workspace
+### 79. A propped-cantilever model crashed the whole workspace
 - **Problem:** `Cannot read properties of undefined (reading '0')`, blank page.
 - **Cause:** Gemini sent a `recommendedCut` without a `normal`; the cleaner passed the object through unchecked and an effect read `normal[0]`.
 - **Solution:** `cleanCut` in `note3d/sanitize.ts` checks every field (also applied when opening saved models and in the notes reader), and error boundaries round the 3D view, the side panel and each page.
 - **Lesson:** validate every nested field of model output, not just its presence; and no page should be one bad value away from blank.
 
-### 77. Nightly builds failed with "Something went wrong on the server" (500)
+### 80. Nightly builds failed with "Something went wrong on the server" (500)
 - **Problem:** Nightly builds failed with "Something went wrong on the server" (500).
 - **Cause:** Gemini answered 429 RESOURCE_EXHAUSTED when three builds ran at once, and the API gave up on the first refusal.
 - **Solution:** `api/src/retry.ts` waits and retries (2, 6, 15 s) on 429/503, streamed builds retry if refused before their first word, the final failure says the model is busy (503), and the runner tries once more after 30 s.
 - **Lesson:** treat rate limits as normal for a hosted model; read the service's logs before guessing.
 
-### 78. A draft scored 100 while visibly broken
+### 81. A draft scored 100 while visibly broken
 - **Problem:** (rods not reaching the crank, a tilted flywheel through the casing, labels on top of each other).
 - **Cause:** the checks only covered layout overlap, drawability and calculations.
 - **Solution:** checks for moving parts joined by relation and for overlapping labels, and the prompt states the same rules.
 - **Lesson:** a score is only as good as its checks; look at high scorers before trusting the number.
 
-### 79. Deploy failed: "Build failed; check build logs"
+### 82. Deploy failed: "Build failed; check build logs"
 - **Problem:** Deploy failed: "Build failed; check build logs".
 - **Cause:** `gcloud run deploy --source .` run from the repo root, which has no Dockerfile.
 - **Solution:** run it from `api/`.
 - **Lesson:** `--source .` uploads the current folder; check where you are.
 
-### 80. Rig thumbnails came out blank, and with a stray `_` in their names
+### 83. Rig thumbnails came out blank, and with a stray `_` in their names
 - **Problem:** Rig thumbnails came out blank, and with a stray `_` in their names.
 - **Cause:** two scenes photographed before they had drawn in a reused tab; and the rig list written by Python on Windows had CRLF line endings, so each id ended in `\r`.
 - **Solution:** retook those two in a fresh tab (`SHOT_COLD=1`); renamed the files and strip `\r` when reading lists.
 - **Lesson:** check the smallest output files of a batch capture, and strip `\r` from lists made on Windows.
 
-### 81. Inline scripts lost their backslashes
+### 84. Inline scripts lost their backslashes
 - **Problem:** A `node -e` / heredoc script through the shell turned `C:\Program Files` into `C:\Program Files`, so the browser path was not found.
 - **Solution:** forward slashes in Windows paths in scripts, and the editor rather than the shell for code containing escapes.
 - **Lesson:** don't pass escape-heavy code through the shell.
 
-### 82. Prettier reformatted a file into another style
+### 85. Prettier reformatted a file into another style
 - **Problem:** With no project config it used its defaults (double quotes, semicolons).
 - **Solution:** re-run with the project's settings (`--no-semi --single-quote --print-width 220`).
 - **Lesson:** don't run a formatter the project doesn't configure.
 
-### 83. The Labs page was wider than a phone
+### 86. The Labs page was wider than a phone
 - **Problem:** The Labs page was wider than a phone.
 - **Cause:** one-line rig names in a grid item set its minimum width.
 - **Solution:** `min-w-0` on the card.
 - **Lesson:** any `truncate` text inside a grid or flex child needs `min-w-0` on that child.
 
-### 84. Gearbox levers hung in the air, and the reverse idler had no shaft
+### 87. Gearbox levers hung in the air, and the reverse idler had no shaft
 - **Problem:** Gearbox levers hung in the air, and the reverse idler had no shaft.
 - **Cause:** the cut-away removed the half of the casing the lever towers stood on (moving parts are not cut, so the levers stayed); the idler's shaft was defined but never drawn, and a full-length pin would have run through third gear and the range gears.
 - **Solution:** a shift cover the towers stand on; a stub shaft and wall boss for the idler; and the cut now removes the other half, with the cameras moved to that side, so everything kept is attached to something.

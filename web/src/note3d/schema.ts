@@ -223,6 +223,10 @@ export interface NoteCalculationSpec {
   /** Optional LaTeX equation string for display */
   latex?: string
   description?: string
+  /** in a worked solution: what this step does, in one sentence ("Take moments about A to find R_B.") */
+  step?: string
+  /** in a worked solution: this is one of the results the question asks for */
+  answer?: boolean
   limit?: {
     kind: 'max' | 'min'
     value: DimExpr
@@ -296,6 +300,12 @@ export function evaluateChart(chart: NoteChartSpec, scope: Record<string, number
   return { spec: chart, xs, series, yMin, yMax }
 }
 
+export interface NoteQuestionSpec {
+  text: string
+  /** what is asked, one item each ("the reactions at A and B") */
+  find: string[]
+}
+
 export interface NoteSceneSpec {
   id: string
   title: string
@@ -308,6 +318,9 @@ export interface NoteSceneSpec {
     position: [number, number, number]
     target: [number, number, number]
   }
+  /** a pasted problem being solved: the question as given and what it asks for (its givens are the parameters,
+   *  its worked solution the calculations, in order) */
+  question?: NoteQuestionSpec
   parameters: NoteParameterSpec[]
   parts: NotePartSpec[]
   annotations?: NoteAnnotationSpec[]
@@ -749,8 +762,11 @@ export const noteCalculationSchema = z.object({
   symbol: z.string().min(1).max(40),
   formula: z.string().min(1).max(240),
   unit: z.string().max(32),
-  latex: z.string().max(240).optional(),
+  latex: z.string().max(400).optional(),
   description: z.string().max(400).optional(),
+  /** a worked solution's step: what it does, and whether it is a result the question asks for */
+  step: z.string().max(400).optional(),
+  answer: z.boolean().optional(),
   limit: z
     .object({
       kind: z.enum(['max', 'min']),
@@ -782,6 +798,7 @@ export const noteSceneSpecSchema = z.object({
       target: z.tuple([z.number(), z.number(), z.number()]),
     })
     .optional(),
+  question: z.object({ text: z.string().min(1).max(4000), find: z.array(z.string().max(300)).max(8) }).optional(),
   parameters: z.array(noteParameterSchema).max(20).default([]),
   parts: z.array(notePartSchema).min(1).max(32),
   annotations: z.array(noteAnnotationSchema).max(24).optional(),

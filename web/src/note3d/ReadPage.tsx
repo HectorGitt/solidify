@@ -15,6 +15,7 @@ import { Icon } from '@/ui/icons'
 import { Tex } from '@/ui/Tex'
 import { Toolbar } from '@/ui/Toolbar'
 import { InlineFigure3D } from './InlineFigure3D'
+import { SolveQuestionDialog } from './SolveQuestionDialog'
 import { createSceneDefFromSpec } from './NoteSceneRenderer'
 import { MAX_PAGES_PER_READ, buildPicked, convertAll, convertTodo, isPdf, loadReader, pdfPageCount, readDocument, removeDocument, setActiveDoc, stopConverting, useReader } from './readerStore'
 import { SAMPLE_TEXTBOOKS } from './sampleTextbooks'
@@ -206,6 +207,7 @@ export default function ReadPage() {
   const reading = useReader((s) => s.reading)
   const converting = useReader((s) => s.converting)
   const uploading = !!reading
+  const [solving, setSolving] = useState(false)
   useEffect(() => {
     void loadReader()
   }, [])
@@ -391,10 +393,15 @@ export default function ReadPage() {
               e.target.value = ''
             }}
           />
+          <button type="button" onClick={() => setSolving(true)} className={ghostBtn}>
+            <Icon.text width={16} height={16} />
+            Solve a question
+          </button>
           <button type="button" onClick={() => fileInputRef.current?.click()} disabled={uploading || openingPdf} className={primaryBtn}>
             <Icon.upload width={16} height={16} />
             {openingPdf ? 'Opening the PDF…' : uploading ? 'Reading the page…' : 'Upload a PDF or page'}
           </button>
+          <SolveQuestionDialog open={solving} onClose={() => setSolving(false)} />
         </>
       }
     >

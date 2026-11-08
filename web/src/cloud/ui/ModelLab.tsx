@@ -22,6 +22,7 @@ import { Toolbar } from '@/ui/Toolbar'
 import { Readout, Section, Slider } from '@/ui/controls'
 import { FoldChevron, usePersisted } from '@/ui/usePersisted'
 import { Tex } from '@/ui/Tex'
+import { WorkedSolution } from './WorkedSolution'
 import { toast } from '@/ui/toast'
 import { ApiError } from '../api'
 import { useAuth } from '../auth'
@@ -131,9 +132,19 @@ function StartPanel({ onBuild, signedIn }: { onBuild: (text: string, photo?: { n
                 go()
               }
             }}
+            onPaste={(e) => {
+              // a pasted screenshot (a question, a drawing) is taken as the photo
+              const file = [...e.clipboardData.items].find((i) => i.kind === 'file' && i.type.startsWith('image/'))?.getAsFile()
+              if (!file) return
+              e.preventDefault()
+              if (file.size > 8_000_000) return toast('That picture is too large. Please use one under 8 MB.', { tone: 'warn' })
+              const reader = new FileReader()
+              reader.onload = () => typeof reader.result === 'string' && setPhoto({ name: file.name || 'screenshot.png', url: reader.result })
+              reader.readAsDataURL(file)
+            }}
             rows={3}
-            maxLength={2000}
-            placeholder={photo ? 'Anything to add? (optional)' : 'e.g. a two-stage gear reducer for a 15 kW motor at 1450 rpm'}
+            maxLength={3800}
+            placeholder={photo ? 'Anything to add? (optional)' : 'e.g. a two-stage gear reducer for a 15 kW motor at 1450 rpm, or paste a question (or its screenshot) to solve'}
             aria-label="Describe a machine"
             className="w-full resize-none bg-transparent px-3 py-2 text-[15px] text-ink placeholder:text-dim field-bare focus:outline-none"
           />
@@ -954,7 +965,7 @@ export default function ModelLab() {
       </div>
 
       {opening ? <WorkspaceBodySkeleton /> : null}
-      <div className={`${opening ? 'hidden' : 'grid'} min-h-0 flex-1 ${blank ? 'grid-rows-1' : 'grid-rows-[minmax(380px,58vh)_auto]'} lg:grid-cols-[340px_minmax(0,1fr)_360px] lg:grid-rows-1`}>
+      <div className={`${opening ? 'hidden' : 'grid'} min-h-0 flex-1 grid-cols-[minmax(0,1fr)] ${blank ? 'grid-rows-1' : 'grid-rows-[minmax(380px,58vh)_auto]'} lg:grid-cols-[340px_minmax(0,1fr)_360px] lg:grid-rows-1`}>
         {/* the conversation */}
         <aside className={`${mobilePane === 'chat' && !blank ? 'flex' : 'hidden'} order-2 min-h-[360px] flex-col border-line lg:order-1 lg:flex lg:min-h-0 lg:border-r`}>
           <div className="flex-1 space-y-4 overflow-y-auto px-4 py-4">
@@ -1022,7 +1033,7 @@ export default function ModelLab() {
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={onKey}
                 rows={2}
-                maxLength={2000}
+                maxLength={3800}
                 disabled={!!live}
                 placeholder={attached ? (spec ? 'What should change? (optional)' : 'Anything to add? (optional)') : spec ? 'Ask for a change, or ask a question…' : 'Describe a machine…'}
                 aria-label="Message"
@@ -1221,7 +1232,19 @@ export default function ModelLab() {
                   </div>
                   {shownSpec.summary && detailsOpen ? <p className="mt-1 text-[12.5px] leading-relaxed text-mute">{shownSpec.summary}</p> : null}
                 </div>
-                {calcResults.length ? (
+                {shownSpec.question ? (
+                  <Section title="Worked solution">
+                    <WorkedSolution
+                      question={shownSpec.question}
+                      parameters={shownSpec.parameters}
+                      scope={calcScope}
+                      results={calcResults}
+                      disabled={!!live}
+                      onExplain={(label) => void send(`Explain how the ${label.toLowerCase()} is worked out, step by step with this problem's numbers.`)}
+                    />
+                  </Section>
+                ) : null}
+                {calcResults.length && !shownSpec.question ? (
                   <Section title="Live">
                     <div className="grid grid-cols-2 gap-2 xl:grid-cols-3">
                       {calcResults.slice(0, 9).map((r) => (
@@ -1231,7 +1254,7 @@ export default function ModelLab() {
                   </Section>
                 ) : null}
                 {shownSpec.parameters.length ? (
-                  <Section title="Dimensions">
+                  <Section title={shownSpec.question ? 'Givens: try other values' : 'Dimensions'}>
                     {live ? <p className="mb-2 text-[11.5px] text-mute">Locked while the model is being changed; they unlock when it is done.</p> : null}
                     {shownSpec.parameters.map((p) => {
                       const val = shownParams[p.id] ?? p.value
@@ -1274,6 +1297,7 @@ export default function ModelLab() {
                   </div>
                   </Section>
                 ) : null}
+                {shownSpec.question ? null : (
                 <Section title="Working">
                   {calcResults.length ? (
                     <div className="space-y-2">
@@ -1298,6 +1322,7 @@ export default function ModelLab() {
                     <p className="text-[13px] text-mute">{live ? 'Working out the engineering…' : 'This model has no calculations yet. Ask for some in the chat.'}</p>
                   )}
                 </Section>
+                )}
 
 
                 <Section title={`Parts (${shownSpec.parts.length})`}>
@@ -1346,7 +1371,8 @@ export default function ModelLab() {
                                 setViewMode('parametric')
                                 setMaterial(pt.id, e.target.value as MaterialKey)
                               }}
-                              className={selectCls}
+                              // as narrow as the panel allows: the longest material name would push the page wider than a phone
+                              className={`${selectCls} w-[7.5rem] min-w-0 shrink`}
                             >
                               {ALLOWED_MATERIALS.slice(0, 26).map((mk) => (
                                 <option key={mk} value={mk}>

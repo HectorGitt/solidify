@@ -50,6 +50,30 @@ export function cleanMotion(m: unknown): NotePartSpec['motion'] {
   return out
 }
 
+/** a pasted problem: its text and what it asks for, as plain strings of sane length; anything else is dropped */
+export function cleanQuestion(q: unknown): NoteSceneSpec['question'] {
+  if (!q || typeof q !== 'object') return undefined
+  const o = q as Record<string, unknown>
+  const text = typeof o.text === 'string' ? o.text.trim().slice(0, 4000) : ''
+  if (!text) return undefined
+  const find = (Array.isArray(o.find) ? o.find : [])
+    .filter((f): f is string => typeof f === 'string' && !!f.trim())
+    .map((f) => f.trim().slice(0, 300))
+    .slice(0, 8)
+  return { text, find }
+}
+
+/** a calculation's worked-solution fields: the step as a short string, answer only when truly set */
+const cleanStep = (c: NoteCalculationSpec): NoteCalculationSpec => {
+  if (!c || typeof c !== 'object') return c
+  const out = { ...c }
+  if (typeof out.step === 'string' && out.step.trim()) out.step = out.step.trim().slice(0, 400)
+  else delete out.step
+  if (out.answer === true) out.answer = true
+  else delete out.answer
+  return out
+}
+
 export function sanitizeGeneratedSpec(raw: Record<string, unknown>, fallbackTitle: string): NoteSceneSpec | null {
   try {
     const candidate = (raw.spec ?? raw) as Record<string, unknown>
@@ -69,9 +93,8 @@ export function sanitizeGeneratedSpec(raw: Record<string, unknown>, fallbackTitl
           : { position: [0.52, 0.38, 0.58], target: [0, 0, 0] },
       recommendedCut: cleanCut(candidate.recommendedCut),
       parameters: Array.isArray(candidate.parameters) ? (candidate.parameters as NoteParameterSpec[]) : [],
-      calculations: Array.isArray(candidate.calculations)
-        ? (candidate.calculations as NoteCalculationSpec[])
-        : [],
+      calculations: Array.isArray(candidate.calculations) ? (candidate.calculations as NoteCalculationSpec[]).map(cleanStep) : [],
+      question: cleanQuestion(candidate.question),
       parts: candidate.parts as NotePartSpec[],
       // loads, reactions and dimensions drawn as arrows; each checked on its own
       annotations: (Array.isArray(candidate.annotations) ? candidate.annotations : [])
