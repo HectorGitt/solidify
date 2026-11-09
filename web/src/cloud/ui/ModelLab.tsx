@@ -90,6 +90,12 @@ const EXAMPLES = [
 ]
 
 /** a new workspace: what to build, from words, a photo or an example */
+/** does a message to an open model read as a question (rather than a change)? Only for the wait's wording */
+function looksLikeQuestion(text: string) {
+  const t = text.trim().toLowerCase()
+  return t.endsWith('?') || /^(why|what|how|which|where|when|who|is|are|does|do|can|could|should|would|explain|derive|show that|prove|describe|compare|tell me|give me)\b/.test(t)
+}
+
 function StartPanel({ onBuild, signedIn }: { onBuild: (text: string, photo?: { name: string; url: string }) => void; signedIn: boolean }) {
   const [text, setText] = useState('')
   const [photo, setPhoto] = useState<{ name: string; url: string } | null>(null)
@@ -400,7 +406,8 @@ export default function ModelLab() {
   const [spec, setSpec] = useState<NoteSceneSpec | null>(null)
   const [params, setParams] = useState<Record<string, number>>({})
   const [turns, setTurns] = useState<Turn[]>([])
-  const [live, setLive] = useState<{ prompt: string; photoUrl?: string; isNew: boolean; progress: LiveProgress | null } | null>(null)
+  /** `asking`: the message reads as a question (so the wait says so, before the reply confirms it) */
+  const [live, setLive] = useState<{ prompt: string; photoUrl?: string; isNew: boolean; asking?: boolean; progress: LiveProgress | null } | null>(null)
   const [input, setInput] = useState('')
   /** a photo attached to the next message */
   const [attached, setAttached] = useState<{ name: string; url: string } | null>(null)
@@ -579,7 +586,7 @@ export default function ModelLab() {
     )
     setInput('')
     setAttached(null)
-    setLive({ prompt: asked, photoUrl: withPhoto?.url, isNew, progress: null })
+    setLive({ prompt: asked, photoUrl: withPhoto?.url, isNew, asking: !isNew && looksLikeQuestion(prompt), progress: null })
     builtHereRef.current = true
     if (isNew) setViewKey(`build-${Date.now()}`)
     // a model being assembled holds still: the scene is rebuilt as each part lands, which would restart
@@ -1166,7 +1173,7 @@ export default function ModelLab() {
                         <span className="bp-ping absolute inset-0 rounded-full bg-accent/50" />
                         <span className="h-2 w-2 rounded-full bg-accent" />
                       </span>
-                      {live.progress?.isQuestion ? 'Thinking about your question…' : preview ? `Placing parts · ${preview.parts.length} in place` : 'Working on your change…'}
+                      {live.progress?.isQuestion || (live.asking && !preview?.parts.length) ? 'Thinking about your question…' : preview ? `Placing parts · ${preview.parts.length} in place` : 'Working on your change…'}
                     </div>
                   </div>
                 ) : null}

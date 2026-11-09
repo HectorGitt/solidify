@@ -12,8 +12,8 @@ import { Icon } from './icons'
 import { Loader, LoaderMark } from './Loader'
 import { Stage, type StageFrame } from './Stage'
 import { hasWebGL } from './webgl'
-import { focusPart, getCameraControls } from './camera'
-import { useParts } from '@/parts/registry'
+import { getCameraControls } from './camera'
+import { partObjects, useParts } from '@/parts/registry'
 import { SiteHeader } from '@/ui/SiteHeader'
 import { SiteFooter } from './SiteFooter'
 import { ALL_ORDER, MEDIA, Media, ModuleTile, READY } from './labsCatalog'
@@ -27,10 +27,10 @@ import { applySceneView, useHomeStage } from './homeStage'
  * default settings; `fill` draws a bar only where the figure is a fraction of a limit.
  */
 type HeroReadout = { label: string; value: string; unit: string; fill?: number }
-const HERO_SCENES: { moduleId: string; sceneId: string; label: string; frame: StageFrame; focus?: RegExp; readouts: HeroReadout[] }[] = [
-  { moduleId: 'vibration', sceneId: 'seat', label: 'Seat suspension', focus: /^suspension$|suspension/i, frame: { back: 1.6, shift: 0.55 }, readouts: [{ label: 'Operator vibration', value: '0.666', unit: 'm/s² RMS' }, { label: 'Seat transmissibility', value: '0.549', unit: 'floor to operator' }] },
-  { moduleId: 'mechanisms', sceneId: 'four-bar', label: 'Four-bar linkage', focus: /^crank$/, frame: { back: 1.45, shift: 0.35 }, readouts: [{ label: 'Rocker swing', value: '73.8', unit: '° (crank-rocker)' }, { label: 'Transmission angle', value: '18.2–65.4', unit: '°' }] },
-  { moduleId: 'powertrain', sceneId: 'differential', label: 'Differential & diff lock', focus: /^spiders$|spider/i, frame: { back: 1.8, shift: 0.35 }, readouts: [{ label: 'Pinion', value: '600', unit: 'rpm' }, { label: 'Crown wheel', value: '140', unit: 'rpm' }] },
+const HERO_SCENES: { moduleId: string; sceneId: string; label: string; frame: StageFrame; focus?: RegExp; xray?: boolean; noExplode?: boolean; fromFront?: RegExp; pad?: number; readouts: HeroReadout[] }[] = [
+  { moduleId: 'vibration', sceneId: 'seat', label: 'Seat suspension', focus: /^suspension$|suspension/i, xray: true, frame: { back: 1.6, shift: 0.55 }, readouts: [{ label: 'Operator vibration', value: '0.666', unit: 'm/s² RMS' }, { label: 'Seat transmissibility', value: '0.549', unit: 'floor to operator' }] },
+  { moduleId: 'mechanisms', sceneId: 'four-bar', label: 'Four-bar linkage', focus: /^crank$/, noExplode: true, frame: { back: 1.45, shift: 0.35 }, readouts: [{ label: 'Rocker swing', value: '73.8', unit: '° (crank-rocker)' }, { label: 'Transmission angle', value: '18.2–65.4', unit: '°' }] },
+  { moduleId: 'powertrain', sceneId: 'differential', label: 'Differential & diff lock', focus: /^cage$/, fromFront: /^pinion$/, pad: 0.45, frame: { back: 1.8, shift: 0.35 }, readouts: [{ label: 'Pinion', value: '600', unit: 'rpm' }, { label: 'Crown wheel', value: '140', unit: 'rpm' }] },
   { moduleId: 'engine', sceneId: 'cooling', label: 'Engine cooling', focus: /radiator|water pump/i, frame: { back: 1.4, shift: 0.45 }, readouts: [{ label: 'Heat to coolant', value: '36', unit: 'kW' }] },
 ]
 
@@ -165,52 +165,155 @@ function Hero({ copy }: { copy: (typeof COPY)[keyof typeof COPY] }) {
   useEffect(() => {
     if (!reel || !scene || owner !== 'hero' || switching) return
     const view = () => useView.getState()
-    // zoom in on the part that shows how this machine works, then back out to where the view started
-    const want = HERO_SCENES.find((h) => h.sceneId === scene.id)?.focus
-    let back: { p: number[]; t: number[] } | null = null
-    const zoomIn = () => {
-      const c = getCameraControls()
-      if (!c || !want) return
-      const parts = Object.values(useParts.getState().parts)
-      const hit = parts.find((x) => want.test(x.id)) ?? parts.find((x) => want.test(x.name))
-      if (!hit) return
+    const hero = HERO_SCENES.find((h) => h.sceneId === scene.id)
+    const want = hero?.focus
+    // the steps run one after another, each waiting for the last (a big machine's parts can take seconds to
+    // appear); stopping the reel cancels whatever step is waiting
+    let cancelled = false
+    const pending: number[] = []
+    const wait = (ms: number) => new Promise<void>((res) => pending.push(window.setTimeout(res, ms)))
+    let orbit = 0
+    // the sideways shift that clears the headline is a fixed distance: scaled with the zoom, or a close-up part
+    // ends far off-centre (a tyre fills the view instead); restored on the way back out
+    let back: { p: number[]; t: number[]; offset: THREE.Vector3 } | null = null
+
+    /** the part to zoom in on, once it is there (up to 8 s) */
+    const findPart = async () => {
+      for (let i = 0; i < 27 && !cancelled; i++) {
+        const parts = Object.values(useParts.getState().parts)
+        const hit = want ? (parts.find((x) => want.test(x.id)) ?? parts.find((x) => want.test(x.name))) : undefined
+        const obj = hit ? partObjects.get(hit.id) : undefined
+        if (hit && obj && getCameraControls()) return { hit, obj }
+        await wait(300)
+      }
+      return null
+    }
+    /** where the view is now, to come back to */
+    const here = () => {
+      const c = getCameraControls()!
       const p = new THREE.Vector3()
       const t = new THREE.Vector3()
       c.getPosition(p)
       c.getTarget(t)
-      back = { p: p.toArray(), t: t.toArray() }
+      return { p: p.toArray(), t: t.toArray(), offset: c.getFocalOffset(new THREE.Vector3()) }
+    }
+    /**
+     * Close in on a part along a chosen direction (by default the one the camera already looks along). Not the
+     * library's fitToBox: that snaps the view to the nearest straight side or front first, which put the
+     * differential side-on with a wheel filling the view.
+     */
+    const zoomIn = (hit: { id: string }, obj: THREE.Object3D, from = here(), dir?: THREE.Vector3) => {
+      const c = getCameraControls()!
+      const p = new THREE.Vector3(...from.p)
+      const t = new THREE.Vector3(...from.t)
+      const offset = from.offset
+      back = from
+      const box = new THREE.Box3().setFromObject(obj)
+      const centre = box.getCenter(new THREE.Vector3())
+      const radius = box.getSize(new THREE.Vector3()).length() / 2
+      const fov = ((c.camera as THREE.PerspectiveCamera).fov ?? 40) * (Math.PI / 180)
+      const distance = (radius / Math.sin(fov / 2)) * (1 + (hero?.pad ?? 0.15))
+      const look = (dir ?? p.clone().sub(t)).normalize()
+      const eye = centre.clone().addScaledVector(look, distance)
+      // the sideways shift scaled with the distance, so the part stays in the clear right of the headline
+      const k = Math.min(1, distance / Math.max(1e-6, p.distanceTo(t)))
+      void c.setFocalOffset(offset.x * k, offset.y * k, offset.z * k, true)
       view().select(hit.id)
-      focusPart(hit.id)
+      void c.setLookAt(eye.x, eye.y, eye.z, centre.x, centre.y, centre.z, true)
     }
     const zoomOut = () => {
       const c = getCameraControls()
       if (!c || !back) return
       view().select(null)
       void c.setLookAt(back.p[0], back.p[1], back.p[2], back.t[0], back.t[1], back.t[2], true)
+      void c.setFocalOffset(back.offset.x, back.offset.y, back.offset.z, true)
       back = null
     }
-    const timers = [
-      window.setTimeout(() => view().setCut({ enabled: true }), 2000),
-      window.setTimeout(zoomIn, 3500),
-      window.setTimeout(zoomOut, 7500),
-      window.setTimeout(() => view().setExplode(0.75), 9000),
-      window.setTimeout(() => view().setExplode(0), 11500),
-      window.setTimeout(() => view().setCut({ enabled: false }), 13300),
-      window.setTimeout(() => setHeroIdx((i) => (i + 1) % HERO_SCENES.length), 15000),
-    ]
-    // the camera sways gently either side of the scene's own view (about 18°), so flat rigs never turn edge-on
+
+    const run = async () => {
+      // see inside: a part within the machine (the seat's suspension) is shown through the bodywork; otherwise cut it open
+      await wait(1800)
+      if (cancelled) return
+      if (hero?.xray) view().setXray(true)
+      else view().setCut({ enabled: true })
+      await wait(hero?.xray ? 1200 : 900)
+      // zoom in on the part that shows how this machine works, and go round it
+      const found = await findPart()
+      if (cancelled) return
+      if (found) {
+        // the differential: in from the front, along the drive, so its wheels stay out to the sides
+        const start = here()
+        // "the front" is where the drive comes in (the bevel pinion): look in along it, from above, into the cut
+        let dir: THREE.Vector3 | undefined
+        const front = hero?.fromFront ? Object.values(useParts.getState().parts).find((x) => hero.fromFront!.test(x.id)) : undefined
+        const frontObj = front ? partObjects.get(front.id) : undefined
+        if (frontObj) {
+          const a = new THREE.Box3().setFromObject(frontObj).getCenter(new THREE.Vector3())
+          const b = new THREE.Box3().setFromObject(found.obj).getCenter(new THREE.Vector3())
+          const flat = new THREE.Vector3(a.x - b.x, 0, a.z - b.z).normalize()
+          dir = flat.multiplyScalar(Math.cos(0.9)).add(new THREE.Vector3(0, Math.sin(0.9), 0))
+        }
+        zoomIn(found.hit, found.obj, start, dir)
+        await wait(1200)
+        orbit = 1
+        await wait(3600)
+        orbit = 0
+        if (cancelled) return
+        if (hero?.xray) {
+          view().setXray(false)
+          await wait(1000)
+        }
+        if (cancelled) return
+        zoomOut()
+        await wait(1500)
+      }
+      if (cancelled) return
+      // take it apart and put it back (a flat linkage has nothing to take apart: it keeps running instead)
+      if (!hero?.noExplode) {
+        view().setExplode(0.75)
+        await wait(2500)
+        view().setExplode(0)
+        await wait(1800)
+      }
+      if (cancelled) return
+      view().setCut({ enabled: false })
+      await wait(1700)
+      if (!cancelled) setHeroIdx((i) => (i + 1) % HERO_SCENES.length)
+    }
+    void run()
+
+    // the camera sways gently either side of the scene's own view (about 18°), so flat rigs never turn edge-on;
+    // while zoomed in on a part it goes round it instead
     let raf = 0
-    const t0 = performance.now()
+    let last = performance.now()
+    let phase = 0
     let applied = 0
-    const spin = (t: number) => {
-      const want = 0.32 * Math.sin(((t - t0) / 1000) * ((2 * Math.PI) / 15))
-      void getCameraControls()?.rotate(want - applied, 0, false)
-      applied = want
+    let orbitPhase = 0
+    let orbitApplied = 0
+    const spin = (now: number) => {
+      const dt = Math.min(0.05, (now - last) / 1000)
+      last = now
+      const c = getCameraControls()
+      if (orbit && hero?.fromFront) {
+        orbitPhase += dt
+        const want = 0.35 * Math.sin(orbitPhase * 1.2)
+        void c?.rotate(want - orbitApplied, 0, false)
+        orbitApplied = want
+      } else if (orbit) {
+        void c?.rotate(dt * 0.6, 0, false)
+      } else {
+        phase += dt
+        const want = 0.32 * Math.sin(phase * ((2 * Math.PI) / 15))
+        void c?.rotate(want - applied, 0, false)
+        applied = want
+      }
       raf = requestAnimationFrame(spin)
     }
     raf = requestAnimationFrame(spin)
     return () => {
-      timers.forEach(clearTimeout)
+      cancelled = true
+      pending.forEach(clearTimeout)
+      if (hero?.xray) view().setXray(false)
       cancelAnimationFrame(raf)
     }
   }, [reel, scene, owner, switching])
