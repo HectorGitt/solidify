@@ -3,7 +3,10 @@ import { createRoot } from 'react-dom/client'
 import App from './App'
 import './index.css'
 import './ui/theme'
-import { registerServiceWorker, watchInstallOffer } from './ui/pwa'
+import { openWhereLeftOff, registerServiceWorker, watchInstallOffer } from './ui/pwa'
+
+// before the router reads the address: the installed app opens where it was left
+openWhereLeftOff()
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

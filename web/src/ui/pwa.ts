@@ -67,3 +67,35 @@ export const isIosSafari = () => {
 }
 /** whether the install card may show at all (not installed, not turned down lately, not an automated browser) */
 export const mayOfferInstall = () => !isStandalone() && !dismissedRecently() && !navigator.webdriver
+
+const LAST = 'solidify.lastRoute'
+/** pages not worth reopening at launch: the home page, sign-in returns, a preview whose model lived only in memory */
+const skipRoute = (r: string) => r === '/' || r.startsWith('/create/preview') || r.startsWith('/shot') || r.startsWith('/promo')
+
+/** remember where someone is, so the installed app can open there next time */
+export function rememberRoute(route: string) {
+  if (skipRoute(route)) return
+  try {
+    localStorage.setItem(LAST, route)
+  } catch {
+    /* storage blocked: the app opens on the labs */
+  }
+}
+
+/**
+ * Opened from the home screen: an installed app has no use for the home (sales) page at launch, so go back
+ * to the last page used, or the labs the first time. Only at launch and only onto the bare home address:
+ * a shared link still opens its own page, and the logo still leads home.
+ */
+export function openWhereLeftOff() {
+  if (!isStandalone()) return
+  const hash = window.location.hash
+  if (hash && hash !== '#/' && hash !== '#') return
+  let last: string | null = null
+  try {
+    last = localStorage.getItem(LAST)
+  } catch {
+    last = null
+  }
+  window.location.replace(`#${last && !skipRoute(last) ? last : '/labs'}`)
+}
