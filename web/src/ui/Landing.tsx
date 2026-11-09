@@ -231,15 +231,17 @@ function Hero({ copy }: { copy: (typeof COPY)[keyof typeof COPY] }) {
     }
 
     const run = async () => {
-      // see inside: a part within the machine (the seat's suspension) is shown through the bodywork; otherwise cut it open
-      await wait(1800)
+      // a second of the whole machine once it is all there (the tractor takes a few seconds to arrive), then look
+      // inside it: through the bodywork for a part within it (the seat's suspension), else cut open
+      const found = await findPart()
+      if (cancelled) return
+      await wait(1000)
       if (cancelled) return
       if (hero?.xray) view().setXray(true)
       else view().setCut({ enabled: true })
       await wait(hero?.xray ? 1200 : 900)
-      // zoom in on the part that shows how this machine works, and go round it
-      const found = await findPart()
       if (cancelled) return
+      // zoom in on the part that shows how this machine works, and go round it
       if (found) {
         // the differential: in from the front, along the drive, so its wheels stay out to the sides
         const start = here()
