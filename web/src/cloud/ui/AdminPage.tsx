@@ -64,7 +64,7 @@ import {
   type ModelPrice,
   type WaitlistEntry,
 } from '../admin'
-import { ghostBtn, inputCls, primaryBtn } from './Modal'
+import { Modal, ghostBtn, inputCls, primaryBtn } from './Modal'
 import { ThumbnailMaker } from './ThumbnailMaker'
 
 type Tab = 'quality' | 'review' | 'library' | 'users' | 'activity' | 'feedback' | 'waitlist' | 'settings'
@@ -716,8 +716,14 @@ function DraftCard({ d, onDone, onChanged, backTo }: { d: LibraryDraft; onDone: 
   const [showHistory, setShowHistory] = useState(false)
   const [reason, setReason] = useState('')
   const allChecked = CHECKS.every(([k]) => checklist[k])
+  const [problemsOpen, setProblemsOpen] = useState(false)
+  const [reviewOpen, setReviewOpen] = useState(false)
+  const [moreOpen, setMoreOpen] = useState(false)
+  const [confirmRebuild, setConfirmRebuild] = useState(false)
   const mech = draftMechanism(d)
   const now = draftLive(d)
+  // everything wrong, as plain lines: the motion check's reasons, then each other failed check
+  const problems = [...mech, ...now.checks.filter((x) => !x.ok && x.name !== 'mechanism moves right' && x.name !== 'under two minutes').map((x) => (x.detail ? `${x.name}: ${x.detail}` : x.name))]
   const tick = (k: keyof ReviewChecklist, v: boolean) => {
     const next = { ...checklist, [k]: v }
     setChecklist(next)
@@ -790,117 +796,182 @@ function DraftCard({ d, onDone, onChanged, backTo }: { d: LibraryDraft; onDone: 
       </div>
       <p className="text-[12.5px] leading-snug text-mute">{d.prompt}</p>
       <p className="text-[11.5px] text-dim">
-        {d.parts} parts · drafted {dateTime(d.createdAt)} ·{' '}
-        <button type="button" onClick={() => setShowHistory((v) => !v)} className="text-mute underline-offset-2 hover:text-ink hover:underline">
-          {showHistory ? 'Hide history' : 'History'}
-        </button>
+        {d.parts} parts · drafted {dateTime(d.createdAt)}
       </p>
-      {showHistory ? <DraftHistory id={d.id} /> : null}
-      {mech.length ? (
-        <div className="rounded-xl border border-warn/40 bg-warn/10 px-3 py-2 text-[11.5px] leading-snug">
-          <div className="font-medium text-warn">Moves wrongly: rebuild it</div>
-          <ul className="mt-0.5 space-y-0.5 text-ink/80">
-            {mech.map((m) => (
-              <li key={m}>· {m}</li>
-            ))}
-          </ul>
+
+      {/* what is wrong: one line that opens */}
+      {problems.length ? (
+        <div className={`rounded-xl border px-3 py-2 text-[12px] leading-snug ${mech.length ? 'border-warn/40 bg-warn/10' : 'border-line bg-panel-2/60'}`}>
+          <button type="button" onClick={() => setProblemsOpen((o) => !o)} aria-expanded={problemsOpen} className="flex w-full items-center justify-between gap-2 text-left">
+            <span className={`font-medium ${mech.length ? 'text-warn' : 'text-ink'}`}>
+              {problems.length} problem{problems.length === 1 ? '' : 's'}
+              {mech.length ? ': moves wrongly' : ''}
+            </span>
+            <span className="text-[11.5px] text-mute">{problemsOpen ? 'Hide' : 'Show'}</span>
+          </button>
+          {problemsOpen ? (
+            <ul className="mt-1.5 space-y-1 text-[11.5px] text-ink/80">
+              {problems.map((m) => (
+                <li key={m}>· {m}</li>
+              ))}
+            </ul>
+          ) : null}
         </div>
-      ) : null}
-      <FailedChecks checks={now.checks.filter((x) => x.name !== 'mechanism moves right')} />
-      <fieldset className="rounded-xl border border-line px-3 py-2.5">
-        <legend className="px-1 text-[11px] font-medium uppercase tracking-wide text-dim">Review</legend>
-        {CHECKS.map(([k, label]) => (
-          <label key={k} className="flex cursor-pointer items-center gap-2 py-0.5 text-[12.5px] text-ink/90">
-            <input type="checkbox" checked={!!checklist[k]} onChange={(e) => tick(k, e.target.checked)} className="h-3.5 w-3.5 accent-[var(--color-accent)]" />
-            {label}
-          </label>
-        ))}
-        <textarea
-          value={notes}
-          onChange={(e) => setNotes(e.target.value)}
-          onBlur={saveNotes}
-          rows={2}
-          maxLength={2000}
-          placeholder="Notes: what you checked, what you changed"
-          className={`${inputCls} mt-2 text-[12.5px]`}
-        />
-      </fieldset>
-      {rejecting ? (
-        <form
-          className="flex flex-col gap-2"
-          onSubmit={(e) => {
-            e.preventDefault()
-            void act('reject')
-          }}
-        >
-          <input autoFocus value={reason} onChange={(e) => setReason(e.target.value)} maxLength={500} placeholder="Why? e.g. the rods don’t reach the crank" className={`${inputCls} text-[12.5px]`} />
-          <div className="flex gap-2">
-            <button type="submit" disabled={!!busy} className={`${smallBtn} bg-warn/15 text-warn hover:bg-warn/25`}>
-              {busy === 'reject' ? 'Rejecting…' : 'Reject the draft'}
-            </button>
-            <button type="button" disabled={!!busy} onClick={() => setRejecting(false)} className={`${smallBtn} text-mute hover:text-ink`}>
-              Keep it
-            </button>
+      ) : (
+        <p className="text-[11.5px] text-accent">All checks passed.</p>
+      )}
+
+      {/* the reviewer's checklist and notes, folded to a count */}
+      <div className="rounded-xl border border-line px-3 py-2">
+        <button type="button" onClick={() => setReviewOpen((o) => !o)} aria-expanded={reviewOpen} className="flex w-full items-center justify-between gap-2 text-left text-[12px]">
+          <span className="font-medium text-ink">
+            Review · {CHECKS.filter(([k]) => checklist[k]).length} of {CHECKS.length} checked
+          </span>
+          <span className="text-[11.5px] text-mute">{reviewOpen ? 'Hide' : 'Open'}</span>
+        </button>
+        {reviewOpen ? (
+          <div className="mt-2">
+            {CHECKS.map(([k, label]) => (
+              <label key={k} className="flex cursor-pointer items-center gap-2 py-0.5 text-[12.5px] text-ink/90">
+                <input type="checkbox" checked={!!checklist[k]} onChange={(e) => tick(k, e.target.checked)} className="h-3.5 w-3.5 accent-[var(--color-accent)]" />
+                {label}
+              </label>
+            ))}
+            <textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              onBlur={saveNotes}
+              rows={2}
+              maxLength={2000}
+              placeholder="Notes: what you checked, what you changed"
+              className={`${inputCls} mt-2 text-[12.5px]`}
+            />
           </div>
-        </form>
-      ) : null}
-      {fixing ? (
-        <form
-          className="flex flex-col gap-2"
-          onSubmit={(e) => {
-            e.preventDefault()
-            if (note.trim()) void remake('fix')
-          }}
-        >
-          <textarea
-            autoFocus
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            rows={2}
-            maxLength={1500}
-            placeholder="What’s wrong, e.g. “the connecting rods don’t reach the crank and the flywheel is tilted”"
-            className={`${inputCls} text-[12.5px]`}
-          />
-          <div className="flex gap-2">
-            <button type="submit" disabled={!!busy || !note.trim()} className={`${smallBtn} bg-ink text-bg hover:opacity-90`}>
-              {busy === 'fix' ? BUILD_NOTE : 'Ask Gemini to fix it'}
-            </button>
-            <button type="button" disabled={!!busy} onClick={() => setFixing(false)} className={`${smallBtn} text-mute hover:text-ink`}>
-              Cancel
-            </button>
-          </div>
-        </form>
-      ) : null}
-      <div className="mt-auto flex flex-wrap gap-2 pt-1">
-        <button type="button" disabled={!!busy} onClick={() => void act('open')} className={`${smallBtn} border border-line-2 text-ink/90 hover:border-ink/40`}>
+        ) : null}
+      </div>
+
+      {/* two main actions; everything else under More */}
+      <div className="mt-auto flex items-center gap-2 pt-1">
+        <button type="button" disabled={!!busy} onClick={() => void act('open')} className={`${smallBtn} flex-1 border border-line-2 text-ink/90 hover:border-ink/40 sm:flex-none`}>
           {busy === 'open' ? 'Opening…' : 'Open in 3D'}
         </button>
         <button
           type="button"
           disabled={!!busy || !allChecked}
           onClick={() => void act('approve')}
-          title={allChecked ? 'Publish it to the library' : 'Tick all three checks first'}
-          className={`${smallBtn} bg-accent text-accent-ink hover:opacity-90`}
+          title={allChecked ? 'Publish it to the library' : 'Tick all three review checks first'}
+          className={`${smallBtn} flex-1 bg-accent text-accent-ink hover:opacity-90 sm:flex-none`}
         >
           {busy === 'approve' ? 'Publishing…' : 'Approve'}
         </button>
-        {fixing ? null : (
-          <button type="button" disabled={!!busy} onClick={() => setFixing(true)} className={`${smallBtn} border border-line-2 text-ink/90 hover:border-ink/40`}>
-            Fix…
+        <div className="relative ml-auto">
+          <button type="button" disabled={!!busy && busy !== 'fix' && busy !== 'rebuild'} onClick={() => setMoreOpen((o) => !o)} aria-expanded={moreOpen} aria-haspopup="menu" className={`${smallBtn} border border-line-2 text-ink/90 hover:border-ink/40`}>
+            {busy === 'fix' || busy === 'rebuild' ? BUILD_NOTE : 'More'}
           </button>
-        )}
-        <button type="button" disabled={!!busy} onClick={() => void remake('rebuild')} className={`${smallBtn} border border-line-2 text-ink/90 hover:border-ink/40`}>
-          {busy === 'rebuild' ? BUILD_NOTE : 'Rebuild'}
-        </button>
-        <button type="button" onClick={() => downloadDraft(d)} title="The draft as a file: its request, score, checks and model" className={`${smallBtn} border border-line-2 text-ink/90 hover:border-ink/40`}>
-          Download
-        </button>
-        {rejecting ? null : (
-          <button type="button" disabled={!!busy} onClick={() => setRejecting(true)} className={`${smallBtn} ml-auto text-mute hover:bg-panel-2 hover:text-warn`}>
-            Reject…
-          </button>
-        )}
+          {moreOpen ? (
+            <div role="menu" className="absolute bottom-full right-0 z-20 mb-1.5 w-52 rounded-2xl border border-line bg-panel p-1.5 shadow-xl" onMouseLeave={() => setMoreOpen(false)}>
+              {[
+                { label: 'Fix with Gemini…', run: () => setFixing(true), off: !!busy },
+                { label: 'Rebuild…', run: () => setConfirmRebuild(true), off: !!busy },
+                { label: 'Download', run: () => downloadDraft(d), off: false },
+                { label: 'History', run: () => setShowHistory(true), off: false },
+                { label: 'Reject…', run: () => setRejecting(true), off: !!busy, warn: true },
+              ].map((m) => (
+                <button
+                  key={m.label}
+                  type="button"
+                  role="menuitem"
+                  disabled={m.off}
+                  onClick={() => {
+                    setMoreOpen(false)
+                    m.run()
+                  }}
+                  className={`block w-full rounded-xl px-3 py-2 text-left text-[13px] disabled:opacity-40 ${m.warn ? 'text-warn hover:bg-warn/10' : 'text-ink hover:bg-panel-2'}`}
+                >
+                  {m.label}
+                </button>
+              ))}
+            </div>
+          ) : null}
+        </div>
       </div>
+
+      <Modal open={fixing} onClose={() => !busy && setFixing(false)} title="Fix with Gemini" width={480}>
+        <form
+          className="space-y-3"
+          onSubmit={(e) => {
+            e.preventDefault()
+            if (note.trim()) void remake('fix')
+          }}
+        >
+          <p className="text-[12.5px] text-mute">Say what is wrong; Gemini changes the draft, and it is scored and pictured again (one build).</p>
+          <textarea
+            autoFocus
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            rows={4}
+            maxLength={1500}
+            placeholder="e.g. the connecting rods don’t reach the crank and the flywheel is tilted"
+            className={`${inputCls} text-[13px]`}
+          />
+          {problems.length ? (
+            <button type="button" onClick={() => setNote(problems.join('\n'))} className="text-[12px] font-medium text-accent hover:underline">
+              Use the problems found ({problems.length})
+            </button>
+          ) : null}
+          <div className="flex justify-end gap-2">
+            <button type="button" disabled={!!busy} onClick={() => setFixing(false)} className={ghostBtn}>
+              Cancel
+            </button>
+            <button type="submit" disabled={!!busy || !note.trim()} className={primaryBtn}>
+              {busy === 'fix' ? BUILD_NOTE : 'Fix it'}
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      <Modal open={confirmRebuild} onClose={() => !busy && setConfirmRebuild(false)} title="Rebuild this draft?" width={420}>
+        <p className="text-[13px] leading-relaxed text-mute">Gemini builds it again from its request, with today’s prompt; the new model replaces this one and is scored and pictured again. Uses one build.</p>
+        <div className="mt-4 flex justify-end gap-2">
+          <button type="button" disabled={!!busy} onClick={() => setConfirmRebuild(false)} className={ghostBtn}>
+            Cancel
+          </button>
+          <button
+            type="button"
+            disabled={!!busy}
+            onClick={() => {
+              void remake('rebuild').finally(() => setConfirmRebuild(false))
+            }}
+            className={primaryBtn}
+          >
+            {busy === 'rebuild' ? BUILD_NOTE : 'Rebuild'}
+          </button>
+        </div>
+      </Modal>
+
+      <Modal open={rejecting} onClose={() => !busy && setRejecting(false)} title="Reject this draft?" width={440}>
+        <form
+          className="space-y-3"
+          onSubmit={(e) => {
+            e.preventDefault()
+            void act('reject')
+          }}
+        >
+          <input autoFocus value={reason} onChange={(e) => setReason(e.target.value)} maxLength={500} placeholder="Why? e.g. the rods don’t reach the crank" className={`${inputCls} text-[13px]`} />
+          <div className="flex justify-end gap-2">
+            <button type="button" disabled={!!busy} onClick={() => setRejecting(false)} className={ghostBtn}>
+              Keep it
+            </button>
+            <button type="submit" disabled={!!busy} className={`${primaryBtn} bg-warn! text-white!`}>
+              {busy === 'reject' ? 'Rejecting…' : 'Reject'}
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      <Modal open={showHistory} onClose={() => setShowHistory(false)} title="History" width={520}>
+        <DraftHistory id={d.id} />
+      </Modal>
     </article>
   )
 }

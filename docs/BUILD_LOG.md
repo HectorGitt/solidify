@@ -564,3 +564,9 @@ Every entry is numbered (in the order they appear, top to bottom) and set out th
 - **Solution:** a shift cover the towers stand on; a stub shaft and wall boss for the idler; and the cut now removes the other half, with the cameras moved to that side, so everything kept is attached to something.
 - **Lesson:** a cut-away must keep whatever holds up the parts it leaves whole; check every part has a visible support, in every cut, not only the opening view. I missed this twice by checking the framing instead of the model.
 
+
+### 100. The draft review card was chaotic on a phone (2026-11-09)
+- **Problem:** on a phone each review draft showed its checks, the full problem list, the checklist, a notes box, a fix box and seven buttons at once, wrapping into a wall of controls.
+- **Cause:** every tool for a draft was added to the card as its own row as it was built, with nothing grouped or folded.
+- **Solution:** the card shows one problems line (opens to the list), the review checklist folded to a count ("Review · 1 of 3 checked"), and two buttons, Open in 3D and Approve; Fix with Gemini, Rebuild, Download, History and Reject sit under More, and the ones that need input or confirmation open in a dialog (the fix dialog can fill in the problems found).
+- **Lesson:** when adding a control to a card, decide which two actions matter most and group the rest; check the card at phone width each time it grows.
