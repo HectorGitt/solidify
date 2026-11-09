@@ -68,6 +68,10 @@ interface ClassDoc {
   teacherName: string
   code: string
   createdAt: number
+  /** a line for the students: what the class is, when it meets */
+  about?: string
+  /** the subjects it covers (the app's course ids), to narrow the teacher's pickers */
+  subjects?: string[]
 }
 
 interface MemberDoc {
@@ -76,7 +80,8 @@ interface MemberDoc {
   joinedAt: number
 }
 
-type AssignmentKind = 'scene' | 'question' | 'challenge'
+/** scene, question, challenge: tracked from progress; model, link, note: the student marks them done */
+type AssignmentKind = 'scene' | 'question' | 'challenge' | 'model' | 'link' | 'note'
 
 interface AssignmentDoc {
   [k: string]: unknown
@@ -85,8 +90,13 @@ interface AssignmentDoc {
   title: string
   due?: number
   better?: 'higher' | 'lower'
+  /** the teacher's instructions, or a note's text */
+  note?: string
   createdAt: number
 }
+
+/** a student's own "done" marks for the class's resources: assignment id -> when */
+type DoneDoc = Record<string, number>
 
 interface PaperDoc {
   [k: string]: unknown
@@ -1422,19 +1432,38 @@ export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision
 
   /* ------------------------------------------------------------------ classes */
 
+  const classInput = z.object({
+    name: z.string().trim().min(1).max(80).optional(),
+    about: z.string().trim().max(400).optional(),
+    subjects: z.array(z.string().trim().min(1).max(20)).max(12).optional(),
+  })
+
+  /** a code no other class has */
+  async function newClassCode(classId: string) {
+    for (let i = 0; i < 8; i++) {
+      const candidate = randomCode()
+      if (await db.create(`classCodes/${candidate}`, { classId })) return candidate
+    }
+    throw new Error('could not allocate a class code')
+  }
+
   app.post('/v1/classes', async (c) => {
     const u = requireUser(c)
-    const { name } = await body(c, z.object({ name: z.string().trim().min(1).max(80) }))
+    const { name, about, subjects } = await body(c, classInput.extend({ name: z.string().trim().min(1).max(80) }))
     const p = await profile(u)
     if (p.role !== 'teacher') throw fail(403, 'Switch your account to teacher to create classes.')
     const id = randomId()
-    let code = ''
-    for (let i = 0; i < 8 && !code; i++) {
-      const candidate = randomCode()
-      if (await db.create(`classCodes/${candidate}`, { classId: id })) code = candidate
+    const code = await newClassCode(id)
+    const cls: ClassDoc = {
+      name,
+      teacherUid: u.uid,
+      teacherName: p.displayName,
+      code,
+      createdAt: now(),
+      ...(about ? { about } : {}),
+      ...(subjects?.length ? { subjects: [...new Set(subjects)] } : {}),
+      ...(p.referredBy ? { referredBy: p.referredBy } : {}),
     }
-    if (!code) throw new Error('could not allocate a class code')
-    const cls: ClassDoc = { name, teacherUid: u.uid, teacherName: p.displayName, code, createdAt: now(), ...(p.referredBy ? { referredBy: p.referredBy } : {}) }
     await db.set(`classes/${id}`, cls)
     await db.set(`users/${u.uid}/classes/${id}`, { name, role: 'teacher' })
     return c.json({ id, ...cls }, 201)
@@ -1463,7 +1492,59 @@ export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision
     const id = c.req.param('id')
     const { cls, isTeacher } = await requireMemberOrTeacher(c, id)
     const members = isTeacher ? (await db.list<MemberDoc>(`classes/${id}/members`)).map((r) => ({ uid: r.id, ...r.data })) : undefined
-    return c.json({ id, name: cls.name, teacherName: cls.teacherName, code: isTeacher ? cls.code : undefined, isTeacher, members })
+    return c.json({ id, name: cls.name, teacherName: cls.teacherName, about: cls.about, subjects: cls.subjects ?? [], code: isTeacher ? cls.code : undefined, isTeacher, members })
+  })
+
+  /** Teacher: rename the class, change its description or subjects. Every member's list shows the new name. */
+  app.put('/v1/classes/:id', async (c) => {
+    const id = c.req.param('id')
+    const { u, cls } = await requireTeacherOf(c, id)
+    const patch = await body(c, classInput)
+    const next: ClassDoc = {
+      ...cls,
+      ...(patch.name ? { name: patch.name } : {}),
+      ...(patch.about !== undefined ? { about: patch.about } : {}),
+      ...(patch.subjects ? { subjects: [...new Set(patch.subjects)] } : {}),
+    }
+    await db.set(`classes/${id}`, next)
+    if (next.name !== cls.name) {
+      const members = await db.list<MemberDoc>(`classes/${id}/members`)
+      await Promise.all([
+        db.set(`users/${u.uid}/classes/${id}`, { name: next.name, role: 'teacher' }),
+        ...members.map((m) => db.set(`users/${m.id}/classes/${id}`, { name: next.name, role: 'student' })),
+      ])
+    }
+    return c.json({ id, name: next.name, about: next.about, subjects: next.subjects ?? [] })
+  })
+
+  /** Teacher: a new join code (the old one stops working; students already in stay in). */
+  app.post('/v1/classes/:id/code', async (c) => {
+    const id = c.req.param('id')
+    const { cls } = await requireTeacherOf(c, id)
+    const code = await newClassCode(id)
+    await db.set(`classes/${id}`, { ...cls, code })
+    await db.delete(`classCodes/${cls.code}`)
+    return c.json({ code })
+  })
+
+  /** Teacher: close the class for good. Students lose it from their list; their own progress stays theirs. */
+  app.delete('/v1/classes/:id', async (c) => {
+    const id = c.req.param('id')
+    const { u, cls } = await requireTeacherOf(c, id)
+    const [members, assignments, done] = await Promise.all([
+      db.list<MemberDoc>(`classes/${id}/members`),
+      db.list<AssignmentDoc>(`classes/${id}/assignments`),
+      db.list<DoneDoc>(`classes/${id}/done`),
+    ])
+    await Promise.all([
+      ...members.flatMap((m) => [db.delete(`users/${m.id}/classes/${id}`), db.delete(`classes/${id}/members/${m.id}`)]),
+      ...assignments.map((a) => db.delete(`classes/${id}/assignments/${a.id}`)),
+      ...done.map((d) => db.delete(`classes/${id}/done/${d.id}`)),
+      db.delete(`users/${u.uid}/classes/${id}`),
+      db.delete(`classCodes/${cls.code}`),
+    ])
+    await db.delete(`classes/${id}`)
+    return c.body(null, 204)
   })
 
   /** Teacher removes a student, or a student leaves. */
@@ -1478,12 +1559,26 @@ export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision
     return c.body(null, 204)
   })
 
-  const assignmentInput = z.object({
-    kind: z.enum(['scene', 'question', 'challenge']),
-    ref: z.string().trim().min(1).max(120),
-    title: z.string().trim().min(1).max(160),
-    due: z.number().int().positive().optional(),
-    better: z.enum(['higher', 'lower']).optional(),
+  const assignmentInput = z
+    .object({
+      kind: z.enum(['scene', 'question', 'challenge', 'model', 'link', 'note']),
+      // a link's ref is its address; a note's is free (its text is in `note`)
+      ref: z.string().trim().min(1).max(500),
+      title: z.string().trim().min(1).max(160),
+      due: z.number().int().positive().optional(),
+      better: z.enum(['higher', 'lower']).optional(),
+      note: z.string().trim().max(2000).optional(),
+    })
+    .refine((a) => a.kind !== 'link' || /^https?:\/\/\S+$/i.test(a.ref), { message: 'A link must start with http:// or https://' })
+    .refine((a) => a.kind !== 'note' || !!a.note, { message: 'A note needs its text' })
+  const tidyAssignment = (a: z.infer<typeof assignmentInput>): AssignmentDoc => ({
+    kind: a.kind,
+    ref: a.ref,
+    title: a.title,
+    ...(a.due ? { due: a.due } : {}),
+    ...(a.better ? { better: a.better } : {}),
+    ...(a.note ? { note: a.note } : {}),
+    createdAt: now(),
   })
 
   app.post('/v1/classes/:id/assignments', async (c) => {
@@ -1491,16 +1586,69 @@ export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision
     await requireTeacherOf(c, id)
     const a = await body(c, assignmentInput)
     const aid = randomId()
-    const doc: AssignmentDoc = { ...a, createdAt: now() }
+    const doc = tidyAssignment(a)
     await db.set(`classes/${id}/assignments/${aid}`, doc)
     return c.json({ id: aid, ...doc }, 201)
   })
 
+  /** Teacher: several pieces of work at once (a week's reading, a set of questions), all with the same due date. */
+  app.post('/v1/classes/:id/assignments/batch', async (c) => {
+    const id = c.req.param('id')
+    await requireTeacherOf(c, id)
+    const { items } = await body(c, z.object({ items: z.array(assignmentInput).min(1).max(40) }))
+    const out = await Promise.all(
+      items.map(async (a) => {
+        const aid = randomId()
+        const doc = tidyAssignment(a)
+        await db.set(`classes/${id}/assignments/${aid}`, doc)
+        return { id: aid, ...doc }
+      }),
+    )
+    return c.json({ assignments: out }, 201)
+  })
+
+  /** Teacher: change a piece of work's title, due date or instructions. */
+  app.patch('/v1/classes/:id/assignments/:aid', async (c) => {
+    const id = c.req.param('id')
+    const aid = c.req.param('aid')
+    await requireTeacherOf(c, id)
+    const patch = await body(
+      c,
+      z.object({ title: z.string().trim().min(1).max(160).optional(), due: z.number().int().positive().nullable().optional(), note: z.string().trim().max(2000).optional() }),
+    )
+    const prev = await db.get<AssignmentDoc>(`classes/${id}/assignments/${aid}`)
+    if (!prev) throw fail(404, 'That piece of work is gone.')
+    const next: AssignmentDoc = { ...prev, ...(patch.title ? { title: patch.title } : {}), ...(patch.note !== undefined ? { note: patch.note } : {}) }
+    if (patch.due === null) delete next.due
+    else if (patch.due) next.due = patch.due
+    await db.set(`classes/${id}/assignments/${aid}`, next)
+    return c.json({ id: aid, ...next })
+  })
+
+  /** A student marks a resource (model, link, note) done, or not done. */
+  app.put('/v1/classes/:id/assignments/:aid/done', async (c) => {
+    const id = c.req.param('id')
+    const aid = c.req.param('aid')
+    const { u, isTeacher } = await requireMemberOrTeacher(c, id)
+    if (isTeacher) throw fail(403, 'Students mark their own work done.')
+    const { done } = await body(c, z.object({ done: z.boolean() }))
+    if (!(await db.get(`classes/${id}/assignments/${aid}`))) throw fail(404, 'That piece of work is gone.')
+    const t = now()
+    await db.transact<DoneDoc>(`classes/${id}/done/${u.uid}`, (prev) => {
+      const next = { ...(prev ?? {}) }
+      if (done) next[aid] = next[aid] ?? t
+      else delete next[aid]
+      return next
+    })
+    return c.json({ done, at: done ? t : null })
+  })
+
   app.get('/v1/classes/:id/assignments', async (c) => {
     const id = c.req.param('id')
-    await requireMemberOrTeacher(c, id)
+    const { u, isTeacher } = await requireMemberOrTeacher(c, id)
     const rows = await db.list<AssignmentDoc>(`classes/${id}/assignments`)
-    return c.json({ assignments: rows.map((r) => ({ id: r.id, ...r.data })).sort((a, b) => (a.due ?? Infinity) - (b.due ?? Infinity) || a.createdAt - b.createdAt) })
+    const mine = isTeacher ? null : await db.get<DoneDoc>(`classes/${id}/done/${u.uid}`)
+    return c.json({ assignments: rows.map((r) => ({ id: r.id, ...r.data, ...(mine?.[r.id] ? { doneAt: mine[r.id] } : {}) })).sort((a, b) => (a.due ?? Infinity) - (b.due ?? Infinity) || a.createdAt - b.createdAt) })
   })
 
   app.delete('/v1/classes/:id/assignments/:aid', async (c) => {
@@ -1633,11 +1781,14 @@ export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision
   /** Per-student status for every assignment, from each student's synced progress. */
   async function dashboard(id: string) {
     const [members, assignments] = await Promise.all([db.list<MemberDoc>(`classes/${id}/members`), db.list<AssignmentDoc>(`classes/${id}/assignments`)])
-    const progress = await Promise.all(members.map((m) => db.get<Progress>(`progress/${m.id}`)))
+    const [progress, done] = await Promise.all([
+      Promise.all(members.map((m) => db.get<Progress>(`progress/${m.id}`))),
+      Promise.all(members.map((m) => db.get<DoneDoc>(`classes/${id}/done/${m.id}`))),
+    ])
     const sorted = assignments.map((r) => ({ id: r.id, ...r.data })).sort((a, b) => (a.due ?? Infinity) - (b.due ?? Infinity) || a.createdAt - b.createdAt)
     const students = members.map((m, i) => {
       const p = progress[i] ?? emptyProgress()
-      const results = sorted.map((a) => assignmentStatus(a, p))
+      const results = sorted.map((a) => assignmentStatus(a, p, done[i]?.[a.id]))
       return { uid: m.id, displayName: m.data.displayName, completed: results.filter((r) => r.complete).length, results }
     })
     return { assignments: sorted, students }
@@ -1806,7 +1957,9 @@ export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision
 }
 
 /** How far a student has got with one assignment. */
-export function assignmentStatus(a: Pick<AssignmentDoc, 'kind' | 'ref' | 'due'>, p: Progress) {
+export function assignmentStatus(a: Pick<AssignmentDoc, 'kind' | 'ref' | 'due'>, p: Progress, doneAt?: number) {
+  // resources: the student says when they have read, watched or worked through them
+  if (a.kind === 'model' || a.kind === 'link' || a.kind === 'note') return { complete: !!doneAt, at: doneAt, label: doneAt ? 'Done' : 'Not started' }
   if (a.kind === 'scene') {
     const s = p.scenes[a.ref]
     const complete = !!s?.tour
