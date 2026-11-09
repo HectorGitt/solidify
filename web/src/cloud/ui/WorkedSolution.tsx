@@ -6,6 +6,7 @@ import type { EvaluatedCalculation, NoteParameterSpec, NoteQuestionSpec } from '
 import { useProgress } from '@/study/progress'
 import { checkAnswer, parseAnswer } from '@/study/types'
 import { Tex } from '@/ui/Tex'
+import { useMirrored } from '@/xr/mirror'
 
 const IDENT = /[A-Za-z_][A-Za-z0-9_]*/g
 const FUNCS = new Set(['pi', 'PI', 'sqrt', 'sin', 'cos', 'tan', 'atan', 'asin', 'acos', 'atan2', 'exp', 'log', 'ln', 'log10', 'pow', 'sinh', 'cosh', 'tanh', 'hypot', 'floor', 'ceil', 'round', 'abs', 'min', 'max', 'step', 'mac'])
@@ -24,6 +25,21 @@ const symTex = (s: string) => (/[\\{}]/.test(s) ? s : nameTex(s))
 
 /** a given as the question states it: its own unit, not converted */
 const given = (v: number, unit: string) => `${Number(v.toPrecision(6))}${unit ? ` ${unit}` : ''}`
+
+/** a label as plain words for the headset panel: no maths markup */
+const plain = (s: string) =>
+  s
+    .replace(/\$+/g, '')
+    .replace(/\\(text|mathrm|mathit)\{([^}]*)\}/g, '$2')
+    .replace(/[\\{}]/g, '')
+    .replace(/_/g, ' ')
+    .trim()
+
+/** an answer, also shown on the panel beside the model in a headset */
+function MirrorAnswer({ label, value, unit }: { label: string; value: string; unit?: string }) {
+  useMirrored({ kind: 'readout', label: `Answer: ${plain(label)}`, value, unit, tone: 'accent' })
+  return null
+}
 
 const H = ({ children, tone = 'text-dim' }: { children: string; tone?: string }) => <h3 className={`mb-1.5 text-[11.5px] font-semibold uppercase tracking-wide ${tone}`}>{children}</h3>
 
@@ -283,6 +299,7 @@ export function WorkedSolution({
               <ul className="space-y-1">
                 {answers.map((r) => (
                   <li key={r.spec.id} className="flex items-baseline justify-between gap-3 text-[13px]">
+                    {symbolic || r.broken ? null : <MirrorAnswer label={r.spec.label} value={r.formatted} unit={r.spec.unit} />}
                     <span className="text-ink/90">
                       <RichInline text={r.spec.label} />
                     </span>

@@ -45,6 +45,7 @@ import { WorkspaceBodySkeleton } from '@/ui/Skeleton'
 import { dismissTask, startTask } from '@/ui/tasks'
 import { ErrorBoundary } from '@/ui/ErrorBoundary'
 import { usePageTourOn } from '@/ui/PageTour'
+import { HeadsetButton } from '@/xr/HeadsetButton'
 
 /** one turn of the conversation about a model (saved newest first, shown oldest first) */
 interface Turn {
@@ -1023,6 +1024,8 @@ export default function ModelLab() {
           {live ? (live.progress?.title || spec ? 'Building…' : '') : routeId === 'preview' && !creationId ? (viewing?.draftId ? (savingDraft ? 'Saving to the draft…' : draftChanged ? 'Draft under review: changes not saved yet' : 'Draft under review: saved') : 'Preview, not saved') : creationId ? (saveState === 'saving' ? 'Saving…' : saveState === 'error' ? 'Not saved: check your connection' : 'Saved') : ''}
         </span>
         <div className="ml-auto flex items-center gap-2">
+          {/* on a headset: the model (or the question's setup) on the student's table, with its sizes and readings beside it */}
+          {spec && !live ? <HeadsetButton what={spec.question ? 'this question' : 'this model'} className="px-3 py-1.5" /> : null}
           {spec && matchedCatalog && loadedCatalogScene && !live ? (
             <button type="button" onClick={() => setViewMode((m) => (m === 'parametric' ? 'catalog' : 'parametric'))} className={`${viewMode === 'catalog' ? ghostBtn : primaryBtn} px-4 py-1.5 text-[12.5px]`}>
               {viewMode === 'parametric' ? `Open the lab model: ${matchedCatalog.scene.title}` : 'Back to your model'}
@@ -1202,7 +1205,7 @@ export default function ModelLab() {
               ) : null}
               <div data-tour="ws-model" className="relative min-h-0 flex-1">
                 <ErrorBoundary label="3D model" resetKey={scene}>
-                <Stage scene={scene} cover={!live && !builtHereRef.current} viewKey={viewMode === 'catalog' && loadedCatalogScene && !live ? undefined : viewKey} />
+                <Stage scene={scene} cover={!live && !builtHereRef.current} viewKey={viewMode === 'catalog' && loadedCatalogScene && !live ? undefined : viewKey} xr />
                 </ErrorBoundary>
                 {/* the same controls as the lab rigs: views, play and step, slow motion, cuts, taking apart, x-ray,
                     labels, measuring */}
