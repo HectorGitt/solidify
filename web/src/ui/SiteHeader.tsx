@@ -108,7 +108,8 @@ function MobileMenu() {
   const { pathname } = useLocation()
   const link = (active: boolean) => `block rounded-xl px-3 py-2 text-[13.5px] ${active ? 'bg-ink text-bg' : 'text-ink hover:bg-panel-2'}`
   return (
-    <div ref={ref} className="relative lg:hidden">
+    // not positioned itself: the sheet hangs from the header bar, so it spans the screen with even margins
+    <div ref={ref} className="lg:hidden">
       <button
         type="button"
         aria-expanded={open}
@@ -120,7 +121,7 @@ function MobileMenu() {
         Menu
       </button>
       {open ? (
-        <div role="menu" className="absolute left-0 top-full z-50 mt-2 max-h-[80vh] w-64 overflow-y-auto rounded-2xl border border-line bg-panel p-1.5 shadow-xl">
+        <div role="menu" className="absolute inset-x-4 top-full z-50 mt-1 max-h-[80vh] overflow-y-auto rounded-2xl border border-line bg-panel p-1.5 shadow-xl sm:left-6 sm:right-auto sm:w-80">
           {NAV.map((g, i) =>
             g.items.length === 1 ? (
               <Link key={g.label} role="menuitem" to={g.items[0].to} className={link(g.match(pathname))}>
@@ -130,7 +131,8 @@ function MobileMenu() {
               <div key={g.label}>
                 {i > 0 ? <div className="mx-3 my-1.5 border-t border-line" /> : null}
                 <p className="px-3 pb-1 pt-0.5 text-[11px] font-medium uppercase tracking-wider text-dim">{g.label}</p>
-                {g.items.map((it) => (
+                {/* one list here: a link that a later section also has (Solve a question) is listed there only */}
+                {g.items.filter((it) => !NAV.slice(i + 1).some((x) => x.items.some((y) => y.to === it.to))).map((it) => (
                   <Link key={it.to} role="menuitem" to={it.to} className={link(itemActive(pathname, it.to))}>
                     {it.label}
                   </Link>
@@ -163,7 +165,7 @@ export function SiteHeader({ floating = false, scrolled = false, width = 'max-w-
         frosted ? 'border-b border-line bg-[var(--color-scrim)] backdrop-blur-xl' : 'border-b border-transparent'
       }`}
     >
-      <div className={`mx-auto flex ${width} items-center gap-3 px-4 transition-[padding] duration-300 sm:px-6 lg:px-8 ${floating && !scrolled ? 'py-4' : 'py-2.5'}`}>
+      <div className={`relative mx-auto flex ${width} items-center gap-3 px-4 transition-[padding] duration-300 sm:px-6 lg:px-8 ${floating && !scrolled ? 'py-4' : 'py-2.5'}`}>
         <Link to="/" aria-label="Solidify home" className="pointer-events-auto shrink-0 rounded-full border border-line-2 bg-[var(--color-scrim)] py-1.5 pl-2.5 pr-3.5 backdrop-blur-xl">
           <Logo />
         </Link>
