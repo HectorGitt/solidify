@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { Pills, StudyShell } from '@/study/ui/StudyShell'
 import { Icon } from '@/ui/icons'
 import { CardGridSkeleton } from '@/ui/Skeleton'
@@ -26,6 +26,17 @@ export default function LibraryPage() {
       .catch((e) => setError(e instanceof ApiError ? e.message : 'Couldn’t load the library.'))
   }
   useEffect(load, [])
+
+  // /library?open=<id> (a class's "Open" on a library model): open that model once the list is in
+  const [params, setParams] = useSearchParams()
+  const want = params.get('open')
+  useEffect(() => {
+    if (!want || !items) return
+    const item = items.find((i) => i.id === want)
+    setParams({}, { replace: true })
+    if (item) void open(item)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [want, items])
 
   const topics = useMemo(() => [...new Set((items ?? []).map((i) => i.topic).filter((t): t is string => !!t))].sort(), [items])
   const shown = useMemo(() => {

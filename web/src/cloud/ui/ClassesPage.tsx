@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { StudyShell } from '@/study/ui/StudyShell'
+import { COURSES } from '@/study/types'
 import { api, ApiError } from '../api'
 import { useAuth } from '../auth'
 import { useProfile, type ClassRef } from '../profile'
@@ -63,6 +64,7 @@ function JoinForm() {
 function CreateForm() {
   const navigate = useNavigate()
   const [name, setName] = useState('')
+  const [subjects, setSubjects] = useState<string[]>([])
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const submit = async (e: FormEvent) => {
@@ -70,7 +72,7 @@ function CreateForm() {
     setBusy(true)
     setError(null)
     try {
-      const res = await api<{ id: string }>('/v1/classes', { body: { name } })
+      const res = await api<{ id: string }>('/v1/classes', { body: { name, subjects } })
       await useProfile.getState().refresh()
       navigate(`/classes/${res.id}`)
     } catch (err) {
@@ -83,26 +85,46 @@ function CreateForm() {
     <form data-tour="class-create" onSubmit={(e) => void submit(e)} className="rounded-3xl border border-line bg-panel-2/50 p-4">
       <h2 className="mb-1 text-[14px] font-semibold">Create a class</h2>
       <p className="mb-3 text-[12.5px] text-mute">You’ll get a join code to share with your students.</p>
-      <div className="flex gap-2">
-        <input className={inputCls} value={name} onChange={(e) => setName(e.target.value)} maxLength={80} placeholder="e.g. 500L Farm Power, first semester" aria-label="Class name" />
-        <button className={primaryBtn} disabled={busy || !name.trim()}>
-          {busy ? 'Creating…' : 'Create'}
-        </button>
+      <input className={inputCls} value={name} onChange={(e) => setName(e.target.value)} maxLength={80} placeholder="e.g. 500L Farm Power, first semester" aria-label="Class name" />
+      <p className="mb-1.5 mt-3 text-[12px] font-medium text-mute">Subjects (optional: they narrow the lists when you set work)</p>
+      <div className="flex flex-wrap gap-1.5">
+        {COURSES.map((c) => {
+          const on = subjects.includes(c.id)
+          return (
+            <button
+              key={c.id}
+              type="button"
+              aria-pressed={on}
+              onClick={() => setSubjects((s) => (on ? s.filter((x) => x !== c.id) : [...s, c.id]))}
+              className={`rounded-full border px-2.5 py-1 text-[12px] ${on ? 'border-accent bg-accent/10 font-medium text-ink' : 'border-line-2 text-mute hover:text-ink'}`}
+            >
+              {on ? '✓ ' : ''}
+              {c.title}
+            </button>
+          )
+        })}
       </div>
+      <button className={`${primaryBtn} mt-4 w-full`} disabled={busy || !name.trim()}>
+        {busy ? 'Creating…' : 'Create the class'}
+      </button>
       {error ? <div className="mt-3"><Notice tone="warn">{error}</Notice></div> : null}
     </form>
   )
 }
 
 function ClassList({ classes }: { classes: ClassRef[] }) {
-  if (!classes.length) return <p className="text-[13px] text-mute">You’re not in any classes yet.</p>
+  if (!classes.length) return <p className="rounded-3xl border border-dashed border-line-2 p-6 text-center text-[13px] text-mute">You’re not in any classes yet. Join one with a code, or create one if you teach.</p>
+  const sorted = [...classes].sort((a, b) => (a.role === b.role ? a.name.localeCompare(b.name) : a.role === 'teacher' ? -1 : 1))
   return (
-    <ul className="divide-y divide-line overflow-hidden rounded-3xl border border-line">
-      {classes.map((c) => (
+    <ul className="grid gap-3 sm:grid-cols-2">
+      {sorted.map((c) => (
         <li key={c.id}>
-          <Link to={`/classes/${c.id}`} className="flex items-center justify-between gap-3 bg-panel-2/40 px-4 py-3 hover:bg-panel-3">
-            <span className="text-[13.5px] font-medium text-ink">{c.name}</span>
-            <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${c.role === 'teacher' ? 'bg-accent/15 text-accent' : 'bg-panel-3 text-mute'}`}>{c.role === 'teacher' ? 'Teaching' : 'Student'}</span>
+          <Link to={`/classes/${c.id}`} className="flex h-full flex-col justify-between gap-3 rounded-2xl border border-line bg-panel p-4 transition-colors hover:border-accent/50">
+            <span className="text-[14.5px] font-semibold text-ink">{c.name}</span>
+            <span className="flex items-center justify-between">
+              <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${c.role === 'teacher' ? 'bg-accent/15 text-accent' : 'bg-panel-3 text-mute'}`}>{c.role === 'teacher' ? 'Teaching' : 'Student'}</span>
+              <span className="text-[12.5px] font-medium text-accent">Open →</span>
+            </span>
           </Link>
         </li>
       ))}
@@ -133,7 +155,7 @@ export default function ClassesPage() {
     status === 'signed-in',
   )
   return (
-    <StudyShell title="Classes" lead="Teachers set scenes, exam questions and challenges; students see what’s due and their progress syncs to the teacher automatically.">
+    <StudyShell title="Classes" lead="Teachers set lab rigs, exam questions, challenges, library models, links and notes; students see what’s due, and their progress reaches the teacher by itself.">
       {status === 'loading' ? null : status !== 'signed-in' ? (
         <SignInFirst what="join or create a class" />
       ) : (
