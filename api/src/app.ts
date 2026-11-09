@@ -386,7 +386,7 @@ export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision
    * What each kind of AI action really costs, counted by day without names: the numbers credit prices are
    * set from. A question is only known to be one once the model has answered.
    */
-  const actionOf = (req: Create3dRequest, isQuestion?: boolean) => (req.photoBase64 ? 'photo' : !req.currentSpec ? 'build' : isQuestion ? 'question' : 'edit')
+  const actionOf = (req: Create3dRequest, isQuestion?: boolean, answerOnly?: boolean) => (answerOnly ? 'answer' : req.photoBase64 ? 'photo' : !req.currentSpec ? 'build' : isQuestion ? 'question' : 'edit')
   const recordUsage = async (action: string, u?: ModelUsage) => {
     if (!u) return
     try {
@@ -432,7 +432,7 @@ export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision
     const req = await withReference(await body(c, create3dRequest))
     const remaining = await spend(u.uid, 'createUsage', config.createDailyLimit ?? 15, '3D builds')
     const { usage, ...out } = await model(() => noteVision.createOrEdit3D(req))
-    await recordUsage(actionOf(req, out.isQuestion), usage)
+    await recordUsage(actionOf(req, out.isQuestion, out.answerOnly), usage)
     return c.json({ ...out, remaining })
   })
 
@@ -467,7 +467,7 @@ export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision
           }
         }
         const reply = readCreateReply(text, req)
-        await recordUsage(actionOf(req, reply.isQuestion), usage)
+        await recordUsage(actionOf(req, reply.isQuestion, reply.answerOnly), usage)
         await stream.writeSSE({ event: 'done', data: JSON.stringify(reply) })
       } catch (e) {
         if (ac.signal.aborted) return
@@ -1369,9 +1369,10 @@ export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision
   /** a solved question's short form for lists (Exam practice's "Your questions"): the start of it and what it asks */
   const questionSummary = (spec: unknown) => {
     const q = (spec as { question?: { text?: unknown; find?: unknown } } | undefined)?.question
+    const written = (spec as { answerOnly?: unknown } | undefined)?.answerOnly === true
     if (!q || typeof q.text !== 'string' || !q.text.trim()) return undefined
     const find = Array.isArray(q.find) ? q.find.filter((f): f is string => typeof f === 'string').slice(0, 4).map((f) => f.slice(0, 120)) : []
-    return { text: q.text.trim().slice(0, 240), find }
+    return { text: q.text.trim().slice(0, 240), find, ...(written ? { written: true } : {}) }
   }
 
   app.get('/v1/creations', async (c) => {

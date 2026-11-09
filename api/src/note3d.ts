@@ -70,6 +70,8 @@ export interface CreateReply {
   isNewMachine: boolean
   /** the student asked a question: `explanation` answers it and the model is unchanged */
   isQuestion?: boolean
+  /** a request with nothing to build: `explanation` is the full worked answer, and there is no model */
+  answerOnly?: boolean
   labMatch?: { moduleId: string; sceneId: string }
   usage?: ModelUsage
 }
@@ -88,7 +90,11 @@ export function createParts(req: Create3dRequest): Part[] {
 
 /** reads Gemini's whole reply into a build result (throws ModelReplyError when it is unusable) */
 export function readCreateReply(text: string, req: Create3dRequest): CreateReply {
-  const parsed = parseModelJson<{ spec?: Record<string, unknown>; explanation?: string; isNewMachine?: boolean; isQuestion?: boolean; labMatch?: unknown }>(text)
+  const parsed = parseModelJson<{ spec?: Record<string, unknown>; explanation?: string; isNewMachine?: boolean; isQuestion?: boolean; answerOnly?: boolean; labMatch?: unknown }>(text)
+  // a request with nothing to build (a transportation problem, statistics): a written answer and no model
+  if (parsed.answerOnly === true && typeof parsed.explanation === 'string' && parsed.explanation.trim()) {
+    return { spec: req.currentSpec ?? {}, explanation: parsed.explanation, isNewMachine: false, isQuestion: true, answerOnly: true }
+  }
   const isQuestion = parsed.isQuestion === true && !!req.currentSpec
   return {
     spec: isQuestion ? (req.currentSpec ?? {}) : (parsed.spec ?? req.currentSpec ?? {}),
