@@ -236,14 +236,14 @@ function CalcCard({
         {status === 'warn' && c.limit ? <p className="mt-1 text-[11.5px] text-warn">Over the limit: {c.limit.label ?? 'check this value'}</p> : null}
         {/* the equation: as the model wrote it, else its formula written out as maths */}
         {c.latex || formulaTex ? (
-          <div className="mt-1.5 overflow-x-auto text-[12px] text-mute">
+          <div className="mt-1.5 overflow-x-auto overflow-y-hidden py-0.5 text-[12px] text-mute">
             <Tex tex={`\\displaystyle ${c.latex || `${/[\\{}]/.test(c.symbol) ? c.symbol : nameTex(c.symbol || c.id)} = ${formulaTex}`}`} />
           </div>
         ) : null}
       </button>
       {open ? (
         <div className="space-y-3 border-t border-line px-3 pb-3 pt-2.5">
-          <p className="overflow-x-auto text-[12px] leading-relaxed text-mute">
+          <p className="overflow-x-auto overflow-y-hidden py-0.5 text-[12px] leading-relaxed text-mute">
             {numbersTex ? <Tex tex={`\\displaystyle = ${numbersTex} = \\mathbf{${formatted}}`} /> : <span className="font-mono">= {worked} = <span className="text-ink">{formatted}</span></span>} <span className="text-ink/80">{c.unit}</span>
           </p>
           {inputs.map((p) => {
@@ -413,7 +413,10 @@ export default function ModelLab() {
   const [attached, setAttached] = useState<{ name: string; url: string } | null>(null)
   const attachRef = useRef<HTMLInputElement>(null)
   const [, setTab] = useState<Tab>('calculations')
-  const [mobilePane, setMobilePane] = useState<'chat' | 'engineering'>('chat')
+  // phones: the chat is a sheet over the page, opened from a round button, so the model and its engineering
+  // keep the screen; on a computer it is the left column
+  const [chatOpen, setChatOpen] = useState(false)
+  const [chatUnread, setChatUnread] = useState(false)
   const [matchedCatalog, setMatchedCatalog] = useState<CatalogSceneMatch | null>(null)
   const [loadedCatalogScene, setLoadedCatalogScene] = useState<SceneDef | null>(null)
   const [viewMode, setViewMode] = useState<'parametric' | 'catalog'>('parametric')
@@ -929,6 +932,7 @@ export default function ModelLab() {
   }, [spec, live, viewMode, calcScope, turns])
   const problems = [...layoutIssues.map((i) => i.message), ...mechIssues]
   const [layoutDismissed, setLayoutDismissed] = useState('')
+  const [problemsOpen, setProblemsOpen] = useState(false)
   const layoutKey = problems.join('|')
   // each layout problem a student is shown is counted once, so the team sees which kinds of model go wrong
   useEffect(() => {
@@ -940,7 +944,7 @@ export default function ModelLab() {
   const selectedPart = useMemo(() => (viewMode === 'parametric' ? findPart(shownSpec, selectedId) : null), [shownSpec, selectedId, viewMode])
   // on a phone, choosing a part brings its details up under the model
   useEffect(() => {
-    if (selectedPart) setMobilePane('engineering')
+    if (selectedPart) setChatOpen(false)
   }, [selectedPart?.id])
   const calcUnits = useMemo(() => Object.fromEntries((shownSpec?.calculations ?? []).map((c) => [c.id, c.unit])), [shownSpec?.calculations])
   // one viewport for the page, fed the latest model: parts and arrows update in place as sizes change and parts stream in
@@ -955,6 +959,12 @@ export default function ModelLab() {
   // a saved model still loading (a written answer has no model: it is open once its conversation is there)
   const opening = routeId !== 'new' && routeId !== 'preview' && !spec && !live && !turns.length && authStatus !== 'signed-out'
   const messages = [...turns].reverse()
+  // a reply that lands while the phone's chat sheet is shut marks its button
+  const wasLive = useRef(false)
+  useEffect(() => {
+    if (wasLive.current && !live && !chatOpen) setChatUnread(true)
+    wasLive.current = !!live
+  }, [live, chatOpen])
 
   return (
     <div className="flex h-full flex-col bg-bg text-ink">
@@ -970,11 +980,12 @@ export default function ModelLab() {
       ) : null}
 
       {/* the model's own bar */}
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-line px-4 py-2 sm:px-6">
-        <Link to={viewing ? viewing.backTo : '/create/lab'} className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-[12.5px] text-mute hover:bg-panel-2 hover:text-ink">
-          <Icon.back width={14} height={14} /> {viewing ? 'Back' : 'My models'}
+      {/* phones: two rows, the way back and the name, then the state and the actions */}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-b border-line px-3 py-2 sm:px-6">
+        <Link to={viewing ? viewing.backTo : '/create/lab'} aria-label={viewing ? 'Back' : 'My models'} className="inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-1 text-[12.5px] text-mute hover:bg-panel-2 hover:text-ink">
+          <Icon.back width={14} height={14} /> <span className="max-sm:hidden">{viewing ? 'Back' : 'My models'}</span>
         </Link>
-        <span className="h-4 w-px bg-line" />
+        <span className="h-4 w-px bg-line max-sm:hidden" />
         {renaming && spec ? (
           <form onSubmit={rename} className="flex items-center gap-1.5">
             <input autoFocus value={titleDraft} onChange={(e) => setTitleDraft(e.target.value)} onBlur={rename} maxLength={120} aria-label="Model name" className={`${inputCls} py-1 text-[14px]`} />
@@ -987,13 +998,13 @@ export default function ModelLab() {
               setTitleDraft(spec?.title ?? '')
               setRenaming(true)
             }}
-            className="min-w-0 truncate text-left text-[15px] font-semibold text-ink enabled:hover:underline disabled:cursor-default"
+            className="min-w-0 truncate text-left text-[15px] font-semibold text-ink max-sm:basis-[calc(100%-3rem)] enabled:hover:underline disabled:cursor-default"
             title={spec ? 'Rename' : undefined}
           >
             {live?.progress?.title ?? spec?.title ?? (live ? 'Building…' : answerView ? 'Worked answer' : routeId === 'new' ? 'New model' : 'Model')}
           </button>
         )}
-        <span className="text-[12px] text-dim">
+        <span className="min-w-0 text-[12px] text-dim max-sm:flex-1">
           {live ? (live.progress?.title || spec ? 'Building…' : '') : routeId === 'preview' && !creationId ? (viewing?.draftId ? (savingDraft ? 'Saving to the draft…' : draftChanged ? 'Draft under review: changes not saved yet' : 'Draft under review: saved') : 'Preview, not saved') : creationId ? (saveState === 'saving' ? 'Saving…' : saveState === 'error' ? 'Not saved: check your connection' : 'Saved') : ''}
         </span>
         <div className="ml-auto flex items-center gap-2">
@@ -1004,7 +1015,11 @@ export default function ModelLab() {
           ) : null}
           {viewing?.draftId ? (
             <button type="button" disabled={!draftChanged || savingDraft} onClick={() => void saveToDraft()} title={draftChanged ? 'Save your changes into the draft under review' : 'Change sizes, materials or parts to save them to the draft'} className={`${primaryBtn} px-4 py-1.5 text-[12.5px]`}>
-              {savingDraft ? 'Saving…' : 'Save changes to the draft'}
+              {savingDraft ? 'Saving…' : (
+                <span>
+                  Save<span className="hidden sm:inline"> changes</span> to the draft
+                </span>
+              )}
             </button>
           ) : null}
           {isAdmin && spec && !live && !viewing?.draftId ? (
@@ -1013,7 +1028,7 @@ export default function ModelLab() {
             </button>
           ) : null}
           {spec || live ? (
-            <Link to="/create/new" className={`${ghostBtn} px-4 py-1.5 text-[12.5px]`}>
+            <Link to="/create/new" className={`${ghostBtn} px-4 py-1.5 text-[12.5px] ${viewing?.draftId ? 'max-sm:hidden' : ''}`}>
               New model
             </Link>
           ) : null}
@@ -1021,9 +1036,24 @@ export default function ModelLab() {
       </div>
 
       {opening ? <WorkspaceBodySkeleton /> : null}
-      <div className={`${opening ? 'hidden' : 'grid'} min-h-0 flex-1 grid-cols-[minmax(0,1fr)] ${blank || answerView ? 'grid-rows-1' : 'grid-rows-[minmax(380px,58vh)_auto]'} ${answerView ? 'lg:grid-cols-[minmax(0,1fr)]' : 'lg:grid-cols-[340px_minmax(0,1fr)_360px]'} lg:grid-rows-1`}>
+      <div className={`${opening ? 'hidden' : 'grid'} min-h-0 flex-1 grid-cols-[minmax(0,1fr)] ${blank || answerView ? 'grid-rows-1' : 'grid-rows-[minmax(300px,50vh)_minmax(0,1fr)]'} ${answerView ? 'lg:grid-cols-[minmax(0,1fr)]' : 'lg:grid-cols-[340px_minmax(0,1fr)_360px]'} lg:grid-rows-1`}>
         {/* the conversation */}
-        <aside className={`${answerView ? 'mx-auto flex w-full max-w-3xl text-[14px]' : `${mobilePane === 'chat' && !blank ? 'flex' : 'hidden'} lg:border-r`} order-2 min-h-[360px] flex-col border-line lg:order-1 lg:flex lg:min-h-0`}>
+        {chatOpen && !answerView && !blank ? <div className="fixed inset-0 z-40 bg-black/30 lg:hidden" onClick={() => setChatOpen(false)} aria-hidden /> : null}
+        <aside
+          className={`${
+            answerView
+              ? 'mx-auto flex w-full max-w-3xl text-[14px]'
+              : `${chatOpen && !blank ? 'fixed inset-x-0 bottom-0 z-50 flex h-[80vh] rounded-t-3xl border-t bg-bg shadow-2xl' : 'hidden'} lg:static lg:z-auto lg:h-auto lg:rounded-none lg:border-t-0 lg:border-r lg:shadow-none`
+          } order-2 flex-col border-line lg:order-1 lg:flex lg:min-h-0`}
+        >
+          {!answerView ? (
+            <div className="flex items-center justify-between border-b border-line px-4 py-2.5 lg:hidden">
+              <span className="text-[13.5px] font-semibold text-ink">Chat</span>
+              <button type="button" onClick={() => setChatOpen(false)} aria-label="Close the chat" className="rounded-full p-1.5 text-mute hover:bg-panel-2 hover:text-ink">
+                <Icon.close width={16} height={16} />
+              </button>
+            </div>
+          ) : null}
           <div className="flex-1 space-y-4 overflow-y-auto px-4 py-4">
             {!messages.length && !live ? (
               <p className="rounded-2xl border border-dashed border-line-2 p-4 text-[13px] leading-relaxed text-mute">
@@ -1121,7 +1151,8 @@ export default function ModelLab() {
             <>
               {problems.length > 0 && layoutDismissed !== layoutKey ? (
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-line bg-warn/10 px-4 py-2 text-[12.5px]">
-                  <span className="min-w-0 flex-1 text-ink">
+                  {/* on a phone one line, opened with a tap, so the model keeps the room */}
+                  <button type="button" onClick={() => setProblemsOpen((o) => !o)} aria-expanded={problemsOpen} className={`min-w-0 flex-1 text-left text-ink sm:pointer-events-none ${problemsOpen ? '' : 'line-clamp-1 sm:line-clamp-none'}`}>
                     <span className="font-semibold">
                       {mechIssues.length && !layoutIssues.length
                         ? 'Moves wrongly'
@@ -1134,7 +1165,7 @@ export default function ModelLab() {
                     </span>{' '}
                     {problems.slice(0, 3).join('; ')}
                     {problems.length > 3 ? '…' : ''}
-                  </span>
+                  </button>
                   <button
                     type="button"
                     onClick={() => {
@@ -1219,23 +1250,25 @@ export default function ModelLab() {
             )
           )}
 
-          {/* phones: choose what sits under the model */}
-          <div className={`flex gap-1 border-t border-line p-2 lg:hidden ${blank ? 'hidden' : ''}`} role="tablist" aria-label="Panels">
-            {(
-              [
-                ['chat', 'Chat'],
-                ['engineering', 'Engineering'],
-              ] as const
-            ).map(([id, label]) => (
-              <button key={id} type="button" role="tab" aria-selected={mobilePane === id} onClick={() => setMobilePane(id)} className={`flex-1 rounded-full px-3 py-1.5 text-[12.5px] font-medium ${mobilePane === id ? 'bg-ink text-bg' : 'text-mute'}`}>
-                {label}
-              </button>
-            ))}
-          </div>
         </main>
 
+        {!blank && !answerView && !chatOpen ? (
+          <button
+            type="button"
+            onClick={() => {
+              setChatOpen(true)
+              setChatUnread(false)
+            }}
+            aria-label="Open the chat"
+            className="fixed bottom-5 right-4 z-30 flex h-14 w-14 items-center justify-center rounded-full bg-accent text-accent-ink shadow-xl lg:hidden"
+          >
+            <Icon.chat width={24} height={24} />
+            {live || chatUnread ? <span className={`absolute right-1 top-1 h-3 w-3 rounded-full border-2 border-accent ${live ? 'bp-ping bg-white' : 'bg-warn'}`} /> : null}
+          </button>
+        ) : null}
+
         {/* the engineering */}
-        <aside className={`${mobilePane === 'engineering' && !blank && !answerView ? 'flex' : 'hidden'} order-3 min-h-[360px] flex-col border-line ${answerView ? '' : 'lg:flex'} lg:min-h-0 lg:border-l`}>
+        <aside className={`${!blank && !answerView ? 'flex' : 'hidden'} order-3 min-h-0 flex-col border-t border-line lg:min-h-0 lg:border-l lg:border-t-0`}>
           <ErrorBoundary label="engineering panel" resetKey={shownSpec}>
           {selectedPart && shownSpec ? (
             <>

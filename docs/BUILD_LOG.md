@@ -570,3 +570,21 @@ Every entry is numbered (in the order they appear, top to bottom) and set out th
 - **Cause:** every tool for a draft was added to the card as its own row as it was built, with nothing grouped or folded.
 - **Solution:** the card shows one problems line (opens to the list), the review checklist folded to a count ("Review · 1 of 3 checked"), and two buttons, Open in 3D and Approve; Fix with Gemini, Rebuild, Download, History and Reject sit under More, and the ones that need input or confirmation open in a dialog (the fix dialog can fill in the problems found).
 - **Lesson:** when adding a control to a card, decide which two actions matter most and group the rest; check the card at phone width each time it grows.
+
+### 101. The phone Menu button sat beside the logo (2026-11-09)
+- **Problem:** on a phone the Menu button sat right after the logo, with the account button alone at the far right; the owner read it as misplaced.
+- **Cause:** the button was placed where the desktop nav pills go, in the middle of the bar.
+- **Solution:** Menu sits at the far right after the account button, where phone menus usually are; its sheet now opens from the right on tablets.
+- **Lesson:** place phone controls where phone users look for them, not where the desktop version happens to have them.
+
+### 102. Formulas had their own tiny scroll bars (2026-11-09)
+- **Problem:** in the model view the calculation cards scrolled up and down a few pixels each, so the panel felt "weirdly scrollable".
+- **Cause:** the maths boxes set `overflow-x: auto` for long formulas; CSS then makes the other direction scroll too, and KaTeX draws a few pixels above and below its line box.
+- **Solution:** `overflow-y-hidden` with a little padding on every maths box (calculation cards, part inspector, worked solution, formula sheet, chat maths).
+- **Lesson:** a horizontal scroller needs its vertical overflow set as well, or it scrolls both ways.
+
+### 103. The model view on a phone left the model a thin strip (2026-11-09)
+- **Problem:** a draft opened from review on a phone showed a four-row title bar, a four-line problems banner, the toolbar and the Chat/Engineering tabs, leaving about 130 px of model; the page also scrolled while the panel under it scrolled inside it.
+- **Cause:** desktop pieces stacked on the phone unchanged; the lower row was sized to its content, so the page grew past the screen.
+- **Solution:** a two-row title bar (back arrow and name; state and Save), a one-line problems banner that opens on tap, the chat as a round button that opens a sheet (with a dot when a reply comes in while shut), Engineering always under the model, and the page fitted to the screen: the model half, the panel the rest, which scrolls by itself.
+- **Lesson:** on a phone measure what the model actually gets, and check that only one thing scrolls.
