@@ -83,7 +83,11 @@ export function YourQuestions({ showSolve = true }: { showSolve?: boolean }) {
             return (
               <li key={c.id} className="flex min-w-0 flex-col overflow-hidden rounded-3xl border border-line bg-panel">
                 <Link to={`/create/${c.id}`} className="relative block aspect-[16/8] bg-[var(--color-stage)]">
-                  {c.thumbnail ? <img src={c.thumbnail} alt="" loading="lazy" className="absolute inset-0 h-full w-full object-cover" /> : null}
+                  {c.thumbnail ? (
+                    <img src={c.thumbnail} alt="" loading="lazy" className="absolute inset-0 h-full w-full object-cover" />
+                  ) : c.question!.written ? (
+                    <span className="absolute inset-0 grid place-items-center text-[12.5px] font-medium text-mute">Worked answer, no model</span>
+                  ) : null}
                 </Link>
                 <div className="flex min-w-0 flex-1 flex-col p-4">
                   <h3 className="truncate text-[14px] font-semibold text-ink">{c.title}</h3>
@@ -95,13 +99,21 @@ export function YourQuestions({ showSolve = true }: { showSolve?: boolean }) {
                     </p>
                   ) : null}
                   <div className="mt-auto flex flex-wrap items-center gap-2 pt-3">
-                    <Link to={`/create/${c.id}?try=1`} className="rounded-full bg-accent px-3 py-1.5 text-[12.5px] font-semibold text-accent-ink hover:brightness-110">
-                      Try it
-                    </Link>
-                    <Link to={`/create/${c.id}`} className="rounded-full border border-line-2 px-3 py-1.5 text-[12.5px] font-medium text-ink hover:border-ink/40">
-                      See the solution
-                    </Link>
-                    <span className="ml-auto text-[11.5px] text-dim">{stat ? `${stat.correct}/${stat.attempts} right` : 'not tried yet'}</span>
+                    {c.question!.written ? (
+                      <Link to={`/create/${c.id}`} className="rounded-full bg-accent px-3 py-1.5 text-[12.5px] font-semibold text-accent-ink hover:brightness-110">
+                        Read the answer
+                      </Link>
+                    ) : (
+                      <>
+                        <Link to={`/create/${c.id}?try=1`} className="rounded-full bg-accent px-3 py-1.5 text-[12.5px] font-semibold text-accent-ink hover:brightness-110">
+                          Try it
+                        </Link>
+                        <Link to={`/create/${c.id}`} className="rounded-full border border-line-2 px-3 py-1.5 text-[12.5px] font-medium text-ink hover:border-ink/40">
+                          See the solution
+                        </Link>
+                      </>
+                    )}
+                    {c.question!.written ? null : <span className="ml-auto text-[11.5px] text-dim">{stat ? `${stat.correct}/${stat.attempts} right` : 'not tried yet'}</span>}
                   </div>
                 </div>
               </li>

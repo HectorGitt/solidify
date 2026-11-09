@@ -23,7 +23,7 @@ import { Readout, Section, Slider } from '@/ui/controls'
 import { FoldChevron, usePersisted } from '@/ui/usePersisted'
 import { Tex } from '@/ui/Tex'
 import { WorkedSolution } from './WorkedSolution'
-import { RichText } from '@/ui/RichText'
+import { RichInline, RichText } from '@/ui/RichText'
 import { exprTex, nameTex } from '@/note3d/exprTex'
 import { freshNumbers } from '@/note3d/freshNumbers'
 import { toast } from '@/ui/toast'
@@ -220,7 +220,9 @@ function CalcCard({
     <div className={`bp-fade rounded-2xl border transition-colors ${status === 'warn' ? 'border-warn/50 bg-warn/5' : open ? 'border-ink/30' : 'border-line-2'}`}>
       <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} className="w-full p-3 text-left">
         <div className="flex items-baseline justify-between gap-3">
-          <span className="text-[12.5px] text-mute">{c.label}</span>
+          <span className="text-[12.5px] text-mute">
+            <RichInline text={c.label} />
+          </span>
           <span className="font-mono text-[16px] font-semibold text-ink">
             {formatted} <span className="text-[12px] font-normal text-mute">{c.unit}</span>
           </span>
@@ -559,6 +561,8 @@ export default function ModelLab() {
       return
     }
     const isNew = !spec
+    // a follow-up to a written answer (nothing built): the conversation goes with it
+    const followUp = isNew && turns.some((t) => t.kind === 'answer')
     const asked = withPhoto && !text.trim() ? (isNew ? `From a photo: ${withPhoto.name}` : 'Change it to match this photo') : prompt
     // a background task: it keeps going if the student leaves, and writes to this screen only while it is still here
     const token = ++buildSeq.current
@@ -589,7 +593,7 @@ export default function ModelLab() {
     abortRef.current = ac
     try {
       const res = await streamOrEdit3DScene(
-        { prompt, currentSpec: isNew ? undefined : (spec ?? undefined), photoDataUrl: withPhoto?.url, history: isNew ? [] : savedHistory(turns).reverse() },
+        { prompt, currentSpec: isNew ? undefined : (spec ?? undefined), photoDataUrl: withPhoto?.url, history: isNew && !followUp ? [] : savedHistory(turns).reverse() },
         (progress) => {
           if (attached()) setLive((l) => (l ? { ...l, progress } : l))
           task.update(progress.isQuestion ? 'Answering' : progress.parts.length ? `${progress.parts.length} ${progress.parts.length === 1 ? 'part' : 'parts'} placed` : 'Working out the engineering')
@@ -600,6 +604,29 @@ export default function ModelLab() {
         const next = [{ id: `t-${Date.now()}`, prompt: asked, response: res.explanation, kind: 'answer' as const, photoUrl: withPhoto?.url }, ...turns]
         if (attached()) setTurns(next)
         if (startId) void updateCreation(startId, { history: savedHistory(next) }).catch(() => {})
+        else if (res.answerOnly && isNew) {
+          // a written answer with nothing built: kept with the models (and in Your questions), reopened as text
+          const text = asked.replace(/^Solve (?:this problem|the problem in this screenshot) in 3D, step by step[^:]*:\s*/i, '').trim() || asked
+          const title = (text.split(/(?<=[.?!])\s|\n/)[0] || 'Worked answer').slice(0, 110)
+          try {
+            const { id } = await saveNewCreation({
+              title,
+              prompt: asked.slice(0, 2000),
+              fromPhoto: !!withPhoto,
+              spec: { id: `answer-${Date.now()}`, title, answerOnly: true, question: { text: text.slice(0, 4000), find: [] }, parts: [] },
+              params: {},
+              history: savedHistory(next),
+            })
+            if (attached()) {
+              creationIdRef.current = id
+              setCreationId(id)
+              setSaveState('saved')
+              navigate(`/create/${id}`, { replace: true })
+            }
+          } catch {
+            /* the answer is on screen; keeping it failed (e.g. the saved-models limit) */
+          }
+        }
         // an answer is quick: only worth a notice if the student has moved on
         if (attached()) dismissTask(task.id)
         else task.finish({ message: 'Your answer is ready.' })
@@ -759,10 +786,19 @@ export default function ModelLab() {
       .then((c) => {
         if (cancelled) return
         const loaded = c.spec as unknown as NoteSceneSpec
-        const p = { ...Object.fromEntries((loaded.parameters ?? []).map((x) => [x.id, x.value])), ...c.params }
         creationIdRef.current = routeId
         setCreationId(routeId)
         setViewKey(routeId)
+        // a written answer kept with the models (nothing was built): it reopens as the conversation
+        if ((c.spec as { answerOnly?: unknown }).answerOnly === true) {
+          lastSavedRef.current = ''
+          setSpec(null)
+          setParams({})
+          setTurns(c.history.map((h, i) => ({ id: `saved-${i}`, ...h, kind: 'answer' as const })))
+          setSaveState('saved')
+          return
+        }
+        const p = { ...Object.fromEntries((loaded.parameters ?? []).map((x) => [x.id, x.value])), ...c.params }
         lastSavedRef.current = JSON.stringify([loaded, p])
         setSpec(loaded)
         setParams(p)
@@ -906,8 +942,11 @@ export default function ModelLab() {
   const firstBuild = !!live && live.isNew && !preview
   /** a new, empty workspace: the start panel takes the input */
   const blank = routeId === 'new' && !spec && !live && !turns.length
+  // a written answer with nothing to build (a transportation problem, statistics): the conversation is the page
+  const answerView = !spec && !live && turns.some((t) => t.kind === 'answer')
   /** a saved model is being fetched */
-  const opening = routeId !== 'new' && routeId !== 'preview' && !spec && !live && authStatus !== 'signed-out'
+  // a saved model still loading (a written answer has no model: it is open once its conversation is there)
+  const opening = routeId !== 'new' && routeId !== 'preview' && !spec && !live && !turns.length && authStatus !== 'signed-out'
   const messages = [...turns].reverse()
 
   return (
@@ -944,7 +983,7 @@ export default function ModelLab() {
             className="min-w-0 truncate text-left text-[15px] font-semibold text-ink enabled:hover:underline disabled:cursor-default"
             title={spec ? 'Rename' : undefined}
           >
-            {live?.progress?.title ?? spec?.title ?? (live ? 'Building…' : routeId === 'new' ? 'New model' : 'Model')}
+            {live?.progress?.title ?? spec?.title ?? (live ? 'Building…' : answerView ? 'Worked answer' : routeId === 'new' ? 'New model' : 'Model')}
           </button>
         )}
         <span className="text-[12px] text-dim">
@@ -975,9 +1014,9 @@ export default function ModelLab() {
       </div>
 
       {opening ? <WorkspaceBodySkeleton /> : null}
-      <div className={`${opening ? 'hidden' : 'grid'} min-h-0 flex-1 grid-cols-[minmax(0,1fr)] ${blank ? 'grid-rows-1' : 'grid-rows-[minmax(380px,58vh)_auto]'} lg:grid-cols-[340px_minmax(0,1fr)_360px] lg:grid-rows-1`}>
+      <div className={`${opening ? 'hidden' : 'grid'} min-h-0 flex-1 grid-cols-[minmax(0,1fr)] ${blank || answerView ? 'grid-rows-1' : 'grid-rows-[minmax(380px,58vh)_auto]'} ${answerView ? 'lg:grid-cols-[minmax(0,1fr)]' : 'lg:grid-cols-[340px_minmax(0,1fr)_360px]'} lg:grid-rows-1`}>
         {/* the conversation */}
-        <aside className={`${mobilePane === 'chat' && !blank ? 'flex' : 'hidden'} order-2 min-h-[360px] flex-col border-line lg:order-1 lg:flex lg:min-h-0 lg:border-r`}>
+        <aside className={`${answerView ? 'mx-auto flex w-full max-w-3xl text-[14px]' : `${mobilePane === 'chat' && !blank ? 'flex' : 'hidden'} lg:border-r`} order-2 min-h-[360px] flex-col border-line lg:order-1 lg:flex lg:min-h-0`}>
           <div className="flex-1 space-y-4 overflow-y-auto px-4 py-4">
             {!messages.length && !live ? (
               <p className="rounded-2xl border border-dashed border-line-2 p-4 text-[13px] leading-relaxed text-mute">
@@ -1046,7 +1085,7 @@ export default function ModelLab() {
                 rows={2}
                 maxLength={3800}
                 disabled={!!live}
-                placeholder={attached ? (spec ? 'What should change? (optional)' : 'Anything to add? (optional)') : spec ? 'Ask for a change, or ask a question…' : 'Describe a machine…'}
+                placeholder={attached ? (spec ? 'What should change? (optional)' : 'Anything to add? (optional)') : spec ? 'Ask for a change, or ask a question…' : answerView ? 'Ask a follow-up question…' : 'Describe a machine, or paste a question…'}
                 aria-label="Message"
                 className="max-h-40 min-h-[44px] flex-1 resize-none bg-transparent px-2 py-1.5 text-[13.5px] text-ink placeholder:text-dim field-bare focus:outline-none disabled:opacity-60"
               />
@@ -1058,7 +1097,7 @@ export default function ModelLab() {
         </aside>
 
         {/* the model */}
-        <main className="order-1 flex min-h-0 min-w-0 flex-col border-line lg:order-2">
+        <main className={`${answerView ? 'hidden' : 'flex'} order-1 min-h-0 min-w-0 flex-col border-line lg:order-2`}>
           {firstBuild ? (
             <div className="relative flex-1 overflow-y-auto p-3">
               <BuildScreen
@@ -1189,7 +1228,7 @@ export default function ModelLab() {
         </main>
 
         {/* the engineering */}
-        <aside className={`${mobilePane === 'engineering' && !blank ? 'flex' : 'hidden'} order-3 min-h-[360px] flex-col border-line lg:flex lg:min-h-0 lg:border-l`}>
+        <aside className={`${mobilePane === 'engineering' && !blank && !answerView ? 'flex' : 'hidden'} order-3 min-h-[360px] flex-col border-line ${answerView ? '' : 'lg:flex'} lg:min-h-0 lg:border-l`}>
           <ErrorBoundary label="engineering panel" resetKey={shownSpec}>
           {selectedPart && shownSpec ? (
             <>
@@ -1271,7 +1310,7 @@ export default function ModelLab() {
                   <Section title="Live">
                     <div className="grid grid-cols-2 gap-2 xl:grid-cols-3">
                       {calcResults.slice(0, 9).map((r) => (
-                        <Readout key={r.spec.id} label={r.spec.label} value={r.formatted} unit={r.spec.unit} tone={r.status === 'warn' ? 'warn' : 'ink'} />
+                        <Readout key={r.spec.id} label={<RichInline text={r.spec.label} />} value={r.formatted} unit={r.spec.unit} tone={r.status === 'warn' ? 'warn' : 'ink'} />
                       ))}
                     </div>
                   </Section>

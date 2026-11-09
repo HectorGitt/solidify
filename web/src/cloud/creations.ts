@@ -11,7 +11,7 @@ export interface CreationSummary {
   createdAt: number
   updatedAt: number
   /** a solved question: the start of it and what it asks (for Exam practice's "Your questions") */
-  question?: { text: string; find: string[] }
+  question?: { text: string; find: string[]; written?: boolean }
 }
 
 export interface CreationInput {

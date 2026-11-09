@@ -75,6 +75,9 @@ export function previewSpec(progress: LiveProgress): NoteSceneSpec | null {
 export interface LiveResult extends BuildOrRefineResult {
   /** the student asked a question: the model is unchanged and `explanation` is the answer */
   isQuestion: boolean
+  /** a request with nothing to build (a transportation problem, statistics): `explanation` is the whole worked
+   *  answer and there is no model (`spec` is the current one, if any) */
+  answerOnly?: boolean
 }
 
 /**
@@ -100,7 +103,10 @@ export async function streamOrEdit3DScene(
     } else if (ev.event === 'error') {
       throw new ApiError(typeof data.error === 'string' ? data.error : 'Solidify couldn’t build that just now. Please try again.', 502)
     } else if (ev.event === 'done') {
-      const reply = data as { spec?: Record<string, unknown>; explanation?: string; isNewMachine?: boolean; isQuestion?: boolean; labMatch?: { moduleId: string; sceneId: string } }
+      const reply = data as { spec?: Record<string, unknown>; explanation?: string; isNewMachine?: boolean; isQuestion?: boolean; answerOnly?: boolean; labMatch?: { moduleId: string; sceneId: string } }
+      if (reply.answerOnly && reply.explanation) {
+        return { spec: (req.currentSpec ?? null) as unknown as NoteSceneSpec, explanation: reply.explanation, isNewMachine: false, isQuestion: true, answerOnly: true, matchedCatalogScene: null }
+      }
       if (reply.isQuestion && req.currentSpec) {
         return { spec: req.currentSpec, explanation: reply.explanation ?? '', isNewMachine: false, isQuestion: true, matchedCatalogScene: null }
       }
