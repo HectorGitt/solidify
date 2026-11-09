@@ -600,3 +600,9 @@ Every entry is numbered (in the order they appear, top to bottom) and set out th
 - **Cause:** the class page grew one section at a time on a single long page; the report read `students` from every reply without checking it was a list (model output and server replies must both be treated as untrusted).
 - **Solution:** a teacher page in four tabs (Work, Students, Report, Settings); a Set work dialog that ticks any number of rigs, questions, challenges and library models, narrowed to the class's subjects, plus links and notes, all with one due date and instructions; work grouped by overdue, coming up and undated with how many have done each; edit and remove in dialogs; a join panel with an invitation to copy and a new-code button; a student list with each one's progress; settings for name, description and subjects, and closing the class. Students get a summary (done, next due, overdue), a to-do list in due order with instructions, Mark done for links, notes and models, and the done list folded. The report checks every reply.
 - **Lesson:** the role a feature exists for (teachers here) needs the whole job covered, set up to follow-up; and every list read from a reply needs an `Array.isArray` check.
+
+### 106. A rig opened from a link sometimes came up with nothing picked (2026-11-09)
+- **Problem:** "Open in the rig" from the home hero opened the four-bar without the part the visitor had clicked; the same path serves search results and "seen in" links.
+- **Cause:** the rig looked for the named part once, 0.45 s after the scene loaded; when the scene's code was already loaded (the hero had just shown it) its parts were not registered yet at that moment, and a big machine can take seconds.
+- **Solution:** the rig keeps looking for the part every 0.3 s for about 4 s, and picks it once it is drawn.
+- **Lesson:** never wait a fixed time for something that loads at its own pace; poll for it with a limit.

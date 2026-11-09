@@ -29,7 +29,7 @@ import { dropInside, exitInside, useInside } from './inside'
 import { TelemetryTag } from './TelemetryTag'
 import { PowerPath } from './PowerPath'
 import { WholePanel } from './WholePanel'
-import { useParts } from '@/parts/registry'
+import { partObjects, useParts } from '@/parts/registry'
 import { currentPose, flyTo, focusPart } from './camera'
 import { onSceneReady } from '@/study/bridge'
 import { SceneMark } from '@/study/ui/badges'
@@ -157,13 +157,17 @@ export function Viewer() {
         }
         if (arrival?.selectName) {
           const name = arrival.selectName
-          window.setTimeout(() => {
+          // the scene's parts register as it builds (later when its code was already loaded and it builds at
+          // once, or a big machine takes seconds): keep looking for the part for a few seconds
+          let tries = 0
+          const find = () => {
             const hit = Object.values(useParts.getState().parts).find((x) => x.name === name)
-            if (hit) {
+            if (hit && partObjects.get(hit.id)) {
               useView.getState().select(hit.id)
               focusPart(hit.id)
-            }
-          }, 450)
+            } else if (++tries < 14) window.setTimeout(find, 300)
+          }
+          window.setTimeout(find, 450)
         }
         window.setTimeout(() => useFade.getState().set(0), 120)
         // Restore shared deep-link view parameters (?cut=...&pos=...&explode=...&xray=...&cam=...)

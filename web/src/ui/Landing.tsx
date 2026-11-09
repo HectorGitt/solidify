@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 import { useEffect, useState, type ReactNode } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { MODULES } from '@/modules/catalog'
 import type { ModuleDef, SceneDef } from '@/modules/types'
 import { useView } from '@/render/view'
@@ -12,7 +12,8 @@ import { Icon } from './icons'
 import { Loader, LoaderMark } from './Loader'
 import { Stage, type StageFrame } from './Stage'
 import { hasWebGL } from './webgl'
-import { getCameraControls } from './camera'
+import { focusPart, getCameraControls } from './camera'
+import { useTrail } from './trail'
 import { partObjects, useParts } from '@/parts/registry'
 import { SiteHeader } from '@/ui/SiteHeader'
 import { SiteFooter } from './SiteFooter'
@@ -123,6 +124,7 @@ function Hero({ copy }: { copy: (typeof COPY)[keyof typeof COPY] }) {
   const cutEnabled = useView((s) => s.cut.enabled)
   const explode = useView((s) => s.explode)
   const hero = HERO_SCENES[heroIdx]
+  const partPicked = useView((s) => !!s.selectedId)
   const shownFrame = HERO_SCENES.find((h) => h.sceneId === scene?.id)?.frame
   const switching = !!scene && scene.id !== hero.sceneId
 
@@ -360,7 +362,10 @@ function Hero({ copy }: { copy: (typeof COPY)[keyof typeof COPY] }) {
         aria-hidden
       />
 
-      <div className="pointer-events-none absolute right-5 top-24 hidden w-[230px] flex-col gap-2.5 lg:flex">
+      {/* mouse: a part's name under the pointer; a clicked part gets a card with where to go next */}
+      {live3D && scene && owner === 'hero' ? <HeroHoverTip /> : null}
+      {live3D && scene && owner === 'hero' && !reel ? <HeroPartCard moduleId={hero.moduleId} sceneId={hero.sceneId} /> : null}
+      <div className={`pointer-events-none absolute right-5 top-24 hidden w-[230px] flex-col gap-2.5 ${partPicked && !reel ? '' : 'lg:flex'}`}>
         {hero.readouts.map((r) => (
           <Gauge key={r.label} {...r} />
         ))}
@@ -431,6 +436,74 @@ function Hero({ copy }: { copy: (typeof COPY)[keyof typeof COPY] }) {
   )
 }
 
+
+/** what a part is, in a line: its summary, else what it does */
+const partLine = (id: string | null) => {
+  if (!id) return null
+  const p = useParts.getState().parts[id]
+  if (!p) return null
+  return { name: p.name, line: p.info?.summary ?? p.info?.role ?? null }
+}
+
+/** The part under the mouse, named beside the pointer (mouse only: touch screens leave the hero to scroll). */
+function HeroHoverTip() {
+  const hovered = useView((s) => s.hoveredId)
+  const selected = useView((s) => s.selectedId)
+  const [at, setAt] = useState<{ x: number; y: number } | null>(null)
+  useEffect(() => {
+    const move = (e: PointerEvent) => e.pointerType === 'mouse' && setAt({ x: e.clientX, y: e.clientY })
+    window.addEventListener('pointermove', move, { passive: true })
+    return () => window.removeEventListener('pointermove', move)
+  }, [])
+  const info = partLine(hovered)
+  if (!info || !at || hovered === selected) return null
+  const left = Math.min(at.x + 16, window.innerWidth - 300)
+  return (
+    <div className="pointer-events-none fixed z-30 max-w-[280px] rounded-xl border border-line-2 bg-panel/95 px-3 py-2 shadow-xl backdrop-blur" style={{ left, top: at.y + 18 }} role="tooltip">
+      <div className="text-[13px] font-semibold text-ink">{info.name}</div>
+      {info.line ? <div className="mt-0.5 line-clamp-2 text-[12px] leading-snug text-mute">{info.line}</div> : null}
+      <div className="mt-1 text-[11px] font-medium text-accent">Click for more</div>
+    </div>
+  )
+}
+
+/** A clicked part: what it is, a closer look, or the rig opened with it picked. */
+function HeroPartCard({ moduleId, sceneId }: { moduleId: string; sceneId: string }) {
+  const navigate = useNavigate()
+  const selected = useView((s) => s.selectedId)
+  const info = partLine(selected)
+  if (!selected || !info) return null
+  const p = useParts.getState().parts[selected]
+  const role = p?.info?.summary && p.info.role ? p.info.role : null
+  return (
+    <div className="absolute right-4 top-20 z-20 w-[min(300px,calc(100vw-2rem))] rounded-2xl border border-line-2 bg-panel/95 p-4 shadow-2xl backdrop-blur-xl lg:right-5 lg:top-24" role="dialog" aria-label={info.name}>
+      <div className="flex items-start justify-between gap-2">
+        <h3 className="text-[15px] font-semibold leading-snug text-ink">{info.name}</h3>
+        <button type="button" onClick={() => useView.getState().select(null)} aria-label="Close" className="-mr-1 -mt-1 grid h-7 w-7 shrink-0 place-items-center rounded-full text-mute hover:bg-panel-2 hover:text-ink">
+          <Icon.close width={14} height={14} />
+        </button>
+      </div>
+      {info.line ? <p className="mt-1 text-[12.5px] leading-relaxed text-mute">{info.line}</p> : null}
+      {role ? <p className="mt-1.5 text-[12.5px] leading-relaxed text-ink/80">{role}</p> : null}
+      <div className="mt-3 flex flex-wrap gap-2">
+        <button type="button" onClick={() => focusPart(selected)} className="rounded-full border border-line-2 px-3.5 py-1.5 text-[12.5px] font-medium text-ink hover:border-ink/40">
+          Look closer
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            // the rig opens with this part picked and the camera on it
+            useTrail.getState().arrive({ route: `${moduleId}/${sceneId}`, selectName: info.name })
+            navigate(`/m/${moduleId}/${sceneId}`)
+          }}
+          className="rounded-full bg-accent px-3.5 py-1.5 text-[12.5px] font-semibold text-accent-ink hover:opacity-90"
+        >
+          Open in the rig →
+        </button>
+      </div>
+    </div>
+  )
+}
 
 function FeatureIcon({ name }: { name: string }) {
   const I = Icon[name as keyof typeof Icon] ?? Icon.target
