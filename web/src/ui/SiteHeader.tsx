@@ -121,7 +121,7 @@ function MobileMenu() {
         Menu
       </button>
       {open ? (
-        <div role="menu" className="absolute inset-x-4 top-full z-50 mt-1 max-h-[80vh] overflow-y-auto rounded-2xl border border-line bg-panel p-1.5 shadow-xl sm:left-6 sm:right-auto sm:w-80">
+        <div role="menu" className="absolute inset-x-4 top-full z-50 mt-1 max-h-[80vh] overflow-y-auto rounded-2xl border border-line bg-panel p-1.5 shadow-xl sm:left-auto sm:right-6 sm:w-80">
           {NAV.map((g, i) =>
             g.items.length === 1 ? (
               <Link key={g.label} role="menuitem" to={g.items[0].to} className={link(g.match(pathname))}>
@@ -169,9 +169,6 @@ export function SiteHeader({ floating = false, scrolled = false, width = 'max-w-
         <Link to="/" aria-label="Solidify home" className="pointer-events-auto shrink-0 rounded-full border border-line-2 bg-[var(--color-scrim)] py-1.5 pl-2.5 pr-3.5 backdrop-blur-xl">
           <Logo />
         </Link>
-        <div className="pointer-events-auto">
-          <MobileMenu />
-        </div>
         <nav aria-label="Main" className="pointer-events-auto hidden items-center gap-0.5 rounded-full border border-line-2 bg-[var(--color-scrim)] p-1 text-[13px] font-medium backdrop-blur-xl lg:flex">
           {NAV.map((g) =>
             g.items.length === 1 ? (
@@ -193,6 +190,8 @@ export function SiteHeader({ floating = false, scrolled = false, width = 'max-w-
             <ThemeToggle />
           </div>
           <AccountMenu compact />
+          {/* the menu at the far right, where a phone's thumb and habit look for it */}
+          <MobileMenu />
         </div>
       </div>
     </header>
