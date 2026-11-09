@@ -220,7 +220,7 @@ export function PartInspector({
                   </span>
                 </div>
                 {c.latex ? (
-                  <div className="mt-1 overflow-x-auto text-[11.5px] text-mute">
+                  <div className="mt-1 overflow-x-auto overflow-y-hidden py-0.5 text-[11.5px] text-mute">
                     <Tex tex={c.latex} />
                   </div>
                 ) : null}

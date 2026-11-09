@@ -243,13 +243,13 @@ export function WorkedSolution({
                           <RichText text={c.step ?? c.label} className="text-[12.5px] leading-snug text-ink" />
                           {/* the equation: as the model wrote it, else its formula written out as maths */}
                           {c.latex || exprTex(c.formula, { symbols }) ? (
-                            <div className="mt-1.5 overflow-x-auto text-[12.5px] text-ink/85">
+                            <div className="mt-1.5 overflow-x-auto overflow-y-hidden py-0.5 text-[12.5px] text-ink/85">
                               {/* full-size fractions, as a textbook writes a working step */}
                               <Tex tex={`\\displaystyle ${c.latex || `${symTex(c.symbol || c.label)} = ${exprTex(c.formula, { symbols })}`}`} />
                             </div>
                           ) : null}
                           {/* the same with the numbers put in, then the result */}
-                          <p className={`mt-1 overflow-x-auto text-[12px] leading-relaxed text-mute ${symbolic ? 'hidden' : ''}`}>
+                          <p className={`mt-1 overflow-x-auto overflow-y-hidden py-0.5 text-[12px] leading-relaxed text-mute ${symbolic ? 'hidden' : ''}`}>
                             {exprTex(c.formula, { values }) ? (
                               <Tex tex={`\\displaystyle = ${exprTex(c.formula, { values })} = \\mathbf{${r.broken ? '—' : r.formatted}}`} />
                             ) : (
@@ -288,7 +288,7 @@ export function WorkedSolution({
                     </span>
                     {symbolic ? (
                       // the result in symbols, as derived
-                      <span className="min-w-0 overflow-x-auto text-[14px] text-ink">
+                      <span className="min-w-0 overflow-x-auto overflow-y-hidden py-0.5 text-[14px] text-ink">
                         <Tex tex={`\\displaystyle ${r.spec.latex || `${symTex(r.spec.symbol || r.spec.label)} = ${exprTex(r.spec.formula, { symbols }) ?? r.spec.formula}`}`} />
                       </span>
                     ) : (

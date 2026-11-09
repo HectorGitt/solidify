@@ -216,7 +216,7 @@ function Inlines({ items }: { items: Inline[] }) {
             )
           case 'math':
             return x.display ? (
-              <span key={i} className="my-1 block overflow-x-auto">
+              <span key={i} className="my-1 block overflow-x-auto overflow-y-hidden py-0.5">
                 <Tex tex={x.v} display />
               </span>
             ) : (

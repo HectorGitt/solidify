@@ -65,7 +65,7 @@ function FormulaRow({ f, ownPicture, link }: { f: Formula; ownPicture: boolean; 
           </Link>
         ) : null}
       </div>
-      <div className="mt-1 overflow-x-auto text-[14px] text-ink">
+      <div className="mt-1 overflow-x-auto overflow-y-hidden py-0.5 text-[14px] text-ink">
         <Tex tex={f.tex} display />
       </div>
       {f.note ? <p className="text-[11.5px] text-mute">{f.note}</p> : null}
