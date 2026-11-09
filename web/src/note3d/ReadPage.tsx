@@ -14,6 +14,8 @@ import { BuildScreen } from '@/ui/BuildScreen'
 import { Icon } from '@/ui/icons'
 import { Tex } from '@/ui/Tex'
 import { Toolbar } from '@/ui/Toolbar'
+import { Slider } from '@/ui/controls'
+import { HeadsetButton } from '@/xr/HeadsetButton'
 import { InlineFigure3D } from './InlineFigure3D'
 import { SolveQuestionDialog } from './SolveQuestionDialog'
 import { createSceneDefFromSpec } from './NoteSceneRenderer'
@@ -100,6 +102,7 @@ function ExpandedFigureModal({
           <h2 className="text-[14.5px] font-semibold text-ink">{figure.caption}</h2>
         </div>
         <div className="flex items-center gap-2">
+          {activeSceneDef ? <HeadsetButton what="this figure" className="rounded-full px-3" /> : null}
           {figure.visualization.kind === 'catalog' && (
             <Link
               to={`/m/${figure.visualization.moduleId}/${figure.visualization.sceneId}`}
@@ -129,7 +132,7 @@ function ExpandedFigureModal({
         <div className="relative h-full w-full overflow-hidden">
           {activeSceneDef ? (
             <>
-              <Stage key={activeSceneDef.id} scene={activeSceneDef} />
+              <Stage key={activeSceneDef.id} scene={activeSceneDef} xr />
               <div className="pointer-events-none absolute left-3 top-3 z-20">
                 <OrientationGizmo scene={activeSceneDef} />
               </div>
@@ -149,37 +152,20 @@ function ExpandedFigureModal({
           </div>
           {paramSpecs.length > 0 ? (
             <div className="space-y-3">
-              {paramSpecs.map((p) => {
-                const val = params[p.id] ?? p.value
-                return (
-                  <label
-                    key={p.id}
-                    className="block rounded-xl border border-line bg-panel-2/60 p-3"
-                  >
-                    <div className="mb-1 flex items-center justify-between text-[12.5px]">
-                      <span className="font-medium text-ink">
-                        {p.symbol ? <strong className="mr-1 font-mono text-accent">{p.symbol}</strong> : null}
-                        {p.label}
-                      </span>
-                      <span className="font-mono text-[12px] font-semibold text-accent">
-                        {Number(val.toPrecision(4))} {p.unit}
-                      </span>
-                    </div>
-                    <input
-                      type="range"
-                      min={p.min}
-                      max={p.max}
-                      step={p.step}
-                      value={val}
-                      onChange={(e) => {
-                        const v = parseFloat(e.target.value)
-                        setParams((prev) => ({ ...prev, [p.id]: v }))
-                      }}
-                      className="h-1.5 w-full accent-emerald-400"
-                    />
-                  </label>
-                )
-              })}
+              {/* the shared slider, so the givens also appear on the panel in a headset */}
+              {paramSpecs.map((p) => (
+                <Slider
+                  key={p.id}
+                  label={p.symbol && !p.label.includes(p.symbol) ? `${p.symbol}: ${p.label}` : p.label}
+                  value={params[p.id] ?? p.value}
+                  min={p.min}
+                  max={p.max}
+                  step={p.step}
+                  unit={p.unit}
+                  digits={4}
+                  onChange={(v: number) => setParams((prev) => ({ ...prev, [p.id]: v }))}
+                />
+              ))}
             </div>
           ) : (
             <p className="text-[12.5px] text-mute">
