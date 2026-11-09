@@ -28,8 +28,6 @@ type HeroReadout = { label: string; value: string; unit: string; fill?: number }
 const HERO_SCENES: { moduleId: string; sceneId: string; label: string; frame: StageFrame; readouts: HeroReadout[] }[] = [
   { moduleId: 'vibration', sceneId: 'seat', label: 'Seat suspension', frame: { back: 1.6, shift: 0.55 }, readouts: [{ label: 'Operator vibration', value: '0.666', unit: 'm/s² RMS' }, { label: 'Seat transmissibility', value: '0.549', unit: 'floor to operator' }] },
   { moduleId: 'mechanisms', sceneId: 'four-bar', label: 'Four-bar linkage', frame: { back: 1.45, shift: 0.35 }, readouts: [{ label: 'Rocker swing', value: '73.8', unit: '° (crank-rocker)' }, { label: 'Transmission angle', value: '18.2–65.4', unit: '°' }] },
-  { moduleId: 'traction', sceneId: 'traction-lab', label: 'Traction & drawbar pull', frame: { back: 1.25, shift: 0.2, lift: 0.12 }, readouts: [{ label: 'Drawbar pull', value: '12', unit: 'kN at 14.6 % slip' }, { label: 'Drawbar power', value: '11.4', unit: 'kW of 17.3', fill: 11.4 / 17.3 }] },
-  { moduleId: 'mechanisms', sceneId: 'governors', label: 'Centrifugal governor', frame: { back: 1.5, shift: 0.3 }, readouts: [{ label: 'Spindle speed', value: '240', unit: 'rpm' }, { label: 'Sleeve lift', value: '42', unit: 'mm' }] },
   { moduleId: 'powertrain', sceneId: 'differential', label: 'Differential & diff lock', frame: { back: 1.8, shift: 0.35 }, readouts: [{ label: 'Pinion', value: '600', unit: 'rpm' }, { label: 'Crown wheel', value: '140', unit: 'rpm' }] },
   { moduleId: 'engine', sceneId: 'cooling', label: 'Engine cooling', frame: { back: 1.4, shift: 0.45 }, readouts: [{ label: 'Heat to coolant', value: '36', unit: 'kW' }] },
 ]
@@ -70,7 +68,6 @@ const LAB_LINKS = [
   { label: 'Beam bending', to: '/m/materials/beam' },
   { label: 'Steam plant', to: '/m/thermal/steam-plant' },
   { label: 'Refrigeration', to: '/m/thermal/refrigeration' },
-  { label: 'Governors', to: '/m/mechanisms/governors' },
 ]
 
 /** A real recording of the tensile rig: the feature is easier to show than to describe. */
