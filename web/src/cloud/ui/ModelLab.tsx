@@ -418,6 +418,8 @@ export default function ModelLab() {
   // keep the screen; on a computer it is the left column
   const [chatOpen, setChatOpen] = useState(false)
   const [chatUnread, setChatUnread] = useState(false)
+  // phones: the details under the model can take most of the screen (the model shrinks to a strip above)
+  const [detailsTall, setDetailsTall] = useState(false)
   const [matchedCatalog, setMatchedCatalog] = useState<CatalogSceneMatch | null>(null)
   const [loadedCatalogScene, setLoadedCatalogScene] = useState<SceneDef | null>(null)
   const [viewMode, setViewMode] = useState<'parametric' | 'catalog'>('parametric')
@@ -1049,7 +1051,7 @@ export default function ModelLab() {
       </div>
 
       {opening ? <WorkspaceBodySkeleton /> : null}
-      <div className={`${opening ? 'hidden' : 'grid'} min-h-0 flex-1 grid-cols-[minmax(0,1fr)] ${blank || answerView ? 'grid-rows-1' : 'grid-rows-[minmax(300px,50vh)_minmax(0,1fr)]'} ${answerView ? 'lg:grid-cols-[minmax(0,1fr)]' : 'lg:grid-cols-[340px_minmax(0,1fr)_360px]'} lg:grid-rows-1`}>
+      <div className={`${opening ? 'hidden' : 'grid'} min-h-0 flex-1 grid-cols-[minmax(0,1fr)] ${blank || answerView ? 'grid-rows-1' : detailsTall ? 'grid-rows-[minmax(180px,26vh)_minmax(0,1fr)]' : 'grid-rows-[minmax(300px,50vh)_minmax(0,1fr)]'} ${answerView ? 'lg:grid-cols-[minmax(0,1fr)]' : 'lg:grid-cols-[340px_minmax(0,1fr)_360px]'} lg:grid-rows-1`}>
         {/* the conversation */}
         {chatOpen && !answerView && !blank ? <div className="fixed inset-0 z-40 bg-black/30 lg:hidden" onClick={() => setChatOpen(false)} aria-hidden /> : null}
         <aside
@@ -1237,7 +1239,7 @@ export default function ModelLab() {
                 ) : null}
               </div>
               {/* phones: the toolbar under the view, so it never covers the model */}
-              <div className="flex justify-center border-t border-line px-2 py-2 sm:hidden">
+              <div className={`flex justify-center border-t border-line px-2 py-2 sm:hidden ${detailsTall ? 'hidden' : ''}`}>
                 <Toolbar scene={scene} />
               </div>
             </>
@@ -1283,6 +1285,15 @@ export default function ModelLab() {
 
         {/* the engineering */}
         <aside data-tour="ws-engineering" className={`${!blank && !answerView ? 'flex' : 'hidden'} order-3 min-h-0 flex-col border-t border-line lg:min-h-0 lg:border-l lg:border-t-0`}>
+          <button
+            type="button"
+            onClick={() => setDetailsTall((t) => !t)}
+            aria-expanded={detailsTall}
+            className="flex w-full flex-col items-center gap-1 border-b border-line py-1.5 text-[11.5px] font-medium text-mute lg:hidden"
+          >
+            <span className="h-1 w-10 rounded-full bg-line-2" aria-hidden />
+            {detailsTall ? 'Show more of the model' : 'Show more of the details'}
+          </button>
           <ErrorBoundary label="engineering panel" resetKey={shownSpec}>
           {selectedPart && shownSpec ? (
             <>
