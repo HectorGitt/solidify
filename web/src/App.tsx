@@ -10,6 +10,7 @@ import { startUpdateWatch } from './ui/appUpdate'
 import { UpdateNotice } from './ui/UpdateNotice'
 import { TaskTray } from './ui/TaskTray'
 import { PageTourHost } from './ui/PageTour'
+import { InstallCard } from './ui/InstallCard'
 import { useAuth } from './cloud/auth'
 import { startProfile } from './cloud/profile'
 import { startSync } from './cloud/sync'
@@ -57,6 +58,7 @@ export default function App() {
       <UpdateNotice />
       <TaskTray />
       <PageTourHost />
+      <InstallCard />
       <ErrorBoundary label="page">
       <Routes>
         <Route path="/" element={<Landing />} />

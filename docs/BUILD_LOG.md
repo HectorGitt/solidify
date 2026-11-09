@@ -588,3 +588,9 @@ Every entry is numbered (in the order they appear, top to bottom) and set out th
 - **Cause:** desktop pieces stacked on the phone unchanged; the lower row was sized to its content, so the page grew past the screen.
 - **Solution:** a two-row title bar (back arrow and name; state and Save), a one-line problems banner that opens on tap, the chat as a round button that opens a sheet (with a dot when a reply comes in while shut), Engineering always under the model, and the page fitted to the screen: the model half, the panel the rest, which scrolls by itself.
 - **Lesson:** on a phone measure what the model actually gets, and check that only one thing scrolls.
+
+### 104. The installable app never offered to install (2026-11-09)
+- **Problem:** after the app became installable, the owner opened it on their phone and saw no install prompt.
+- **Cause:** the code took the browser's install offer (to stop Chrome's own mini bar) and only added a quiet "Install the app" line inside the Menu sheet, so nothing on screen said it could be installed.
+- **Solution:** a small "Install Solidify" card appears a few seconds into a visit once the browser offers it (Install / Not now, away for a month after Not now); on iPhone Safari, which has no offer, it explains Share, then Add to Home Screen. The menus keep the item.
+- **Lesson:** when replacing a browser's own prompt, replace it with something at least as visible.

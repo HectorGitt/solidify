@@ -39,3 +39,31 @@ export async function installApp() {
   // an offer can be used once, whatever the answer
   useInstall.setState({ offer: null })
 }
+
+const DISMISSED = 'solidify.install.dismissed'
+const dismissedRecently = () => {
+  try {
+    return Date.now() - Number(localStorage.getItem(DISMISSED) ?? 0) < 30 * 24 * 3600 * 1000
+  } catch {
+    return true
+  }
+}
+export const dismissInstall = () => {
+  try {
+    localStorage.setItem(DISMISSED, String(Date.now()))
+  } catch {
+    /* it may show again */
+  }
+}
+/** already running as the installed app */
+export const isStandalone = () =>
+  typeof window !== 'undefined' && (window.matchMedia?.('(display-mode: standalone)').matches || (navigator as Navigator & { standalone?: boolean }).standalone === true)
+/** iPhone or iPad Safari: no install offer there, only Share > Add to Home Screen */
+export const isIosSafari = () => {
+  if (typeof navigator === 'undefined') return false
+  const ua = navigator.userAgent
+  const ios = /iPhone|iPad|iPod/.test(ua) || (ua.includes('Macintosh') && navigator.maxTouchPoints > 1)
+  return ios && /Safari/.test(ua) && !/CriOS|FxiOS|EdgiOS/.test(ua)
+}
+/** whether the install card may show at all (not installed, not turned down lately, not an automated browser) */
+export const mayOfferInstall = () => !isStandalone() && !dismissedRecently() && !navigator.webdriver
