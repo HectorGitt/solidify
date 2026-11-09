@@ -60,7 +60,7 @@ export function cleanQuestion(q: unknown): NoteSceneSpec['question'] {
     .filter((f): f is string => typeof f === 'string' && !!f.trim())
     .map((f) => f.trim().slice(0, 300))
     .slice(0, 8)
-  return { text, find }
+  return { text, find, ...(o.symbolic === true ? { symbolic: true } : {}) }
 }
 
 /** a calculation's worked-solution fields: the step as a short string, answer only when truly set */

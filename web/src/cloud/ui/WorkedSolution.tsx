@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { fmtNum } from '@/note3d/ChartView'
 import { exprTex, nameTex } from '@/note3d/exprTex'
-import { RichText } from '@/ui/RichText'
+import { RichInline, RichText } from '@/ui/RichText'
 import type { EvaluatedCalculation, NoteParameterSpec, NoteQuestionSpec } from '@/note3d/schema'
 import { useProgress } from '@/study/progress'
 import { checkAnswer, parseAnswer } from '@/study/types'
@@ -107,9 +107,16 @@ export function WorkedSolution({
   }
   const got = marks ? Object.values(marks).filter(Boolean).length : 0
 
+  // a derivation with no numbers given: shown in symbols only (the sliders' values just draw the model)
+  const symbolic = !!question.symbolic
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-2">
+      {symbolic ? (
+        <p className="rounded-xl border border-line-2 bg-panel-2/60 px-3 py-2 text-[12px] leading-relaxed text-mute">
+          Worked in symbols: the result holds for any values. The sliders only size the 3D model.
+        </p>
+      ) : null}
+      <div className={`flex flex-wrap items-center gap-2 ${symbolic ? 'hidden' : ''}`}>
         <button
           type="button"
           onClick={() => {
@@ -134,7 +141,9 @@ export function WorkedSolution({
 
       <div>
         <H>Question</H>
-        <p className={`whitespace-pre-wrap text-[13px] leading-relaxed text-ink/90 ${open ? '' : 'line-clamp-5'}`}>{question.text}</p>
+        <div className={`text-[13px] leading-relaxed text-ink/90 ${open ? '' : 'line-clamp-5'}`}>
+          <RichText text={question.text} />
+        </div>
         {long ? (
           <button type="button" onClick={() => setOpen((o) => !o)} className="mt-1 text-[12px] font-medium text-accent hover:underline">
             {open ? 'Show less' : 'Show the whole question'}
@@ -149,10 +158,10 @@ export function WorkedSolution({
             {parameters.map((p) => (
               <li key={p.id} className="flex items-baseline justify-between gap-2 border-b border-line/60 py-0.5">
                 <span className="min-w-0 truncate text-mute">
-                  {p.label}
+                  <RichInline text={p.label} />
                   {p.symbol ? <span className="ml-1 text-dim">({p.symbol})</span> : null}
                 </span>
-                <span className="shrink-0 font-mono text-ink">{given(scope[p.id] ?? p.value, p.unit)}</span>
+                {symbolic ? null : <span className="shrink-0 font-mono text-ink">{given(scope[p.id] ?? p.value, p.unit)}</span>}
               </li>
             ))}
           </ul>
@@ -164,7 +173,9 @@ export function WorkedSolution({
           <H>Find</H>
           <ul className="list-disc space-y-0.5 pl-5 text-[12.5px] text-ink/90">
             {question.find.map((f) => (
-              <li key={f}>{f}</li>
+              <li key={f}>
+                <RichInline text={f} />
+              </li>
             ))}
           </ul>
         </div>
@@ -183,7 +194,9 @@ export function WorkedSolution({
             const m = marks?.[r.spec.id]
             return (
               <label key={r.spec.id} className={`flex items-center gap-2 rounded-xl border px-3 py-2 ${m === undefined ? 'border-line-2' : m ? 'border-accent/60 bg-accent/5' : 'border-danger/50 bg-danger/5'}`}>
-                <span className="min-w-0 flex-1 text-[12.5px] text-ink">{r.spec.label}</span>
+                <span className="min-w-0 flex-1 text-[12.5px] text-ink">
+                  <RichInline text={r.spec.label} />
+                </span>
                 <input
                   inputMode="decimal"
                   value={inputs[r.spec.id] ?? ''}
@@ -236,7 +249,7 @@ export function WorkedSolution({
                             </div>
                           ) : null}
                           {/* the same with the numbers put in, then the result */}
-                          <p className="mt-1 overflow-x-auto text-[12px] leading-relaxed text-mute">
+                          <p className={`mt-1 overflow-x-auto text-[12px] leading-relaxed text-mute ${symbolic ? 'hidden' : ''}`}>
                             {exprTex(c.formula, { values }) ? (
                               <Tex tex={`\\displaystyle = ${exprTex(c.formula, { values })} = \\mathbf{${r.broken ? '—' : r.formatted}}`} />
                             ) : (
@@ -246,7 +259,11 @@ export function WorkedSolution({
                           </p>
                           {r.broken ? <p className="mt-1 text-[11.5px] text-warn">This step can’t be worked out with these numbers (a root of a negative, a division by zero, or something it doesn’t know).</p> : null}
                           <div className="mt-1 flex items-center gap-3">
-                            {c.step ? <span className="text-[11px] text-dim">{c.label}</span> : null}
+                            {c.step ? (
+                              <span className="text-[11px] text-dim">
+                                <RichInline text={c.label} />
+                              </span>
+                            ) : null}
                             <button type="button" disabled={disabled} onClick={() => onExplain(c.label)} className="text-[11.5px] font-medium text-accent hover:underline disabled:opacity-50">
                               Explain this step
                             </button>
@@ -266,14 +283,23 @@ export function WorkedSolution({
               <ul className="space-y-1">
                 {answers.map((r) => (
                   <li key={r.spec.id} className="flex items-baseline justify-between gap-3 text-[13px]">
-                    <span className="text-ink/90">{r.spec.label}</span>
-                    <span className="shrink-0 font-mono text-[15px] font-semibold text-ink">
-                      {r.formatted} <span className="text-[12px] font-normal text-mute">{r.broken ? '' : r.spec.unit}</span>
+                    <span className="text-ink/90">
+                      <RichInline text={r.spec.label} />
                     </span>
+                    {symbolic ? (
+                      // the result in symbols, as derived
+                      <span className="min-w-0 overflow-x-auto text-[14px] text-ink">
+                        <Tex tex={`\\displaystyle ${r.spec.latex || `${symTex(r.spec.symbol || r.spec.label)} = ${exprTex(r.spec.formula, { symbols }) ?? r.spec.formula}`}`} />
+                      </span>
+                    ) : (
+                      <span className="shrink-0 font-mono text-[15px] font-semibold text-ink">
+                        {r.formatted} <span className="text-[12px] font-normal text-mute">{r.broken ? '' : r.spec.unit}</span>
+                      </span>
+                    )}
                   </li>
                 ))}
               </ul>
-              <p className="mt-2 text-[11.5px] text-dim">Move the givens to see how the answer changes.</p>
+              {symbolic ? null : <p className="mt-2 text-[11.5px] text-dim">Move the givens to see how the answer changes.</p>}
             </div>
           ) : null}
         </>

@@ -307,6 +307,8 @@ export interface NoteQuestionSpec {
   text: string
   /** what is asked, one item each ("the reactions at A and B") */
   find: string[]
+  /** a derivation with no numbers given: solved in symbols; the sliders' values only draw the model */
+  symbolic?: boolean
 }
 
 export interface NoteSceneSpec {
@@ -846,7 +848,7 @@ export const noteSceneSpecSchema = z.object({
       target: z.tuple([z.number(), z.number(), z.number()]),
     })
     .optional(),
-  question: z.object({ text: z.string().min(1).max(4000), find: z.array(z.string().max(300)).max(8) }).optional(),
+  question: z.object({ text: z.string().min(1).max(4000), find: z.array(z.string().max(300)).max(8), symbolic: z.boolean().optional() }).optional(),
   parameters: z.array(noteParameterSchema).max(20).default([]),
   parts: z.array(notePartSchema).min(1).max(32),
   annotations: z.array(noteAnnotationSchema).max(24).optional(),
