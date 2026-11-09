@@ -6,6 +6,7 @@ import { AudienceSwitch } from '@/ui/AudienceSwitch'
 import { AUDIENCE_SWITCH } from '@/ui/audience'
 import { Icon } from '@/ui/icons'
 import { Logo } from '@/ui/Logo'
+import { installApp, useInstall } from './pwa'
 import { ThemeToggle } from '@/ui/ThemeToggle'
 
 interface NavItem {
@@ -106,6 +107,7 @@ function GroupMenu({ group }: { group: NavGroup }) {
 function MobileMenu() {
   const [open, setOpen] = useState(false)
   const tour = usePageTour((s) => !!s.current)
+  const installOffer = useInstall((s) => s.offer)
   const ref = useDismiss(open, () => setOpen(false))
   const { pathname } = useLocation()
   const link = (active: boolean) => `block rounded-xl px-3 py-2 text-[13.5px] ${active ? 'bg-ink text-bg' : 'text-ink hover:bg-panel-2'}`
@@ -116,11 +118,12 @@ function MobileMenu() {
         type="button"
         aria-expanded={open}
         aria-haspopup="menu"
+        aria-label="Menu"
+        title="Menu"
         onClick={() => setOpen((o) => !o)}
-        className="inline-flex items-center gap-1.5 rounded-full border border-line-2 bg-[var(--color-scrim)] px-3.5 py-2 text-[13px] font-medium text-ink backdrop-blur-xl"
+        className="grid h-9 w-9 place-items-center rounded-full border border-line-2 bg-[var(--color-scrim)] text-ink backdrop-blur-xl"
       >
-        {open ? <Icon.close width={14} height={14} /> : <Icon.text width={14} height={14} />}
-        Menu
+        {open ? <Icon.close width={16} height={16} /> : <Icon.menu width={18} height={18} />}
       </button>
       {open ? (
         <div role="menu" className="absolute inset-x-4 top-full z-50 mt-1 max-h-[80vh] overflow-y-auto rounded-2xl border border-line bg-panel p-1.5 shadow-xl sm:left-auto sm:right-6 sm:w-80">
@@ -143,6 +146,22 @@ function MobileMenu() {
               </div>
             ),
           )}
+          {installOffer ? (
+            <>
+              <div className="mx-3 my-1.5 border-t border-line" />
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  setOpen(false)
+                  void installApp()
+                }}
+                className={link(false) + ' w-full text-left'}
+              >
+                Install the app
+              </button>
+            </>
+          ) : null}
           <div className="mx-3 my-1.5 border-t border-line sm:hidden" />
           <div className="flex items-center justify-between gap-2 px-2 py-1 sm:hidden">
             {AUDIENCE_SWITCH ? <AudienceSwitch compact /> : null}

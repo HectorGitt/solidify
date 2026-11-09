@@ -206,6 +206,11 @@ export const Icon = {
       <path d="M14 3v5h5" />
     </svg>
   ),
+  menu: (p: SVGProps<SVGSVGElement>) => (
+    <svg {...base(p)}>
+      <path d="M4 7h16M4 12h16M4 17h16" />
+    </svg>
+  ),
   text: (p: SVGProps<SVGSVGElement>) => (
     <svg {...base(p)}>
       <path d="M5 6h14M5 10h14M5 14h14M5 18h9" />

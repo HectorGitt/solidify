@@ -3,12 +3,16 @@ import { createRoot } from 'react-dom/client'
 import App from './App'
 import './index.css'
 import './ui/theme'
+import { registerServiceWorker, watchInstallOffer } from './ui/pwa'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <App />
   </StrictMode>,
 )
+
+registerServiceWorker()
+watchInstallOffer()
 
 // Start building the shared engine in the background straight away (it takes a few seconds), so a
 // tractor or engine scene can show it as soon as it opens. Low priority, and never on every worker:
