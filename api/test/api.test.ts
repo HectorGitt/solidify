@@ -235,6 +235,68 @@ describe('classes', () => {
     expect((await (await as('tina').get(`/v1/classes/${cls.id}`)).json()).members).toEqual([])
     expect((await (await as('ada').get('/v1/me')).json()).classes).toEqual([])
   })
+
+  it('teacher edits the class (every member sees the new name) and renews the code', async () => {
+    const cls = await teacher()
+    await as('ada:Ada').send('POST', '/v1/classes/join', { code: cls.code })
+    expect((await as('ada').send('PUT', `/v1/classes/${cls.id}`, { name: 'Hijack' })).status).toBe(403)
+    const put = await (await as('tina').send('PUT', `/v1/classes/${cls.id}`, { name: 'Farm Power II', about: 'Tuesdays 10am', subjects: ['AEE509', 'AEE509', 'AEE510'] })).json()
+    expect(put).toMatchObject({ name: 'Farm Power II', about: 'Tuesdays 10am', subjects: ['AEE509', 'AEE510'] })
+    expect((await (await as('ada').get('/v1/me')).json()).classes).toEqual([{ id: cls.id, name: 'Farm Power II', role: 'student' }])
+    expect(await (await as('ada').get(`/v1/classes/${cls.id}`)).json()).toMatchObject({ about: 'Tuesdays 10am', subjects: ['AEE509', 'AEE510'] })
+    const { code } = await (await as('tina').send('POST', `/v1/classes/${cls.id}/code`, {})).json()
+    expect(code).not.toBe(cls.code)
+    expect(await db.get(`classCodes/${cls.code}`)).toBeNull()
+    expect((await as('ben:Ben').send('POST', '/v1/classes/join', { code: cls.code })).status).toBe(404)
+    expect((await as('ben:Ben').send('POST', '/v1/classes/join', { code })).status).toBe(200)
+  })
+
+  it('sets several pieces of work at once, including links and notes the students mark done', async () => {
+    const cls = await teacher()
+    await as('ada:Ada').send('POST', '/v1/classes/join', { code: cls.code })
+    expect((await as('tina').send('POST', `/v1/classes/${cls.id}/assignments`, { kind: 'link', ref: 'javascript:alert(1)', title: 'Bad' })).status).toBe(400)
+    expect((await as('tina').send('POST', `/v1/classes/${cls.id}/assignments`, { kind: 'note', ref: 'note', title: 'Empty' })).status).toBe(400)
+    const due = clock + 86_400_000
+    const batch = await as('tina').send('POST', `/v1/classes/${cls.id}/assignments/batch`, {
+      items: [
+        { kind: 'scene', ref: 'belts', title: 'Belt drives', due },
+        { kind: 'link', ref: 'https://example.org/belts.pdf', title: 'Belt notes (PDF)', due, note: 'Read section 2' },
+        { kind: 'note', ref: 'note', title: 'Bring a calculator', note: 'Thursday’s test needs one.' },
+        { kind: 'model', ref: 'lib123', title: 'Gear train model' },
+      ],
+    })
+    expect(batch.status).toBe(201)
+    const { assignments } = (await batch.json()) as { assignments: { id: string; kind: string }[] }
+    expect(assignments).toHaveLength(4)
+    const link = assignments.find((a) => a.kind === 'link')!
+    expect((await as('tina').send('PUT', `/v1/classes/${cls.id}/assignments/${link.id}/done`, { done: true })).status).toBe(403)
+    expect((await as('ada').send('PUT', `/v1/classes/${cls.id}/assignments/${link.id}/done`, { done: true })).status).toBe(200)
+    const mine = await (await as('ada').get(`/v1/classes/${cls.id}/assignments`)).json()
+    expect(mine.assignments.find((a: { id: string }) => a.id === link.id).doneAt).toBe(clock)
+    const d = await (await as('tina').get(`/v1/classes/${cls.id}/dashboard`)).json()
+    const ada = d.students[0]
+    expect(ada.completed).toBe(1)
+    expect(d.assignments.map((a: { title: string }) => a.title).slice(0, 2).sort()).toEqual(['Belt drives', 'Belt notes (PDF)'])
+    // edit: a new due date, then none
+    await as('tina').send('PATCH', `/v1/classes/${cls.id}/assignments/${link.id}`, { title: 'Belt notes', due: null })
+    const after = await (await as('ada').get(`/v1/classes/${cls.id}/assignments`)).json()
+    const edited = after.assignments.find((a: { id: string }) => a.id === link.id)
+    expect(edited.title).toBe('Belt notes')
+    expect(edited.due).toBeUndefined()
+    // and not done again
+    await as('ada').send('PUT', `/v1/classes/${cls.id}/assignments/${link.id}/done`, { done: false })
+    expect((await (await as('tina').get(`/v1/classes/${cls.id}/dashboard`)).json()).students[0].completed).toBe(0)
+  })
+
+  it('the teacher can close a class: it leaves every member’s list and its code stops working', async () => {
+    const cls = await teacher()
+    await as('ada:Ada').send('POST', '/v1/classes/join', { code: cls.code })
+    expect((await as('ada').del(`/v1/classes/${cls.id}`)).status).toBe(403)
+    expect((await as('tina').del(`/v1/classes/${cls.id}`)).status).toBe(204)
+    expect((await (await as('ada').get('/v1/me')).json()).classes).toEqual([])
+    expect((await (await as('tina').get('/v1/me')).json()).classes).toEqual([])
+    expect((await as('ben:Ben').send('POST', '/v1/classes/join', { code: cls.code })).status).toBe(404)
+  })
 })
 
 describe('shared links and feedback', () => {

@@ -1,4 +1,4 @@
-import { Html } from '@react-three/drei'
+import { Html } from '@/render/Html'
 import { useEffect, useState, type MutableRefObject, type ReactNode } from 'react'
 import type { PartInfo } from '@/parts/registry'
 import type { MaterialKey } from '@/render/materials'

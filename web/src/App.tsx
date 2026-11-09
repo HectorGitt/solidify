@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, type ReactNode } from 'react'
-import { HashRouter, Route, Routes } from 'react-router-dom'
+import { HashRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { About } from './ui/About'
 import { Landing } from './ui/Landing'
 import { Viewer } from './ui/Viewer'
@@ -9,6 +9,9 @@ import { ErrorBoundary } from './ui/ErrorBoundary'
 import { startUpdateWatch } from './ui/appUpdate'
 import { UpdateNotice } from './ui/UpdateNotice'
 import { TaskTray } from './ui/TaskTray'
+import { PageTourHost } from './ui/PageTour'
+import { InstallCard } from './ui/InstallCard'
+import { rememberRoute } from './ui/pwa'
 import { useAuth } from './cloud/auth'
 import { startProfile } from './cloud/profile'
 import { startSync } from './cloud/sync'
@@ -19,6 +22,7 @@ import { PageSkeleton, WorkspaceSkeleton } from './ui/Skeleton'
 
 // study pages (loaded on demand)
 const ExamPage = lazy(() => import('./study/ui/ExamPage'))
+const QuestionsPage = lazy(() => import('./study/ui/QuestionsPage'))
 const ProgressPage = lazy(() => import('./study/ui/ProgressPage'))
 const FormulasPage = lazy(() => import('./study/ui/FormulasPage'))
 const ChallengesPage = lazy(() => import('./challenges/ChallengesPage'))
@@ -38,6 +42,13 @@ const LabsPage = lazy(() => import('./ui/LabsPage'))
 const ShotPage = import.meta.env.DEV ? lazy(() => import('./ui/ShotPage')) : null
 const page = (el: ReactNode, fallback: ReactNode = <PageSkeleton />) => <Suspense fallback={fallback}>{el}</Suspense>
 
+/** keeps the current page for the installed app's next launch */
+function RememberRoute() {
+  const { pathname, search } = useLocation()
+  useEffect(() => rememberRoute(pathname + search), [pathname, search])
+  return null
+}
+
 export default function App() {
   useEffect(() => {
     useAuth.getState().init()
@@ -54,11 +65,15 @@ export default function App() {
       <Toaster />
       <UpdateNotice />
       <TaskTray />
+      <PageTourHost />
+      <InstallCard />
+      <RememberRoute />
       <ErrorBoundary label="page">
       <Routes>
         <Route path="/" element={<Landing />} />
         <Route path="/about" element={<About />} />
         <Route path="/exam" element={page(<ExamPage />)} />
+        <Route path="/questions" element={page(<QuestionsPage />)} />
         <Route path="/progress" element={page(<ProgressPage />)} />
         <Route path="/formulas" element={page(<FormulasPage />)} />
         <Route path="/challenges" element={page(<ChallengesPage />)} />

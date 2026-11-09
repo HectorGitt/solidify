@@ -4,6 +4,7 @@ import { api } from '../api'
 import { useAuth } from '../auth'
 import { can, useProfile } from '../profile'
 import { syncNow, useSync } from '../sync'
+import { installApp, useInstall } from '@/ui/pwa'
 import { useReport } from './ReportDialog'
 
 function ago(t: number) {
@@ -36,6 +37,7 @@ function SyncLine() {
 
 /** Header control: "Sign in", or the account menu once signed in. */
 export function AccountMenu({ compact = false }: { compact?: boolean }) {
+  const installOffer = useInstall((s) => s.offer)
   const status = useAuth((s) => s.status)
   const user = useAuth((s) => s.user)
   const profile = useProfile((s) => s.profile)
@@ -114,6 +116,17 @@ export function AccountMenu({ compact = false }: { compact?: boolean }) {
             >
               Report a problem
             </button>
+            {installOffer ? (
+              <button
+                onClick={() => {
+                  setOpen(false)
+                  void installApp()
+                }}
+                className="block w-full px-3.5 py-2 text-left text-ink/90 hover:bg-panel-3"
+              >
+                Install the app
+              </button>
+            ) : null}
           </div>
           <div className="border-t border-line px-3.5 py-2.5">
             <label className="flex items-center justify-between gap-3 text-[12.5px] text-ink/90">

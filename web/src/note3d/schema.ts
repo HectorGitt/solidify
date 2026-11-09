@@ -108,8 +108,9 @@ export interface NoteShapeSpec {
   // Gear / Sprocket / Rack
   teeth?: DimExpr
   module?: DimExpr
-  pressureAngle?: number
-  helixAngle?: number
+  /** degrees; a number or an expression of the model's values (a helix angle slider: "beta") */
+  pressureAngle?: DimExpr
+  helixAngle?: DimExpr
   pitch?: DimExpr
   // Hex nut / hex bolt: thread diameter (bolt shank length is h)
   d?: DimExpr
@@ -156,6 +157,15 @@ export type NoteMountSpec =
   | { kind: 'slider'; target: string; throw: DimExpr; rod: DimExpr; angle?: DimExpr; direction?: AxisDir; shift?: Vec3Expr }
   /** a link (a connecting rod) from the crank pin of `target` to the centre of `to`, its long side along the line */
   | { kind: 'link'; target: string; to: string; throw: DimExpr; angle?: DimExpr; direction?: AxisDir; shift?: Vec3Expr }
+  /** a slotted lever: pivots on the centre of `pivot` and always points through the crank pin of `target`
+   *  (crank radius `throw`, starting `angle` degrees), so the pin stays in its slot (a quick-return mechanism) */
+  | { kind: 'lever'; target: string; pivot: string; throw: DimExpr; angle?: DimExpr; direction?: AxisDir; shift?: Vec3Expr }
+  /** a part that slides along `direction` with a point of `target`: its crank pin (a scotch yoke's slide, given
+   *  `throw`), or the far end of a lever ('tip': a shaper's ram); across that direction it stays where it is */
+  | { kind: 'follower'; target: string; direction: AxisDir; of?: 'pin' | 'tip'; throw?: DimExpr; angle?: DimExpr; offset?: DimExpr; shift?: Vec3Expr }
+  /** the output shaft of a universal (Hooke's) joint: from the end of the input shaft `target`, its axis turned
+   *  `angle` degrees off the input's; it turns by Hooke's law, tan θ₂ = tan θ₁ / cos β */
+  | { kind: 'hooke'; target: string; angle: DimExpr; shift?: Vec3Expr }
 
 export type AxisDir = '+x' | '-x' | '+y' | '-y' | '+z' | '-z'
 
@@ -213,6 +223,10 @@ export interface NoteCalculationSpec {
   /** Optional LaTeX equation string for display */
   latex?: string
   description?: string
+  /** in a worked solution: what this step does, in one sentence ("Take moments about A to find R_B.") */
+  step?: string
+  /** in a worked solution: this is one of the results the question asks for */
+  answer?: boolean
   limit?: {
     kind: 'max' | 'min'
     value: DimExpr
@@ -222,7 +236,10 @@ export interface NoteCalculationSpec {
 
 export interface EvaluatedCalculation {
   spec: NoteCalculationSpec
+  /** 0 when broken (see `broken`) */
   value: number
+  /** the step could not be worked out with these numbers */
+  broken?: boolean
   formatted: string
   status: 'ok' | 'warn'
   limitValue?: number
@@ -286,6 +303,14 @@ export function evaluateChart(chart: NoteChartSpec, scope: Record<string, number
   return { spec: chart, xs, series, yMin, yMax }
 }
 
+export interface NoteQuestionSpec {
+  text: string
+  /** what is asked, one item each ("the reactions at A and B") */
+  find: string[]
+  /** a derivation with no numbers given: solved in symbols; the sliders' values only draw the model */
+  symbolic?: boolean
+}
+
 export interface NoteSceneSpec {
   id: string
   title: string
@@ -298,6 +323,9 @@ export interface NoteSceneSpec {
     position: [number, number, number]
     target: [number, number, number]
   }
+  /** a pasted problem being solved: the question as given and what it asks for (its givens are the parameters,
+   *  its worked solution the calculations, in order) */
+  question?: NoteQuestionSpec
   parameters: NoteParameterSpec[]
   parts: NotePartSpec[]
   annotations?: NoteAnnotationSpec[]
@@ -418,10 +446,16 @@ function tokenize(expr: string): Token[] {
  * Safely evaluates a numeric literal or parametric expression string (e.g. "flangeOD / 2000", "L * 0.5")
  * against the current parameter map without `eval` or `Function`.
  */
+/** every function a formula may use (the prompt in api/src/createPrompt.ts lists the same; a test keeps them in step) */
+export const FORMULA_FUNCTIONS = ['sqrt', 'pow', 'hypot', 'sin', 'cos', 'tan', 'asin', 'acos', 'atan', 'atan2', 'sinh', 'cosh', 'tanh', 'exp', 'log', 'ln', 'log10', 'abs', 'min', 'max', 'floor', 'ceil', 'round', 'step', 'mac'] as const
+
 export function evalDim(
   expr: DimExpr | undefined,
   params: Record<string, number>,
   fallback = 0,
+  /** calculations: a root of a negative, a log of zero or less, or a name that isn't there can't be worked out
+   *  (the fallback); for sizes they are guarded to 0 so a part still draws */
+  strict = false,
 ): number {
   if (expr === undefined || expr === null) return fallback
   if (typeof expr === 'number') return Number.isFinite(expr) ? expr : fallback
@@ -463,7 +497,8 @@ export function evalDim(
         if (t?.type === 'op' && (t.op === '*' || t.op === '/')) {
           next()
           const right = parsePower()
-          left = t.op === '*' ? left * right : right === 0 ? 0 : left / right
+          // a division by zero: in a calculation it can't be worked out; in a size, 0 so the part still draws
+          left = t.op === '*' ? left * right : right === 0 ? (strict ? Number.NaN : 0) : left / right
         } else {
           break
         }
@@ -522,6 +557,7 @@ export function evalDim(
             case 'tan':
               return Math.tan(args[0] ?? 0)
             case 'sqrt':
+              if (strict && (args[0] ?? 0) < 0) return Number.NaN
               return Math.sqrt(Math.max(0, args[0] ?? 0))
             case 'abs':
               return Math.abs(args[0] ?? 0)
@@ -540,15 +576,47 @@ export function evalDim(
             case 'exp':
               return Math.exp(args[0] ?? 0)
             case 'log':
+              if (strict && !((args[0] ?? 0) > 0)) return Number.NaN
               return (args[0] ?? 0) > 0 ? Math.log(args[0] ?? 1) : 0
             case 'atan':
               return Math.atan(args[0] ?? 0)
+            case 'asin':
+            case 'acos': {
+              const x = args[0] ?? 0
+              if (Math.abs(x) > 1) return strict ? Number.NaN : name === 'asin' ? Math.asin(Math.sign(x)) : Math.acos(Math.sign(x))
+              return name === 'asin' ? Math.asin(x) : Math.acos(x)
+            }
+            case 'atan2':
+              return Math.atan2(args[0] ?? 0, args[1] ?? 1)
+            case 'ln':
+              if (strict && !((args[0] ?? 0) > 0)) return Number.NaN
+              return (args[0] ?? 0) > 0 ? Math.log(args[0] ?? 1) : 0
+            case 'log10':
+              if (strict && !((args[0] ?? 0) > 0)) return Number.NaN
+              return (args[0] ?? 0) > 0 ? Math.log10(args[0] ?? 1) : 0
+            case 'pow':
+              return Math.pow(args[0] ?? 0, args[1] ?? 1)
+            case 'sinh':
+              return Math.sinh(args[0] ?? 0)
+            case 'cosh':
+              return Math.cosh(args[0] ?? 0)
+            case 'tanh':
+              return Math.tanh(args[0] ?? 0)
+            case 'hypot':
+              return Math.hypot(...args)
+            case 'floor':
+              return Math.floor(args[0] ?? 0)
+            case 'ceil':
+              return Math.ceil(args[0] ?? 0)
+            case 'round':
+              return Math.round(args[0] ?? 0)
             default:
-              return args[0] ?? 0
+              // a function it doesn't know: in a calculation that can't be worked out; in a size, its argument
+              return strict ? Number.NaN : (args[0] ?? 0)
           }
         }
         if (name === 'PI' || name === 'pi') return Math.PI
-        return params[name] !== undefined && Number.isFinite(params[name]) ? params[name] : 0
+        return params[name] !== undefined && Number.isFinite(params[name]) ? params[name] : strict ? Number.NaN : 0
       }
       next()
       return 0
@@ -582,7 +650,11 @@ export function evaluateCalculations(
   if (!calculations?.length) return { results: [], scope }
   const results: EvaluatedCalculation[] = []
   for (const spec of calculations) {
-    const value = evalDim(spec.formula, scope, 0)
+    // a step that can't be worked out (a root of a negative, a division by zero, a name that isn't there) is
+    // marked broken and shown as such; it never passes as a plausible 0. Later steps still read it as 0.
+    const raw = evalDim(spec.formula, scope, Number.NaN, true)
+    const broken = !Number.isFinite(raw)
+    const value = broken ? 0 : raw
     scope[spec.id] = value
     if (spec.symbol && IDENT_RE.test(spec.symbol)) {
       scope[spec.symbol] = value
@@ -595,8 +667,9 @@ export function evaluateCalculations(
       if (spec.limit.kind === 'min' && value < limitValue) status = 'warn'
     }
     const abs = Math.abs(value)
-    const formatted =
-      abs === 0
+    const formatted = broken
+      ? '—'
+      : abs === 0
         ? '0'
         : abs >= 1000
           ? value.toFixed(0)
@@ -605,7 +678,7 @@ export function evaluateCalculations(
             : abs >= 1
               ? value.toFixed(2)
               : Number(value.toPrecision(3)).toString()
-    results.push({ spec, value, formatted, status, limitValue })
+    results.push({ spec, value, formatted, status, limitValue, ...(broken ? { broken } : {}) })
   }
   return { results, scope }
 }
@@ -624,6 +697,9 @@ export const noteMountSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('centered'), target: z.string().min(1).max(80), shift: vec3ExprSchema.optional() }),
   z.object({ kind: z.literal('slider'), target: z.string().min(1).max(80), throw: dimExprSchema, rod: dimExprSchema, angle: dimExprSchema.optional(), direction: axisDirSchema.optional(), shift: vec3ExprSchema.optional() }),
   z.object({ kind: z.literal('link'), target: z.string().min(1).max(80), to: z.string().min(1).max(80), throw: dimExprSchema, angle: dimExprSchema.optional(), direction: axisDirSchema.optional(), shift: vec3ExprSchema.optional() }),
+  z.object({ kind: z.literal('lever'), target: z.string().min(1).max(80), pivot: z.string().min(1).max(80), throw: dimExprSchema, angle: dimExprSchema.optional(), direction: axisDirSchema.optional(), shift: vec3ExprSchema.optional() }),
+  z.object({ kind: z.literal('follower'), target: z.string().min(1).max(80), direction: axisDirSchema, of: z.enum(['pin', 'tip']).optional(), throw: dimExprSchema.optional(), angle: dimExprSchema.optional(), offset: dimExprSchema.optional(), shift: vec3ExprSchema.optional() }),
+  z.object({ kind: z.literal('hooke'), target: z.string().min(1).max(80), angle: dimExprSchema, shift: vec3ExprSchema.optional() }),
 ])
 
 export const noteParameterSchema = z.object({
@@ -673,8 +749,8 @@ export const noteShapeSchema = z.object({
   tubeRadius: dimExprSchema.optional(),
   teeth: dimExprSchema.optional(),
   module: dimExprSchema.optional(),
-  pressureAngle: z.number().optional(),
-  helixAngle: z.number().optional(),
+  pressureAngle: dimExprSchema.optional(),
+  helixAngle: dimExprSchema.optional(),
   pitch: dimExprSchema.optional(),
   d: dimExprSchema.optional(),
   turns: dimExprSchema.optional(),
@@ -736,8 +812,11 @@ export const noteCalculationSchema = z.object({
   symbol: z.string().min(1).max(40),
   formula: z.string().min(1).max(240),
   unit: z.string().max(32),
-  latex: z.string().max(240).optional(),
+  latex: z.string().max(400).optional(),
   description: z.string().max(400).optional(),
+  /** a worked solution's step: what it does, and whether it is a result the question asks for */
+  step: z.string().max(400).optional(),
+  answer: z.boolean().optional(),
   limit: z
     .object({
       kind: z.enum(['max', 'min']),
@@ -769,6 +848,7 @@ export const noteSceneSpecSchema = z.object({
       target: z.tuple([z.number(), z.number(), z.number()]),
     })
     .optional(),
+  question: z.object({ text: z.string().min(1).max(4000), find: z.array(z.string().max(300)).max(8), symbolic: z.boolean().optional() }).optional(),
   parameters: z.array(noteParameterSchema).max(20).default([]),
   parts: z.array(notePartSchema).min(1).max(32),
   annotations: z.array(noteAnnotationSchema).max(24).optional(),

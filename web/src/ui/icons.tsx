@@ -126,6 +126,12 @@ export const Icon = {
       <path d="M6 6l12 12M18 6 6 18" />
     </svg>
   ),
+  chat: (p: SVGProps<SVGSVGElement>) => (
+    <svg {...base(p)}>
+      <path d="M4 5.5A1.5 1.5 0 0 1 5.5 4h13A1.5 1.5 0 0 1 20 5.5v9a1.5 1.5 0 0 1-1.5 1.5H10l-4.5 4v-4h0A1.5 1.5 0 0 1 4 14.5z" />
+      <path d="M8 9h8M8 12h5" />
+    </svg>
+  ),
   tour: (p: SVGProps<SVGSVGElement>) => (
     <svg {...base(p)}>
       <path d="M4 5h11l5 5-5 5H4z" />
@@ -198,6 +204,11 @@ export const Icon = {
     <svg {...base(p)}>
       <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" />
       <path d="M14 3v5h5" />
+    </svg>
+  ),
+  menu: (p: SVGProps<SVGSVGElement>) => (
+    <svg {...base(p)}>
+      <path d="M4 7h16M4 12h16M4 17h16" />
     </svg>
   ),
   text: (p: SVGProps<SVGSVGElement>) => (

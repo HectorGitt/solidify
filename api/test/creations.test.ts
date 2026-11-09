@@ -69,6 +69,18 @@ describe('creation lab', () => {
     expect((await call('GET', `/v1/creations/${b.id}`)).status).toBe(404)
   })
 
+  it('lists a solved question with the start of it and what it asks, and plain models without', async () => {
+    const q = { ...model('Beam reactions'), spec: { title: 'Beam reactions', question: { text: 'A beam of span 6 m carries 20 kN. ' + 'x'.repeat(400), find: ['the reactions at A and B', 7] }, parts: [{ id: 'b', shapes: [{ kind: 'box', sx: 6, sy: 0.2, sz: 0.2 }] }] } }
+    expect((await call('POST', '/v1/creations', q)).status).toBe(201)
+    expect((await call('POST', '/v1/creations', model('Plain nut'))).status).toBe(201)
+    const { items } = (await (await call('GET', '/v1/creations')).json()) as { items: { title: string; question?: { text: string; find: string[] } }[] }
+    const solved = items.find((i) => i.title === 'Beam reactions')!
+    expect(solved.question?.text.startsWith('A beam of span 6 m')).toBe(true)
+    expect(solved.question?.text.length).toBeLessThanOrEqual(240)
+    expect(solved.question?.find).toEqual(['the reactions at A and B'])
+    expect(items.find((i) => i.title === 'Plain nut')!.question).toBeUndefined()
+  })
+
   it('an update changes only what it sends', async () => {
     const a = (await (await call('POST', '/v1/creations', model())).json()) as { id: string }
     expect((await call('PUT', `/v1/creations/${a.id}`, { thumbnail: 'data:image/jpeg;base64,BBBB' })).status).toBe(204)

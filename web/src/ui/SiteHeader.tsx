@@ -1,9 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { AccountMenu } from '@/cloud/ui/AccountMenu'
+import { TourHelpButton, usePageTour } from './PageTour'
 import { AudienceSwitch } from '@/ui/AudienceSwitch'
+import { AUDIENCE_SWITCH } from '@/ui/audience'
 import { Icon } from '@/ui/icons'
 import { Logo } from '@/ui/Logo'
+import { installApp, useInstall } from './pwa'
 import { ThemeToggle } from '@/ui/ThemeToggle'
 
 interface NavItem {
@@ -31,6 +34,7 @@ const NAV: NavGroup[] = [
       { to: '/create', label: 'Create in 3D', hint: 'Samples and your recent models' },
       { to: '/create/lab', label: 'My models', hint: 'Everything you have built' },
       { to: '/library', label: 'Library', hint: 'Models checked by the team' },
+      { to: '/questions', label: 'Solve a question', hint: 'Paste a problem or a screenshot; get it in 3D, worked out' },
     ],
     match: (p) => p.startsWith('/create') || p === '/library',
   },
@@ -38,13 +42,14 @@ const NAV: NavGroup[] = [
   {
     label: 'Study',
     items: [
+      { to: '/questions', label: 'Solve a question', hint: 'Paste a problem or a screenshot; get it in 3D, worked out' },
       { to: '/exam', label: 'Exam practice', hint: 'Worked problems, checked live' },
       { to: '/formulas', label: 'Formula sheet' },
       { to: '/challenges', label: 'Challenges', hint: 'Goals set inside the labs' },
       { to: '/progress', label: 'Progress' },
       { to: '/classes', label: 'Classes' },
     ],
-    match: (p) => ['/exam', '/formulas', '/challenges', '/progress', '/classes'].some((x) => p === x || p.startsWith(`${x}/`)),
+    match: (p) => ['/questions', '/exam', '/formulas', '/challenges', '/progress', '/classes'].some((x) => p === x || p.startsWith(`${x}/`)),
   },
 ]
 
@@ -101,23 +106,27 @@ function GroupMenu({ group }: { group: NavGroup }) {
 /** below laptop width every section folds into one menu, so the header never wraps */
 function MobileMenu() {
   const [open, setOpen] = useState(false)
+  const tour = usePageTour((s) => !!s.current)
+  const installOffer = useInstall((s) => s.offer)
   const ref = useDismiss(open, () => setOpen(false))
   const { pathname } = useLocation()
   const link = (active: boolean) => `block rounded-xl px-3 py-2 text-[13.5px] ${active ? 'bg-ink text-bg' : 'text-ink hover:bg-panel-2'}`
   return (
-    <div ref={ref} className="relative lg:hidden">
+    // not positioned itself: the sheet hangs from the header bar, so it spans the screen with even margins
+    <div ref={ref} className="lg:hidden">
       <button
         type="button"
         aria-expanded={open}
         aria-haspopup="menu"
+        aria-label="Menu"
+        title="Menu"
         onClick={() => setOpen((o) => !o)}
-        className="inline-flex items-center gap-1.5 rounded-full border border-line-2 bg-[var(--color-scrim)] px-3.5 py-2 text-[13px] font-medium text-ink backdrop-blur-xl"
+        className="grid h-9 w-9 place-items-center rounded-full border border-line-2 bg-[var(--color-scrim)] text-ink backdrop-blur-xl"
       >
-        {open ? <Icon.close width={14} height={14} /> : <Icon.text width={14} height={14} />}
-        Menu
+        {open ? <Icon.close width={16} height={16} /> : <Icon.menu width={18} height={18} />}
       </button>
       {open ? (
-        <div role="menu" className="absolute left-0 top-full z-50 mt-2 max-h-[80vh] w-64 overflow-y-auto rounded-2xl border border-line bg-panel p-1.5 shadow-xl">
+        <div role="menu" className="absolute inset-x-4 top-full z-50 mt-1 max-h-[80vh] overflow-y-auto rounded-2xl border border-line bg-panel p-1.5 shadow-xl sm:left-auto sm:right-6 sm:w-80">
           {NAV.map((g, i) =>
             g.items.length === 1 ? (
               <Link key={g.label} role="menuitem" to={g.items[0].to} className={link(g.match(pathname))}>
@@ -127,7 +136,8 @@ function MobileMenu() {
               <div key={g.label}>
                 {i > 0 ? <div className="mx-3 my-1.5 border-t border-line" /> : null}
                 <p className="px-3 pb-1 pt-0.5 text-[11px] font-medium uppercase tracking-wider text-dim">{g.label}</p>
-                {g.items.map((it) => (
+                {/* one list here: a link that a later section also has (Solve a question) is listed there only */}
+                {g.items.filter((it) => !NAV.slice(i + 1).some((x) => x.items.some((y) => y.to === it.to))).map((it) => (
                   <Link key={it.to} role="menuitem" to={it.to} className={link(itemActive(pathname, it.to))}>
                     {it.label}
                   </Link>
@@ -136,10 +146,38 @@ function MobileMenu() {
               </div>
             ),
           )}
+          {installOffer ? (
+            <>
+              <div className="mx-3 my-1.5 border-t border-line" />
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  setOpen(false)
+                  void installApp()
+                }}
+                className={link(false) + ' w-full text-left'}
+              >
+                Install the app
+              </button>
+            </>
+          ) : null}
           <div className="mx-3 my-1.5 border-t border-line sm:hidden" />
           <div className="flex items-center justify-between gap-2 px-2 py-1 sm:hidden">
-            <AudienceSwitch compact />
+            {AUDIENCE_SWITCH ? <AudienceSwitch compact /> : null}
             <ThemeToggle />
+            {tour ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setOpen(false)
+                  usePageTour.getState().show()
+                }}
+                className="rounded-full border border-line-2 px-3 py-1.5 text-[12.5px] font-medium text-ink"
+              >
+                Show me around
+              </button>
+            ) : null}
           </div>
         </div>
       ) : null}
@@ -160,13 +198,10 @@ export function SiteHeader({ floating = false, scrolled = false, width = 'max-w-
         frosted ? 'border-b border-line bg-[var(--color-scrim)] backdrop-blur-xl' : 'border-b border-transparent'
       }`}
     >
-      <div className={`mx-auto flex ${width} items-center gap-3 px-4 transition-[padding] duration-300 sm:px-6 lg:px-8 ${floating && !scrolled ? 'py-4' : 'py-2.5'}`}>
+      <div className={`relative mx-auto flex ${width} items-center gap-3 px-4 transition-[padding] duration-300 sm:px-6 lg:px-8 ${floating && !scrolled ? 'py-4' : 'py-2.5'}`}>
         <Link to="/" aria-label="Solidify home" className="pointer-events-auto shrink-0 rounded-full border border-line-2 bg-[var(--color-scrim)] py-1.5 pl-2.5 pr-3.5 backdrop-blur-xl">
           <Logo />
         </Link>
-        <div className="pointer-events-auto">
-          <MobileMenu />
-        </div>
         <nav aria-label="Main" className="pointer-events-auto hidden items-center gap-0.5 rounded-full border border-line-2 bg-[var(--color-scrim)] p-1 text-[13px] font-medium backdrop-blur-xl lg:flex">
           {NAV.map((g) =>
             g.items.length === 1 ? (
@@ -179,13 +214,18 @@ export function SiteHeader({ floating = false, scrolled = false, width = 'max-w-
           )}
         </nav>
         <div className="pointer-events-auto ml-auto flex shrink-0 items-center gap-2">
-          <div className="hidden sm:block">
-            <AudienceSwitch compact />
-          </div>
+          {AUDIENCE_SWITCH ? (
+            <div className="hidden sm:block">
+              <AudienceSwitch compact />
+            </div>
+          ) : null}
           <div className="hidden sm:block">
             <ThemeToggle />
           </div>
+          <TourHelpButton className="hidden sm:grid" />
           <AccountMenu compact />
+          {/* the menu at the far right, where a phone's thumb and habit look for it */}
+          <MobileMenu />
         </div>
       </div>
     </header>

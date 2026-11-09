@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent, type KeyboardEvent, type ReactNode } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent, type KeyboardEvent } from 'react'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useSim } from '@/core/sim'
 import type { SceneDef } from '@/modules/types'
 import { previewSpec, streamOrEdit3DScene } from '@/note3d/ai3dCompiler'
@@ -17,8 +17,15 @@ import { useView } from '@/render/view'
 import { BuildScreen } from '@/ui/BuildScreen'
 import { Icon } from '@/ui/icons'
 import { SiteHeader } from '@/ui/SiteHeader'
-import { Stage } from '@/ui/Stage'
+import { OrientationGizmo, Stage } from '@/ui/Stage'
+import { Toolbar } from '@/ui/Toolbar'
+import { Readout, Section, Slider } from '@/ui/controls'
+import { FoldChevron, usePersisted } from '@/ui/usePersisted'
 import { Tex } from '@/ui/Tex'
+import { WorkedSolution } from './WorkedSolution'
+import { RichInline, RichText } from '@/ui/RichText'
+import { exprTex, nameTex } from '@/note3d/exprTex'
+import { freshNumbers } from '@/note3d/freshNumbers'
 import { toast } from '@/ui/toast'
 import { ApiError } from '../api'
 import { useAuth } from '../auth'
@@ -31,11 +38,13 @@ import { clearPendingBuild, peekPendingBuild } from '../pendingBuild'
 import { peekPreviewModel, setPreviewModel } from '../previewModel'
 import { updateDraft } from '../admin'
 import { scoreBuild } from '@/evals/score'
+import { mechanismProblems } from '@/note3d/kinematics'
 import { ghostBtn, inputCls, primaryBtn } from './Modal'
 import { PartInspector } from './PartInspector'
 import { WorkspaceBodySkeleton } from '@/ui/Skeleton'
 import { dismissTask, startTask } from '@/ui/tasks'
 import { ErrorBoundary } from '@/ui/ErrorBoundary'
+import { usePageTourOn } from '@/ui/PageTour'
 
 /** one turn of the conversation about a model (saved newest first, shown oldest first) */
 interface Turn {
@@ -62,20 +71,6 @@ const BUILD_TIPS = [
 const selectCls = 'rounded-lg border border-line-2 bg-bg px-2 py-1 text-[12px] text-ink focus:border-accent focus:outline-none'
 const fmt = (v: number, unit?: string) => (unit === 'm' ? `${(v * 1000).toFixed(1)} mm` : `${Number(v.toPrecision(4))}${unit ? ` ${unit}` : ''}`)
 
-/** a toolbar toggle in the app's own style */
-function Tool({ on, onClick, children, title }: { on?: boolean; onClick: () => void; children: ReactNode; title?: string }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      title={title}
-      aria-pressed={on}
-      className={`whitespace-nowrap rounded-full px-3 py-1 text-[12px] font-medium transition-colors ${on ? 'bg-ink text-bg' : 'text-mute hover:bg-panel-2 hover:text-ink'}`}
-    >
-      {children}
-    </button>
-  )
-}
 
 /** where a live build has got to, from what has actually arrived */
 function liveStage(p: LiveProgress | null) {
@@ -96,6 +91,12 @@ const EXAMPLES = [
 ]
 
 /** a new workspace: what to build, from words, a photo or an example */
+/** does a message to an open model read as a question (rather than a change)? Only for the wait's wording */
+function looksLikeQuestion(text: string) {
+  const t = text.trim().toLowerCase()
+  return t.endsWith('?') || /^(why|what|how|which|where|when|who|is|are|does|do|can|could|should|would|explain|derive|show that|prove|describe|compare|tell me|give me)\b/.test(t)
+}
+
 function StartPanel({ onBuild, signedIn }: { onBuild: (text: string, photo?: { name: string; url: string }) => void; signedIn: boolean }) {
   const [text, setText] = useState('')
   const [photo, setPhoto] = useState<{ name: string; url: string } | null>(null)
@@ -141,9 +142,19 @@ function StartPanel({ onBuild, signedIn }: { onBuild: (text: string, photo?: { n
                 go()
               }
             }}
+            onPaste={(e) => {
+              // a pasted screenshot (a question, a drawing) is taken as the photo
+              const file = [...e.clipboardData.items].find((i) => i.kind === 'file' && i.type.startsWith('image/'))?.getAsFile()
+              if (!file) return
+              e.preventDefault()
+              if (file.size > 8_000_000) return toast('That picture is too large. Please use one under 8 MB.', { tone: 'warn' })
+              const reader = new FileReader()
+              reader.onload = () => typeof reader.result === 'string' && setPhoto({ name: file.name || 'screenshot.png', url: reader.result })
+              reader.readAsDataURL(file)
+            }}
             rows={3}
-            maxLength={2000}
-            placeholder={photo ? 'Anything to add? (optional)' : 'e.g. a two-stage gear reducer for a 15 kW motor at 1450 rpm'}
+            maxLength={3800}
+            placeholder={photo ? 'Anything to add? (optional)' : 'e.g. a two-stage gear reducer for a 15 kW motor at 1450 rpm, or paste a question (or its screenshot) to solve'}
             aria-label="Describe a machine"
             className="w-full resize-none bg-transparent px-3 py-2 text-[15px] text-ink placeholder:text-dim field-bare focus:outline-none"
           />
@@ -179,7 +190,7 @@ function StartPanel({ onBuild, signedIn }: { onBuild: (text: string, photo?: { n
 }
 
 const IDENT = /[A-Za-z_][A-Za-z0-9_]*/g
-const FUNCS = new Set(['pi', 'PI', 'sqrt', 'sin', 'cos', 'tan', 'atan', 'exp', 'log', 'abs', 'min', 'max', 'step', 'mac'])
+const FUNCS = new Set(['pi', 'PI', 'sqrt', 'sin', 'cos', 'tan', 'atan', 'asin', 'acos', 'atan2', 'exp', 'log', 'ln', 'log10', 'pow', 'sinh', 'cosh', 'tanh', 'hypot', 'floor', 'ceil', 'round', 'abs', 'min', 'max', 'step', 'mac'])
 
 function CalcCard({
   result,
@@ -209,26 +220,32 @@ function CalcCard({
     .replace(IDENT, (id) => (FUNCS.has(id) ? id : scope[id] !== undefined ? fmtNum(scope[id]) : id))
     .replace(/\*/g, ' × ')
     .replace(/\s+/g, ' ')
+  // the same as equations: names by their symbols, then with the numbers put in (a negative bracketed)
+  const formulaTex = exprTex(c.formula, { symbols: Object.fromEntries(parameters.map((p) => [p.id, p.symbol || p.id])) })
+  const numbersTex = exprTex(c.formula, { values: Object.fromEntries(Object.entries(scope).map(([k, v]) => [k, v < 0 ? `\\left(${fmtNum(v)}\\right)` : fmtNum(v)])) })
   return (
     <div className={`bp-fade rounded-2xl border transition-colors ${status === 'warn' ? 'border-warn/50 bg-warn/5' : open ? 'border-ink/30' : 'border-line-2'}`}>
       <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} className="w-full p-3 text-left">
         <div className="flex items-baseline justify-between gap-3">
-          <span className="text-[12.5px] text-mute">{c.label}</span>
+          <span className="text-[12.5px] text-mute">
+            <RichInline text={c.label} />
+          </span>
           <span className="font-mono text-[16px] font-semibold text-ink">
             {formatted} <span className="text-[12px] font-normal text-mute">{c.unit}</span>
           </span>
         </div>
         {status === 'warn' && c.limit ? <p className="mt-1 text-[11.5px] text-warn">Over the limit: {c.limit.label ?? 'check this value'}</p> : null}
-        {c.latex ? (
-          <div className="mt-1.5 overflow-x-auto text-[11.5px] text-mute">
-            <Tex tex={c.latex} />
+        {/* the equation: as the model wrote it, else its formula written out as maths */}
+        {c.latex || formulaTex ? (
+          <div className="mt-1.5 overflow-x-auto overflow-y-hidden py-0.5 text-[12px] text-mute">
+            <Tex tex={`\\displaystyle ${c.latex || `${/[\\{}]/.test(c.symbol) ? c.symbol : nameTex(c.symbol || c.id)} = ${formulaTex}`}`} />
           </div>
         ) : null}
       </button>
       {open ? (
         <div className="space-y-3 border-t border-line px-3 pb-3 pt-2.5">
-          <p className="font-mono text-[11.5px] leading-relaxed text-mute">
-            = {worked} = <span className="text-ink">{formatted}</span> {c.unit}
+          <p className="overflow-x-auto overflow-y-hidden py-0.5 text-[12px] leading-relaxed text-mute">
+            {numbersTex ? <Tex tex={`\\displaystyle = ${numbersTex} = \\mathbf{${formatted}}`} /> : <span className="font-mono">= {worked} = <span className="text-ink">{formatted}</span></span>} <span className="text-ink/80">{c.unit}</span>
           </p>
           {inputs.map((p) => {
             const v = scope[p.id] ?? p.value
@@ -378,6 +395,9 @@ function LiveReply({ progress, isNew, photo }: { progress: LiveProgress | null; 
  */
 export default function ModelLab() {
   const { id: routeId } = useParams()
+  // ?try=1: a solved question opened from Exam practice's "Your questions" starts as practice
+  const [search] = useSearchParams()
+  const startTrying = search.get('try') === '1'
   const navigate = useNavigate()
   const authStatus = useAuth((s) => s.status)
   const signedIn = authStatus === 'signed-in'
@@ -387,13 +407,19 @@ export default function ModelLab() {
   const [spec, setSpec] = useState<NoteSceneSpec | null>(null)
   const [params, setParams] = useState<Record<string, number>>({})
   const [turns, setTurns] = useState<Turn[]>([])
-  const [live, setLive] = useState<{ prompt: string; photoUrl?: string; isNew: boolean; progress: LiveProgress | null } | null>(null)
+  /** `asking`: the message reads as a question (so the wait says so, before the reply confirms it) */
+  const [live, setLive] = useState<{ prompt: string; photoUrl?: string; isNew: boolean; asking?: boolean; progress: LiveProgress | null } | null>(null)
   const [input, setInput] = useState('')
   /** a photo attached to the next message */
   const [attached, setAttached] = useState<{ name: string; url: string } | null>(null)
   const attachRef = useRef<HTMLInputElement>(null)
-  const [tab, setTab] = useState<Tab>('calculations')
-  const [mobilePane, setMobilePane] = useState<'chat' | 'engineering'>('chat')
+  const [, setTab] = useState<Tab>('calculations')
+  // phones: the chat is a sheet over the page, opened from a round button, so the model and its engineering
+  // keep the screen; on a computer it is the left column
+  const [chatOpen, setChatOpen] = useState(false)
+  const [chatUnread, setChatUnread] = useState(false)
+  // phones: the details under the model can take most of the screen (the model shrinks to a strip above)
+  const [detailsTall, setDetailsTall] = useState(false)
   const [matchedCatalog, setMatchedCatalog] = useState<CatalogSceneMatch | null>(null)
   const [loadedCatalogScene, setLoadedCatalogScene] = useState<SceneDef | null>(null)
   const [viewMode, setViewMode] = useState<'parametric' | 'catalog'>('parametric')
@@ -415,16 +441,10 @@ export default function ModelLab() {
   const abortRef = useRef<AbortController | null>(null)
   const chatEndRef = useRef<HTMLDivElement>(null)
 
-  const cut = useView((s) => s.cut)
-  const explode = useView((s) => s.explode)
-  const xray = useView((s) => s.xray)
-  const labels = useView((s) => s.labels)
-  const caliperMode = useView((s) => s.caliperMode)
   const selectedId = useView((s) => s.selectedId)
-  const playing = useSim((s) => s.playing)
-  const timeScale = useSim((s) => s.timeScale)
-  const [cutAxis, setCutAxis] = useState<'x' | 'y' | 'z'>('z')
-  const [cutPos, setCutPos] = useState(0.02)
+  const [detailsOpen, setDetailsOpen] = usePersisted('solidify.panel.details', true)
+  const hiddenParts = useView((s) => s.hidden)
+  const isolatedId = useView((s) => s.isolatedId)
 
   useEffect(() => {
     document.title = `${spec?.title ?? 'Model'} · Solidify`
@@ -436,12 +456,13 @@ export default function ModelLab() {
     // saved models may hold a section plane written before it was checked
     const rec = spec.recommendedCut ? cleanCut(spec.recommendedCut) : undefined
     if (rec) {
-      setCutAxis(Math.abs(rec.normal[0]) > 0.5 ? 'x' : Math.abs(rec.normal[1]) > 0.5 ? 'y' : 'z')
-      setCutPos(rec.pos)
       useView.getState().setCut({ enabled: rec.enabled, planes: [{ normal: rec.normal, pos: rec.pos }] })
     } else useView.getState().setCut({ enabled: false, planes: [{ normal: [0, 0, 1], pos: 0 }] })
     useView.getState().setExplode(0)
     useView.getState().setXray(false)
+    useView.getState().showAll()
+    // generated motion is in real time: open at 1×, running (slow motion is one click away on the toolbar)
+    useSim.setState({ playing: true, timeScale: 1 })
     setTab(spec.charts?.length ? 'graphs' : 'calculations')
     useView.getState().select(null)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -477,14 +498,10 @@ export default function ModelLab() {
   /** each build's number: a build only writes to the screen while it is still this page's current one */
   const buildSeq = useRef(0)
 
-  const applyCutPlane = (enabled: boolean, axis: 'x' | 'y' | 'z', pos: number) => {
-    const normal: [number, number, number] = axis === 'x' ? [1, 0, 0] : axis === 'y' ? [0, 1, 0] : [0, 0, 1]
-    useView.getState().setCut({ enabled, planes: [{ normal, pos }] })
-  }
 
   /* ----------------------------------------------------------------- saving */
 
-  const savedHistory = (list: Turn[]) => list.filter((t) => t.kind !== 'error').slice(0, 30).map(({ prompt, response }) => ({ prompt: prompt.slice(0, 2000), response: response.slice(0, 2000) }))
+  const savedHistory = (list: Turn[]) => list.filter((t) => t.kind !== 'error').slice(0, 30).map(({ prompt, response }) => ({ prompt: prompt.slice(0, 2000), response: response.slice(0, 4000) }))
 
   const saveThumbnail = (id: string) => {
     window.setTimeout(() => {
@@ -557,16 +574,25 @@ export default function ModelLab() {
       return
     }
     const isNew = !spec
+    // a follow-up to a written answer (nothing built): the conversation goes with it
+    const followUp = isNew && turns.some((t) => t.kind === 'answer')
     const asked = withPhoto && !text.trim() ? (isNew ? `From a photo: ${withPhoto.name}` : 'Change it to match this photo') : prompt
     // a background task: it keeps going if the student leaves, and writes to this screen only while it is still here
     const token = ++buildSeq.current
     const attached = () => mountedRef.current && buildSeq.current === token
     const startId = creationIdRef.current
+    // a draft opened from the review queue: a change asked here goes back into that draft (scored and pictured
+    // again), not into a new model of the reviewer's own
+    const reviewing = routeId === 'preview' ? peekPreviewModel() : null
+    const draftId = reviewing?.draftId
     const short = asked.length > 48 ? `${asked.slice(0, 46)}…` : asked
-    const task = startTask(isNew ? `Building: ${short}` : `Changing ${spec?.title ?? 'your model'}`, startId ? `/create/${startId}` : '/create/new')
+    const task = startTask(
+      isNew ? `Building: ${short}` : draftId ? `Changing the draft ${spec?.title ?? ''}`.trim() : `Changing ${spec?.title ?? 'your model'}`,
+      draftId ? '/create/preview' : startId ? `/create/${startId}` : '/create/new',
+    )
     setInput('')
     setAttached(null)
-    setLive({ prompt: asked, photoUrl: withPhoto?.url, isNew, progress: null })
+    setLive({ prompt: asked, photoUrl: withPhoto?.url, isNew, asking: !isNew && looksLikeQuestion(prompt), progress: null })
     builtHereRef.current = true
     if (isNew) setViewKey(`build-${Date.now()}`)
     // a model being assembled holds still: the scene is rebuilt as each part lands, which would restart
@@ -580,7 +606,7 @@ export default function ModelLab() {
     abortRef.current = ac
     try {
       const res = await streamOrEdit3DScene(
-        { prompt, currentSpec: isNew ? undefined : (spec ?? undefined), photoDataUrl: withPhoto?.url, history: isNew ? [] : savedHistory(turns).reverse() },
+        { prompt, currentSpec: isNew ? undefined : (spec ?? undefined), photoDataUrl: withPhoto?.url, history: isNew && !followUp ? [] : savedHistory(turns).reverse() },
         (progress) => {
           if (attached()) setLive((l) => (l ? { ...l, progress } : l))
           task.update(progress.isQuestion ? 'Answering' : progress.parts.length ? `${progress.parts.length} ${progress.parts.length === 1 ? 'part' : 'parts'} placed` : 'Working out the engineering')
@@ -591,9 +617,57 @@ export default function ModelLab() {
         const next = [{ id: `t-${Date.now()}`, prompt: asked, response: res.explanation, kind: 'answer' as const, photoUrl: withPhoto?.url }, ...turns]
         if (attached()) setTurns(next)
         if (startId) void updateCreation(startId, { history: savedHistory(next) }).catch(() => {})
+        else if (res.answerOnly && isNew) {
+          // a written answer with nothing built: kept with the models (and in Your questions), reopened as text
+          const text = asked.replace(/^Solve (?:this problem|the problem in this screenshot) in 3D, step by step[^:]*:\s*/i, '').trim() || asked
+          const title = (text.split(/(?<=[.?!])\s|\n/)[0] || 'Worked answer').slice(0, 110)
+          try {
+            const { id } = await saveNewCreation({
+              title,
+              prompt: asked.slice(0, 2000),
+              fromPhoto: !!withPhoto,
+              spec: { id: `answer-${Date.now()}`, title, answerOnly: true, question: { text: text.slice(0, 4000), find: [] }, parts: [] },
+              params: {},
+              history: savedHistory(next),
+            })
+            if (attached()) {
+              creationIdRef.current = id
+              setCreationId(id)
+              setSaveState('saved')
+              navigate(`/create/${id}`, { replace: true })
+            }
+          } catch {
+            /* the answer is on screen; keeping it failed (e.g. the saved-models limit) */
+          }
+        }
         // an answer is quick: only worth a notice if the student has moved on
         if (attached()) dismissTask(task.id)
         else task.finish({ message: 'Your answer is ready.' })
+        return
+      }
+      if (draftId && reviewing) {
+        const next = [{ id: `t-${Date.now()}`, prompt: asked, response: res.explanation, kind: 'build' as const, photoUrl: withPhoto?.url }, ...turns]
+        const p = Object.fromEntries(res.spec.parameters.map((x) => [x.id, x.value]))
+        if (attached()) {
+          setTurns(next)
+          setSpec(res.spec)
+          setParams(p)
+          setViewMode('parametric')
+        }
+        const { score, checks } = scoreBuild({ id: 'draft', prompt: reviewing.prompt }, { spec: res.spec, explanation: res.explanation }, 0)
+        const explanation = res.explanation.slice(0, 4000)
+        await updateDraft(draftId, { spec: res.spec as unknown as Record<string, unknown>, explanation, score, checks: checks.filter((c) => c.name !== 'under two minutes') })
+        setPreviewModel({ ...reviewing, spec: res.spec as unknown as Record<string, unknown>, explanation })
+        if (attached()) draftBaseRef.current = JSON.stringify([res.spec, p])
+        // its picture once the new model has drawn (the queue draws one itself if this page has been left)
+        window.setTimeout(() => {
+          if (!attached()) return
+          void requestSnapshot({ width: 480 }).then((thumbnail) => {
+            if (thumbnail) void updateDraft(draftId, { thumbnail }).catch(() => {})
+          })
+        }, 1800)
+        task.finish({ href: '/create/preview', message: `Saved to the draft: ${res.spec.title || 'the model'} now scores ${score}.` })
+        if (attached()) toast(`Saved to the draft: now scores ${score}.`, { tone: 'ok' })
         return
       }
       const asNew = isNew || res.isNewMachine || !startId
@@ -725,10 +799,19 @@ export default function ModelLab() {
       .then((c) => {
         if (cancelled) return
         const loaded = c.spec as unknown as NoteSceneSpec
-        const p = { ...Object.fromEntries((loaded.parameters ?? []).map((x) => [x.id, x.value])), ...c.params }
         creationIdRef.current = routeId
         setCreationId(routeId)
         setViewKey(routeId)
+        // a written answer kept with the models (nothing was built): it reopens as the conversation
+        if ((c.spec as { answerOnly?: unknown }).answerOnly === true) {
+          lastSavedRef.current = ''
+          setSpec(null)
+          setParams({})
+          setTurns(c.history.map((h, i) => ({ id: `saved-${i}`, ...h, kind: 'answer' as const })))
+          setSaveState('saved')
+          return
+        }
+        const p = { ...Object.fromEntries((loaded.parameters ?? []).map((x) => [x.id, x.value])), ...c.params }
         lastSavedRef.current = JSON.stringify([loaded, p])
         setSpec(loaded)
         setParams(p)
@@ -841,8 +924,19 @@ export default function ModelLab() {
   const charts = useMemo(() => (shownSpec?.charts ?? []).map((ch) => evaluateChart(ch, calcScope)).filter((ch): ch is EvaluatedChart => !!ch), [shownSpec?.charts, calcScope])
   // the assembly check: parts left floating or buried, which Gemini can be asked to fix
   const layoutIssues = useMemo(() => (spec && !live && viewMode === 'parametric' ? resolveAssembly(spec, calcScope).issues : []), [spec, live, viewMode, calcScope])
+  // the same mechanism check the review queue shows, so a draft reads the same on its card and here
+  const mechIssues = useMemo(() => {
+    if (!spec || live || viewMode !== 'parametric') return []
+    try {
+      return mechanismProblems(spec, calcScope, `${turns[0]?.prompt ?? ''} ${spec.title}`).problems
+    } catch {
+      return []
+    }
+  }, [spec, live, viewMode, calcScope, turns])
+  const problems = [...layoutIssues.map((i) => i.message), ...mechIssues]
   const [layoutDismissed, setLayoutDismissed] = useState('')
-  const layoutKey = layoutIssues.map((i) => i.message).join('|')
+  const [problemsOpen, setProblemsOpen] = useState(false)
+  const layoutKey = problems.join('|')
   // each layout problem a student is shown is counted once, so the team sees which kinds of model go wrong
   useEffect(() => {
     if (!layoutKey || flaggedLayouts.has(layoutKey)) return
@@ -853,19 +947,39 @@ export default function ModelLab() {
   const selectedPart = useMemo(() => (viewMode === 'parametric' ? findPart(shownSpec, selectedId) : null), [shownSpec, selectedId, viewMode])
   // on a phone, choosing a part brings its details up under the model
   useEffect(() => {
-    if (selectedPart) setMobilePane('engineering')
+    if (selectedPart) setChatOpen(false)
   }, [selectedPart?.id])
   const calcUnits = useMemo(() => Object.fromEntries((shownSpec?.calculations ?? []).map((c) => [c.id, c.unit])), [shownSpec?.calculations])
   // one viewport for the page, fed the latest model: parts and arrows update in place as sizes change and parts stream in
   const parametricScene = useLiveSceneDef(shownSpec, shownParams)
   const scene = viewMode === 'catalog' && loadedCatalogScene && !live ? loadedCatalogScene : parametricScene
-  const extent = scene?.extent ?? 0.45
   const firstBuild = !!live && live.isNew && !preview
   /** a new, empty workspace: the start panel takes the input */
   const blank = routeId === 'new' && !spec && !live && !turns.length
+  // a written answer with nothing to build (a transportation problem, statistics): the conversation is the page
+  const answerView = !spec && !live && turns.some((t) => t.kind === 'answer')
+  // the first model someone has open: how to work with it (once)
+  usePageTourOn(
+    'workspace',
+    [
+      { target: 'ws-model', title: 'Your model, live', text: 'Drag to turn it, scroll or pinch to zoom. Click a part to see its size, material and the sums behind it.' },
+      { target: 'toolbar', title: 'Look inside', text: 'Play the motion, slow it down, cut it open, take it apart, see through it and measure, as on the lab rigs.' },
+      { target: 'ws-engineering', title: 'The engineering', text: 'Live readings, the calculations step by step, and sliders for every size: change one and the model and the numbers follow.' },
+      { target: 'ws-chat', title: 'Change it or ask', text: 'Ask for a change in plain words ("make the shaft longer", "use aluminium") or ask a question about how it works.' },
+      { target: 'ws-chat-button', title: 'Change it or ask', text: 'The chat is here: ask for a change in plain words or ask a question about how the model works.' },
+    ],
+    !!spec && !live && !answerView,
+  )
   /** a saved model is being fetched */
-  const opening = routeId !== 'new' && routeId !== 'preview' && !spec && !live && authStatus !== 'signed-out'
+  // a saved model still loading (a written answer has no model: it is open once its conversation is there)
+  const opening = routeId !== 'new' && routeId !== 'preview' && !spec && !live && !turns.length && authStatus !== 'signed-out'
   const messages = [...turns].reverse()
+  // a reply that lands while the phone's chat sheet is shut marks its button
+  const wasLive = useRef(false)
+  useEffect(() => {
+    if (wasLive.current && !live && !chatOpen) setChatUnread(true)
+    wasLive.current = !!live
+  }, [live, chatOpen])
 
   return (
     <div className="flex h-full flex-col bg-bg text-ink">
@@ -881,11 +995,12 @@ export default function ModelLab() {
       ) : null}
 
       {/* the model's own bar */}
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-line px-4 py-2 sm:px-6">
-        <Link to={viewing ? viewing.backTo : '/create/lab'} className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-[12.5px] text-mute hover:bg-panel-2 hover:text-ink">
-          <Icon.back width={14} height={14} /> {viewing ? 'Back' : 'My models'}
+      {/* phones: two rows, the way back and the name, then the state and the actions */}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-b border-line px-3 py-2 sm:px-6">
+        <Link to={viewing ? viewing.backTo : '/create/lab'} aria-label={viewing ? 'Back' : 'My models'} className="inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-1 text-[12.5px] text-mute hover:bg-panel-2 hover:text-ink">
+          <Icon.back width={14} height={14} /> <span className="max-sm:hidden">{viewing ? 'Back' : 'My models'}</span>
         </Link>
-        <span className="h-4 w-px bg-line" />
+        <span className="h-4 w-px bg-line max-sm:hidden" />
         {renaming && spec ? (
           <form onSubmit={rename} className="flex items-center gap-1.5">
             <input autoFocus value={titleDraft} onChange={(e) => setTitleDraft(e.target.value)} onBlur={rename} maxLength={120} aria-label="Model name" className={`${inputCls} py-1 text-[14px]`} />
@@ -898,14 +1013,14 @@ export default function ModelLab() {
               setTitleDraft(spec?.title ?? '')
               setRenaming(true)
             }}
-            className="min-w-0 truncate text-left text-[15px] font-semibold text-ink enabled:hover:underline disabled:cursor-default"
+            className="min-w-0 truncate text-left text-[15px] font-semibold text-ink max-sm:basis-[calc(100%-3rem)] enabled:hover:underline disabled:cursor-default"
             title={spec ? 'Rename' : undefined}
           >
-            {live?.progress?.title ?? spec?.title ?? (live ? 'Building…' : routeId === 'new' ? 'New model' : 'Model')}
+            {live?.progress?.title ?? spec?.title ?? (live ? 'Building…' : answerView ? 'Worked answer' : routeId === 'new' ? 'New model' : 'Model')}
           </button>
         )}
-        <span className="text-[12px] text-dim">
-          {live ? (live.progress?.title || spec ? 'Building…' : '') : routeId === 'preview' && !creationId ? 'Preview, not saved' : creationId ? (saveState === 'saving' ? 'Saving…' : saveState === 'error' ? 'Not saved: check your connection' : 'Saved') : ''}
+        <span className="min-w-0 text-[12px] text-dim max-sm:flex-1">
+          {live ? (live.progress?.title || spec ? 'Building…' : '') : routeId === 'preview' && !creationId ? (viewing?.draftId ? (savingDraft ? 'Saving to the draft…' : draftChanged ? 'Draft under review: changes not saved yet' : 'Draft under review: saved') : 'Preview, not saved') : creationId ? (saveState === 'saving' ? 'Saving…' : saveState === 'error' ? 'Not saved: check your connection' : 'Saved') : ''}
         </span>
         <div className="ml-auto flex items-center gap-2">
           {spec && matchedCatalog && loadedCatalogScene && !live ? (
@@ -915,7 +1030,11 @@ export default function ModelLab() {
           ) : null}
           {viewing?.draftId ? (
             <button type="button" disabled={!draftChanged || savingDraft} onClick={() => void saveToDraft()} title={draftChanged ? 'Save your changes into the draft under review' : 'Change sizes, materials or parts to save them to the draft'} className={`${primaryBtn} px-4 py-1.5 text-[12.5px]`}>
-              {savingDraft ? 'Saving…' : 'Save changes to the draft'}
+              {savingDraft ? 'Saving…' : (
+                <span>
+                  Save<span className="hidden sm:inline"> changes</span> to the draft
+                </span>
+              )}
             </button>
           ) : null}
           {isAdmin && spec && !live && !viewing?.draftId ? (
@@ -924,7 +1043,7 @@ export default function ModelLab() {
             </button>
           ) : null}
           {spec || live ? (
-            <Link to="/create/new" className={`${ghostBtn} px-4 py-1.5 text-[12.5px]`}>
+            <Link to="/create/new" className={`${ghostBtn} px-4 py-1.5 text-[12.5px] ${viewing?.draftId ? 'max-sm:hidden' : ''}`}>
               New model
             </Link>
           ) : null}
@@ -932,9 +1051,24 @@ export default function ModelLab() {
       </div>
 
       {opening ? <WorkspaceBodySkeleton /> : null}
-      <div className={`${opening ? 'hidden' : 'grid'} min-h-0 flex-1 ${blank ? 'grid-rows-1' : 'grid-rows-[minmax(380px,58vh)_auto]'} lg:grid-cols-[340px_minmax(0,1fr)_360px] lg:grid-rows-1`}>
+      <div className={`${opening ? 'hidden' : 'grid'} min-h-0 flex-1 grid-cols-[minmax(0,1fr)] ${blank || answerView ? 'grid-rows-1' : detailsTall ? 'grid-rows-[minmax(180px,26vh)_minmax(0,1fr)]' : 'grid-rows-[minmax(300px,50vh)_minmax(0,1fr)]'} ${answerView ? 'lg:grid-cols-[minmax(0,1fr)]' : 'lg:grid-cols-[340px_minmax(0,1fr)_360px]'} lg:grid-rows-1`}>
         {/* the conversation */}
-        <aside className={`${mobilePane === 'chat' && !blank ? 'flex' : 'hidden'} order-2 min-h-[360px] flex-col border-line lg:order-1 lg:flex lg:min-h-0 lg:border-r`}>
+        {chatOpen && !answerView && !blank ? <div className="fixed inset-0 z-40 bg-black/30 lg:hidden" onClick={() => setChatOpen(false)} aria-hidden /> : null}
+        <aside
+          className={`${
+            answerView
+              ? 'mx-auto flex w-full max-w-3xl text-[14px]'
+              : `${chatOpen && !blank ? 'fixed inset-x-0 bottom-0 z-50 flex h-[80vh] rounded-t-3xl border-t bg-bg shadow-2xl' : 'hidden'} lg:static lg:z-auto lg:h-auto lg:rounded-none lg:border-t-0 lg:border-r lg:shadow-none`
+          } order-2 flex-col border-line lg:order-1 lg:flex lg:min-h-0`}
+        >
+          {!answerView ? (
+            <div className="flex items-center justify-between border-b border-line px-4 py-2.5 lg:hidden">
+              <span className="text-[13.5px] font-semibold text-ink">Chat</span>
+              <button type="button" onClick={() => setChatOpen(false)} aria-label="Close the chat" className="rounded-full p-1.5 text-mute hover:bg-panel-2 hover:text-ink">
+                <Icon.close width={16} height={16} />
+              </button>
+            </div>
+          ) : null}
           <div className="flex-1 space-y-4 overflow-y-auto px-4 py-4">
             {!messages.length && !live ? (
               <p className="rounded-2xl border border-dashed border-line-2 p-4 text-[13px] leading-relaxed text-mute">
@@ -946,7 +1080,8 @@ export default function ModelLab() {
                 <UserBubble text={m.prompt} photoUrl={m.photoUrl} />
                 <div className={`mr-6 rounded-2xl rounded-bl-md border px-3.5 py-2.5 text-[13px] leading-relaxed ${m.kind === 'error' ? 'border-warn/50 bg-warn/5 text-ink' : 'border-line bg-panel text-ink'}`}>
                   {m.kind === 'answer' ? <p className="mb-1 text-[11px] font-medium uppercase tracking-wider text-accent">Answer</p> : null}
-                  {m.response}
+                  {/* answers and derivations carry equations: drawn as maths, with lists and paragraphs */}
+                  {m.kind === 'error' ? m.response : <RichText text={m.response} />}
                   {m.kind === 'error' ? (
                     <button type="button" onClick={() => void send(m.prompt)} className="mt-2 block text-[12px] font-medium text-accent hover:underline">
                       Try again
@@ -991,7 +1126,7 @@ export default function ModelLab() {
               </div>
             ) : null}
             <input ref={attachRef} type="file" accept="image/*" onChange={attach} className="hidden" />
-            <form onSubmit={submit} className="flex items-end gap-2 rounded-2xl border border-line-2 bg-panel p-1.5 focus-within:border-accent">
+            <form data-tour="ws-chat" onSubmit={submit} className="flex items-end gap-2 rounded-2xl border border-line-2 bg-panel p-1.5 focus-within:border-accent">
               <button type="button" aria-label="Attach a photo" title="Attach a photo or drawing" disabled={!!live} onClick={() => attachRef.current?.click()} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-mute transition-colors hover:bg-panel-2 hover:text-ink disabled:opacity-40">
                 <Icon.camera width={17} height={17} />
               </button>
@@ -1000,9 +1135,9 @@ export default function ModelLab() {
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={onKey}
                 rows={2}
-                maxLength={2000}
+                maxLength={3800}
                 disabled={!!live}
-                placeholder={attached ? (spec ? 'What should change? (optional)' : 'Anything to add? (optional)') : spec ? 'Ask for a change, or ask a question…' : 'Describe a machine…'}
+                placeholder={attached ? (spec ? 'What should change? (optional)' : 'Anything to add? (optional)') : spec ? 'Ask for a change, or ask a question…' : answerView ? 'Ask a follow-up question…' : 'Describe a machine, or paste a question…'}
                 aria-label="Message"
                 className="max-h-40 min-h-[44px] flex-1 resize-none bg-transparent px-2 py-1.5 text-[13.5px] text-ink placeholder:text-dim field-bare focus:outline-none disabled:opacity-60"
               />
@@ -1014,7 +1149,7 @@ export default function ModelLab() {
         </aside>
 
         {/* the model */}
-        <main className="order-1 flex min-h-0 min-w-0 flex-col border-line lg:order-2">
+        <main className={`${answerView ? 'hidden' : 'flex'} order-1 min-h-0 min-w-0 flex-col border-line lg:order-2`}>
           {firstBuild ? (
             <div className="relative flex-1 overflow-y-auto p-3">
               <BuildScreen
@@ -1029,65 +1164,54 @@ export default function ModelLab() {
             </div>
           ) : scene ? (
             <>
-              <div className="flex items-center gap-1 overflow-x-auto border-b border-line px-3 py-1.5 scrollbar-none">
-                <Tool on={cut.enabled} onClick={() => applyCutPlane(!cut.enabled, cutAxis, cutPos)}>Section</Tool>
-                <Tool on={explode > 0.05} onClick={() => useView.getState().setExplode(explode > 0.05 ? 0 : 0.7)}>Take apart</Tool>
-                <Tool on={xray} onClick={() => useView.getState().setXray(!xray)}>X-ray</Tool>
-                <Tool on={labels} onClick={() => useView.getState().setLabels(!labels)}>Labels</Tool>
-                <Tool on={caliperMode} onClick={() => useView.getState().setCaliperMode(!caliperMode)} title="Click two points on the model to measure between them">Measure</Tool>
-                <span className="mx-1 h-4 w-px shrink-0 bg-line" />
-                <Tool onClick={() => useSim.getState().toggle()}>{playing ? 'Pause' : 'Play'}</Tool>
-                {[0.5, 1, 2].map((spd) => (
-                  <Tool key={spd} on={Math.abs(timeScale - spd) < 0.05} onClick={() => useSim.getState().setTimeScale(spd)}>{spd}×</Tool>
-                ))}
-              </div>
-              {cut.enabled || explode > 0.05 ? (
-                <div className="flex flex-wrap items-center gap-x-5 gap-y-2 border-b border-line bg-panel-2/40 px-4 py-2 text-[12px] text-mute">
-                  {cut.enabled ? (
-                    <div className="flex min-w-55 flex-1 items-center gap-2" role="group" aria-label="Section plane">
-                      Section through
-                      {(['x', 'y', 'z'] as const).map((ax) => (
-                        <button key={ax} type="button" aria-label={`Section across ${ax}`} aria-pressed={cutAxis === ax} onClick={() => { setCutAxis(ax); applyCutPlane(true, ax, cutPos) }} className={`rounded px-1.5 font-mono uppercase ${cutAxis === ax ? 'bg-ink text-bg' : 'hover:text-ink'}`}>
-                          {ax}
-                        </button>
-                      ))}
-                      <input type="range" aria-label="Section position" min={-extent * 0.6} max={extent * 0.6} step={extent / 100} value={cutPos} onChange={(e) => { const v = parseFloat(e.target.value); setCutPos(v); applyCutPlane(true, cutAxis, v) }} className="slider flex-1" />
-                    </div>
-                  ) : null}
-                  {explode > 0.05 ? (
-                    <label className="flex min-w-45 flex-1 items-center gap-2">
-                      Apart
-                      <input type="range" aria-label="How far apart" min={0} max={1} step={0.02} value={explode} onChange={(e) => useView.getState().setExplode(parseFloat(e.target.value))} className="slider flex-1" />
-                    </label>
-                  ) : null}
-                </div>
-              ) : null}
-              {layoutIssues.length > 0 && layoutDismissed !== layoutKey ? (
+              {problems.length > 0 && layoutDismissed !== layoutKey ? (
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-line bg-warn/10 px-4 py-2 text-[12.5px]">
-                  <span className="min-w-0 flex-1 text-ink">
-                    <span className="font-semibold">{layoutIssues.length === 1 ? 'A part looks out of place' : `${layoutIssues.length} parts look out of place`}:</span>{' '}
-                    {layoutIssues.slice(0, 3).map((i) => i.message).join('; ')}
-                    {layoutIssues.length > 3 ? '…' : ''}
-                  </span>
+                  {/* on a phone one line, opened with a tap, so the model keeps the room */}
+                  <button type="button" onClick={() => setProblemsOpen((o) => !o)} aria-expanded={problemsOpen} className={`min-w-0 flex-1 text-left text-ink sm:pointer-events-none ${problemsOpen ? '' : 'line-clamp-1 sm:line-clamp-none'}`}>
+                    <span className="font-semibold">
+                      {mechIssues.length && !layoutIssues.length
+                        ? 'Moves wrongly'
+                        : !mechIssues.length
+                          ? layoutIssues.length === 1
+                            ? 'A part looks out of place'
+                            : `${layoutIssues.length} parts look out of place`
+                          : `${problems.length} problems`}
+                      :
+                    </span>{' '}
+                    {problems.slice(0, 3).join('; ')}
+                    {problems.length > 3 ? '…' : ''}
+                  </button>
                   <button
                     type="button"
                     onClick={() => {
-                      logEvent('fix-layout', spec?.title, layoutIssues.slice(0, 3).map((i) => i.message).join('; '))
-                      void send(`Fix the layout so every part sits where it belongs, using mounts (coaxial, mesh, against, centered) rather than coordinates. The problems: ${layoutIssues.map((i) => i.message).join('; ')}.`)
+                      logEvent('fix-layout', spec?.title, problems.slice(0, 3).join('; '))
+                      void send(
+                        mechIssues.length
+                          ? `Fix the model so every part sits where it belongs and moves from its mounts: only the driving part has a motion; levers use the lever mount, rams and yokes the follower mount, racks mesh with their pinion. The problems: ${problems.join('; ')}.`
+                          : `Fix the layout so every part sits where it belongs, using mounts (coaxial, mesh, against, centered) rather than coordinates. The problems: ${problems.join('; ')}.`,
+                      )
                     }}
                     className={`${primaryBtn} px-3.5 py-1 text-[12px]`}
                   >
-                    Fix the layout
+                    {mechIssues.length ? 'Fix it' : 'Fix the layout'}
                   </button>
                   <button type="button" onClick={() => setLayoutDismissed(layoutKey)} className="text-[12px] text-mute hover:text-ink">
                     Dismiss
                   </button>
                 </div>
               ) : null}
-              <div className="relative min-h-0 flex-1">
+              <div data-tour="ws-model" className="relative min-h-0 flex-1">
                 <ErrorBoundary label="3D model" resetKey={scene}>
                 <Stage scene={scene} cover={!live && !builtHereRef.current} viewKey={viewMode === 'catalog' && loadedCatalogScene && !live ? undefined : viewKey} />
                 </ErrorBoundary>
+                {/* the same controls as the lab rigs: views, play and step, slow motion, cuts, taking apart, x-ray,
+                    labels, measuring */}
+                <div className="pointer-events-none absolute right-3 top-3 z-10 hidden sm:block">
+                  <OrientationGizmo scene={scene} />
+                </div>
+                <div className="pointer-events-none absolute inset-x-0 bottom-3 z-10 hidden justify-center px-2 sm:flex">
+                  <Toolbar scene={scene} />
+                </div>
                 {live ? (
                   <div className="pointer-events-none absolute left-1/2 top-3 z-30 -translate-x-1/2">
                     <div className="flex items-center gap-2 rounded-full border border-line bg-panel/95 px-3.5 py-1.5 text-[12.5px] text-ink shadow-lg backdrop-blur">
@@ -1095,12 +1219,12 @@ export default function ModelLab() {
                         <span className="bp-ping absolute inset-0 rounded-full bg-accent/50" />
                         <span className="h-2 w-2 rounded-full bg-accent" />
                       </span>
-                      {live.progress?.isQuestion ? 'Thinking about your question…' : preview ? `Placing parts · ${preview.parts.length} in place` : 'Working on your change…'}
+                      {live.progress?.isQuestion || (live.asking && !preview?.parts.length) ? 'Thinking about your question…' : preview ? `Placing parts · ${preview.parts.length} in place` : 'Working on your change…'}
                     </div>
                   </div>
                 ) : null}
                 {spec && !live && !selectedPart && viewMode === 'parametric' ? (
-                  <div className="pointer-events-none absolute bottom-3 right-3 z-20 rounded-full border border-line bg-panel/90 px-3 py-1 text-[11.5px] text-mute shadow-sm backdrop-blur">
+                  <div className="pointer-events-none absolute left-3 top-3 z-20 rounded-full border border-line bg-panel/90 px-3 py-1 text-[11.5px] text-mute shadow-sm backdrop-blur">
                     Click a part to inspect it
                   </div>
                 ) : null}
@@ -1113,6 +1237,10 @@ export default function ModelLab() {
                     </div>
                   </div>
                 ) : null}
+              </div>
+              {/* phones: the toolbar under the view, so it never covers the model */}
+              <div className={`flex justify-center border-t border-line px-2 py-2 sm:hidden ${detailsTall ? 'hidden' : ''}`}>
+                <Toolbar scene={scene} />
               </div>
             </>
           ) : (
@@ -1137,23 +1265,35 @@ export default function ModelLab() {
             )
           )}
 
-          {/* phones: choose what sits under the model */}
-          <div className={`flex gap-1 border-t border-line p-2 lg:hidden ${blank ? 'hidden' : ''}`} role="tablist" aria-label="Panels">
-            {(
-              [
-                ['chat', 'Chat'],
-                ['engineering', 'Engineering'],
-              ] as const
-            ).map(([id, label]) => (
-              <button key={id} type="button" role="tab" aria-selected={mobilePane === id} onClick={() => setMobilePane(id)} className={`flex-1 rounded-full px-3 py-1.5 text-[12.5px] font-medium ${mobilePane === id ? 'bg-ink text-bg' : 'text-mute'}`}>
-                {label}
-              </button>
-            ))}
-          </div>
         </main>
 
+        {!blank && !answerView && !chatOpen ? (
+          <button
+            type="button"
+            onClick={() => {
+              setChatOpen(true)
+              setChatUnread(false)
+            }}
+            data-tour="ws-chat-button"
+            aria-label="Open the chat"
+            className="fixed bottom-5 right-4 z-30 flex h-14 w-14 items-center justify-center rounded-full bg-accent text-accent-ink shadow-xl lg:hidden"
+          >
+            <Icon.chat width={24} height={24} />
+            {live || chatUnread ? <span className={`absolute right-1 top-1 h-3 w-3 rounded-full border-2 border-accent ${live ? 'bp-ping bg-white' : 'bg-warn'}`} /> : null}
+          </button>
+        ) : null}
+
         {/* the engineering */}
-        <aside className={`${mobilePane === 'engineering' && !blank ? 'flex' : 'hidden'} order-3 min-h-[360px] flex-col border-line lg:flex lg:min-h-0 lg:border-l`}>
+        <aside data-tour="ws-engineering" className={`${!blank && !answerView ? 'flex' : 'hidden'} order-3 min-h-0 flex-col border-t border-line lg:min-h-0 lg:border-l lg:border-t-0`}>
+          <button
+            type="button"
+            onClick={() => setDetailsTall((t) => !t)}
+            aria-expanded={detailsTall}
+            className="flex w-full flex-col items-center gap-1 border-b border-line py-1.5 text-[11.5px] font-medium text-mute lg:hidden"
+          >
+            <span className="h-1 w-10 rounded-full bg-line-2" aria-hidden />
+            {detailsTall ? 'Show more of the model' : 'Show more of the details'}
+          </button>
           <ErrorBoundary label="engineering panel" resetKey={shownSpec}>
           {selectedPart && shownSpec ? (
             <>
@@ -1188,32 +1328,105 @@ export default function ModelLab() {
             <p className="p-4 text-[13px] text-mute">{live ? 'Sizes and calculations appear here as they are worked out.' : blank ? 'Calculations, sizes and parts appear here once the model is built.' : ''}</p>
           ) : (
             <>
-              <div className="flex gap-1 border-b border-line p-2" role="tablist" aria-label="Model details">
-                {(
-                  [
-                    ...(charts.length ? [['graphs', 'Graphs'] as const] : []),
-                    ['calculations', `Calculations`],
-                    ['dimensions', 'Dimensions'],
-                    ['parts', `Parts (${shownSpec.parts.length})`],
-                  ] as const
-                ).map(([id, label]) => (
-                  <button key={id} type="button" role="tab" aria-selected={tab === id} onClick={() => setTab(id)} className={`flex-1 whitespace-nowrap rounded-full px-2 py-1.5 text-[12.5px] font-medium transition-colors ${tab === id ? 'bg-ink text-bg' : 'text-mute hover:text-ink'}`}>
-                    {label}
-                  </button>
-                ))}
-              </div>
-
-              <div className="min-h-0 flex-1 overflow-y-auto p-4">
-                {tab === 'graphs' && charts.length ? (
+              <div className="min-h-0 flex-1 overflow-y-auto">
+                <div className="border-b border-line px-4 py-3">
+                  <div className="flex items-start gap-2">
+                    <h2 className="min-w-0 flex-1 text-[15px] font-semibold leading-snug text-ink">{shownSpec.title}</h2>
+                    {shownSpec.summary ? (
+                      <button
+                        type="button"
+                        onClick={() => setDetailsOpen(!detailsOpen)}
+                        aria-expanded={detailsOpen}
+                        aria-label={detailsOpen ? 'Hide the description' : 'Show the description'}
+                        title={detailsOpen ? 'Hide the description' : 'Show the description'}
+                        className="-mr-1 grid h-7 w-7 shrink-0 place-items-center rounded-md text-mute hover:bg-panel-2 hover:text-ink"
+                      >
+                        <FoldChevron open={detailsOpen} />
+                      </button>
+                    ) : null}
+                  </div>
+                  {shownSpec.summary && detailsOpen ? <p className="mt-1 text-[12.5px] leading-relaxed text-mute">{shownSpec.summary}</p> : null}
+                </div>
+                {shownSpec.question ? (
+                  <Section title="Worked solution">
+                    <WorkedSolution
+                      question={shownSpec.question}
+                      parameters={shownSpec.parameters}
+                      scope={calcScope}
+                      results={calcResults}
+                      disabled={!!live}
+                      onExplain={(label) => void send(`Explain how the ${label.toLowerCase()} is worked out, step by step with this problem's numbers.`)}
+                      practiceId={`own:${creationId ?? shownSpec.id}`}
+                      startTrying={startTrying}
+                      onNewNumbers={() => {
+                        const v = freshNumbers(shownSpec)
+                        if (!v) {
+                          toast('No other numbers keep this problem workable; move the givens yourself.', { tone: 'warn' })
+                          return false
+                        }
+                        setViewMode('parametric')
+                        setParams(v)
+                        return true
+                      }}
+                    />
+                  </Section>
+                ) : null}
+                {calcResults.length && !shownSpec.question ? (
+                  <Section title="Live">
+                    <div className="grid grid-cols-2 gap-2 xl:grid-cols-3">
+                      {calcResults.slice(0, 9).map((r) => (
+                        <Readout key={r.spec.id} label={<RichInline text={r.spec.label} />} value={r.formatted} unit={r.spec.unit} tone={r.status === 'warn' ? 'warn' : 'ink'} />
+                      ))}
+                    </div>
+                  </Section>
+                ) : null}
+                {shownSpec.parameters.length ? (
+                  <Section title={shownSpec.question ? 'Givens: try other values' : 'Dimensions'}>
+                    {live ? <p className="mb-2 text-[11.5px] text-mute">Locked while the model is being changed; they unlock when it is done.</p> : null}
+                    {shownSpec.parameters.map((p) => {
+                      const val = shownParams[p.id] ?? p.value
+                      // lengths in millimetres, as on the rigs
+                      const mm = p.unit === 'm'
+                      const k = mm ? 1000 : 1
+                      return (
+                        <Slider
+                          key={p.id}
+                          label={p.label}
+                          value={val * k}
+                          min={p.min * k}
+                          max={p.max * k}
+                          step={p.step * k}
+                          unit={mm ? 'mm' : p.unit}
+                          digits={4}
+                          disabled={!!live}
+                          onChange={(v) => {
+                            if (live) return
+                            setViewMode('parametric')
+                            setParams((prev) => ({ ...prev, [p.id]: v / k }))
+                          }}
+                        />
+                      )
+                    })}
+                    {spec && !live ? (
+                      <button type="button" onClick={() => setParams(Object.fromEntries(spec.parameters.map((p) => [p.id, p.value])))} className={`${ghostBtn} text-[12px]`}>
+                        Reset dimensions
+                      </button>
+                    ) : null}
+                  </Section>
+                ) : null}
+                {charts.length ? (
+                  <Section title="Graphs">
                   <div className="space-y-3">
                     {charts.map((ch) => (
                       <ChartView key={ch.spec.id} chart={ch} />
                     ))}
                     <p className="text-[11.5px] text-dim">Graphs redraw as you change the sizes. Hover or tap a graph to read any point.</p>
                   </div>
+                  </Section>
                 ) : null}
-                {tab === 'calculations' || (tab === 'graphs' && !charts.length) ? (
-                  calcResults.length ? (
+                {shownSpec.question ? null : (
+                <Section title="Working">
+                  {calcResults.length ? (
                     <div className="space-y-2">
                       {calcResults.map((r) => (
                         <CalcCard
@@ -1234,44 +1447,12 @@ export default function ModelLab() {
                     </div>
                   ) : (
                     <p className="text-[13px] text-mute">{live ? 'Working out the engineering…' : 'This model has no calculations yet. Ask for some in the chat.'}</p>
-                  )
-                ) : null}
+                  )}
+                </Section>
+                )}
 
-                {tab === 'dimensions' ? (
-                  <div className="space-y-3">
-                    {shownSpec.parameters.map((p) => {
-                      const val = shownParams[p.id] ?? p.value
-                      return (
-                        <label key={p.id} className="block">
-                          <div className="mb-1 flex items-baseline justify-between gap-2 text-[12.5px]">
-                            <span className="text-ink">{p.label}</span>
-                            <span className="font-mono text-mute">{fmt(val, p.unit)}</span>
-                          </div>
-                          <input
-                            type="range"
-                            min={p.min}
-                            max={p.max}
-                            step={p.step}
-                            value={val}
-                            disabled={!!live}
-                            onChange={(e) => {
-                              setViewMode('parametric')
-                              setParams((prev) => ({ ...prev, [p.id]: parseFloat(e.target.value) }))
-                            }}
-                            className="slider w-full"
-                          />
-                        </label>
-                      )
-                    })}
-                    {spec && !live ? (
-                      <button type="button" onClick={() => setParams(Object.fromEntries(spec.parameters.map((p) => [p.id, p.value])))} className={`${ghostBtn} text-[12px]`}>
-                        Reset dimensions
-                      </button>
-                    ) : null}
-                  </div>
-                ) : null}
 
-                {tab === 'parts' ? (
+                <Section title={`Parts (${shownSpec.parts.length})`}>
                   <div className="space-y-2">
                     {shownSpec.parts.map((pt) => (
                       <div
@@ -1280,9 +1461,33 @@ export default function ModelLab() {
                         className={`bp-fade flex cursor-pointer items-center gap-2 rounded-2xl border px-3 py-2 transition-colors ${selectedId === pt.id ? 'border-accent bg-accent/10' : 'border-line-2 hover:border-ink/30'}`}
                       >
                         <div className="min-w-0 flex-1">
-                          <div className="truncate text-[13px] font-medium text-ink">{pt.name}</div>
+                          <div className={`truncate text-[13px] font-medium ${hiddenParts.includes(pt.id) ? 'text-dim line-through' : 'text-ink'}`}>{pt.name}</div>
                           {pt.info?.summary ? <div className="truncate text-[11.5px] text-mute">{pt.info.summary}</div> : null}
                         </div>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            useView.getState().toggleHidden(pt.id)
+                          }}
+                          aria-label={hiddenParts.includes(pt.id) ? `Show ${pt.name}` : `Hide ${pt.name}`}
+                          title={hiddenParts.includes(pt.id) ? 'Show' : 'Hide'}
+                          className="rounded-full px-1.5 text-[11.5px] text-dim hover:text-ink"
+                        >
+                          {hiddenParts.includes(pt.id) ? 'Show' : 'Hide'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            useView.getState().isolate(isolatedId === pt.id ? null : pt.id)
+                          }}
+                          aria-pressed={isolatedId === pt.id}
+                          title="Show only this part"
+                          className={`rounded-full px-1.5 text-[11.5px] ${isolatedId === pt.id ? 'text-accent' : 'text-dim hover:text-ink'}`}
+                        >
+                          Only
+                        </button>
                         {spec && !live ? (
                           <>
                             <select
@@ -1293,7 +1498,8 @@ export default function ModelLab() {
                                 setViewMode('parametric')
                                 setMaterial(pt.id, e.target.value as MaterialKey)
                               }}
-                              className={selectCls}
+                              // as narrow as the panel allows: the longest material name would push the page wider than a phone
+                              className={`${selectCls} w-[7.5rem] min-w-0 shrink`}
                             >
                               {ALLOWED_MATERIALS.slice(0, 26).map((mk) => (
                                 <option key={mk} value={mk}>
@@ -1360,7 +1566,7 @@ export default function ModelLab() {
                       )
                     ) : null}
                   </div>
-                ) : null}
+                </Section>
               </div>
             </>
           )}

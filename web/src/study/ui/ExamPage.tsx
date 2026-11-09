@@ -9,14 +9,19 @@ import { Working, n } from '@/ui/Working'
 import { queueParams } from '../bridge'
 import { useProgress } from '../progress'
 import { QUESTIONS, findQuestion } from '../questions'
-import { COURSES, parseAnswer, type Course, type Question } from '../types'
+import { COURSES, courseTitle, parseAnswer, type Course, type Question } from '../types'
 import { markAnswers } from '../marking'
 import { dueQuestions } from '../review'
 import { ExplainMistake } from './ExplainMistake'
 import { instantiate, randomSeed, type Seed } from '../variants'
+import { RigView } from './RigView'
+import { YourQuestions } from './YourQuestions'
+import { usePageTourOn } from '@/ui/PageTour'
 import { Bar, CourseLabel, Pills, StudyShell } from './StudyShell'
 
 type Inputs = Record<string, string>
+
+const chooser = 'w-full min-w-0 rounded-xl border border-line-2 bg-bg px-3 py-2 text-[13px] text-ink outline-none focus:border-accent'
 
 function fieldResults(q: Question, inputs: Inputs) {
   const given = Object.fromEntries(q.answers.map((a) => [a.key, parseAnswer(inputs[a.key] ?? '')]))
@@ -79,6 +84,12 @@ function AnswerInputs({ q, inputs, setInputs, results }: { q: Question; inputs: 
 
 function QuestionHead({ q, index, total }: { q: Question; index?: number; total?: number }) {
   const academic = useAcademic()
+  usePageTourOn('exam', [
+    { target: 'exam-mode', title: 'Four ways to practise', text: 'Practice one question at a time, Review the ones due again, sit a timed Mock exam, or go back to the questions you pasted yourself.' },
+    { target: 'exam-filter', title: 'Pick a subject and topic', text: 'Narrow the questions down; the bar shows how many you have solved.' },
+    { target: 'rig-view', title: 'The question in 3D', text: 'Each question comes with its rig, set to the numbers in the question. Turn it, cut it open, watch it move.' },
+    { target: 'exam-check', title: 'Answer, then check', text: 'Type your answers and check them; they are accepted within about 1 %. Show working reveals every step.' },
+  ])
   const scene = findModule(q.moduleId)?.scenes.find((s) => s.id === q.sceneId)
   return (
     <>
@@ -160,21 +171,25 @@ function Practice({ list, start, fresh = false }: { list: Question[]; start?: st
   }
   const stat = qp[q.id]
   return (
-    <div className="rounded-3xl border border-line bg-panel p-5">
+    // the problem beside its rig, live in 3D with the problem's numbers (new numbers move the rig too)
+    <div className="grid gap-4 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)] lg:items-start">
+    {/* a new rig is a new view: loading one rig into the view of another left a 3D label to be removed twice */}
+    <RigView key={`${q.moduleId}/${q.sceneId}`} moduleId={q.moduleId} sceneId={q.sceneId} params={q.params} className="h-[300px] sm:h-[420px] lg:sticky lg:top-4 lg:h-[calc(100vh-8rem)] lg:min-h-[480px]" />
+    <div className="min-w-0 rounded-3xl border border-line bg-panel p-5">
       <QuestionHead q={q} index={i} total={list.length} />
       <div className="mt-4">
         <AnswerInputs q={q} inputs={inputs} setInputs={setInputs} results={results} />
         <p className="mt-1.5 text-[11px] text-dim">Answers are accepted within about 1 % of the computed value.</p>
       </div>
       <div className="mt-4 flex flex-wrap items-center gap-2">
-        <button onClick={check} className="rounded-lg bg-accent px-3.5 py-1.5 text-[13px] font-semibold text-accent-ink hover:brightness-110">
+        <button data-tour="exam-check" onClick={check} className="rounded-lg bg-accent px-3.5 py-1.5 text-[13px] font-semibold text-accent-ink hover:brightness-110">
           Check
         </button>
         <button onClick={() => setReveal((v) => !v)} className="rounded-lg border border-line-2 px-3 py-1.5 text-[13px] text-ink hover:border-accent/40">
           {reveal ? 'Hide working' : 'Show working'}
         </button>
         <button onClick={() => open3d(q)} className="rounded-lg border border-accent/50 px-3 py-1.5 text-[13px] text-accent hover:bg-accent/10">
-          Open in 3D{q.params ? ' with this data' : ''}
+          Open the full rig{q.params ? ' with this data' : ''}
         </button>
         {q.vary ? (
           <button
@@ -210,6 +225,7 @@ function Practice({ list, start, fresh = false }: { list: Question[]; start?: st
       </div>
       {results ? <ExplainMistake q={q} results={results} inputs={inputs} /> : null}
       {reveal ? <Solution q={q} /> : null}
+    </div>
     </div>
   )
 }
@@ -376,7 +392,7 @@ export function ExamPage() {
   const [params] = useSearchParams()
   const start = useMemo(() => findQuestion(params.get('q') ?? ''), [params])
   const qp = useProgress((s) => s.questions)
-  const [mode, setMode] = useState<'practice' | 'mock' | 'review'>('practice')
+  const [mode, setMode] = useState<'practice' | 'mock' | 'review' | 'mine'>(() => (params.get('mode') === 'mine' ? 'mine' : 'practice'))
   // reviews due now, across every subject; frozen when a review session starts
   const dueNow = useMemo(() => dueQuestions(qp, QUESTIONS.map((q) => q.id), Date.now()), [qp])
   const [reviewList, setReviewList] = useState<Question[]>([])
@@ -411,6 +427,7 @@ export function ExamPage() {
       title="Exam practice"
       lead={`${QUESTIONS.length} worked problems${academic ? ' from past papers, marking guides and worked examples' : ''}. Every answer is computed by the same tested calculations that drive the 3D scenes.`}
       right={
+        <div data-tour="exam-mode">
         <Pills
           label="Mode"
           value={mode}
@@ -419,31 +436,64 @@ export function ExamPage() {
             { value: 'practice', label: 'Practice' },
             { value: 'review', label: dueNow.length ? `Review · ${dueNow.length} due` : 'Review' },
             { value: 'mock', label: 'Mock exam' },
+            { value: 'mine', label: 'Your questions' },
           ]}
         />
+        </div>
       }
     >
-      {mode !== 'review' ? (
-      <div className="mb-4 space-y-2 rounded-3xl border border-line bg-panel-2/50 p-3">
-        <Pills
-          label="Subject"
-          value={course}
-          onChange={(v) => {
-            setCourse(v)
-            setTopic('all')
-          }}
-          options={[{ value: 'all' as const, label: 'All subjects' }, ...COURSES.map((c) => ({ value: c.id, label: <CourseLabel course={c.id} /> }))]}
-        />
-        <Pills label="Topic" value={topic} onChange={setTopic} options={[{ value: 'all', label: 'All topics' }, ...topics.map((t) => ({ value: t, label: t }))]} />
-        <div className="flex items-center gap-3 pt-1 text-[12px] text-mute">
-          <span className="shrink-0">
-            {solved}/{list.length} solved
-          </span>
+      {mode !== 'review' && mode !== 'mine' ? (
+      <div data-tour="exam-filter" className="mb-4 grid items-end gap-3 rounded-3xl border border-line bg-panel-2/50 p-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.8fr)]">
+        {/* two choosers, not walls of buttons: ten subjects and forty-odd topics read better as lists */}
+        <label className="block min-w-0">
+          <span className="mb-1 block px-1 text-[11.5px] font-medium text-mute">Subject</span>
+          <select
+            value={course}
+            onChange={(e) => {
+              setCourse(e.target.value as Course | 'all')
+              setTopic('all')
+            }}
+            className={chooser}
+          >
+            <option value="all">All subjects ({QUESTIONS.length})</option>
+            {COURSES.map((c) => {
+              const qs = QUESTIONS.filter((q) => q.course === c.id)
+              if (!qs.length) return null
+              const done = qs.filter((q) => (qp[q.id]?.correct ?? 0) > 0).length
+              return (
+                <option key={c.id} value={c.id}>
+                  {courseTitle(c.id)} ({done ? `${done}/` : ''}{qs.length})
+                </option>
+              )
+            })}
+          </select>
+        </label>
+        <label className="block min-w-0">
+          <span className="mb-1 block px-1 text-[11.5px] font-medium text-mute">Topic</span>
+          <select value={topic} onChange={(e) => setTopic(e.target.value)} className={chooser}>
+            <option value="all">All topics ({byCourse.length})</option>
+            {topics.map((t) => {
+              const qs = byCourse.filter((q) => q.topic === t)
+              const done = qs.filter((q) => (qp[q.id]?.correct ?? 0) > 0).length
+              return (
+                <option key={t} value={t}>
+                  {t} ({done ? `${done}/` : ''}{qs.length})
+                </option>
+              )
+            })}
+          </select>
+        </label>
+        <div className="min-w-0 px-1 pb-2 text-[12px] text-mute">
+          <div className="mb-1.5">
+            <span className="font-semibold text-ink">{solved}</span> of {list.length} solved
+          </div>
           <Bar value={solved} total={list.length} />
         </div>
       </div>
       ) : null}
-      {mode === 'review' ? (
+      {mode === 'mine' ? (
+        <YourQuestions />
+      ) : mode === 'review' ? (
         reviewList.length ? (
           <>
             <p className="mb-3 text-[12.5px] text-mute">

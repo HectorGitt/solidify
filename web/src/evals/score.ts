@@ -1,5 +1,6 @@
 import * as THREE from 'three'
 import { resolveAnnotation, resolveAssembly, type PartFrame } from '@/note3d/assembly'
+import { mechanismProblems } from '@/note3d/kinematics'
 import { sanitizeGeneratedSpec } from '@/note3d/sanitize'
 import { evalVec3, evaluateCalculations, evaluateChart, type NoteSceneSpec } from '@/note3d/schema'
 import type { EvalCase } from './cases'
@@ -83,6 +84,17 @@ export function overlappingLabels(spec: NoteSceneSpec, frames: Map<string, PartF
 export function scoreBuild(c: EvalCase, reply: Record<string, unknown>, seconds: number): { score: number; checks: EvalCheck[]; spec: NoteSceneSpec | null } {
   const checks: EvalCheck[] = []
   const add = (name: string, ok: boolean, detail?: string) => checks.push({ name, ok, ...(detail ? { detail: detail.slice(0, 300) } : {}) })
+  // nothing to build: judged as a written answer
+  if (c.written) {
+    const text = typeof reply.explanation === 'string' ? reply.explanation : ''
+    add('written, no model', reply.answerOnly === true && !!text.trim(), reply.answerOnly === true ? undefined : 'a model was built for a problem with nothing physical to show')
+    add('equations as maths', /\$[^$\s][^$]*\$/.test(text), 'no equation written in LaTeX')
+    add('numbered steps', /^\s*\d+[.)]\s/m.test(text), 'no numbered steps')
+    if (c.written.table) add('a table', /^\s*\|.*\|\s*\n\s*\|?\s*:?-{2,}/m.test(text), 'no Markdown table')
+    add('under two minutes', seconds <= 120, `${Math.round(seconds)} s`)
+    const passed = checks.filter((x) => x.ok).length
+    return { score: Math.round((100 * passed) / checks.length), checks, spec: null }
+  }
   const spec: NoteSceneSpec | null = sanitizeGeneratedSpec(reply, c.prompt)
   add('builds', !!spec, spec ? undefined : 'the answer could not be turned into a model')
   if (!spec) return { score: 0, checks, spec: null }
@@ -101,6 +113,8 @@ export function scoreBuild(c: EvalCase, reply: Record<string, unknown>, seconds:
 
   const loose = looseMovingParts(spec)
   if (loose.checked) add('moving parts connected', loose.problems.length === 0, loose.problems.join('; ') || undefined)
+  const mech = mechanismProblems(spec, scope, `${c.prompt} ${spec.title ?? ''}`)
+  if (mech.checked) add('mechanism moves right', mech.problems.length === 0, mech.problems.join('; ') || undefined)
 
   const clash = overlappingLabels(spec, frames, scope)
   add('labels clear', clash.length === 0, clash.length ? `${clash.join('; ')} overlap` : undefined)
@@ -109,7 +123,7 @@ export function scoreBuild(c: EvalCase, reply: Record<string, unknown>, seconds:
     add('assembled by relation', mounted >= 0.6 * (spec.parts.length - 1), `${mounted} of ${spec.parts.length - 1} non-anchor parts mounted`)
   }
 
-  const bad = results.filter((r) => !Number.isFinite(r.value))
+  const bad = results.filter((r) => r.broken || !Number.isFinite(r.value))
   add('calculations work', results.length > 0 && bad.length === 0, results.length ? (bad.length ? `${bad.map((r) => r.spec.label).join(', ')} not a number` : undefined) : 'no calculations')
 
   if (c.charts) {
@@ -120,6 +134,24 @@ export function scoreBuild(c: EvalCase, reply: Record<string, unknown>, seconds:
     const loads = (spec.annotations ?? []).filter((a) => a.kind === 'force' || a.kind === 'moment')
     const loose = loads.filter((a) => !a.anchor)
     add('loads as attached arrows', loads.length > 0 && loose.length === 0, loads.length ? (loose.length ? `${loose.length} of ${loads.length} not attached to a part` : undefined) : 'no load arrows')
+  }
+  if (c.solve) {
+    const steps = spec.calculations ?? []
+    const q = spec.question
+    const answers = steps.filter((s) => s.answer)
+    const ok = !!q && q.find.length > 0 && steps.length >= 2 && steps.every((s) => s.step) && answers.length > 0
+    add(
+      'solved step by step',
+      ok,
+      ok ? undefined : !q ? 'not set up as a question' : !q.find.length ? 'what is asked is not listed' : steps.length < 2 ? 'fewer than two steps' : !answers.length ? 'no result marked as the answer' : 'a step has no explanation',
+    )
+  }
+  if (c.symbolic) {
+    // a derivation given no numbers: in symbols, every step an equation, any values marked as only illustrative
+    const steps = spec.calculations ?? []
+    const unmarked = spec.parameters.filter((p) => !/illustrative/i.test(p.label))
+    const ok = spec.question?.symbolic === true && steps.length > 0 && steps.every((s) => !!s.latex) && unmarked.length === 0
+    add('derived in symbols', ok, ok ? undefined : spec.question?.symbolic !== true ? 'not marked as symbolic' : unmarked.length ? `values presented as given: ${unmarked.map((p) => p.label).join(', ')}` : 'a step has no equation')
   }
   if (c.noRig) {
     const rig = spec.parts.filter((p) => RIG.test(p.name))

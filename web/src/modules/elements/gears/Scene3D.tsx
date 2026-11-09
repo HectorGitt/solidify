@@ -1,4 +1,5 @@
-import { Html, Line } from '@react-three/drei'
+import { Line } from '@react-three/drei'
+import { Html } from '@/render/Html'
 import { useMemo, useRef, type ReactNode } from 'react'
 import * as THREE from 'three'
 import { useSimFrame } from '@/core/sim'

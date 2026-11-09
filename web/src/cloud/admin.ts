@@ -78,6 +78,10 @@ export interface LibraryCard {
   publishedAt?: number
   thumbnail?: string
   reviewedBy?: { uid: string; name: string }
+  /** anyone may open it, signed in or not */
+  free?: boolean
+  /** a curator's choice: free to view (true), sign-in only (false), or left to the default (the six best) */
+  open?: boolean
 }
 
 export interface LibraryItem extends LibraryCard {
@@ -173,7 +177,7 @@ export const addDraft = (d: DraftFields) => api<{ id: string }>('/v1/library/dra
 export const updateDraft = (id: string, patch: Partial<DraftFields> & { reviewNotes?: string; checklist?: ReviewChecklist }) => api<LibraryDraft>(`/v1/library/drafts/${encodeURIComponent(id)}`, { method: 'PUT', body: patch })
 
 export const publishModel = (d: DraftFields) => api<{ id: string }>('/v1/library', { method: 'POST', body: d })
-export const updateLibraryItem = (id: string, patch: { title?: string; topic?: string; thumbnail?: string }) => api<{ ok: true }>(`/v1/library/${encodeURIComponent(id)}`, { method: 'PUT', body: patch })
+export const updateLibraryItem = (id: string, patch: { title?: string; topic?: string; thumbnail?: string; open?: boolean }) => api<{ ok: true }>(`/v1/library/${encodeURIComponent(id)}`, { method: 'PUT', body: patch })
 
 /** a line in the audit trail: who did what, to what, and when */
 export interface AuditEntry {

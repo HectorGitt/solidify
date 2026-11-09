@@ -17,7 +17,8 @@ const scene: SceneDef = {
   floorY: FLOOR,
   hatchScale: 0.007,
   timeScale: 1,
-  cutPresets: [{ id: 'mid', label: 'Through the links', planes: [{ normal: [0, 0, 1], pos: 0.02 }], sectionMoving: true }],
+  // through the coupler (z 0.026 to 0.034), the front link; at 0.02 the coupler lay wholly in front and vanished
+  cutPresets: [{ id: 'mid', label: 'Through the links', planes: [{ normal: [0, 0, 1], pos: 0.03 }], sectionMoving: true }],
   cites: [V('relative velocity method'), A('acceleration diagrams')],
   reset: () => useDiagram.getState().reset(),
   applyParams: (p) => useDiagram.getState().set(p as Partial<typeof DEFAULTS>),

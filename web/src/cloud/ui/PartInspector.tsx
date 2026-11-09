@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import { buildPartGeometry } from '@/note3d/builder'
 import { fmtNum } from '@/note3d/ChartView'
+import { buildKinematics } from '@/note3d/kinematics'
 import { MATERIAL_PROPS, meshVolume, partParameters, relatedCalculations, SHAPE_NAMES, shapeSizes } from '@/note3d/partInfo'
 import { ALLOWED_MATERIALS, type EvaluatedCalculation, type NotePartSpec, type NoteSceneSpec } from '@/note3d/schema'
 import { MATERIALS, type MaterialKey } from '@/render/materials'
@@ -59,14 +60,33 @@ export function PartInspector({
     return calcResults.filter((r) => ids.has(r.spec.id))
   }, [spec.calculations, paramIds, calcResults])
 
+  // how it moves in the 3D view: worked out from its mounts when it is part of a mechanism
+  const kinText = useMemo(() => {
+    try {
+      const kin = buildKinematics(spec, scope)
+      if (!kin.derived.has(part.id)) return null
+      kin.update(0)
+      const a = kin.move(part.id)
+      kin.update(1)
+      const b = kin.move(part.id)
+      const w = (b?.spin ?? 0) - (a?.spin ?? 0)
+      const rpm = fmtNum((Math.abs(w) * 60) / (2 * Math.PI))
+      const via = spec.parts.find((p) => p.id === part.mount?.target)?.name
+      if (kin.drivers.has(part.id)) return `Drives the mechanism, ${rpm} rev/min in the animation`
+      if (Math.abs(w) > 1e-9) return `Turns at ${rpm} rev/min in the animation${via ? `, driven through the ${via}` : ''}`
+      return via ? `Moves with the ${via}` : 'Moves with the mechanism'
+    } catch {
+      return null
+    }
+  }, [spec, scope, part.id, part.mount?.target])
   const speed = part.motion ? Number(scope[String(part.motion.speed)] ?? part.motion.speed) : 0
-  const motionText = part.motion
+  const motionText = kinText ?? (part.motion
     ? part.motion.kind === 'rotate'
       ? `Turns about the ${AXIS[part.motion.axis]} axis${Number.isFinite(speed) && speed ? `, ${fmtNum(Math.abs(speed) * 60 / (2 * Math.PI))} rev/min in the animation` : ''}`
       : part.motion.kind === 'translate'
         ? `Slides along the ${AXIS[part.motion.axis]} axis`
         : `Rocks about the ${AXIS[part.motion.axis]} axis`
-    : 'Does not move'
+    : 'Does not move')
 
   const isIsolated = isolatedId === part.id
   const isHidden = hidden.includes(part.id)
@@ -200,7 +220,7 @@ export function PartInspector({
                   </span>
                 </div>
                 {c.latex ? (
-                  <div className="mt-1 overflow-x-auto text-[11.5px] text-mute">
+                  <div className="mt-1 overflow-x-auto overflow-y-hidden py-0.5 text-[11.5px] text-mute">
                     <Tex tex={c.latex} />
                   </div>
                 ) : null}

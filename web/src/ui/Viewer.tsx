@@ -29,7 +29,7 @@ import { dropInside, exitInside, useInside } from './inside'
 import { TelemetryTag } from './TelemetryTag'
 import { PowerPath } from './PowerPath'
 import { WholePanel } from './WholePanel'
-import { useParts } from '@/parts/registry'
+import { partObjects, useParts } from '@/parts/registry'
 import { currentPose, flyTo, focusPart } from './camera'
 import { onSceneReady } from '@/study/bridge'
 import { SceneMark } from '@/study/ui/badges'
@@ -37,6 +37,8 @@ import { InSceneExam, questionsForScene } from '@/study/ui/InSceneExam'
 import { SceneMenu } from './SceneMenu'
 import { TutorButton, TutorPanel } from '@/cloud/ui/Tutor'
 import { checkXRSupport, enterXR, useXRSession } from '@/xr/session'
+import { FoldChevron, usePersisted } from './usePersisted'
+import { usePageTourOn } from './PageTour'
 
 function useMediaQuery(q: string) {
   const [m, setM] = useState(() => window.matchMedia(q).matches)
@@ -59,6 +61,20 @@ export function Viewer() {
   const wide = useMediaQuery('(min-width: 1100px)')
   const [leftOpen, setLeftOpen] = useState(wide)
   const [rightOpen, setRightOpen] = useState(wide)
+  // the first rig someone opens: where everything is (once, for all rigs)
+  usePageTourOn(
+    'rig',
+    [
+      { title: 'A working lab rig', text: 'This is a live 3D machine: drag to turn it, scroll or pinch to zoom, and click any part to see what it is and what it does.' },
+      { target: 'rig-scene', title: 'Other rigs in this system', text: 'Switch to another rig on the same subject here.' },
+      { target: 'toolbar', title: 'Look inside', text: 'Play and pause, slow it down, cut it open, take it apart, see through the casing, label the parts and measure.' },
+      { target: 'rig-test', title: 'Run the experiment', text: 'Start the test and the rig takes its own readings into a table you can work up. Nothing runs until you start it.' },
+      { target: 'rig-guided', title: 'Guided tour', text: 'A step-by-step walk round this machine: the camera goes to each part in turn and explains it.' },
+      { target: 'tutor', title: 'Ask about it', text: 'Ask a question about this rig and get an answer that knows what you are looking at.' },
+      { target: 'rig-parts', title: 'Parts and controls', text: 'Show or hide the list of parts on the left and the readings and settings on the right.' },
+    ],
+    !!scene,
+  )
   const [rightTab, setRightTab] = useState<'controls' | 'exam'>('controls')
   // in a headset: the rig's panel must be showing, as the panel in the headset copies its controls
   const xrSupported = useXRSession((s) => s.supported)
@@ -69,6 +85,7 @@ export function Viewer() {
     setRightOpen(true)
     setRightTab('controls')
   }, [xrActive])
+  const [detailsOpen, setDetailsOpen] = usePersisted('solidify.panel.details', true)
   const tourActive = useTour((s) => s.active)
   const academic = useAcademic()
   const startTour = useTour((s) => s.start)
@@ -150,13 +167,17 @@ export function Viewer() {
         }
         if (arrival?.selectName) {
           const name = arrival.selectName
-          window.setTimeout(() => {
+          // the scene's parts register as it builds (later when its code was already loaded and it builds at
+          // once, or a big machine takes seconds): keep looking for the part for a few seconds
+          let tries = 0
+          const find = () => {
             const hit = Object.values(useParts.getState().parts).find((x) => x.name === name)
-            if (hit) {
+            if (hit && partObjects.get(hit.id)) {
               useView.getState().select(hit.id)
               focusPart(hit.id)
-            }
-          }, 450)
+            } else if (++tries < 14) window.setTimeout(find, 300)
+          }
+          window.setTimeout(find, 450)
         }
         window.setTimeout(() => useFade.getState().set(0), 120)
         // Restore shared deep-link view parameters (?cut=...&pos=...&explode=...&xray=...&cam=...)
@@ -288,6 +309,7 @@ export function Viewer() {
         </span>
         <span className="hidden text-line-2 md:inline" aria-hidden>›</span>
         <select
+          data-tour="rig-scene"
           aria-label="Scene"
           className="order-last min-w-0 basis-full truncate rounded-md border border-line-2 bg-panel-2 px-2 py-1.5 text-[13px] text-ink sm:order-none sm:max-w-[50vw] sm:basis-auto sm:py-1"
           value={entry?.id}
@@ -312,6 +334,7 @@ export function Viewer() {
           {scene && entry ? <SceneMenu scene={scene} moduleId={mod.id} sceneId={entry.id} onPower={() => setPower(true)} onShare={copyShareLink} /> : null}
           {scene?.tour?.length ? (
             <button
+              data-tour="rig-guided"
               onClick={() => (tourActive ? stopTour() : startTour())}
               className={`flex items-center gap-1.5 rounded-md px-2.5 py-1 text-[12.5px] font-medium ${tourActive ? 'bg-accent text-accent-ink' : 'border border-accent/50 text-accent hover:bg-accent/10'}`}
             >
@@ -335,10 +358,10 @@ export function Viewer() {
           ) : null}
           {scene ? <TutorButton /> : null}
           <span className="mx-0.5 hidden h-5 w-px bg-line sm:block" aria-hidden />
-          <button aria-label="Toggle parts panel" aria-pressed={leftOpen} onClick={() => setLeftOpen((o) => !o)} className={`grid h-8 w-8 place-items-center rounded-md ${leftOpen ? 'text-accent' : 'text-mute'} hover:bg-panel-3`}>
+          <button data-tour="rig-parts" aria-label="Toggle parts panel" aria-pressed={leftOpen} onClick={() => setLeftOpen((o) => !o)} className={`grid h-8 w-8 place-items-center rounded-md ${leftOpen ? 'text-accent' : 'text-mute'} hover:bg-panel-3`}>
             <Icon.panel />
           </button>
-          <button aria-label="Toggle controls panel" aria-pressed={rightOpen} onClick={() => setRightOpen((o) => !o)} className={`grid h-8 w-8 place-items-center rounded-md ${rightOpen ? 'text-accent' : 'text-mute'} hover:bg-panel-3`}>
+          <button data-tour="rig-controls" aria-label="Toggle controls panel" aria-pressed={rightOpen} onClick={() => setRightOpen((o) => !o)} className={`grid h-8 w-8 place-items-center rounded-md ${rightOpen ? 'text-accent' : 'text-mute'} hover:bg-panel-3`}>
             <Icon.sliders />
           </button>
         </div>
@@ -442,13 +465,30 @@ export function Viewer() {
         {rightOpen && scene ? (
           <aside className={`${wide ? 'relative' : 'absolute inset-y-0 right-0 z-20 shadow-2xl'} flex w-[min(380px,100vw)] shrink-0 flex-col border-l border-line bg-panel`}>
             <div className="border-b border-line px-4 py-3">
-              <h1 className="text-[15px] font-semibold leading-snug text-ink">{scene.title}</h1>
-              <p className="mt-1 text-[12.5px] leading-relaxed text-mute">{scene.summary}</p>
-              {mod && entry ? <SeenIn route={`${mod.id}/${entry.id}`} /> : null}
-              {academic && entry?.exam ? (
-                <div className="mt-2">
-                  <Badge tone="warn">Frequently examined</Badge>
-                </div>
+              <div className="flex items-start gap-2">
+                <h1 className="min-w-0 flex-1 text-[15px] font-semibold leading-snug text-ink">{scene.title}</h1>
+                {/* the description folds away, so the live readings sit higher */}
+                <button
+                  type="button"
+                  onClick={() => setDetailsOpen(!detailsOpen)}
+                  aria-expanded={detailsOpen}
+                  aria-label={detailsOpen ? 'Hide the description' : 'Show the description'}
+                  title={detailsOpen ? 'Hide the description' : 'Show the description'}
+                  className="-mr-1 grid h-7 w-7 shrink-0 place-items-center rounded-md text-mute hover:bg-panel-3 hover:text-ink"
+                >
+                  <FoldChevron open={detailsOpen} />
+                </button>
+              </div>
+              {detailsOpen ? (
+                <>
+                  <p className="mt-1 text-[12.5px] leading-relaxed text-mute">{scene.summary}</p>
+                  {mod && entry ? <SeenIn route={`${mod.id}/${entry.id}`} /> : null}
+                  {academic && entry?.exam ? (
+                    <div className="mt-2">
+                      <Badge tone="warn">Frequently examined</Badge>
+                    </div>
+                  ) : null}
+                </>
               ) : null}
               {sceneQuestions.length > 0 ? (
                 <div className="mt-3 grid grid-cols-2 gap-1 rounded-xl border border-line bg-panel-2 p-1">

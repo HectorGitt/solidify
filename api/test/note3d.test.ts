@@ -128,6 +128,19 @@ describe('streamed builds', () => {
     expect(done.data.explanation).toMatch(/why is the gear there/)
   })
 
+  it('passes a written answer with nothing to build (a transportation problem) straight through, with no model', async () => {
+    const answer = 'Given three plants and four markets.\n\n1. Balance supply and demand: $$\\sum s_i = \\sum d_j = 120$$\n\n**Minimum cost: 1 330**'
+    vision.streamCreate3D = async function* () {
+      yield JSON.stringify({ answerOnly: true, explanation: answer })
+    }
+    const done = (await events(await post('/v1/create-3d/stream', { prompt: 'Solve this transportation problem by the least-cost method' }))).at(-1)!
+    expect(done.event).toBe('done')
+    expect(done.data.answerOnly).toBe(true)
+    expect(done.data.isQuestion).toBe(true)
+    expect(done.data.explanation).toBe(answer)
+    expect(done.data.spec).toEqual({})
+  })
+
   it('reports an incomplete answer as an error event', async () => {
     vision.streamCreate3D = async function* () {
       yield '{"spec": {"parts": ['

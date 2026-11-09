@@ -22,7 +22,7 @@ export function ClassReport({ classId, papers }: { classId: string; papers: Pape
 
   useEffect(() => {
     api<ClassProgress>(`/v1/classes/${classId}/progress`)
-      .then(setProgress)
+      .then((r) => setProgress({ students: Array.isArray(r?.students) ? r.students : [] }))
       .catch(() => setProgress({ students: [] }))
   }, [classId])
 
@@ -31,7 +31,7 @@ export function ClassReport({ classId, papers }: { classId: string; papers: Pape
     Promise.all(papers.map((p) => api<{ students: { results: Record<string, { slips: string[] }> | null }[] }>(`/v1/classes/${classId}/papers/${p.id}/results`).catch(() => ({ students: [] }))))
       .then((all) => {
         const count: Record<string, number> = {}
-        for (const r of all) for (const s of r.students) for (const q of Object.values(s.results ?? {})) for (const k of q.slips) count[k] = (count[k] ?? 0) + 1
+        for (const r of all) for (const s of Array.isArray(r?.students) ? r.students : []) for (const q of Object.values(s?.results ?? {})) for (const k of Array.isArray(q?.slips) ? q.slips : []) count[k] = (count[k] ?? 0) + 1
         setSlips(count)
       })
   }, [classId, papers])

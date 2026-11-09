@@ -1,4 +1,4 @@
-import { Html } from '@react-three/drei'
+import { Html } from '@/render/Html'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { create } from 'zustand'

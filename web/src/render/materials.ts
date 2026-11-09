@@ -251,6 +251,19 @@ export interface MaterialOptions {
   tint?: string
 }
 
+/**
+ * A liquid fills its sump, tank or jacket right up to the walls, so its surface and the container's inner
+ * surface are in the same place and the depth test can't tell which is in front: as the camera moves,
+ * patches of the casing break through the oil (worst in a cut-away, where the oil's far side is drawn as
+ * its section). A small depth nudge toward the camera makes the liquid win wherever the two coincide; it is
+ * far thinner than any wall, so the liquid never shows through one.
+ */
+function liquidWins(m: THREE.Material) {
+  m.polygonOffset = true
+  m.polygonOffsetFactor = -1
+  m.polygonOffsetUnits = -4
+}
+
 function baseMaterial(def: MaterialDef, highlight: Highlight) {
   const params: THREE.MeshPhysicalMaterialParameters = {
     color: def.color,
@@ -264,6 +277,7 @@ function baseMaterial(def: MaterialDef, highlight: Highlight) {
     emissiveIntensity: def.emissiveIntensity ?? 1,
   }
   const m = new THREE.MeshPhysicalMaterial(params)
+  if (def.hatch === 'fluid') liquidWins(m)
   if (highlight === 'select') {
     m.emissive = new THREE.Color('#f0a020')
     m.emissiveIntensity = 0.28
@@ -322,6 +336,7 @@ export function createDynamicCutMaterial(base: Partial<MaterialDef> & { color: s
   const m = new THREE.MeshPhysicalMaterial({ color: def.color, vertexColors: base.vertexColors ?? false, metalness: def.metalness, roughness: def.roughness, emissive: def.emissive ?? '#000000', emissiveIntensity: def.emissiveIntensity ?? 1 })
   m.clippingPlanes = cutPlanes
   m.side = THREE.DoubleSide
+  if (def.hatch === 'fluid') liquidWins(m)
   injectCap(m, def, 'none', capColor)
   m.customProgramCacheKey = () => `dyncap|${def.hatch}`
   return { material: m, capColor }

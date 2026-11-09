@@ -1,4 +1,4 @@
-import { Html } from '@react-three/drei'
+import { Html } from '@/render/Html'
 import { useParts } from '@/parts/registry'
 import { useView } from './view'
 

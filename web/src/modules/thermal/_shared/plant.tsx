@@ -1,4 +1,4 @@
-import { Html } from '@react-three/drei'
+import { Html } from '@/render/Html'
 import { useMemo, type ReactNode } from 'react'
 import * as THREE from 'three'
 import { cylinder, mat4, merge, pipe, xform } from '@/geometry'

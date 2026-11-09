@@ -1,4 +1,5 @@
-import { Html, Line } from '@react-three/drei'
+import { Line } from '@react-three/drei'
+import { Html } from '@/render/Html'
 import { useEffect, useLayoutEffect, useMemo, useRef, type ReactNode } from 'react'
 import * as THREE from 'three'
 import { box, cylinder, extrude, mat4, merge, roundedBox, xform } from '@/geometry'

@@ -14,10 +14,30 @@ const make = (extra: Record<string, unknown> = {}, appChecker?: { verify(t: stri
 }
 
 describe('against scraping', () => {
+  it('lets anyone open the few models free to view, the six best by default or those marked', async () => {
+    const req = make()
+    const ids: string[] = []
+    for (let i = 0; i < 8; i++) ids.push(((await (await req('POST', '/v1/library', { title: `Model ${i}`, prompt: `a model ${i}`, spec: { parts: [] }, score: 60 + i * 5 }, boss)).json()) as { id: string }).id)
+    const cards = async () => ((await (await req('GET', '/v1/library')).json()) as { items: { id: string; free: boolean }[] }).items
+    // nothing marked: the six best scored (models 2 to 7)
+    let free = (await cards()).filter((c) => c.free).map((c) => c.id)
+    expect(free.sort()).toEqual(ids.slice(2).sort())
+    expect((await req('GET', `/v1/library/${ids[7]}`)).status).toBe(200)
+    expect((await req('GET', `/v1/library/${ids[0]}`)).status).toBe(401)
+    // only a curator marks one; once any is marked, only those marked are free
+    expect((await req('PUT', `/v1/library/${ids[0]}`, { open: true }, { Authorization: 'Bearer user:sam:Sam' })).status).toBe(403)
+    expect((await req('PUT', `/v1/library/${ids[0]}`, { open: true }, boss)).status).toBe(200)
+    free = (await cards()).filter((c) => c.free).map((c) => c.id)
+    expect(free).toEqual([ids[0]])
+    expect((await req('GET', `/v1/library/${ids[0]}`)).status).toBe(200)
+    expect((await req('GET', `/v1/library/${ids[7]}`)).status).toBe(401)
+  })
+
   it('keeps full library models for people signed in, a day’s worth each, and staff uncounted', async () => {
     const req = make()
     const { id } = (await (await req('POST', '/v1/library', { title: 'Pump', prompt: 'A pump', spec: { parts: [] }, score: 100 }, boss)).json()) as { id: string }
-    // the cards stay public; the model itself does not
+    // the cards stay public; a model that isn't free to view does not
+    await req('PUT', `/v1/library/${id}`, { open: false }, boss)
     expect((await req('GET', '/v1/library')).status).toBe(200)
     expect((await req('GET', `/v1/library/${id}`)).status).toBe(401)
     const sam = { Authorization: 'Bearer user:sam:Sam', 'X-Forwarded-For': '10.0.0.1' }

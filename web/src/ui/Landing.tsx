@@ -1,9 +1,10 @@
+import * as THREE from 'three'
 import { useEffect, useState, type ReactNode } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { MODULES } from '@/modules/catalog'
 import type { ModuleDef, SceneDef } from '@/modules/types'
 import { useView } from '@/render/view'
-import { useAcademic, useAudience } from './audience'
+import { AUDIENCE_SWITCH, useAcademic, useAudience } from './audience'
 import { SUPPORT_EMAIL } from '@/cloud/config'
 import { useReport } from '@/cloud/ui/ReportDialog'
 import { useSales } from '@/cloud/ui/SalesDialog'
@@ -11,7 +12,9 @@ import { Icon } from './icons'
 import { Loader, LoaderMark } from './Loader'
 import { Stage, type StageFrame } from './Stage'
 import { hasWebGL } from './webgl'
-import { getCameraControls } from './camera'
+import { focusPart, getCameraControls } from './camera'
+import { useTrail } from './trail'
+import { partObjects, useParts } from '@/parts/registry'
 import { SiteHeader } from '@/ui/SiteHeader'
 import { SiteFooter } from './SiteFooter'
 import { ALL_ORDER, MEDIA, Media, ModuleTile, READY } from './labsCatalog'
@@ -25,13 +28,11 @@ import { applySceneView, useHomeStage } from './homeStage'
  * default settings; `fill` draws a bar only where the figure is a fraction of a limit.
  */
 type HeroReadout = { label: string; value: string; unit: string; fill?: number }
-const HERO_SCENES: { moduleId: string; sceneId: string; label: string; frame: StageFrame; readouts: HeroReadout[] }[] = [
-  { moduleId: 'vibration', sceneId: 'seat', label: 'Seat suspension', frame: { back: 1.6, shift: 0.55 }, readouts: [{ label: 'Operator vibration', value: '0.666', unit: 'm/s² RMS' }, { label: 'Seat transmissibility', value: '0.549', unit: 'floor to operator' }] },
-  { moduleId: 'mechanisms', sceneId: 'four-bar', label: 'Four-bar linkage', frame: { back: 1.45, shift: 0.35 }, readouts: [{ label: 'Rocker swing', value: '73.8', unit: '° (crank-rocker)' }, { label: 'Transmission angle', value: '18.2–65.4', unit: '°' }] },
-  { moduleId: 'traction', sceneId: 'traction-lab', label: 'Traction & drawbar pull', frame: { back: 1.25, shift: 0.2, lift: 0.12 }, readouts: [{ label: 'Drawbar pull', value: '12', unit: 'kN at 14.6 % slip' }, { label: 'Drawbar power', value: '11.4', unit: 'kW of 17.3', fill: 11.4 / 17.3 }] },
-  { moduleId: 'mechanisms', sceneId: 'governors', label: 'Centrifugal governor', frame: { back: 1.5, shift: 0.3 }, readouts: [{ label: 'Spindle speed', value: '240', unit: 'rpm' }, { label: 'Sleeve lift', value: '42', unit: 'mm' }] },
-  { moduleId: 'powertrain', sceneId: 'differential', label: 'Differential & diff lock', frame: { back: 1.8, shift: 0.35 }, readouts: [{ label: 'Pinion', value: '600', unit: 'rpm' }, { label: 'Crown wheel', value: '140', unit: 'rpm' }] },
-  { moduleId: 'engine', sceneId: 'cooling', label: 'Engine cooling', frame: { back: 1.4, shift: 0.45 }, readouts: [{ label: 'Heat to coolant', value: '36', unit: 'kW' }] },
+const HERO_SCENES: { moduleId: string; sceneId: string; label: string; frame: StageFrame; focus?: RegExp; xray?: boolean; noExplode?: boolean; fromFront?: RegExp; pad?: number; readouts: HeroReadout[] }[] = [
+  { moduleId: 'vibration', sceneId: 'seat', label: 'Seat suspension', focus: /^suspension$|suspension/i, xray: true, frame: { back: 1.6, shift: 0.55 }, readouts: [{ label: 'Operator vibration', value: '0.666', unit: 'm/s² RMS' }, { label: 'Seat transmissibility', value: '0.549', unit: 'floor to operator' }] },
+  { moduleId: 'mechanisms', sceneId: 'four-bar', label: 'Four-bar linkage', focus: /^crank$/, noExplode: true, frame: { back: 1.45, shift: 0.35 }, readouts: [{ label: 'Rocker swing', value: '73.8', unit: '° (crank-rocker)' }, { label: 'Transmission angle', value: '18.2–65.4', unit: '°' }] },
+  { moduleId: 'powertrain', sceneId: 'differential', label: 'Differential & diff lock', focus: /^cage$/, fromFront: /^pinion$/, pad: 0.45, frame: { back: 1.8, shift: 0.35 }, readouts: [{ label: 'Pinion', value: '600', unit: 'rpm' }, { label: 'Crown wheel', value: '140', unit: 'rpm' }] },
+  { moduleId: 'engine', sceneId: 'cooling', label: 'Engine cooling', focus: /radiator|water pump/i, frame: { back: 1.4, shift: 0.45 }, readouts: [{ label: 'Heat to coolant', value: '36', unit: 'kW' }] },
 ]
 
 
@@ -49,11 +50,11 @@ const COPY = {
     ],
   },
   academic: {
-    eyebrow: '3D machinery and laboratories for engineering students',
+    eyebrow: '3D models, labs and worked answers for engineering and science students',
     title: 'Engineering, brought to life.',
-    lead: 'Engines, mechanisms, strength of materials, thermal plant and technical drawing, as models you can run. Do the lab test on screen, then practise with fresh numbers and see the slip behind a wrong answer.',
-    primary: { label: 'Start with the diesel engine', to: '/m/engine/four-stroke-diesel' },
-    labs: { label: 'Open the labs', to: '/m/materials/tensile' },
+    lead: 'Paste any question, from materials science to machine design, and see it in 3D with the working step by step. Run lab tests on engines, materials, mechanisms and thermal plant, then practise with fresh numbers and see the slip behind a wrong answer.',
+    primary: { label: 'Solve a question', to: '/questions' },
+    labs: { label: 'Open the labs', to: '/labs' },
     features: [
       { icon: 'cut', title: 'Interactive diagrams', text: 'Every textbook figure becomes a model you can turn, slice, explode and run in slow motion, down to 1/200 of real speed.' },
       { icon: 'book', title: 'Worked examples', text: 'Load exam-style data into any scene and follow the working: the formula, the numbers substituted, then the answer.' },
@@ -70,7 +71,6 @@ const LAB_LINKS = [
   { label: 'Beam bending', to: '/m/materials/beam' },
   { label: 'Steam plant', to: '/m/thermal/steam-plant' },
   { label: 'Refrigeration', to: '/m/thermal/refrigeration' },
-  { label: 'Governors', to: '/m/mechanisms/governors' },
 ]
 
 /** A real recording of the tensile rig: the feature is easier to show than to describe. */
@@ -124,6 +124,7 @@ function Hero({ copy }: { copy: (typeof COPY)[keyof typeof COPY] }) {
   const cutEnabled = useView((s) => s.cut.enabled)
   const explode = useView((s) => s.explode)
   const hero = HERO_SCENES[heroIdx]
+  const partPicked = useView((s) => !!s.selectedId)
   const shownFrame = HERO_SCENES.find((h) => h.sceneId === scene?.id)?.frame
   const switching = !!scene && scene.id !== hero.sceneId
 
@@ -166,26 +167,157 @@ function Hero({ copy }: { copy: (typeof COPY)[keyof typeof COPY] }) {
   useEffect(() => {
     if (!reel || !scene || owner !== 'hero' || switching) return
     const view = () => useView.getState()
-    const timers = [
-      window.setTimeout(() => view().setCut({ enabled: true }), 2500),
-      window.setTimeout(() => view().setExplode(0.75), 6500),
-      window.setTimeout(() => view().setExplode(0), 10500),
-      window.setTimeout(() => view().setCut({ enabled: false }), 13000),
-      window.setTimeout(() => setHeroIdx((i) => (i + 1) % HERO_SCENES.length), 15000),
-    ]
-    // the camera sways gently either side of the scene's own view (about 18°), so flat rigs never turn edge-on
+    const hero = HERO_SCENES.find((h) => h.sceneId === scene.id)
+    const want = hero?.focus
+    // the steps run one after another, each waiting for the last (a big machine's parts can take seconds to
+    // appear); stopping the reel cancels whatever step is waiting
+    let cancelled = false
+    const pending: number[] = []
+    const wait = (ms: number) => new Promise<void>((res) => pending.push(window.setTimeout(res, ms)))
+    let orbit = 0
+    // the sideways shift that clears the headline is a fixed distance: scaled with the zoom, or a close-up part
+    // ends far off-centre (a tyre fills the view instead); restored on the way back out
+    let back: { p: number[]; t: number[]; offset: THREE.Vector3 } | null = null
+
+    /** the part to zoom in on, once it is there (up to 8 s) */
+    const findPart = async () => {
+      for (let i = 0; i < 27 && !cancelled; i++) {
+        const parts = Object.values(useParts.getState().parts)
+        const hit = want ? (parts.find((x) => want.test(x.id)) ?? parts.find((x) => want.test(x.name))) : undefined
+        const obj = hit ? partObjects.get(hit.id) : undefined
+        if (hit && obj && getCameraControls()) return { hit, obj }
+        await wait(300)
+      }
+      return null
+    }
+    /** where the view is now, to come back to */
+    const here = () => {
+      const c = getCameraControls()!
+      const p = new THREE.Vector3()
+      const t = new THREE.Vector3()
+      c.getPosition(p)
+      c.getTarget(t)
+      return { p: p.toArray(), t: t.toArray(), offset: c.getFocalOffset(new THREE.Vector3()) }
+    }
+    /**
+     * Close in on a part along a chosen direction (by default the one the camera already looks along). Not the
+     * library's fitToBox: that snaps the view to the nearest straight side or front first, which put the
+     * differential side-on with a wheel filling the view.
+     */
+    const zoomIn = (hit: { id: string }, obj: THREE.Object3D, from = here(), dir?: THREE.Vector3) => {
+      const c = getCameraControls()!
+      const p = new THREE.Vector3(...from.p)
+      const t = new THREE.Vector3(...from.t)
+      const offset = from.offset
+      back = from
+      const box = new THREE.Box3().setFromObject(obj)
+      const centre = box.getCenter(new THREE.Vector3())
+      const radius = box.getSize(new THREE.Vector3()).length() / 2
+      const fov = ((c.camera as THREE.PerspectiveCamera).fov ?? 40) * (Math.PI / 180)
+      const distance = (radius / Math.sin(fov / 2)) * (1 + (hero?.pad ?? 0.15))
+      const look = (dir ?? p.clone().sub(t)).normalize()
+      const eye = centre.clone().addScaledVector(look, distance)
+      // the sideways shift scaled with the distance, so the part stays in the clear right of the headline
+      const k = Math.min(1, distance / Math.max(1e-6, p.distanceTo(t)))
+      void c.setFocalOffset(offset.x * k, offset.y * k, offset.z * k, true)
+      view().select(hit.id)
+      void c.setLookAt(eye.x, eye.y, eye.z, centre.x, centre.y, centre.z, true)
+    }
+    const zoomOut = () => {
+      const c = getCameraControls()
+      if (!c || !back) return
+      view().select(null)
+      void c.setLookAt(back.p[0], back.p[1], back.p[2], back.t[0], back.t[1], back.t[2], true)
+      void c.setFocalOffset(back.offset.x, back.offset.y, back.offset.z, true)
+      back = null
+    }
+
+    const run = async () => {
+      // a second of the whole machine once it is all there (the tractor takes a few seconds to arrive), then look
+      // inside it: through the bodywork for a part within it (the seat's suspension), else cut open
+      const found = await findPart()
+      if (cancelled) return
+      await wait(1000)
+      if (cancelled) return
+      if (hero?.xray) view().setXray(true)
+      else view().setCut({ enabled: true })
+      await wait(hero?.xray ? 1200 : 900)
+      if (cancelled) return
+      // zoom in on the part that shows how this machine works, and go round it
+      if (found) {
+        // the differential: in from the front, along the drive, so its wheels stay out to the sides
+        const start = here()
+        // "the front" is where the drive comes in (the bevel pinion): look in along it, from above, into the cut
+        let dir: THREE.Vector3 | undefined
+        const front = hero?.fromFront ? Object.values(useParts.getState().parts).find((x) => hero.fromFront!.test(x.id)) : undefined
+        const frontObj = front ? partObjects.get(front.id) : undefined
+        if (frontObj) {
+          const a = new THREE.Box3().setFromObject(frontObj).getCenter(new THREE.Vector3())
+          const b = new THREE.Box3().setFromObject(found.obj).getCenter(new THREE.Vector3())
+          const flat = new THREE.Vector3(a.x - b.x, 0, a.z - b.z).normalize()
+          dir = flat.multiplyScalar(Math.cos(0.9)).add(new THREE.Vector3(0, Math.sin(0.9), 0))
+        }
+        zoomIn(found.hit, found.obj, start, dir)
+        await wait(1200)
+        orbit = 1
+        await wait(3600)
+        orbit = 0
+        if (cancelled) return
+        if (hero?.xray) {
+          view().setXray(false)
+          await wait(1000)
+        }
+        if (cancelled) return
+        zoomOut()
+        await wait(1500)
+      }
+      if (cancelled) return
+      // take it apart and put it back (a flat linkage has nothing to take apart: it keeps running instead)
+      if (!hero?.noExplode) {
+        view().setExplode(0.75)
+        await wait(2500)
+        view().setExplode(0)
+        await wait(1800)
+      }
+      if (cancelled) return
+      view().setCut({ enabled: false })
+      await wait(1700)
+      if (!cancelled) setHeroIdx((i) => (i + 1) % HERO_SCENES.length)
+    }
+    void run()
+
+    // the camera sways gently either side of the scene's own view (about 18°), so flat rigs never turn edge-on;
+    // while zoomed in on a part it goes round it instead
     let raf = 0
-    const t0 = performance.now()
+    let last = performance.now()
+    let phase = 0
     let applied = 0
-    const spin = (t: number) => {
-      const want = 0.32 * Math.sin(((t - t0) / 1000) * ((2 * Math.PI) / 15))
-      void getCameraControls()?.rotate(want - applied, 0, false)
-      applied = want
+    let orbitPhase = 0
+    let orbitApplied = 0
+    const spin = (now: number) => {
+      const dt = Math.min(0.05, (now - last) / 1000)
+      last = now
+      const c = getCameraControls()
+      if (orbit && hero?.fromFront) {
+        orbitPhase += dt
+        const want = 0.35 * Math.sin(orbitPhase * 1.2)
+        void c?.rotate(want - orbitApplied, 0, false)
+        orbitApplied = want
+      } else if (orbit) {
+        void c?.rotate(dt * 0.6, 0, false)
+      } else {
+        phase += dt
+        const want = 0.32 * Math.sin(phase * ((2 * Math.PI) / 15))
+        void c?.rotate(want - applied, 0, false)
+        applied = want
+      }
       raf = requestAnimationFrame(spin)
     }
     raf = requestAnimationFrame(spin)
     return () => {
-      timers.forEach(clearTimeout)
+      cancelled = true
+      pending.forEach(clearTimeout)
+      if (hero?.xray) view().setXray(false)
       cancelAnimationFrame(raf)
     }
   }, [reel, scene, owner, switching])
@@ -230,7 +362,10 @@ function Hero({ copy }: { copy: (typeof COPY)[keyof typeof COPY] }) {
         aria-hidden
       />
 
-      <div className="pointer-events-none absolute right-5 top-24 hidden w-[230px] flex-col gap-2.5 lg:flex">
+      {/* mouse: a part's name under the pointer; a clicked part gets a card with where to go next */}
+      {live3D && scene && owner === 'hero' ? <HeroHoverTip /> : null}
+      {live3D && scene && owner === 'hero' && !reel ? <HeroPartCard moduleId={hero.moduleId} sceneId={hero.sceneId} /> : null}
+      <div className={`pointer-events-none absolute right-5 top-24 hidden w-[230px] flex-col gap-2.5 ${partPicked && !reel ? '' : 'lg:flex'}`}>
         {hero.readouts.map((r) => (
           <Gauge key={r.label} {...r} />
         ))}
@@ -302,6 +437,74 @@ function Hero({ copy }: { copy: (typeof COPY)[keyof typeof COPY] }) {
 }
 
 
+/** what a part is, in a line: its summary, else what it does */
+const partLine = (id: string | null) => {
+  if (!id) return null
+  const p = useParts.getState().parts[id]
+  if (!p) return null
+  return { name: p.name, line: p.info?.summary ?? p.info?.role ?? null }
+}
+
+/** The part under the mouse, named beside the pointer (mouse only: touch screens leave the hero to scroll). */
+function HeroHoverTip() {
+  const hovered = useView((s) => s.hoveredId)
+  const selected = useView((s) => s.selectedId)
+  const [at, setAt] = useState<{ x: number; y: number } | null>(null)
+  useEffect(() => {
+    const move = (e: PointerEvent) => e.pointerType === 'mouse' && setAt({ x: e.clientX, y: e.clientY })
+    window.addEventListener('pointermove', move, { passive: true })
+    return () => window.removeEventListener('pointermove', move)
+  }, [])
+  const info = partLine(hovered)
+  if (!info || !at || hovered === selected) return null
+  const left = Math.min(at.x + 16, window.innerWidth - 300)
+  return (
+    <div className="pointer-events-none fixed z-30 max-w-[280px] rounded-xl border border-line-2 bg-panel/95 px-3 py-2 shadow-xl backdrop-blur" style={{ left, top: at.y + 18 }} role="tooltip">
+      <div className="text-[13px] font-semibold text-ink">{info.name}</div>
+      {info.line ? <div className="mt-0.5 line-clamp-2 text-[12px] leading-snug text-mute">{info.line}</div> : null}
+      <div className="mt-1 text-[11px] font-medium text-accent">Click for more</div>
+    </div>
+  )
+}
+
+/** A clicked part: what it is, a closer look, or the rig opened with it picked. */
+function HeroPartCard({ moduleId, sceneId }: { moduleId: string; sceneId: string }) {
+  const navigate = useNavigate()
+  const selected = useView((s) => s.selectedId)
+  const info = partLine(selected)
+  if (!selected || !info) return null
+  const p = useParts.getState().parts[selected]
+  const role = p?.info?.summary && p.info.role ? p.info.role : null
+  return (
+    <div className="absolute right-4 top-20 z-20 w-[min(300px,calc(100vw-2rem))] rounded-2xl border border-line-2 bg-panel/95 p-4 shadow-2xl backdrop-blur-xl lg:right-5 lg:top-24" role="dialog" aria-label={info.name}>
+      <div className="flex items-start justify-between gap-2">
+        <h3 className="text-[15px] font-semibold leading-snug text-ink">{info.name}</h3>
+        <button type="button" onClick={() => useView.getState().select(null)} aria-label="Close" className="-mr-1 -mt-1 grid h-7 w-7 shrink-0 place-items-center rounded-full text-mute hover:bg-panel-2 hover:text-ink">
+          <Icon.close width={14} height={14} />
+        </button>
+      </div>
+      {info.line ? <p className="mt-1 text-[12.5px] leading-relaxed text-mute">{info.line}</p> : null}
+      {role ? <p className="mt-1.5 text-[12.5px] leading-relaxed text-ink/80">{role}</p> : null}
+      <div className="mt-3 flex flex-wrap gap-2">
+        <button type="button" onClick={() => focusPart(selected)} className="rounded-full border border-line-2 px-3.5 py-1.5 text-[12.5px] font-medium text-ink hover:border-ink/40">
+          Look closer
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            // the rig opens with this part picked and the camera on it
+            useTrail.getState().arrive({ route: `${moduleId}/${sceneId}`, selectName: info.name })
+            navigate(`/m/${moduleId}/${sceneId}`)
+          }}
+          className="rounded-full bg-accent px-3.5 py-1.5 text-[12.5px] font-semibold text-accent-ink hover:opacity-90"
+        >
+          Open in the rig →
+        </button>
+      </div>
+    </div>
+  )
+}
+
 function FeatureIcon({ name }: { name: string }) {
   const I = Icon[name as keyof typeof Icon] ?? Icon.target
   return (
@@ -317,6 +520,68 @@ function Stat({ value, label }: { value: ReactNode; label: string }) {
       <div className="font-mono text-[40px] font-medium tracking-tight text-accent">{value}</div>
       <div className="mt-1 text-[14px] text-mute">{label}</div>
     </div>
+  )
+}
+
+/** who Solidify is for, and where each starts: set by the account (a teacher's account also gets Classes), not a switch */
+function Roles() {
+  const roles = [
+    {
+      who: 'For students',
+      title: 'Learn it by seeing it work',
+      points: [
+        'Paste a question, or a screenshot of one, and see it built in 3D with the working step by step',
+        'Upload your notes: their figures become models you can turn, cut open and test',
+        'Practise exam-style problems with fresh numbers, method marks and spaced review',
+      ],
+      links: [
+        { label: 'Solve a question', to: '/questions', primary: true },
+        { label: 'Read notes in 3D', to: '/read' },
+        { label: 'Exam practice', to: '/exam' },
+      ],
+    },
+    {
+      who: 'For teachers',
+      title: 'Teach with models that run',
+      points: [
+        'Show any machine, structure or material in 3D in class, cut open and moving',
+        'Set papers with numbers that differ for each student, marked with method marks',
+        'See each student’s progress and a weak-spot report for the class',
+      ],
+      links: [
+        { label: 'Set up a class', to: '/classes', primary: true },
+        { label: 'Open the labs', to: '/labs' },
+      ],
+    },
+  ]
+  return (
+    <section id="roles" className="mx-auto max-w-[1360px] scroll-mt-20 px-5 pt-20 sm:px-10">
+      <h2 className="text-[30px] font-semibold tracking-[-0.03em] sm:text-[38px]">For students and teachers</h2>
+      <p className="mt-1.5 max-w-2xl text-[15px] text-mute">Engineering and science, from materials and mechanics to machines and thermal plant.</p>
+      <div className="mt-8 grid gap-4 md:grid-cols-2">
+        {roles.map((r) => (
+          <div key={r.who} className="flex flex-col rounded-3xl border border-line bg-panel p-7">
+            <p className="text-[13px] font-medium text-accent">{r.who}</p>
+            <h3 className="mt-2 text-[22px] font-semibold tracking-[-0.02em] text-ink">{r.title}</h3>
+            <ul className="mt-5 space-y-3">
+              {r.points.map((p) => (
+                <li key={p} className="flex gap-3 text-[14px] leading-relaxed text-mute">
+                  <Icon.check width={16} height={16} className="mt-[3px] shrink-0 text-accent" />
+                  {p}
+                </li>
+              ))}
+            </ul>
+            <div className="mt-7 flex flex-wrap gap-2">
+              {r.links.map((l) => (
+                <Link key={l.to} to={l.to} className={`rounded-full px-5 py-2.5 text-[13.5px] font-semibold transition-colors ${l.primary ? 'bg-accent text-accent-ink hover:brightness-110' : 'border border-line-2 text-ink hover:border-accent/50'}`}>
+                  {l.label}
+                </Link>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
   )
 }
 
@@ -346,7 +611,7 @@ function AudienceCard({ who, title, points, active, onChoose }: { who: string; t
   )
 }
 
-const HOME_TITLE = 'Solidify — Interactive 3D Machinery & Engineering Labs'
+const HOME_TITLE = 'Solidify — Engineering in 3D: models, labs and worked answers'
 
 /** Two ways to reach us: ask for a feature, or talk to us about a school or company plan. */
 function Contact() {
@@ -439,6 +704,9 @@ export function Landing() {
         </div>
       </section>
 
+      <Roles />
+
+      {AUDIENCE_SWITCH ? (
       <section id="audiences" className="mx-auto max-w-[1360px] scroll-mt-20 px-5 pt-20 sm:px-10">
         <h2 className="text-[30px] font-semibold tracking-[-0.03em] sm:text-[38px]">The workshop and the lecture hall</h2>
         <p className="mt-1.5 max-w-2xl text-[15px] text-mute">The same models, two ways of working. Switch any time from the top bar.</p>
@@ -467,6 +735,7 @@ export function Landing() {
           />
         </div>
       </section>
+      ) : null}
 
       <Contact />
 

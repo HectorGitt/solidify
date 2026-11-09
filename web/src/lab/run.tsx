@@ -151,7 +151,7 @@ export function TestBench({ run, steps, title = 'The test', head, format, childr
   const running = status === 'running'
   return (
     <Section title={title}>
-      <div className="flex items-center gap-2">
+      <div data-tour="rig-test" className="flex items-center gap-2">
         <span className={`h-2 w-2 shrink-0 rounded-full ${running ? 'animate-pulse bg-accent' : status === 'failed' ? 'bg-danger' : status === 'done' ? 'bg-accent' : 'bg-dim'}`} />
         <span className="text-[12.5px] font-medium text-ink">{LABEL[status]}</span>
         {status === 'idle' ? null : (
@@ -201,7 +201,7 @@ function LabHudInner({ run, steps, onOpenPanel }: { run: RunStore; steps: number
   const rows = run((s) => s.rows)
   const running = status === 'running'
   return (
-    <div className="pointer-events-auto flex items-center gap-2 rounded-full border border-line bg-panel/95 px-3 py-1.5 text-[12px] text-ink shadow-lg backdrop-blur">
+    <div data-tour="rig-test" className="pointer-events-auto flex items-center gap-2 rounded-full border border-line bg-panel/95 px-3 py-1.5 text-[12px] text-ink shadow-lg backdrop-blur">
       <span className={`h-2 w-2 shrink-0 rounded-full ${running ? 'animate-pulse bg-accent' : status === 'failed' ? 'bg-danger' : status === 'done' ? 'bg-accent' : 'bg-dim'}`} />
       <span className="font-medium">{LABEL[status]}</span>
       <span className="font-mono text-[11px] text-mute">

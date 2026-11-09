@@ -3,12 +3,19 @@ import { createRoot } from 'react-dom/client'
 import App from './App'
 import './index.css'
 import './ui/theme'
+import { openWhereLeftOff, registerServiceWorker, watchInstallOffer } from './ui/pwa'
+
+// before the router reads the address: the installed app opens where it was left
+openWhereLeftOff()
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <App />
   </StrictMode>,
 )
+
+registerServiceWorker()
+watchInstallOffer()
 
 // Start building the shared engine in the background straight away (it takes a few seconds), so a
 // tractor or engine scene can show it as soon as it opens. Low priority, and never on every worker:

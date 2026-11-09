@@ -6,6 +6,7 @@ import { useView } from '@/render/view'
 import { flyTo } from './camera'
 import { IconButton } from './controls'
 import { Icon } from './icons'
+import { usePersisted } from './usePersisted'
 
 function Divider() {
   return <span className="mx-1 h-5 w-px bg-line-2" aria-hidden />
@@ -35,13 +36,29 @@ export function Toolbar({ scene }: { scene: SceneDef }) {
   const setLabels = useView((s) => s.setLabels)
   const [openCut, setOpenCut] = useState(false)
   const buildOn = useBuild((s) => !!s.def)
+  const caliperMode = useView((s) => s.caliperMode)
+  // folded down to play and a button to bring it back, so the model has the whole view (remembered)
+  const [folded, setFolded] = usePersisted('solidify.toolbar.folded', false)
 
   const primaryPlane = cut.planes[0]
   const cutRange = scene.extent * 0.6
   const cutFill = primaryPlane ? ((primaryPlane.pos + cutRange) / (2 * cutRange)) * 100 : 50
 
+  if (folded)
+    return (
+      <div data-tour="toolbar" className="pointer-events-auto flex items-center gap-1 rounded-full border border-line-2 bg-panel-2/85 p-1 shadow-xl shadow-black/40 backdrop-blur-xl">
+        <IconButton label={playing ? 'Pause (space)' : 'Play (space)'} onClick={toggle} active={playing}>
+          {playing ? <Icon.pause /> : <Icon.play />}
+        </IconButton>
+        <button type="button" onClick={() => setFolded(false)} aria-label="Show the toolbar" title="Show the toolbar" className="flex items-center gap-1 rounded-full px-2.5 py-1 text-[12px] font-medium text-mute hover:text-ink">
+          Tools
+          <Icon.chevron width={14} height={14} className="-rotate-90" />
+        </button>
+      </div>
+    )
+
   return (
-    <div className="pointer-events-auto relative max-w-[calc(100vw-1.5rem)]">
+    <div data-tour="toolbar" className="pointer-events-auto relative max-w-[calc(100vw-1.5rem)]">
       {/* phones: two centred rows, so every control is in reach without a hidden sideways scroll */}
       <div className="flex flex-wrap items-center justify-center gap-1 rounded-2xl border border-line-2 bg-panel-2/85 px-2 py-1.5 sm:flex-nowrap sm:justify-start sm:overflow-x-auto sm:px-2.5 shadow-2xl shadow-black/60 backdrop-blur-xl ring-1 ring-ink/[0.04]">
         <IconButton label={playing ? 'Pause (space)' : 'Play (space)'} onClick={toggle} active={playing}>
@@ -125,7 +142,7 @@ export function Toolbar({ scene }: { scene: SceneDef }) {
         <IconButton label="Part labels" onClick={() => setLabels(!labels)} active={labels}>
           <Icon.label />
         </IconButton>
-        <IconButton label="Measurement Calipers" onClick={() => useView.getState().setCaliperMode(!useView.getState().caliperMode)} active={useView((s) => s.caliperMode)}>
+        <IconButton label="Measurement Calipers" onClick={() => useView.getState().setCaliperMode(!useView.getState().caliperMode)} active={caliperMode}>
           <Icon.ruler />
         </IconButton>
         {scene.build ? (
@@ -135,6 +152,16 @@ export function Toolbar({ scene }: { scene: SceneDef }) {
         ) : null}
         <IconButton label="Reset camera" onClick={() => flyTo(scene.camera)}>
           <Icon.camera />
+        </IconButton>
+        <IconButton
+          label="Hide the toolbar"
+          onClick={() => {
+            setOpenCut(false)
+            useView.getState().setShowPlanes(false)
+            setFolded(true)
+          }}
+        >
+          <Icon.chevron className="rotate-90" />
         </IconButton>
       </div>
 

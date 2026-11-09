@@ -31,10 +31,10 @@ export interface AssemblyIssue {
 }
 
 /** shapes that turn about their own axis (local Y before the shape's rotation) */
-const ROUND = new Set(['cylinder', 'tube', 'cone', 'gear', 'bevelGear', 'pulley', 'sprocket', 'spring', 'hexNut', 'hexBolt', 'torus'])
-const GEARS = new Set(['gear', 'bevelGear', 'sprocket'])
+export const ROUND = new Set(['cylinder', 'tube', 'cone', 'gear', 'bevelGear', 'pulley', 'sprocket', 'spring', 'hexNut', 'hexBolt', 'torus'])
+export const GEARS = new Set(['gear', 'bevelGear', 'sprocket'])
 
-interface LocalInfo {
+export interface LocalInfo {
   box: THREE.Box3
   center: THREE.Vector3
   /** the part's own axis in its local frame */
@@ -54,6 +54,11 @@ const cache = new Map<string, LocalInfo>()
 function shapeAxis(sh: NoteShapeSpec, scope: Record<string, number>) {
   const r = evalVec3(sh.rotation, scope, [0, 0, 0])
   return new THREE.Vector3(0, 1, 0).applyEuler(new THREE.Euler(r[0], r[1], r[2], 'XYZ')).normalize()
+}
+
+/** a part's own frame: its box, centre, axis, length, pitch radius; what the motion is worked out from */
+export function partInfo(part: NotePartSpec, scope: Record<string, number>): LocalInfo {
+  return localInfo(part, scope)
 }
 
 function localInfo(part: NotePartSpec, scope: Record<string, number>): LocalInfo {
@@ -108,7 +113,7 @@ function alignment(from: THREE.Vector3, to: THREE.Vector3) {
 }
 
 /** one way round for every axis: low to high (left to right, bottom to top, back to front) */
-function canonical(v: THREE.Vector3) {
+export function canonical(v: THREE.Vector3) {
   const big = Math.abs(v.x) >= Math.abs(v.y) && Math.abs(v.x) >= Math.abs(v.z) ? v.x : Math.abs(v.y) >= Math.abs(v.z) ? v.y : v.z
   return big < 0 ? v.negate() : v
 }
@@ -125,17 +130,90 @@ function crankFrame(ti: LocalInfo, T: { pos: THREE.Vector3; quat: THREE.Quaterni
   return { center, axis, slide, across }
 }
 
+export interface AssemblyOptions {
+  /** each turning part's angle now (radians about its axis): cranks drive their sliders, links and levers */
+  angles?: Map<string, number>
+  /** look for floating and buried parts (off while the mechanism is moving, every frame) */
+  checks?: boolean
+}
+
 export function resolveAssembly(
   spec: Pick<NoteSceneSpec, 'parts'> | null,
   scope: Record<string, number>,
-): { placements: Map<string, Placement>; issues: AssemblyIssue[]; frames: Map<string, PartFrame> } {
+  opts: AssemblyOptions = {},
+): { placements: Map<string, Placement>; issues: AssemblyIssue[]; frames: Map<string, PartFrame>; poses: Map<string, { pos: THREE.Vector3; quat: THREE.Quaternion }> } {
   const placements = new Map<string, Placement>()
   const issues: AssemblyIssue[] = []
   const frames = new Map<string, PartFrame>()
-  if (!spec?.parts?.length) return { placements, issues, frames }
+  if (!spec?.parts?.length) return { placements, issues, frames, poses: new Map() }
   const byId = new Map(spec.parts.map((p) => [p.id, p]))
   const done = new Map<string, { pos: THREE.Vector3; quat: THREE.Quaternion }>()
   const visiting = new Set<string>()
+
+  // a crank's angle: where it was drawn (`angle`, degrees) plus how far it has turned since
+  const crankAngle = (m: { angle?: unknown }, crankId: string) => (evalDim(m.angle as never, scope, 0) * Math.PI) / 180 + (opts.angles?.get(crankId) ?? 0)
+  /**
+   * The crank pin as drawn, if the model drew one: a part mounted on the crank off its axis (a die block, a
+   * slide block), else a round shape on the crank off its axis (the pin itself). Its offset from the crank's
+   * axis, at rest. A lever or rod aimed at this always goes through the block, whatever throw and angle the
+   * mount says (they can disagree with the drawing).
+   */
+  const drawnPins = new Map<string, THREE.Vector3 | null>()
+  const drawnPin = (crank: NotePartSpec, ti: LocalInfo, T: { pos: THREE.Vector3; quat: THREE.Quaternion }) => {
+    if (drawnPins.has(crank.id)) return drawnPins.get(crank.id)!
+    drawnPins.set(crank.id, null)
+    const axis = canonical(ti.axis.clone().applyQuaternion(T.quat).normalize())
+    const center = ti.center.clone().applyQuaternion(T.quat).add(T.pos)
+    const radial = (w: THREE.Vector3) => {
+      const v = w.clone().sub(center)
+      return v.addScaledVector(axis, -v.dot(axis))
+    }
+    const minR = Math.max(0.004, 0.08 * Math.max(...ti.box.getSize(new THREE.Vector3()).toArray()))
+    let found: THREE.Vector3 | null = null
+    for (const q of spec.parts) {
+      if (q.id === crank.id || q.mount?.kind !== 'coaxial' || q.mount.target !== crank.id || visiting.has(q.id)) continue
+      place(q)
+      const Q = done.get(q.id)!
+      const v = radial(localInfo(q, scope).center.clone().applyQuaternion(Q.quat).add(Q.pos))
+      if (v.length() > minR) {
+        found = v
+        break
+      }
+    }
+    if (!found) {
+      const adds = crank.shapes.filter((s) => s.op !== 'subtract' && ROUND.has(s.kind))
+      for (const s of adds.slice(1)) {
+        const v = radial(new THREE.Vector3(...evalVec3(s.position, scope, [0, 0, 0])).applyQuaternion(T.quat).add(T.pos))
+        if (v.length() > minR && v.length() < 0.9 * Math.max(...ti.box.getSize(new THREE.Vector3()).toArray())) {
+          found = v
+          break
+        }
+      }
+    }
+    drawnPins.set(crank.id, found)
+    return found
+  }
+  const crankPin = (ti: LocalInfo, T: { pos: THREE.Vector3; quat: THREE.Quaternion }, m: { throw?: unknown; angle?: unknown; direction?: AxisDir }, crankId: string) => {
+    const crank = byId.get(crankId)
+    const drawn = crank ? drawnPin(crank, ti, T) : null
+    if (drawn) {
+      const axis = canonical(ti.axis.clone().applyQuaternion(T.quat).normalize())
+      const center = ti.center.clone().applyQuaternion(T.quat).add(T.pos)
+      return center.add(drawn.clone().applyAxisAngle(axis, opts.angles?.get(crankId) ?? 0))
+    }
+    const { center, slide, across } = crankFrame(ti, T, m.direction)
+    const r = evalDim(m.throw as never, scope, 0.04)
+    const th = crankAngle(m, crankId)
+    return center.clone().addScaledVector(slide, r * Math.cos(th)).addScaledVector(across, r * Math.sin(th))
+  }
+  /** a part's longest side, in its own frame, and its length along it */
+  const longSide = (i: LocalInfo) => {
+    const size = i.box.getSize(new THREE.Vector3())
+    const v = size.x >= size.y && size.x >= size.z ? new THREE.Vector3(1, 0, 0) : size.y >= size.z ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(0, 0, 1)
+    return { v, len: Math.max(size.x, size.y, size.z) }
+  }
+  /** where each lever's pivot is and which way it points, for followers of its tip */
+  const levers = new Map<string, { pivot: THREE.Vector3; dir: THREE.Vector3; len: number }>()
 
   const base = (p: NotePartSpec) => {
     const r = evalVec3(p.rotation, scope, [0, 0, 0])
@@ -184,14 +262,19 @@ export function resolveAssembly(
       if (turn) side.applyAxisAngle(tAxis, (turn * Math.PI) / 180)
       // no gear data: fall back to the parts' sizes across the axis
       const radial = (i: LocalInfo) => i.pitchR || Math.max(...i.box.getSize(new THREE.Vector3()).toArray()) / 2
-      point = tCenter.clone().addScaledVector(side, radial(si) + radial(ti))
+      // inside a ring gear (an annulus): the planet's centre sits the difference of the radii from the ring's
+      const ring = ti.hollow && /\b(ring|annulus|internal)\b/i.test(`${target.id.replace(/_/g, ' ')} ${target.name}`) && radial(ti) > radial(si) * 1.2
+      point = tCenter.clone().addScaledVector(side, ring ? radial(ti) - radial(si) : radial(si) + radial(ti))
     } else if (m.kind === 'slider') {
       // piston position for crank radius r, rod length l, crank angle θ from top dead centre
-      const { center, slide } = crankFrame(ti, T, m.direction)
-      const r = evalDim(m.throw, scope, 0.04)
+      // (from the pin: r cos θ along the line, r sin θ across it; the pin as drawn when there is one)
+      const { center, slide, across } = crankFrame(ti, T, m.direction)
+      const pin = crankPin(ti, T, m, target.id).sub(center)
+      const along = pin.dot(slide)
+      const off = pin.dot(across)
+      const r = Math.hypot(along, off)
       const l = Math.max(r * 1.05, evalDim(m.rod, scope, 0.15))
-      const th = (evalDim(m.angle, scope, 0) * Math.PI) / 180
-      point = center.clone().addScaledVector(slide, r * Math.cos(th) + Math.sqrt(l * l - r * r * Math.sin(th) ** 2))
+      point = center.clone().addScaledVector(slide, along + Math.sqrt(l * l - off * off))
     } else if (m.kind === 'link') {
       // a connecting rod from the crank pin to the centre of the part it drives
       const toPart = byId.get(m.to)
@@ -202,10 +285,7 @@ export function resolveAssembly(
       visiting.add(p.id)
       place(toPart)
       visiting.delete(p.id)
-      const { center, slide, across } = crankFrame(ti, T, m.direction)
-      const r = evalDim(m.throw, scope, 0.04)
-      const th = (evalDim(m.angle, scope, 0) * Math.PI) / 180
-      const pin = center.clone().addScaledVector(slide, r * Math.cos(th)).addScaledVector(across, r * Math.sin(th))
+      const pin = crankPin(ti, T, m, target.id)
       const D = done.get(toPart.id)!
       const end = localInfo(toPart, scope).center.clone().applyQuaternion(D.quat).add(D.pos)
       const line = end.clone().sub(pin)
@@ -214,6 +294,48 @@ export function resolveAssembly(
       const long = size.x >= size.y && size.x >= size.z ? new THREE.Vector3(1, 0, 0) : size.y >= size.z ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(0, 0, 1)
       if (line.lengthSq() > 1e-9) quat = alignment(long, line.clone().normalize())
       point = pin.clone().add(end).multiplyScalar(0.5)
+    } else if (m.kind === 'lever') {
+      // a slotted lever: from its pivot, always through the crank pin
+      const pivotPart = byId.get(m.pivot)
+      if (!pivotPart || pivotPart === p) {
+        issues.push({ partId: p.id, kind: 'missing-target', message: `${p.name} pivots on "${m.pivot}", which is not a part of this model` })
+        return void done.set(p.id, base(p))
+      }
+      visiting.add(p.id)
+      place(pivotPart)
+      visiting.delete(p.id)
+      const PV = done.get(pivotPart.id)!
+      const pivot = localInfo(pivotPart, scope).center.clone().applyQuaternion(PV.quat).add(PV.pos)
+      const pin = crankPin(ti, T, m, target.id)
+      const dir = pin.clone().sub(pivot)
+      if (dir.lengthSq() < 1e-12) dir.set(0, 1, 0)
+      dir.normalize()
+      const { v, len } = longSide(si)
+      quat = new THREE.Quaternion().setFromUnitVectors(v, dir)
+      point = pivot.clone().addScaledVector(dir, len / 2)
+      levers.set(p.id, { pivot, dir, len })
+    } else if (m.kind === 'follower') {
+      // slides along its guide with a point of the target (a crank's pin, a lever's tip); stays put across it
+      const d = new THREE.Vector3(...DIRS[m.direction])
+      let F: THREE.Vector3
+      const lever = levers.get(target.id)
+      if ((m.of === 'tip' || (!m.of && lever && m.throw === undefined)) && lever) F = lever.pivot.clone().addScaledVector(lever.dir, lever.len)
+      else if (m.throw !== undefined) F = crankPin(ti, T, m, target.id)
+      else F = tCenter.clone()
+      const b = base(p)
+      const own = si.center.clone().applyQuaternion(b.quat).add(b.pos)
+      point = own.addScaledVector(d, F.clone().sub(own).dot(d) + evalDim(m.offset, scope, 0))
+      quat = b.quat
+    } else if (m.kind === 'hooke') {
+      // a universal joint: the output leaves the end of the input shaft, its axis turned by the joint angle
+      const beta = (evalDim(m.angle, scope, 30) * Math.PI) / 180
+      let perp = new THREE.Vector3().crossVectors(tAxis, new THREE.Vector3(0, 1, 0))
+      if (perp.lengthSq() < 1e-6) perp = new THREE.Vector3().crossVectors(tAxis, new THREE.Vector3(0, 0, 1))
+      perp.normalize()
+      const out = tAxis.clone().applyAxisAngle(perp, beta)
+      const joint = tCenter.clone().addScaledVector(tAxis, ti.length / 2)
+      quat = new THREE.Quaternion().setFromUnitVectors(si.axis.clone().normalize(), out)
+      point = joint.addScaledVector(out, si.length / 2)
     } else if (m.kind === 'against') {
       const tb = worldBox(ti.box, T.quat, T.pos)
       const sb = worldBox(si.box, quat)
@@ -247,7 +369,7 @@ export function resolveAssembly(
   }
 
   // checks: floating and buried parts
-  if (spec.parts.length > 1) {
+  if (opts.checks !== false && spec.parts.length > 1) {
     const boxes = spec.parts.map((p) => {
       const d = done.get(p.id)!
       return { p, box: worldBox(localInfo(p, scope).box, d.quat, d.pos) }
@@ -256,7 +378,8 @@ export function resolveAssembly(
       const s = b.getSize(new THREE.Vector3())
       return Math.max(1e-12, s.x * s.y * s.z)
     }
-    const linked = (a: NotePartSpec, b: NotePartSpec) => (a.mount?.target === b.id && a.mount.kind !== 'against') || (a.mount?.kind === 'link' && a.mount.to === b.id)
+    const linked = (a: NotePartSpec, b: NotePartSpec) =>
+      (a.mount?.target === b.id && a.mount.kind !== 'against') || (a.mount?.kind === 'link' && a.mount.to === b.id) || (a.mount?.kind === 'lever' && a.mount.pivot === b.id)
     const related = (a: NotePartSpec, b: NotePartSpec) => linked(a, b) || linked(b, a)
     // parts on one axis (a gear on its shaft, a bearing on its journal) overlap by design, however they were placed
     const pos = new Map(spec.parts.map((p) => [p.id, done.get(p.id)!]))
@@ -289,7 +412,7 @@ export function resolveAssembly(
       }
     }
   }
-  return { placements, issues, frames }
+  return { placements, issues, frames, poses: done }
 }
 
 /**

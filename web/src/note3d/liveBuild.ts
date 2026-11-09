@@ -97,7 +97,8 @@ export function readProgress(text: string): LiveProgress {
   return {
     chars: text.length,
     explanation: completedString(text, 'explanation'),
-    isQuestion: /"isQuestion"\s*:\s*true/.test(text),
+    // a question about the model, or a written answer with nothing to build
+    isQuestion: /"(?:isQuestion|answerOnly)"\s*:\s*true/.test(text),
     title,
     parameters,
     calculations,

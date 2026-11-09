@@ -49,6 +49,20 @@ describe('RichText parsing', () => {
     expect(JSON.stringify(ul.items[0])).toContain('"display":true')
   })
 
+  it('reads a Markdown table (a transportation tableau), with maths in its cells', () => {
+    const t = parseBlocks('Costs:\n\n| From | M1 | M2 | Supply |\n|---|:---:|---|---|\n| P1 | 4 | 6 | $s_1 = 30$ |\n| P2 | 5 | 3 | 40 |\n\nDone.')
+    expect(t.map((b) => b.t)).toEqual(['p', 'table', 'p'])
+    const table = t[1] as Extract<ReturnType<typeof parseBlocks>[number], { t: 'table' }>
+    expect(table.head).toHaveLength(4)
+    expect(table.rows).toHaveLength(2)
+    expect(table.rows[0][3]).toEqual([{ t: 'math', v: 's_1 = 30', display: false }])
+  })
+  it('keeps the numbers of a numbered list split by a displayed equation, and reads \\( \\) and \\[ \\]', () => {
+    const b = parseBlocks('1. One\n$$a = b$$\n2. Two')
+    expect(b.map((x) => x.t)).toEqual(['ol', 'math', 'ol'])
+    expect((b[2] as { start?: number }).start).toBe(2)
+  })
+
   it('collects multi-line display maths and shows an unclosed block as text', () => {
     expect(parseBlocks('$$\na = b\n+ c\n$$')).toEqual([{ t: 'math', v: 'a = b\n+ c' }])
     expect(parseBlocks('$$\na = b')[0].t).toBe('p')

@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { AudienceSwitch } from './AudienceSwitch'
+import { AUDIENCE_SWITCH } from './audience'
 import { Icon } from './icons'
 import { Logo } from './Logo'
 import { ThemeToggle } from './ThemeToggle'
@@ -32,7 +33,7 @@ export default function PromoPage() {
             <Logo />
           </Link>
           <div className="ml-auto flex items-center gap-2">
-            <AudienceSwitch />
+            {AUDIENCE_SWITCH ? <AudienceSwitch /> : null}
             <ThemeToggle />
           </div>
         </div>

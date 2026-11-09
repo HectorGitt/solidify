@@ -1,5 +1,6 @@
 import { Fragment, type ReactNode } from 'react'
 import { Tex } from './Tex'
+import { AnswerChart, readAnswerChart } from '@/note3d/AnswerChart'
 
 /**
  * Light Markdown + KaTeX for generated text (the tutor's answers): paragraphs, headings,
@@ -17,8 +18,11 @@ export type Inline =
 export type Block =
   | { t: 'p'; v: Inline[] }
   | { t: 'h'; level: number; v: Inline[] }
-  | { t: 'ul' | 'ol'; items: Inline[][] }
+  | { t: 'ul' | 'ol'; items: Inline[][]; start?: number }
   | { t: 'math'; v: string }
+  | { t: 'table'; head: Inline[][]; rows: Inline[][][] }
+  /** a ```chart block: JSON for a graph or a bar chart (see note3d/AnswerChart) */
+  | { t: 'chart'; json: string }
 
 /** Split text into inline tokens. Unclosed markers are kept as plain text. */
 export function parseInline(s: string): Inline[] {
@@ -123,6 +127,34 @@ export function parseBlocks(text: string): Block[] {
       }
       // unclosed (still streaming): show as text for now
     }
+    // a graph or chart: ```chart, its JSON, then ``` (while still streaming, nothing is shown yet)
+    if (/^```\s*chart\b/i.test(trimmed)) {
+      const body: string[] = []
+      let j = i + 1
+      while (j < lines.length && !lines[j].trim().startsWith('```')) body.push(lines[j++])
+      endPara()
+      if (j < lines.length) blocks.push({ t: 'chart', json: body.join('\n') })
+      i = j
+      continue
+    }
+    // a Markdown table: a header row, a |---| row, then rows (a transportation tableau, a cost matrix)
+    if (trimmed.startsWith('|') && i + 1 < lines.length && /^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?\s*$/.test(lines[i + 1])) {
+      const cells = (row: string) =>
+        row
+          .trim()
+          .replace(/^\|/, '')
+          .replace(/\|$/, '')
+          .split('|')
+          .map((c) => parseInline(c.trim()))
+      const head = cells(trimmed)
+      const rows: Inline[][][] = []
+      let j = i + 2
+      while (j < lines.length && lines[j].trim().startsWith('|')) rows.push(cells(lines[j++]))
+      endPara()
+      blocks.push({ t: 'table', head, rows })
+      i = j - 1
+      continue
+    }
     const h = /^(#{1,4})\s+(.*)$/.exec(trimmed)
     if (h) {
       endPara()
@@ -137,13 +169,24 @@ export function parseBlocks(text: string): Block[] {
       const last = blocks[blocks.length - 1]
       const item = parseInline((b ?? n)![1])
       if (last && last.t === kind) last.items.push(item)
-      else blocks.push({ t: kind, items: [item] })
+      // a numbered list keeps the number written, so steps split by a displayed equation go 1, 2, 3, 4
+      else blocks.push({ t: kind, items: [item], ...(n ? { start: Number(/\d+/.exec(line)![0]) } : {}) })
       continue
     }
     para.push(trimmed)
   }
   endPara()
   return blocks
+}
+
+/**
+ * A short label with maths in it, inline (a calculation's name, a "find" item, a readout): `$…$` drawn as maths,
+ * and a label written entirely in bare LaTeX ("\sigma_{max}") taken as maths too.
+ */
+export function RichInline({ text }: { text: string }) {
+  const t = toDollars(text)
+  const bare = !t.includes('$') && /\\[a-zA-Z]+|[_^]\{/.test(t)
+  return <Inlines items={parseInline(bare ? `$${t}$` : t)} />
 }
 
 function Inlines({ items }: { items: Inline[] }) {
@@ -173,7 +216,7 @@ function Inlines({ items }: { items: Inline[] }) {
             )
           case 'math':
             return x.display ? (
-              <span key={i} className="my-1 block overflow-x-auto">
+              <span key={i} className="my-1 block overflow-x-auto overflow-y-hidden py-0.5">
                 <Tex tex={x.v} display />
               </span>
             ) : (
@@ -185,8 +228,12 @@ function Inlines({ items }: { items: Inline[] }) {
   )
 }
 
+/** LaTeX's own delimiters, as Gemini sometimes writes them: \[ … \] for a displayed equation, \( … \) inline */
+export const toDollars = (t: string) =>
+  t.replace(/\\\[([\s\S]+?)\\\]/g, (_, m: string) => `\n$$${m.trim()}$$\n`).replace(/\\\(([\s\S]+?)\\\)/g, (_, m: string) => `$${m.trim()}$`)
+
 export function RichText({ text, className = '' }: { text: string; className?: string }) {
-  const blocks = parseBlocks(text)
+  const blocks = parseBlocks(toDollars(text))
   const out: ReactNode[] = blocks.map((b, i) => {
     switch (b.t) {
       case 'p':
@@ -207,11 +254,42 @@ export function RichText({ text, className = '' }: { text: string; className?: s
             <Tex tex={b.v} display />
           </div>
         )
+      case 'chart': {
+        const spec = readAnswerChart(b.json)
+        return spec ? <AnswerChart key={i} spec={spec} /> : null
+      }
+      case 'table':
+        return (
+          <div key={i} className="overflow-x-auto rounded-xl border border-line">
+            <table className="w-full border-collapse text-[12.5px] tabular-nums">
+              <thead className="bg-panel-2">
+                <tr>
+                  {b.head.map((c, j) => (
+                    <th key={j} className="border-b border-line px-2.5 py-1.5 text-left font-semibold text-ink">
+                      <Inlines items={c} />
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {b.rows.map((r, k) => (
+                  <tr key={k} className="border-b border-line/60 last:border-0">
+                    {r.map((c, j) => (
+                      <td key={j} className={`px-2.5 py-1.5 ${j === 0 ? 'font-medium text-ink' : 'text-ink/85'}`}>
+                        <Inlines items={c} />
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )
       case 'ul':
       case 'ol': {
         const L = b.t === 'ul' ? 'ul' : 'ol'
         return (
-          <L key={i} className={`space-y-1 pl-5 ${b.t === 'ul' ? 'list-disc' : 'list-decimal'}`}>
+          <L key={i} start={b.t === 'ol' && b.start && b.start > 1 ? b.start : undefined} className={`space-y-1 pl-5 ${b.t === 'ul' ? 'list-disc' : 'list-decimal'}`}>
             {b.items.map((it, j) => (
               <li key={j}>
                 <Inlines items={it} />

@@ -22,11 +22,12 @@ export const noteRefineRequest = z.object({
 export type NoteRefineRequest = z.infer<typeof noteRefineRequest>
 
 export const create3dRequest = z.object({
-  prompt: z.string().trim().min(1).max(2000),
+  /** up to 4000 characters: a pasted exam or textbook question can be long */
+  prompt: z.string().trim().min(1).max(4000),
   currentSpec: z.record(z.string(), z.unknown()).optional(),
   photoBase64: z.string().max(12_000_000).optional(),
   /** the conversation about this model so far, oldest first */
-  history: z.array(z.object({ prompt: z.string().max(2000), response: z.string().max(2000) })).max(12).optional(),
+  history: z.array(z.object({ prompt: z.string().max(2000), response: z.string().max(4000) })).max(12).optional(),
 })
 
 export type Create3dRequest = z.infer<typeof create3dRequest> & {
@@ -69,6 +70,8 @@ export interface CreateReply {
   isNewMachine: boolean
   /** the student asked a question: `explanation` answers it and the model is unchanged */
   isQuestion?: boolean
+  /** a request with nothing to build: `explanation` is the full worked answer, and there is no model */
+  answerOnly?: boolean
   labMatch?: { moduleId: string; sceneId: string }
   usage?: ModelUsage
 }
@@ -87,7 +90,11 @@ export function createParts(req: Create3dRequest): Part[] {
 
 /** reads Gemini's whole reply into a build result (throws ModelReplyError when it is unusable) */
 export function readCreateReply(text: string, req: Create3dRequest): CreateReply {
-  const parsed = parseModelJson<{ spec?: Record<string, unknown>; explanation?: string; isNewMachine?: boolean; isQuestion?: boolean; labMatch?: unknown }>(text)
+  const parsed = parseModelJson<{ spec?: Record<string, unknown>; explanation?: string; isNewMachine?: boolean; isQuestion?: boolean; answerOnly?: boolean; labMatch?: unknown }>(text)
+  // a request with nothing to build (a transportation problem, statistics): a written answer and no model
+  if (parsed.answerOnly === true && typeof parsed.explanation === 'string' && parsed.explanation.trim()) {
+    return { spec: req.currentSpec ?? {}, explanation: parsed.explanation, isNewMachine: false, isQuestion: true, answerOnly: true }
+  }
   const isQuestion = parsed.isQuestion === true && !!req.currentSpec
   return {
     spec: isQuestion ? (req.currentSpec ?? {}) : (parsed.spec ?? req.currentSpec ?? {}),
