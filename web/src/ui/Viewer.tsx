@@ -37,6 +37,7 @@ import { InSceneExam, questionsForScene } from '@/study/ui/InSceneExam'
 import { SceneMenu } from './SceneMenu'
 import { TutorButton, TutorPanel } from '@/cloud/ui/Tutor'
 import { FoldChevron, usePersisted } from './usePersisted'
+import { usePageTourOn } from './PageTour'
 
 function useMediaQuery(q: string) {
   const [m, setM] = useState(() => window.matchMedia(q).matches)
@@ -59,6 +60,20 @@ export function Viewer() {
   const wide = useMediaQuery('(min-width: 1100px)')
   const [leftOpen, setLeftOpen] = useState(wide)
   const [rightOpen, setRightOpen] = useState(wide)
+  // the first rig someone opens: where everything is (once, for all rigs)
+  usePageTourOn(
+    'rig',
+    [
+      { title: 'A working lab rig', text: 'This is a live 3D machine: drag to turn it, scroll or pinch to zoom, and click any part to see what it is and what it does.' },
+      { target: 'rig-scene', title: 'Other rigs in this system', text: 'Switch to another rig on the same subject here.' },
+      { target: 'toolbar', title: 'Look inside', text: 'Play and pause, slow it down, cut it open, take it apart, see through the casing, label the parts and measure.' },
+      { target: 'rig-test', title: 'Run the experiment', text: 'Start the test and the rig takes its own readings into a table you can work up. Nothing runs until you start it.' },
+      { target: 'rig-guided', title: 'Guided tour', text: 'A step-by-step walk round this machine: the camera goes to each part in turn and explains it.' },
+      { target: 'tutor', title: 'Ask about it', text: 'Ask a question about this rig and get an answer that knows what you are looking at.' },
+      { target: 'rig-parts', title: 'Parts and controls', text: 'Show or hide the list of parts on the left and the readings and settings on the right.' },
+    ],
+    !!scene,
+  )
   const [rightTab, setRightTab] = useState<'controls' | 'exam'>('controls')
   const [detailsOpen, setDetailsOpen] = usePersisted('solidify.panel.details', true)
   const tourActive = useTour((s) => s.active)
@@ -280,6 +295,7 @@ export function Viewer() {
         </span>
         <span className="hidden text-line-2 md:inline" aria-hidden>›</span>
         <select
+          data-tour="rig-scene"
           aria-label="Scene"
           className="order-last min-w-0 basis-full truncate rounded-md border border-line-2 bg-panel-2 px-2 py-1.5 text-[13px] text-ink sm:order-none sm:max-w-[50vw] sm:basis-auto sm:py-1"
           value={entry?.id}
@@ -304,6 +320,7 @@ export function Viewer() {
           {scene && entry ? <SceneMenu scene={scene} moduleId={mod.id} sceneId={entry.id} onPower={() => setPower(true)} onShare={copyShareLink} /> : null}
           {scene?.tour?.length ? (
             <button
+              data-tour="rig-guided"
               onClick={() => (tourActive ? stopTour() : startTour())}
               className={`flex items-center gap-1.5 rounded-md px-2.5 py-1 text-[12.5px] font-medium ${tourActive ? 'bg-accent text-accent-ink' : 'border border-accent/50 text-accent hover:bg-accent/10'}`}
             >
@@ -313,10 +330,10 @@ export function Viewer() {
           ) : null}
           {scene ? <TutorButton /> : null}
           <span className="mx-0.5 hidden h-5 w-px bg-line sm:block" aria-hidden />
-          <button aria-label="Toggle parts panel" aria-pressed={leftOpen} onClick={() => setLeftOpen((o) => !o)} className={`grid h-8 w-8 place-items-center rounded-md ${leftOpen ? 'text-accent' : 'text-mute'} hover:bg-panel-3`}>
+          <button data-tour="rig-parts" aria-label="Toggle parts panel" aria-pressed={leftOpen} onClick={() => setLeftOpen((o) => !o)} className={`grid h-8 w-8 place-items-center rounded-md ${leftOpen ? 'text-accent' : 'text-mute'} hover:bg-panel-3`}>
             <Icon.panel />
           </button>
-          <button aria-label="Toggle controls panel" aria-pressed={rightOpen} onClick={() => setRightOpen((o) => !o)} className={`grid h-8 w-8 place-items-center rounded-md ${rightOpen ? 'text-accent' : 'text-mute'} hover:bg-panel-3`}>
+          <button data-tour="rig-controls" aria-label="Toggle controls panel" aria-pressed={rightOpen} onClick={() => setRightOpen((o) => !o)} className={`grid h-8 w-8 place-items-center rounded-md ${rightOpen ? 'text-accent' : 'text-mute'} hover:bg-panel-3`}>
             <Icon.sliders />
           </button>
         </div>

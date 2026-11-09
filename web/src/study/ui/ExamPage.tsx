@@ -16,6 +16,7 @@ import { ExplainMistake } from './ExplainMistake'
 import { instantiate, randomSeed, type Seed } from '../variants'
 import { RigView } from './RigView'
 import { YourQuestions } from './YourQuestions'
+import { usePageTourOn } from '@/ui/PageTour'
 import { Bar, CourseLabel, Pills, StudyShell } from './StudyShell'
 
 type Inputs = Record<string, string>
@@ -83,6 +84,12 @@ function AnswerInputs({ q, inputs, setInputs, results }: { q: Question; inputs: 
 
 function QuestionHead({ q, index, total }: { q: Question; index?: number; total?: number }) {
   const academic = useAcademic()
+  usePageTourOn('exam', [
+    { target: 'exam-mode', title: 'Four ways to practise', text: 'Practice one question at a time, Review the ones due again, sit a timed Mock exam, or go back to the questions you pasted yourself.' },
+    { target: 'exam-filter', title: 'Pick a subject and topic', text: 'Narrow the questions down; the bar shows how many you have solved.' },
+    { target: 'rig-view', title: 'The question in 3D', text: 'Each question comes with its rig, set to the numbers in the question. Turn it, cut it open, watch it move.' },
+    { target: 'exam-check', title: 'Answer, then check', text: 'Type your answers and check them; they are accepted within about 1 %. Show working reveals every step.' },
+  ])
   const scene = findModule(q.moduleId)?.scenes.find((s) => s.id === q.sceneId)
   return (
     <>
@@ -175,7 +182,7 @@ function Practice({ list, start, fresh = false }: { list: Question[]; start?: st
         <p className="mt-1.5 text-[11px] text-dim">Answers are accepted within about 1 % of the computed value.</p>
       </div>
       <div className="mt-4 flex flex-wrap items-center gap-2">
-        <button onClick={check} className="rounded-lg bg-accent px-3.5 py-1.5 text-[13px] font-semibold text-accent-ink hover:brightness-110">
+        <button data-tour="exam-check" onClick={check} className="rounded-lg bg-accent px-3.5 py-1.5 text-[13px] font-semibold text-accent-ink hover:brightness-110">
           Check
         </button>
         <button onClick={() => setReveal((v) => !v)} className="rounded-lg border border-line-2 px-3 py-1.5 text-[13px] text-ink hover:border-accent/40">
@@ -420,6 +427,7 @@ export function ExamPage() {
       title="Exam practice"
       lead={`${QUESTIONS.length} worked problems${academic ? ' from past papers, marking guides and worked examples' : ''}. Every answer is computed by the same tested calculations that drive the 3D scenes.`}
       right={
+        <div data-tour="exam-mode">
         <Pills
           label="Mode"
           value={mode}
@@ -431,10 +439,11 @@ export function ExamPage() {
             { value: 'mine', label: 'Your questions' },
           ]}
         />
+        </div>
       }
     >
       {mode !== 'review' && mode !== 'mine' ? (
-      <div className="mb-4 grid items-end gap-3 rounded-3xl border border-line bg-panel-2/50 p-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.8fr)]">
+      <div data-tour="exam-filter" className="mb-4 grid items-end gap-3 rounded-3xl border border-line bg-panel-2/50 p-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.8fr)]">
         {/* two choosers, not walls of buttons: ten subjects and forty-odd topics read better as lists */}
         <label className="block min-w-0">
           <span className="mb-1 block px-1 text-[11.5px] font-medium text-mute">Subject</span>

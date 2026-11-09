@@ -9,6 +9,7 @@ import { ErrorBoundary } from './ui/ErrorBoundary'
 import { startUpdateWatch } from './ui/appUpdate'
 import { UpdateNotice } from './ui/UpdateNotice'
 import { TaskTray } from './ui/TaskTray'
+import { PageTourHost } from './ui/PageTour'
 import { useAuth } from './cloud/auth'
 import { startProfile } from './cloud/profile'
 import { startSync } from './cloud/sync'
@@ -55,6 +56,7 @@ export default function App() {
       <Toaster />
       <UpdateNotice />
       <TaskTray />
+      <PageTourHost />
       <ErrorBoundary label="page">
       <Routes>
         <Route path="/" element={<Landing />} />

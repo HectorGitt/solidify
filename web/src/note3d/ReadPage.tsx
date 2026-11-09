@@ -20,6 +20,7 @@ import { createSceneDefFromSpec } from './NoteSceneRenderer'
 import { MAX_PAGES_PER_READ, buildPicked, convertAll, convertTodo, isPdf, loadReader, pdfPageCount, readDocument, removeDocument, setActiveDoc, stopConverting, useReader } from './readerStore'
 import { SAMPLE_TEXTBOOKS } from './sampleTextbooks'
 import { CONFIDENCE_THRESHOLD, type DetectedPageFigure } from './schema'
+import { usePageTourOn } from '@/ui/PageTour'
 
 function ExpandedFigureModal({
   figure,
@@ -208,6 +209,12 @@ export default function ReadPage() {
   const converting = useReader((s) => s.converting)
   const uploading = !!reading
   const [solving, setSolving] = useState(false)
+  usePageTourOn('read', [
+    { target: 'read-upload', title: 'Upload your notes', text: 'A PDF or a photo of a page. The page stays as it is; the figures Solidify recognises become 3D models you can turn and test.' },
+    { target: 'read-solve', title: 'Got a question instead?', text: 'Paste a question or a screenshot of one and get a worked answer, with a 3D model when it is about a physical thing.' },
+    { target: 'read-docs', title: 'Your documents', text: 'Everything you have read is kept here; switch between them.' },
+    { target: 'read-layout', title: 'Page and 3D side by side', text: 'Choose how the page and its models sit: side by side, or the 3D model over the page.' },
+  ])
   useEffect(() => {
     void loadReader()
   }, [])
@@ -393,11 +400,11 @@ export default function ReadPage() {
               e.target.value = ''
             }}
           />
-          <button type="button" onClick={() => setSolving(true)} className={ghostBtn}>
+          <button data-tour="read-solve" type="button" onClick={() => setSolving(true)} className={ghostBtn}>
             <Icon.text width={16} height={16} />
             Solve a question
           </button>
-          <button type="button" onClick={() => fileInputRef.current?.click()} disabled={uploading || openingPdf} className={primaryBtn}>
+          <button data-tour="read-upload" type="button" onClick={() => fileInputRef.current?.click()} disabled={uploading || openingPdf} className={primaryBtn}>
             <Icon.upload width={16} height={16} />
             {openingPdf ? 'Opening the PDF…' : uploading ? 'Reading the page…' : 'Upload a PDF or page'}
           </button>
@@ -408,7 +415,7 @@ export default function ReadPage() {
       <div className="mb-5 rounded-2xl border border-line bg-panel shadow-sm">
         {/* documents + layout */}
         <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
-          <div className="-mx-4 flex min-w-0 items-center gap-1.5 overflow-x-auto px-4 text-[12.5px] scrollbar-none sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0" role="group" aria-label="Documents">
+          <div className="-mx-4 flex min-w-0 items-center gap-1.5 overflow-x-auto px-4 text-[12.5px] scrollbar-none sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0" role="group" aria-label="Documents" data-tour="read-docs">
             {documents.map((doc) => {
               const active = doc.id === activeDoc.id
               const uploaded = !SAMPLE_TEXTBOOKS.some((x) => x.id === doc.id)
@@ -436,7 +443,7 @@ export default function ReadPage() {
             })}
           </div>
 
-          <div className="flex items-center rounded-full border border-line-2 bg-panel-2 p-0.5 text-[12.5px]" role="group" aria-label="Layout">
+          <div data-tour="read-layout" className="flex items-center rounded-full border border-line-2 bg-panel-2 p-0.5 text-[12.5px]" role="group" aria-label="Layout">
             <button type="button" aria-pressed={readingMode === 'page-overlay'} onClick={() => setReadingMode('page-overlay')} className={segBtn(readingMode === 'page-overlay')}>
               <Icon.page width={14} height={14} />
               Page

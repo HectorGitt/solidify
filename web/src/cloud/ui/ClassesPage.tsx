@@ -5,6 +5,7 @@ import { api, ApiError } from '../api'
 import { useAuth } from '../auth'
 import { useProfile, type ClassRef } from '../profile'
 import { Notice, inputCls, primaryBtn } from './Modal'
+import { usePageTourOn } from '@/ui/PageTour'
 import { ListSkeleton } from '@/ui/Skeleton'
 
 export function SignInFirst({ what }: { what: string }) {
@@ -38,7 +39,7 @@ function JoinForm() {
     }
   }
   return (
-    <form onSubmit={(e) => void submit(e)} className="rounded-3xl border border-line bg-panel-2/50 p-4">
+    <form data-tour="class-join" onSubmit={(e) => void submit(e)} className="rounded-3xl border border-line bg-panel-2/50 p-4">
       <h2 className="mb-1 text-[14px] font-semibold">Join a class</h2>
       <p className="mb-3 text-[12.5px] text-mute">Enter the 6-character code your teacher gave you.</p>
       <div className="flex gap-2">
@@ -79,7 +80,7 @@ function CreateForm() {
     }
   }
   return (
-    <form onSubmit={(e) => void submit(e)} className="rounded-3xl border border-line bg-panel-2/50 p-4">
+    <form data-tour="class-create" onSubmit={(e) => void submit(e)} className="rounded-3xl border border-line bg-panel-2/50 p-4">
       <h2 className="mb-1 text-[14px] font-semibold">Create a class</h2>
       <p className="mb-3 text-[12.5px] text-mute">You’ll get a join code to share with your students.</p>
       <div className="flex gap-2">
@@ -122,6 +123,15 @@ export default function ClassesPage() {
   }, [status, profile?.classes, profile?.role])
 
   const isTeacher = profile?.role === 'teacher'
+  usePageTourOn(
+    'classes',
+    [
+      { title: 'Classes', text: 'A teacher sets work for a class (rigs, questions, papers) and sees how everyone is doing; students see what is due and hand it in here.' },
+      { target: 'class-join', title: 'Join with a code', text: 'Your teacher gives you a short code: enter it here and the class and its work appear on this page.' },
+      { target: 'class-create', title: 'Teaching? Make a class', text: 'Create a class and share its code with your students. Then set work and follow their results.' },
+    ],
+    status === 'signed-in',
+  )
   return (
     <StudyShell title="Classes" lead="Teachers set scenes, exam questions and challenges; students see what’s due and their progress syncs to the teacher automatically.">
       {status === 'loading' ? null : status !== 'signed-in' ? (

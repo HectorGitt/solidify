@@ -44,6 +44,7 @@ import { PartInspector } from './PartInspector'
 import { WorkspaceBodySkeleton } from '@/ui/Skeleton'
 import { dismissTask, startTask } from '@/ui/tasks'
 import { ErrorBoundary } from '@/ui/ErrorBoundary'
+import { usePageTourOn } from '@/ui/PageTour'
 
 /** one turn of the conversation about a model (saved newest first, shown oldest first) */
 interface Turn {
@@ -955,6 +956,18 @@ export default function ModelLab() {
   const blank = routeId === 'new' && !spec && !live && !turns.length
   // a written answer with nothing to build (a transportation problem, statistics): the conversation is the page
   const answerView = !spec && !live && turns.some((t) => t.kind === 'answer')
+  // the first model someone has open: how to work with it (once)
+  usePageTourOn(
+    'workspace',
+    [
+      { target: 'ws-model', title: 'Your model, live', text: 'Drag to turn it, scroll or pinch to zoom. Click a part to see its size, material and the sums behind it.' },
+      { target: 'toolbar', title: 'Look inside', text: 'Play the motion, slow it down, cut it open, take it apart, see through it and measure, as on the lab rigs.' },
+      { target: 'ws-engineering', title: 'The engineering', text: 'Live readings, the calculations step by step, and sliders for every size: change one and the model and the numbers follow.' },
+      { target: 'ws-chat', title: 'Change it or ask', text: 'Ask for a change in plain words ("make the shaft longer", "use aluminium") or ask a question about how it works.' },
+      { target: 'ws-chat-button', title: 'Change it or ask', text: 'The chat is here: ask for a change in plain words or ask a question about how the model works.' },
+    ],
+    !!spec && !live && !answerView,
+  )
   /** a saved model is being fetched */
   // a saved model still loading (a written answer has no model: it is open once its conversation is there)
   const opening = routeId !== 'new' && routeId !== 'preview' && !spec && !live && !turns.length && authStatus !== 'signed-out'
@@ -1111,7 +1124,7 @@ export default function ModelLab() {
               </div>
             ) : null}
             <input ref={attachRef} type="file" accept="image/*" onChange={attach} className="hidden" />
-            <form onSubmit={submit} className="flex items-end gap-2 rounded-2xl border border-line-2 bg-panel p-1.5 focus-within:border-accent">
+            <form data-tour="ws-chat" onSubmit={submit} className="flex items-end gap-2 rounded-2xl border border-line-2 bg-panel p-1.5 focus-within:border-accent">
               <button type="button" aria-label="Attach a photo" title="Attach a photo or drawing" disabled={!!live} onClick={() => attachRef.current?.click()} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-mute transition-colors hover:bg-panel-2 hover:text-ink disabled:opacity-40">
                 <Icon.camera width={17} height={17} />
               </button>
@@ -1185,7 +1198,7 @@ export default function ModelLab() {
                   </button>
                 </div>
               ) : null}
-              <div className="relative min-h-0 flex-1">
+              <div data-tour="ws-model" className="relative min-h-0 flex-1">
                 <ErrorBoundary label="3D model" resetKey={scene}>
                 <Stage scene={scene} cover={!live && !builtHereRef.current} viewKey={viewMode === 'catalog' && loadedCatalogScene && !live ? undefined : viewKey} />
                 </ErrorBoundary>
@@ -1259,6 +1272,7 @@ export default function ModelLab() {
               setChatOpen(true)
               setChatUnread(false)
             }}
+            data-tour="ws-chat-button"
             aria-label="Open the chat"
             className="fixed bottom-5 right-4 z-30 flex h-14 w-14 items-center justify-center rounded-full bg-accent text-accent-ink shadow-xl lg:hidden"
           >
@@ -1268,7 +1282,7 @@ export default function ModelLab() {
         ) : null}
 
         {/* the engineering */}
-        <aside className={`${!blank && !answerView ? 'flex' : 'hidden'} order-3 min-h-0 flex-col border-t border-line lg:min-h-0 lg:border-l lg:border-t-0`}>
+        <aside data-tour="ws-engineering" className={`${!blank && !answerView ? 'flex' : 'hidden'} order-3 min-h-0 flex-col border-t border-line lg:min-h-0 lg:border-l lg:border-t-0`}>
           <ErrorBoundary label="engineering panel" resetKey={shownSpec}>
           {selectedPart && shownSpec ? (
             <>

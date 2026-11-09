@@ -41,7 +41,7 @@ export function Toolbar({ scene }: { scene: SceneDef }) {
   const cutFill = primaryPlane ? ((primaryPlane.pos + cutRange) / (2 * cutRange)) * 100 : 50
 
   return (
-    <div className="pointer-events-auto relative max-w-[calc(100vw-1.5rem)]">
+    <div data-tour="toolbar" className="pointer-events-auto relative max-w-[calc(100vw-1.5rem)]">
       {/* phones: two centred rows, so every control is in reach without a hidden sideways scroll */}
       <div className="flex flex-wrap items-center justify-center gap-1 rounded-2xl border border-line-2 bg-panel-2/85 px-2 py-1.5 sm:flex-nowrap sm:justify-start sm:overflow-x-auto sm:px-2.5 shadow-2xl shadow-black/60 backdrop-blur-xl ring-1 ring-ink/[0.04]">
         <IconButton label={playing ? 'Pause (space)' : 'Play (space)'} onClick={toggle} active={playing}>

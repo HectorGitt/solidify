@@ -106,6 +106,7 @@ export function SolveQuestionForm({ onDone, intro = true }: { onDone?: () => voi
           </p>
         ) : null}
         <textarea
+          data-tour="q-box"
           autoFocus
           value={text}
           onChange={(e) => setText(e.target.value)}

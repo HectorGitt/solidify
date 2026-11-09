@@ -194,6 +194,7 @@ export function TutorButton() {
   const open = useTutor((s) => s.open)
   return (
     <button
+      data-tour="tutor"
       onClick={() => useTutor.getState().setOpen(!open)}
       aria-pressed={open}
       className={`flex items-center gap-1.5 rounded-md px-2.5 py-1 text-[12.5px] font-medium transition-colors ${open ? 'bg-accent text-accent-ink' : 'border border-line-2 bg-panel-2 text-ink/90 hover:border-accent/40 hover:text-accent'}`}

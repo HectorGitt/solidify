@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { AccountMenu } from '@/cloud/ui/AccountMenu'
+import { TourHelpButton, usePageTour } from './PageTour'
 import { AudienceSwitch } from '@/ui/AudienceSwitch'
 import { AUDIENCE_SWITCH } from '@/ui/audience'
 import { Icon } from '@/ui/icons'
@@ -104,6 +105,7 @@ function GroupMenu({ group }: { group: NavGroup }) {
 /** below laptop width every section folds into one menu, so the header never wraps */
 function MobileMenu() {
   const [open, setOpen] = useState(false)
+  const tour = usePageTour((s) => !!s.current)
   const ref = useDismiss(open, () => setOpen(false))
   const { pathname } = useLocation()
   const link = (active: boolean) => `block rounded-xl px-3 py-2 text-[13.5px] ${active ? 'bg-ink text-bg' : 'text-ink hover:bg-panel-2'}`
@@ -145,6 +147,18 @@ function MobileMenu() {
           <div className="flex items-center justify-between gap-2 px-2 py-1 sm:hidden">
             {AUDIENCE_SWITCH ? <AudienceSwitch compact /> : null}
             <ThemeToggle />
+            {tour ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setOpen(false)
+                  usePageTour.getState().show()
+                }}
+                className="rounded-full border border-line-2 px-3 py-1.5 text-[12.5px] font-medium text-ink"
+              >
+                Show me around
+              </button>
+            ) : null}
           </div>
         </div>
       ) : null}
@@ -189,6 +203,7 @@ export function SiteHeader({ floating = false, scrolled = false, width = 'max-w-
           <div className="hidden sm:block">
             <ThemeToggle />
           </div>
+          <TourHelpButton className="hidden sm:grid" />
           <AccountMenu compact />
           {/* the menu at the far right, where a phone's thumb and habit look for it */}
           <MobileMenu />

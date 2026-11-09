@@ -59,7 +59,7 @@ export function RigView({ moduleId, sceneId, params, className = '' }: { moduleI
 
   if (!entry) return null
   return (
-    <div className={`relative overflow-hidden rounded-3xl border border-line bg-[var(--color-stage)] ${className}`}>
+    <div data-tour="rig-view" className={`relative overflow-hidden rounded-3xl border border-line bg-[var(--color-stage)] ${className}`}>
       {scene ? (
         <ErrorBoundary key={scene.id} label="3D model" resetKey={scene.id}>
           {/* further back than on the rig's own page: this view is narrower, and the whole machine should show */}
