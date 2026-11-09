@@ -113,7 +113,7 @@ export function SolveQuestionForm({ onDone, intro = true }: { onDone?: () => voi
           rows={7}
           maxLength={MAX_TEXT}
           aria-label="The question"
-          placeholder={'e.g. A simply supported beam of span 6 m carries a point load of 20 kN at 2 m from A and a uniformly distributed load of 5 kN/m over its whole length. Determine the reactions at A and B and the maximum bending moment.\n\nOr paste a screenshot here (Ctrl+V).'}
+          placeholder={'e.g. Show that the atomic packing factor of a BCC crystal is 0.68, and sketch its unit cell.\n\nor: A simply supported beam of span 6 m carries 20 kN at 2 m from A and 5 kN/m over its length. Find the reactions and the maximum bending moment.\n\nOr paste a screenshot here (Ctrl+V).'}
           className={`${inputCls} min-h-[150px] resize-y text-[13px] leading-relaxed ${over ? 'border-accent' : ''}`}
         />
         {match ? (

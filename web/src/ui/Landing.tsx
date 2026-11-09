@@ -49,11 +49,11 @@ const COPY = {
     ],
   },
   academic: {
-    eyebrow: '3D machinery and laboratories for engineering students',
+    eyebrow: '3D models, labs and worked answers for engineering and science students',
     title: 'Engineering, brought to life.',
-    lead: 'Engines, mechanisms, strength of materials, thermal plant and technical drawing, as models you can run. Do the lab test on screen, then practise with fresh numbers and see the slip behind a wrong answer.',
-    primary: { label: 'Start with the diesel engine', to: '/m/engine/four-stroke-diesel' },
-    labs: { label: 'Open the labs', to: '/m/materials/tensile' },
+    lead: 'Paste any question, from materials science to machine design, and see it in 3D with the working step by step. Run lab tests on engines, materials, mechanisms and thermal plant, then practise with fresh numbers and see the slip behind a wrong answer.',
+    primary: { label: 'Solve a question', to: '/questions' },
+    labs: { label: 'Open the labs', to: '/labs' },
     features: [
       { icon: 'cut', title: 'Interactive diagrams', text: 'Every textbook figure becomes a model you can turn, slice, explode and run in slow motion, down to 1/200 of real speed.' },
       { icon: 'book', title: 'Worked examples', text: 'Load exam-style data into any scene and follow the working: the formula, the numbers substituted, then the answer.' },
@@ -320,6 +320,68 @@ function Stat({ value, label }: { value: ReactNode; label: string }) {
   )
 }
 
+/** who Solidify is for, and where each starts: set by the account (a teacher's account also gets Classes), not a switch */
+function Roles() {
+  const roles = [
+    {
+      who: 'For students',
+      title: 'Learn it by seeing it work',
+      points: [
+        'Paste a question, or a screenshot of one, and see it built in 3D with the working step by step',
+        'Upload your notes: their figures become models you can turn, cut open and test',
+        'Practise exam-style problems with fresh numbers, method marks and spaced review',
+      ],
+      links: [
+        { label: 'Solve a question', to: '/questions', primary: true },
+        { label: 'Read notes in 3D', to: '/read' },
+        { label: 'Exam practice', to: '/exam' },
+      ],
+    },
+    {
+      who: 'For teachers',
+      title: 'Teach with models that run',
+      points: [
+        'Show any machine, structure or material in 3D in class, cut open and moving',
+        'Set papers with numbers that differ for each student, marked with method marks',
+        'See each student’s progress and a weak-spot report for the class',
+      ],
+      links: [
+        { label: 'Set up a class', to: '/classes', primary: true },
+        { label: 'Open the labs', to: '/labs' },
+      ],
+    },
+  ]
+  return (
+    <section id="roles" className="mx-auto max-w-[1360px] scroll-mt-20 px-5 pt-20 sm:px-10">
+      <h2 className="text-[30px] font-semibold tracking-[-0.03em] sm:text-[38px]">For students and teachers</h2>
+      <p className="mt-1.5 max-w-2xl text-[15px] text-mute">Engineering and science, from materials and mechanics to machines and thermal plant.</p>
+      <div className="mt-8 grid gap-4 md:grid-cols-2">
+        {roles.map((r) => (
+          <div key={r.who} className="flex flex-col rounded-3xl border border-line bg-panel p-7">
+            <p className="text-[13px] font-medium text-accent">{r.who}</p>
+            <h3 className="mt-2 text-[22px] font-semibold tracking-[-0.02em] text-ink">{r.title}</h3>
+            <ul className="mt-5 space-y-3">
+              {r.points.map((p) => (
+                <li key={p} className="flex gap-3 text-[14px] leading-relaxed text-mute">
+                  <Icon.check width={16} height={16} className="mt-[3px] shrink-0 text-accent" />
+                  {p}
+                </li>
+              ))}
+            </ul>
+            <div className="mt-7 flex flex-wrap gap-2">
+              {r.links.map((l) => (
+                <Link key={l.to} to={l.to} className={`rounded-full px-5 py-2.5 text-[13.5px] font-semibold transition-colors ${l.primary ? 'bg-accent text-accent-ink hover:brightness-110' : 'border border-line-2 text-ink hover:border-accent/50'}`}>
+                  {l.label}
+                </Link>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  )
+}
+
 function AudienceCard({ who, title, points, active, onChoose }: { who: string; title: string; points: string[]; active: boolean; onChoose: () => void }) {
   return (
     <div className={`flex flex-col rounded-3xl border p-7 transition-colors ${active ? 'border-accent/50 bg-accent/[0.05]' : 'border-line bg-panel hover:border-line-2'}`}>
@@ -346,7 +408,7 @@ function AudienceCard({ who, title, points, active, onChoose }: { who: string; t
   )
 }
 
-const HOME_TITLE = 'Solidify — Interactive 3D Machinery & Engineering Labs'
+const HOME_TITLE = 'Solidify — Engineering in 3D: models, labs and worked answers'
 
 /** Two ways to reach us: ask for a feature, or talk to us about a school or company plan. */
 function Contact() {
@@ -438,6 +500,8 @@ export function Landing() {
           ))}
         </div>
       </section>
+
+      <Roles />
 
       {AUDIENCE_SWITCH ? (
       <section id="audiences" className="mx-auto max-w-[1360px] scroll-mt-20 px-5 pt-20 sm:px-10">
