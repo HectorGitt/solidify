@@ -19,7 +19,8 @@ const scene: SceneDef = {
   floorY: FLOOR,
   hatchScale: 0.01,
   timeScale: 1,
-  cutPresets: [{ id: 'through', label: 'Through the mechanism', planes: [{ normal: [0, 0, 1], pos: 0.02 }], sectionMoving: true }],
+  // through the connecting rod (z 0.032 to 0.040), the front link; at 0.02 the rod lay wholly in front and vanished
+  cutPresets: [{ id: 'through', label: 'Through the mechanism', planes: [{ normal: [0, 0, 1], pos: 0.036 }], sectionMoving: true }],
   cites: [LAB('Labs 3 and 5')],
   reset: () => useSlider.getState().reset(),
   applyParams: (p) => useSlider.getState().set(p as Partial<SliderParams>),

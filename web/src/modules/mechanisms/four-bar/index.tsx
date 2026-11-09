@@ -20,7 +20,9 @@ const scene: SceneDef = {
   floorY: FLOOR,
   hatchScale: 0.005,
   timeScale: 1,
-  cutPresets: [{ id: 'through', label: 'Through the links', planes: [{ normal: [0, 0, 1], pos: 0.02 }], sectionMoving: true }],
+  // through the crank, the front link (z 0.03): the links behind stay whole. At 0.02 the plane removed everything
+  // in front of it, and the crank, which lies wholly in front, vanished (build log)
+  cutPresets: [{ id: 'through', label: 'Through the crank', planes: [{ normal: [0, 0, 1], pos: 0.03 }], sectionMoving: true }],
   cites: [LAB('Labs 1–2'), INV('four-bar chain, Grashof')],
   reset: () => useFourBar.getState().reset(),
   applyParams: (p) => useFourBar.getState().set(p as Partial<FourBarParams>),

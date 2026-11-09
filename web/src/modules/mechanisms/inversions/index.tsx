@@ -16,7 +16,8 @@ const scene: SceneDef = {
   floorY: FLOOR,
   hatchScale: 0.008,
   timeScale: 1,
-  cutPresets: [{ id: 'mid', label: 'Through the links', planes: [{ normal: [0, 0, 1], pos: 0.03 }], sectionMoving: true }],
+  // through the connecting rod (z 0.039 to 0.061) and the crank; at 0.03 the rod lay wholly in front and vanished
+  cutPresets: [{ id: 'mid', label: 'Through the links', planes: [{ normal: [0, 0, 1], pos: 0.05 }], sectionMoving: true }],
   cites: [INV('Inversions of the single and double slider crank chains')],
   reset: () => useInv.getState().reset(),
   applyParams: (p) => useInv.getState().set(p as Partial<typeof DEFAULTS>),

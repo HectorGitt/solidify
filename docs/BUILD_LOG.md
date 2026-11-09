@@ -498,55 +498,67 @@ Every entry is numbered (in the order they appear, top to bottom) and set out th
 - **Cause:** those places printed text as text; only the chat and the step equations were drawn as maths.
 - **Solution:** `RichInline` (maths in a short label, and a label in bare LaTeX taken as maths) for Given, Find, step and answer labels and the Live and Working labels; the question text through `RichText`. Checked in Edge.
 - **Lesson:** every place model text appears is a place maths can appear.
+
+### 89. The four-bar's crank vanished in the cutaway (home page and its rig) (2026-11-09)
+- **Problem:** the owner saw the crank of the home page's linkage disappear; the Mechanisms tile picture showed the four-bar with no crank at all.
+- **Cause:** planar rigs stack their links in front of a board at different depths (four-bar: frame 6 mm, rocker 14, coupler 22, crank 30). The cutaway "through the links" put its plane at 20 mm and cut moving parts too, which removes everything in front of the plane. The coupler was cut through, but the crank lay wholly in front, so it vanished. The cutaway is part of the home page's show reel and the default for the tile pictures.
+- **Solution:** each plane goes through the front link instead: four-bar at 30 mm (the crank shows hatched), slider-crank at 36 mm (the connecting rod), velocity diagram at 30 mm (the coupler), inversions at 50 mm (the connecting rod and crank). Found by an audit of all 115 rigs (`scripts/audit-cuts.mjs`), which applies every cutaway that cuts moving parts and lists any moving part whose whole box lies on the removed side. The other hits are half sections where the far half is meant to go (a right wheel, push rods). All 12 mechanisms rigs pass, the tile and the four rigs' pictures were retaken, and the cut was checked in Edge.
+- **Lesson:** a section plane must go through what it is meant to show; check that every moving part is still drawn in each cutaway, for every rig, not just the one reported.
+
+### 90. The phone menu ran off the right edge of the screen (2026-11-09)
+- **Problem:** on a phone the Menu sheet was a fixed 256 px panel hung from the Menu button, about 140 px in, so it ran past the right edge and was cut off. It also listed Solve a question twice.
+- **Cause:** the sheet was positioned from the button, not from the page; the item is in both Create and Study.
+- **Solution:** the sheet hangs from the header bar with a 16 px margin each side (a 320 px panel on tablets), and a link a later section also has is listed there only. Measured in Edge at 360, 390 and 820 px: inside the screen every time, page width unchanged.
+- **Lesson:** a popover on a phone belongs to the page's margins, not to the button that opens it; measure its box at the narrowest width.
 ## Nightly tests, admin and labs pages (2026-11-06)
 
-### 89. A propped-cantilever model crashed the whole workspace
+### 91. A propped-cantilever model crashed the whole workspace
 - **Problem:** `Cannot read properties of undefined (reading '0')`, blank page.
 - **Cause:** Gemini sent a `recommendedCut` without a `normal`; the cleaner passed the object through unchecked and an effect read `normal[0]`.
 - **Solution:** `cleanCut` in `note3d/sanitize.ts` checks every field (also applied when opening saved models and in the notes reader), and error boundaries round the 3D view, the side panel and each page.
 - **Lesson:** validate every nested field of model output, not just its presence; and no page should be one bad value away from blank.
 
-### 90. Nightly builds failed with "Something went wrong on the server" (500)
+### 92. Nightly builds failed with "Something went wrong on the server" (500)
 - **Problem:** Nightly builds failed with "Something went wrong on the server" (500).
 - **Cause:** Gemini answered 429 RESOURCE_EXHAUSTED when three builds ran at once, and the API gave up on the first refusal.
 - **Solution:** `api/src/retry.ts` waits and retries (2, 6, 15 s) on 429/503, streamed builds retry if refused before their first word, the final failure says the model is busy (503), and the runner tries once more after 30 s.
 - **Lesson:** treat rate limits as normal for a hosted model; read the service's logs before guessing.
 
-### 91. A draft scored 100 while visibly broken
+### 93. A draft scored 100 while visibly broken
 - **Problem:** (rods not reaching the crank, a tilted flywheel through the casing, labels on top of each other).
 - **Cause:** the checks only covered layout overlap, drawability and calculations.
 - **Solution:** checks for moving parts joined by relation and for overlapping labels, and the prompt states the same rules.
 - **Lesson:** a score is only as good as its checks; look at high scorers before trusting the number.
 
-### 92. Deploy failed: "Build failed; check build logs"
+### 94. Deploy failed: "Build failed; check build logs"
 - **Problem:** Deploy failed: "Build failed; check build logs".
 - **Cause:** `gcloud run deploy --source .` run from the repo root, which has no Dockerfile.
 - **Solution:** run it from `api/`.
 - **Lesson:** `--source .` uploads the current folder; check where you are.
 
-### 93. Rig thumbnails came out blank, and with a stray `_` in their names
+### 95. Rig thumbnails came out blank, and with a stray `_` in their names
 - **Problem:** Rig thumbnails came out blank, and with a stray `_` in their names.
 - **Cause:** two scenes photographed before they had drawn in a reused tab; and the rig list written by Python on Windows had CRLF line endings, so each id ended in `\r`.
 - **Solution:** retook those two in a fresh tab (`SHOT_COLD=1`); renamed the files and strip `\r` when reading lists.
 - **Lesson:** check the smallest output files of a batch capture, and strip `\r` from lists made on Windows.
 
-### 94. Inline scripts lost their backslashes
+### 96. Inline scripts lost their backslashes
 - **Problem:** A `node -e` / heredoc script through the shell turned `C:\Program Files` into `C:\Program Files`, so the browser path was not found.
 - **Solution:** forward slashes in Windows paths in scripts, and the editor rather than the shell for code containing escapes.
 - **Lesson:** don't pass escape-heavy code through the shell.
 
-### 95. Prettier reformatted a file into another style
+### 97. Prettier reformatted a file into another style
 - **Problem:** With no project config it used its defaults (double quotes, semicolons).
 - **Solution:** re-run with the project's settings (`--no-semi --single-quote --print-width 220`).
 - **Lesson:** don't run a formatter the project doesn't configure.
 
-### 96. The Labs page was wider than a phone
+### 98. The Labs page was wider than a phone
 - **Problem:** The Labs page was wider than a phone.
 - **Cause:** one-line rig names in a grid item set its minimum width.
 - **Solution:** `min-w-0` on the card.
 - **Lesson:** any `truncate` text inside a grid or flex child needs `min-w-0` on that child.
 
-### 97. Gearbox levers hung in the air, and the reverse idler had no shaft
+### 99. Gearbox levers hung in the air, and the reverse idler had no shaft
 - **Problem:** Gearbox levers hung in the air, and the reverse idler had no shaft.
 - **Cause:** the cut-away removed the half of the casing the lever towers stood on (moving parts are not cut, so the levers stayed); the idler's shaft was defined but never drawn, and a full-length pin would have run through third gear and the range gears.
 - **Solution:** a shift cover the towers stand on; a stub shaft and wall boss for the idler; and the cut now removes the other half, with the cameras moved to that side, so everything kept is attached to something.
