@@ -15,6 +15,10 @@ export interface EvalCase {
   noRig?: boolean
   /** a pasted problem: it must come back solved, step by step, with the asked results marked */
   solve?: boolean
+  /** nothing physical to build: it must come back as a written answer (no model), equations as maths */
+  written?: { table?: boolean }
+  /** a derivation given no numbers: solved in symbols, no numbers made up */
+  symbolic?: boolean
   /** a result with a known answer: a calculation whose label matches, within a relative tolerance */
   answer?: { label: RegExp; value: number; tol: number }
 }
@@ -51,6 +55,23 @@ export const EVAL_CASES: EvalCase[] = [
   // mechanisms and machines
   { id: 'slider-crank', prompt: 'A slider-crank mechanism with a 50 mm crank and a 200 mm connecting rod', parts: [3, 6] },
   { id: 'cam', prompt: 'A cam and roller follower on a shaft', parts: [2, 6] },
+  // nothing to build: a written answer with a table and equations
+  {
+    id: 'written-transport',
+    prompt: 'Solve this problem in 3D, step by step:\n\nThree plants P1, P2, P3 supply 30, 40 and 50 units to markets M1, M2, M3 needing 40, 50 and 30 units. The unit costs are P1: 4, 6, 9; P2: 5, 3, 8; P3: 7, 5, 4. Find an initial solution by the least-cost method and its total cost.',
+    written: { table: true },
+  },
+  // a derivation with no numbers: built (it is about a physical object) and solved in symbols
+  {
+    id: 'derive-cantilever',
+    prompt: 'Derive the expression for the maximum deflection of a cantilever of length L carrying a point load W at its free end, without numbers.',
+    parts: [1, 4],
+    noRig: true,
+    solve: true,
+    symbolic: true,
+  },
+  // materials science, built in 3D
+  { id: 'bcc-cell', prompt: 'Show the body-centred cubic unit cell and work out its atomic packing factor', parts: [1, 12], answer: { label: /packing|APF/i, value: 0.68, tol: 0.03 } },
   // a pasted exam problem: built as its setup and solved step by step
   {
     id: 'solve-beam',

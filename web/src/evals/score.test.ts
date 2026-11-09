@@ -55,9 +55,17 @@ describe('scoring a build', () => {
     expect(scoreBuild(beamCase, { explanation: 'oops' }, 10).score).toBe(0)
   })
 
-  it('has 36 cases with unique ids', () => {
-    expect(EVAL_CASES).toHaveLength(36)
-    expect(new Set(EVAL_CASES.map((c) => c.id)).size).toBe(36)
+  it('judges a written answer: no model, a table, numbered steps, equations as maths', () => {
+    const c = EVAL_CASES.find((x) => x.id === 'written-transport')!
+    const good = { answerOnly: true, explanation: ['1. Balance: $\\sum s = 120$', '', '| From | M1 |', '|---|---|', '| P1 | 4 |', '', '**Total: 410**'].join('\n') }
+    expect(scoreBuild(c, good, 30).score).toBe(100)
+    const built = { spec: { title: 'x', parts: [{ id: 'a', shapes: [{ kind: 'box', sx: 1, sy: 1, sz: 1 }] }] }, explanation: 'Built a model.' }
+    expect(scoreBuild(c, built, 30).checks.find((x) => x.name === 'written, no model')!.ok).toBe(false)
+  })
+
+  it('has 39 cases with unique ids', () => {
+    expect(EVAL_CASES).toHaveLength(39)
+    expect(new Set(EVAL_CASES.map((c) => c.id)).size).toBe(39)
   })
 })
 

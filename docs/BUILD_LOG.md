@@ -474,55 +474,79 @@ Every entry is numbered (in the order they appear, top to bottom) and set out th
 - **Cause:** the model view's chat printed Gemini's answer as plain text, though the app already had a renderer for maths in text (used by the tutor). The prompt asked for answers "in plain words, 2 to 5 sentences", which allowed no proper derivation, and a calculation's LaTeX was optional. Steps without it fell back to the raw formula, and the "numbers put in" line was always monospaced code.
 - **Solution:** chat answers go through `RichText` (maths, lists, paragraphs), which now also reads LaTeX's own `\( \)` and `\[ \]` delimiters and keeps the numbers of a numbered list split by a displayed equation. A formula with no LaTeX is written out as an equation by `note3d/exprTex.ts`: fractions, roots, powers, inverse trig, Macaulay brackets, subscripts and Greek names. Its tests check that everything it writes is valid KaTeX. The numbers-put-in line is an equation too, with earlier results as they are shown (21.67, not 21.7) and full-size fractions. The prompt asks for every equation in LaTeX, derivations as numbered steps (symbolic when asked "without numbers"), LaTeX on every calculation, and symbols in step sentences in LaTeX. Saved chat answers may be up to 4000 characters. Checked in Edge at desktop and phone width: a four-step derivation in all three delimiter styles draws fully, and a step stripped of its LaTeX shows R_B as a fraction with its numbers.
 - **Lesson:** on an engineering platform an equation is never plain text; render maths wherever model text is shown, and keep one renderer for it.
+
+### 85. A problem with nothing physical in it was still built in 3D (2026-11-09)
+- **Problem:** in the first user test, a transportation problem (supply, demand, costs) came back as a 3D model view that added nothing, with the worked answer pushed to the side and the chat not the focus.
+- **Cause:** the prompt treated every pasted problem as a setup to build, and the app had no way to show an answer without a model: a question-style reply was only accepted when a model was already open.
+- **Solution:** the prompt lists what has nothing to build (operations research, statistics, engineering economics, pure maths, definitions, non-physical derivations). For those Gemini replies `answerOnly` with the full worked answer: given and asked, numbered steps, LaTeX equations, Markdown tables, charts in ```` ```chart ```` blocks (a curve from a formula, or bars from data), and the answer in bold. The API passes it through (`readCreateReply`, counted as "answer"). The model view shows it as a centred reading column with no 3D area or side panel, headed "Worked answer". It is saved with the models (marked `answerOnly`, so it reopens as text and shows in Your questions as "Read the answer"). A follow-up question carries the conversation. Along the way: the reopened answer stayed behind the loading skeleton (the "still opening" test waited for a model that never comes; now a conversation counts as open), and charts stretched to the full column width (capped). Tests: API reply test, Markdown table and chart parsing, chart reading; checked in Edge at desktop and phone width (table, two charts, equations, saved and reopened as text).
+- **Lesson:** not every engineering question is a 3D question; the app must be as good at a written answer as at a model.
+
+### 86. A derivation asked "without numbers" came back with made-up values (2026-11-09)
+- **Problem:** a request for a derivation produced numbers the question never gave.
+- **Cause:** the problem rules said "every number the problem gives is a parameter", and the sliders need values. Chat answers were told to use "the model's real numbers". So Gemini invented givens and worked with them.
+- **Solution:** never invent a number; a derivation with no numbers is solved in symbols (`question.symbolic`): each parameter's value only draws the model and its label says "(illustrative)". The solution panel then shows Given as symbols only, steps as equations with no numbers put in, the Answer as the derived equation, no Try-it or New numbers, and a note that the sliders only size the model. Engineering derivations still get their 3D model. Chat answers use a model's numbers only when a value is asked for. Nightly case derive-cantilever checks it.
+- **Lesson:** a model must never present an assumption as a given; when values are only for drawing, say so on the page.
+
+### 87. The app read as being for machines only; a materials science student felt left out (2026-11-09)
+- **Problem:** the tester studied materials science; the home page, the prompt ("the user describes a machine, mechanism, component or tool") and the examples all spoke to machines.
+- **Cause:** Solidify grew from agricultural machinery; nothing had widened its words since.
+- **Solution:** the prompt covers any engineering or science subject, with materials science spelled out (unit cells as spheres and edges, slip planes, defects, grains; phase diagrams and S-N curves as charts). The home page leads with "Paste any question, from materials science to machine design" and a Solve a question button, and has a For students / For teachers section with real starting links in place of the hidden Pro / Study one. The question box's example is a BCC packing-factor question, and the page title reads "Engineering in 3D: models, labs and worked answers". Nightly case bcc-cell.
+- **Lesson:** the words on the first screen decide who feels the app is for them; check them against who actually uses it.
+
+### 88. Formulas in the right-hand panel showed as raw text (2026-11-09)
+- **Problem:** in the solution panel and the Live and Working cards, labels, Find items and the question text showed LaTeX or symbols as typed ("$\sigma_{max}$", "\sigma").
+- **Cause:** those places printed text as text; only the chat and the step equations were drawn as maths.
+- **Solution:** `RichInline` (maths in a short label, and a label in bare LaTeX taken as maths) for Given, Find, step and answer labels and the Live and Working labels; the question text through `RichText`. Checked in Edge.
+- **Lesson:** every place model text appears is a place maths can appear.
 ## Nightly tests, admin and labs pages (2026-11-06)
 
-### 85. A propped-cantilever model crashed the whole workspace
+### 89. A propped-cantilever model crashed the whole workspace
 - **Problem:** `Cannot read properties of undefined (reading '0')`, blank page.
 - **Cause:** Gemini sent a `recommendedCut` without a `normal`; the cleaner passed the object through unchecked and an effect read `normal[0]`.
 - **Solution:** `cleanCut` in `note3d/sanitize.ts` checks every field (also applied when opening saved models and in the notes reader), and error boundaries round the 3D view, the side panel and each page.
 - **Lesson:** validate every nested field of model output, not just its presence; and no page should be one bad value away from blank.
 
-### 86. Nightly builds failed with "Something went wrong on the server" (500)
+### 90. Nightly builds failed with "Something went wrong on the server" (500)
 - **Problem:** Nightly builds failed with "Something went wrong on the server" (500).
 - **Cause:** Gemini answered 429 RESOURCE_EXHAUSTED when three builds ran at once, and the API gave up on the first refusal.
 - **Solution:** `api/src/retry.ts` waits and retries (2, 6, 15 s) on 429/503, streamed builds retry if refused before their first word, the final failure says the model is busy (503), and the runner tries once more after 30 s.
 - **Lesson:** treat rate limits as normal for a hosted model; read the service's logs before guessing.
 
-### 87. A draft scored 100 while visibly broken
+### 91. A draft scored 100 while visibly broken
 - **Problem:** (rods not reaching the crank, a tilted flywheel through the casing, labels on top of each other).
 - **Cause:** the checks only covered layout overlap, drawability and calculations.
 - **Solution:** checks for moving parts joined by relation and for overlapping labels, and the prompt states the same rules.
 - **Lesson:** a score is only as good as its checks; look at high scorers before trusting the number.
 
-### 88. Deploy failed: "Build failed; check build logs"
+### 92. Deploy failed: "Build failed; check build logs"
 - **Problem:** Deploy failed: "Build failed; check build logs".
 - **Cause:** `gcloud run deploy --source .` run from the repo root, which has no Dockerfile.
 - **Solution:** run it from `api/`.
 - **Lesson:** `--source .` uploads the current folder; check where you are.
 
-### 89. Rig thumbnails came out blank, and with a stray `_` in their names
+### 93. Rig thumbnails came out blank, and with a stray `_` in their names
 - **Problem:** Rig thumbnails came out blank, and with a stray `_` in their names.
 - **Cause:** two scenes photographed before they had drawn in a reused tab; and the rig list written by Python on Windows had CRLF line endings, so each id ended in `\r`.
 - **Solution:** retook those two in a fresh tab (`SHOT_COLD=1`); renamed the files and strip `\r` when reading lists.
 - **Lesson:** check the smallest output files of a batch capture, and strip `\r` from lists made on Windows.
 
-### 90. Inline scripts lost their backslashes
+### 94. Inline scripts lost their backslashes
 - **Problem:** A `node -e` / heredoc script through the shell turned `C:\Program Files` into `C:\Program Files`, so the browser path was not found.
 - **Solution:** forward slashes in Windows paths in scripts, and the editor rather than the shell for code containing escapes.
 - **Lesson:** don't pass escape-heavy code through the shell.
 
-### 91. Prettier reformatted a file into another style
+### 95. Prettier reformatted a file into another style
 - **Problem:** With no project config it used its defaults (double quotes, semicolons).
 - **Solution:** re-run with the project's settings (`--no-semi --single-quote --print-width 220`).
 - **Lesson:** don't run a formatter the project doesn't configure.
 
-### 92. The Labs page was wider than a phone
+### 96. The Labs page was wider than a phone
 - **Problem:** The Labs page was wider than a phone.
 - **Cause:** one-line rig names in a grid item set its minimum width.
 - **Solution:** `min-w-0` on the card.
 - **Lesson:** any `truncate` text inside a grid or flex child needs `min-w-0` on that child.
 
-### 93. Gearbox levers hung in the air, and the reverse idler had no shaft
+### 97. Gearbox levers hung in the air, and the reverse idler had no shaft
 - **Problem:** Gearbox levers hung in the air, and the reverse idler had no shaft.
 - **Cause:** the cut-away removed the half of the casing the lever towers stood on (moving parts are not cut, so the levers stayed); the idler's shaft was defined but never drawn, and a full-length pin would have run through third gear and the range gears.
 - **Solution:** a shift cover the towers stand on; a stub shaft and wall boss for the idler; and the cut now removes the other half, with the cameras moved to that side, so everything kept is attached to something.

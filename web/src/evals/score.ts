@@ -84,6 +84,17 @@ export function overlappingLabels(spec: NoteSceneSpec, frames: Map<string, PartF
 export function scoreBuild(c: EvalCase, reply: Record<string, unknown>, seconds: number): { score: number; checks: EvalCheck[]; spec: NoteSceneSpec | null } {
   const checks: EvalCheck[] = []
   const add = (name: string, ok: boolean, detail?: string) => checks.push({ name, ok, ...(detail ? { detail: detail.slice(0, 300) } : {}) })
+  // nothing to build: judged as a written answer
+  if (c.written) {
+    const text = typeof reply.explanation === 'string' ? reply.explanation : ''
+    add('written, no model', reply.answerOnly === true && !!text.trim(), reply.answerOnly === true ? undefined : 'a model was built for a problem with nothing physical to show')
+    add('equations as maths', /\$[^$\s][^$]*\$/.test(text), 'no equation written in LaTeX')
+    add('numbered steps', /^\s*\d+[.)]\s/m.test(text), 'no numbered steps')
+    if (c.written.table) add('a table', /^\s*\|.*\|\s*\n\s*\|?\s*:?-{2,}/m.test(text), 'no Markdown table')
+    add('under two minutes', seconds <= 120, `${Math.round(seconds)} s`)
+    const passed = checks.filter((x) => x.ok).length
+    return { score: Math.round((100 * passed) / checks.length), checks, spec: null }
+  }
   const spec: NoteSceneSpec | null = sanitizeGeneratedSpec(reply, c.prompt)
   add('builds', !!spec, spec ? undefined : 'the answer could not be turned into a model')
   if (!spec) return { score: 0, checks, spec: null }
@@ -134,6 +145,13 @@ export function scoreBuild(c: EvalCase, reply: Record<string, unknown>, seconds:
       ok,
       ok ? undefined : !q ? 'not set up as a question' : !q.find.length ? 'what is asked is not listed' : steps.length < 2 ? 'fewer than two steps' : !answers.length ? 'no result marked as the answer' : 'a step has no explanation',
     )
+  }
+  if (c.symbolic) {
+    // a derivation given no numbers: in symbols, every step an equation, any values marked as only illustrative
+    const steps = spec.calculations ?? []
+    const unmarked = spec.parameters.filter((p) => !/illustrative/i.test(p.label))
+    const ok = spec.question?.symbolic === true && steps.length > 0 && steps.every((s) => !!s.latex) && unmarked.length === 0
+    add('derived in symbols', ok, ok ? undefined : spec.question?.symbolic !== true ? 'not marked as symbolic' : unmarked.length ? `values presented as given: ${unmarked.map((p) => p.label).join(', ')}` : 'a step has no equation')
   }
   if (c.noRig) {
     const rig = spec.parts.filter((p) => RIG.test(p.name))
