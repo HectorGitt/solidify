@@ -1,3 +1,4 @@
+import * as THREE from 'three'
 import { useEffect, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { MODULES } from '@/modules/catalog'
@@ -11,7 +12,8 @@ import { Icon } from './icons'
 import { Loader, LoaderMark } from './Loader'
 import { Stage, type StageFrame } from './Stage'
 import { hasWebGL } from './webgl'
-import { getCameraControls } from './camera'
+import { focusPart, getCameraControls } from './camera'
+import { useParts } from '@/parts/registry'
 import { SiteHeader } from '@/ui/SiteHeader'
 import { SiteFooter } from './SiteFooter'
 import { ALL_ORDER, MEDIA, Media, ModuleTile, READY } from './labsCatalog'
@@ -25,11 +27,11 @@ import { applySceneView, useHomeStage } from './homeStage'
  * default settings; `fill` draws a bar only where the figure is a fraction of a limit.
  */
 type HeroReadout = { label: string; value: string; unit: string; fill?: number }
-const HERO_SCENES: { moduleId: string; sceneId: string; label: string; frame: StageFrame; readouts: HeroReadout[] }[] = [
-  { moduleId: 'vibration', sceneId: 'seat', label: 'Seat suspension', frame: { back: 1.6, shift: 0.55 }, readouts: [{ label: 'Operator vibration', value: '0.666', unit: 'm/s² RMS' }, { label: 'Seat transmissibility', value: '0.549', unit: 'floor to operator' }] },
-  { moduleId: 'mechanisms', sceneId: 'four-bar', label: 'Four-bar linkage', frame: { back: 1.45, shift: 0.35 }, readouts: [{ label: 'Rocker swing', value: '73.8', unit: '° (crank-rocker)' }, { label: 'Transmission angle', value: '18.2–65.4', unit: '°' }] },
-  { moduleId: 'powertrain', sceneId: 'differential', label: 'Differential & diff lock', frame: { back: 1.8, shift: 0.35 }, readouts: [{ label: 'Pinion', value: '600', unit: 'rpm' }, { label: 'Crown wheel', value: '140', unit: 'rpm' }] },
-  { moduleId: 'engine', sceneId: 'cooling', label: 'Engine cooling', frame: { back: 1.4, shift: 0.45 }, readouts: [{ label: 'Heat to coolant', value: '36', unit: 'kW' }] },
+const HERO_SCENES: { moduleId: string; sceneId: string; label: string; frame: StageFrame; focus?: RegExp; readouts: HeroReadout[] }[] = [
+  { moduleId: 'vibration', sceneId: 'seat', label: 'Seat suspension', focus: /^suspension$|suspension/i, frame: { back: 1.6, shift: 0.55 }, readouts: [{ label: 'Operator vibration', value: '0.666', unit: 'm/s² RMS' }, { label: 'Seat transmissibility', value: '0.549', unit: 'floor to operator' }] },
+  { moduleId: 'mechanisms', sceneId: 'four-bar', label: 'Four-bar linkage', focus: /^crank$/, frame: { back: 1.45, shift: 0.35 }, readouts: [{ label: 'Rocker swing', value: '73.8', unit: '° (crank-rocker)' }, { label: 'Transmission angle', value: '18.2–65.4', unit: '°' }] },
+  { moduleId: 'powertrain', sceneId: 'differential', label: 'Differential & diff lock', focus: /^spiders$|spider/i, frame: { back: 1.8, shift: 0.35 }, readouts: [{ label: 'Pinion', value: '600', unit: 'rpm' }, { label: 'Crown wheel', value: '140', unit: 'rpm' }] },
+  { moduleId: 'engine', sceneId: 'cooling', label: 'Engine cooling', focus: /radiator|water pump/i, frame: { back: 1.4, shift: 0.45 }, readouts: [{ label: 'Heat to coolant', value: '36', unit: 'kW' }] },
 ]
 
 
@@ -163,11 +165,37 @@ function Hero({ copy }: { copy: (typeof COPY)[keyof typeof COPY] }) {
   useEffect(() => {
     if (!reel || !scene || owner !== 'hero' || switching) return
     const view = () => useView.getState()
+    // zoom in on the part that shows how this machine works, then back out to where the view started
+    const want = HERO_SCENES.find((h) => h.sceneId === scene.id)?.focus
+    let back: { p: number[]; t: number[] } | null = null
+    const zoomIn = () => {
+      const c = getCameraControls()
+      if (!c || !want) return
+      const parts = Object.values(useParts.getState().parts)
+      const hit = parts.find((x) => want.test(x.id)) ?? parts.find((x) => want.test(x.name))
+      if (!hit) return
+      const p = new THREE.Vector3()
+      const t = new THREE.Vector3()
+      c.getPosition(p)
+      c.getTarget(t)
+      back = { p: p.toArray(), t: t.toArray() }
+      view().select(hit.id)
+      focusPart(hit.id)
+    }
+    const zoomOut = () => {
+      const c = getCameraControls()
+      if (!c || !back) return
+      view().select(null)
+      void c.setLookAt(back.p[0], back.p[1], back.p[2], back.t[0], back.t[1], back.t[2], true)
+      back = null
+    }
     const timers = [
-      window.setTimeout(() => view().setCut({ enabled: true }), 2500),
-      window.setTimeout(() => view().setExplode(0.75), 6500),
-      window.setTimeout(() => view().setExplode(0), 10500),
-      window.setTimeout(() => view().setCut({ enabled: false }), 13000),
+      window.setTimeout(() => view().setCut({ enabled: true }), 2000),
+      window.setTimeout(zoomIn, 3500),
+      window.setTimeout(zoomOut, 7500),
+      window.setTimeout(() => view().setExplode(0.75), 9000),
+      window.setTimeout(() => view().setExplode(0), 11500),
+      window.setTimeout(() => view().setCut({ enabled: false }), 13300),
       window.setTimeout(() => setHeroIdx((i) => (i + 1) % HERO_SCENES.length), 15000),
     ]
     // the camera sways gently either side of the scene's own view (about 18°), so flat rigs never turn edge-on
