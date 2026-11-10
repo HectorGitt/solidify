@@ -1,0 +1,27 @@
+export const spec = {
+  id: 'create-beam-q', title: 'Simply supported beam: point load and UDL', summary: 'A 6 m simply supported beam with a 20 kN point load at 2 m from A and 5 kN/m over its whole span.', units: 'm',
+  question: { text: 'A simply supported beam of span 6 m carries a point load of 20 kN at 2 m from A and a uniformly distributed load of 5 kN/m over its whole length. Determine the reactions at A and B and the maximum bending moment.', find: ['the reactions at A and B', 'the maximum bending moment'] },
+  parameters: [
+    { id: 'L', label: 'Span', symbol: 'L', value: 6, min: 3, max: 10, step: 0.5, unit: 'm' },
+    { id: 'P', label: 'Point load', symbol: 'P', value: 20, min: 0, max: 50, step: 1, unit: 'kN' },
+    { id: 'a', label: 'Load position from A', symbol: 'a', value: 2, min: 0.5, max: 5, step: 0.5, unit: 'm' },
+    { id: 'w', label: 'Distributed load', symbol: 'w', value: 5, min: 0, max: 15, step: 0.5, unit: 'kN/m' },
+  ],
+  calculations: [
+    { id: 'W', label: 'Total distributed load', symbol: 'W', formula: 'w * L', unit: 'kN', latex: 'W = wL', step: 'Replace the distributed load by its total, acting at mid-span.' },
+    { id: 'R_B', label: 'Reaction at B', symbol: 'R_B', formula: '(P * a + W * L / 2) / L', unit: 'kN', latex: 'R_B = \\frac{Pa + W L/2}{L}', step: 'Take moments about A to find R_B.', answer: true },
+    { id: 'R_A', label: 'Reaction at A', symbol: 'R_A', formula: 'P + W - R_B', unit: 'kN', latex: 'R_A = P + W - R_B', step: 'Resolve vertically to find R_A.', answer: true },
+    { id: 'M_max', label: 'Maximum bending moment', symbol: 'M_{max}', formula: 'R_A * a - w * a ^ 2 / 2', unit: 'kN·m', latex: 'M_{max} = R_A a - \\frac{w a^2}{2}', step: 'The shear force changes sign under the point load, so the bending moment is greatest there.', answer: true },
+  ],
+  charts: [{ id: 'bmd', title: 'Bending moment diagram', x: { label: 'x', unit: 'm', from: '0', to: 'L' }, y: { label: 'M', unit: 'kN·m' }, series: [{ id: 'm', label: 'M', formula: 'R_A * x - w * x ^ 2 / 2 - P * mac(x - a, 1)' }] }],
+  annotations: [
+    { id: 'p', kind: 'force', label: 'P', magnitude: 'P', unit: 'kN', anchor: { part: 'beam', at: '+y', along: 0.33 } },
+    { id: 'ra', kind: 'force', label: 'R_A', magnitude: 'R_A', unit: 'kN', anchor: { part: 'support_a', at: '-y' }, direction: '+y' },
+    { id: 'rb', kind: 'force', label: 'R_B', magnitude: 'R_B', unit: 'kN', anchor: { part: 'support_b', at: '-y' }, direction: '+y' },
+  ],
+  parts: [
+    { id: 'beam', name: 'Beam', material: 'steel', role: 'static', position: [0, 0, 0], shapes: [{ kind: 'box', sx: 'L', sy: 0.25, sz: 0.15 }] },
+    { id: 'support_a', name: 'Pin support A', material: 'castIron', role: 'static', mount: { kind: 'against', target: 'beam', face: '-y', shift: ['-L / 2', 0, 0] }, shapes: [{ kind: 'box', sx: 0.3, sy: 0.25, sz: 0.3 }] },
+    { id: 'support_b', name: 'Roller support B', material: 'castIron', role: 'static', mount: { kind: 'against', target: 'beam', face: '-y', shift: ['L / 2', 0, 0] }, shapes: [{ kind: 'cylinder', r: 0.12, h: 0.3, rotation: [1.5708, 0, 0] }] },
+  ],
+}
