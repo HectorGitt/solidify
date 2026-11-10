@@ -11,3 +11,16 @@ dist
 .env.*
 .claude/settings.local.json
 tsconfig.tsbuildinfo
+
+# reels made by web/scripts/reel
+reel-out/
+
+# one-off scratch scripts (browser checks, demo recordings)
+web/scripts/look*.mjs
+web/scripts/demo-*.mjs
+web/scripts/check-*.mjs
+web/scripts/beam-spec.mjs
+
+# .slfy website build output (published from the HectorGitt/slfy repo)
+format/www/
+format/site/

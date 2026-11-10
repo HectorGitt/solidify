@@ -1,0 +1,82 @@
+[
+  {
+    "file": "minimal-block.slfy",
+    "title": "A block on a plate",
+    "summary": "The smallest useful model: two parts, one placed against the other.",
+    "parts": 2,
+    "calculations": 0,
+    "question": false
+  },
+  {
+    "file": "shaft-in-torsion.slfy",
+    "title": "Solid shaft in torsion",
+    "summary": "A solid shaft whose diameter and torque are sliders; the shear stress and twist follow live.",
+    "parts": 3,
+    "calculations": 4,
+    "question": false
+  },
+  {
+    "file": "spur-gear-pair.slfy",
+    "title": "Spur gear pair",
+    "summary": "Two spur gears placed by relation: the wheel meshes with the pinion and turns at the ratio of their teeth. Both shafts stand in a base plate.",
+    "parts": 3,
+    "calculations": 3,
+    "question": false
+  },
+  {
+    "file": "beam-question.slfy",
+    "title": "Simply supported beam: point load and UDL",
+    "summary": "A 6 m simply supported beam with a 20 kN point load at 2 m from A and 5 kN/m over its whole span.",
+    "parts": 3,
+    "calculations": 4,
+    "question": true
+  },
+  {
+    "file": "helical-gear-pair.slfy",
+    "title": "Helical Gear Pair on Parallel Shafts",
+    "summary": "Single-stage parallel-shaft helical gear pair with 25-tooth pinion and 50-tooth gear showing pitch geometry, center distance, and axial thrust generation.",
+    "parts": 6,
+    "calculations": 8,
+    "question": false
+  },
+  {
+    "file": "worm-reducer.slfy",
+    "title": "Worm & Worm Wheel Reducer (30:1)",
+    "summary": "A high-ratio, right-angle speed reducer featuring a single-start steel worm driving a 30-tooth bronze worm gear with self-locking capability.",
+    "parts": 6,
+    "calculations": 5,
+    "question": false
+  },
+  {
+    "file": "open-differential.slfy",
+    "title": "Open Differential Mechanism",
+    "summary": "An open differential gear train that splits input torque equally between two drive axles while allowing them to rotate at different speeds during cornering.",
+    "parts": 7,
+    "calculations": 5,
+    "question": false
+  },
+  {
+    "file": "scotch-yoke.slfy",
+    "title": "Scotch Yoke Mechanism",
+    "summary": "A Scotch yoke converting rotary motion into exact simple harmonic reciprocating linear motion via a slotted crosshead.",
+    "parts": 4,
+    "calculations": 4,
+    "question": false
+  },
+  {
+    "file": "quick-return-mechanism.slfy",
+    "title": "Crank & Slotted-Lever Quick-Return Mechanism",
+    "summary": "Whitworth crank and slotted-lever drive for a metal shaper. Constant-speed rotation of the bull gear drives a sliding block within the slotted rocker, producing a slow forward cutting stroke and a rapid return stroke.",
+    "parts": 8,
+    "calculations": 6,
+    "question": false
+  },
+  {
+    "file": "muff-coupling.slfy",
+    "title": "Rigid Sleeve (Muff) Coupling",
+    "summary": "A rigid sleeve coupling connecting two collinear 30 mm shafts via a solid cast iron sleeve and a sunk key, featuring torsional shear and crushing stress analyses.",
+    "parts": 5,
+    "calculations": 4,
+    "question": false
+  }
+]
