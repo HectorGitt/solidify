@@ -1,4 +1,4 @@
-import { ContactShadows, Environment, Grid, Lightformer, OrbitControls } from '@react-three/drei'
+import { ContactShadows, Grid, OrbitControls } from '@react-three/drei'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
@@ -11,70 +11,13 @@ import { useView } from '@/render/view'
 import { Icon } from '@/ui/icons'
 import { verifyBackProjection } from './backProjectCheck'
 import { NoteSceneViewport, type InlineViewConfig } from './NoteSceneRenderer'
+import { InlineStudioLights } from './studioLights'
 import {
   CONFIDENCE_THRESHOLD,
   type DetectedPageFigure,
   type NoteParameterSpec,
   type NotePartSpec,
 } from './schema'
-
-function InlineHeadLight() {
-  const light = useRef<THREE.DirectionalLight>(null)
-  const target = useMemo(() => new THREE.Vector3(), [])
-  useFrame(({ camera }) => {
-    const l = light.current
-    if (!l) return
-    camera.getWorldDirection(target).add(camera.position)
-    l.position.copy(camera.position)
-    l.target.position.copy(target)
-    if (!l.target.parent) l.parent?.add(l.target)
-    l.target.updateMatrixWorld()
-  })
-  return <directionalLight ref={light} intensity={0.7} color="#fff8f0" />
-}
-
-function InlineStudioLights({ extent }: { extent: number }) {
-  const s = Math.max(0.2, extent)
-  const half = 1.4 * s
-  const texel = (2 * half) / 2048
-  const offset = useMemo(
-    () => new THREE.Vector3(1.4, 2.2, 1.6).normalize().multiplyScalar(Math.max(s * 3, half * 3)),
-    [s, half],
-  )
-  return (
-    <>
-      {/* Exact natural lighting rig from Stage.tsx */}
-      <hemisphereLight args={['#ffffff', '#5b6470', 0.65]} />
-      <InlineHeadLight />
-      <directionalLight
-        position={[offset.x, offset.y, offset.z]}
-        intensity={2.1}
-        castShadow
-        shadow-mapSize={[2048, 2048]}
-        shadow-bias={-0.0002}
-        shadow-normalBias={texel * 1.5}
-        shadow-camera-left={-half}
-        shadow-camera-right={half}
-        shadow-camera-top={half}
-        shadow-camera-bottom={-half}
-        shadow-camera-near={0.01}
-        shadow-camera-far={offset.length() + half * 3}
-      />
-      <directionalLight position={[-s * 2, s * 0.8, -s]} intensity={0.55} color="#bcd4ff" />
-      <Environment resolution={256} frames={1}>
-        <Lightformer form="rect" intensity={2.2} color="#ffffff" position={[0, 5, -2]} scale={[10, 2, 1]} rotation-x={Math.PI / 2} />
-        <Lightformer form="rect" intensity={1.2} color="#e8f3ff" position={[-5, 1.5, 1]} scale={[3, 6, 1]} rotation-y={Math.PI / 2} />
-        <Lightformer form="rect" intensity={0.9} color="#fff3e0" position={[5, 1, 2]} scale={[3, 5, 1]} rotation-y={-Math.PI / 2} />
-        <Lightformer form="ring" intensity={1.5} color="#ffffff" position={[2, 3, 6]} scale={2} />
-        <Lightformer form="rect" intensity={0.25} color="#10b981" position={[0, -3, 0]} scale={[10, 10, 1]} rotation-x={-Math.PI / 2} />
-        {/* panels behind and below as well, so metal reflects something from every side */}
-        <Lightformer form="rect" intensity={1.0} color="#f2f6ff" position={[0, 2, -6]} scale={[8, 4, 1]} />
-        <Lightformer form="rect" intensity={0.7} color="#fff6ea" position={[-4, 2, -4]} scale={[3, 5, 1]} rotation-y={Math.PI / 4} />
-        <Lightformer form="rect" intensity={0.45} color="#dfe6ee" position={[0, -2.5, 0]} scale={[12, 12, 1]} rotation-x={-Math.PI / 2} />
-      </Environment>
-    </>
-  )
-}
 
 /**
  * Captures a still image from the active WebGL canvas once the geometry has settled
