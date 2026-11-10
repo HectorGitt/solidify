@@ -35,7 +35,8 @@ import { useProfile } from '../profile'
 import { PublishDialog } from './PublishDialog'
 import { LibraryMatches } from './LibraryMatches'
 import { clearPendingBuild, peekPendingBuild } from '../pendingBuild'
-import { peekPreviewModel, setPreviewModel } from '../previewModel'
+import { peekPreviewModel, previewBackAfterReload, setPreviewModel } from '../previewModel'
+import { downloadSlfy } from '@/note3d/slfyFile'
 import { updateDraft } from '../admin'
 import { scoreBuild } from '@/evals/score'
 import { mechanismProblems } from '@/note3d/kinematics'
@@ -748,7 +749,7 @@ export default function ModelLab() {
   useEffect(() => {
     if (routeId !== 'preview') return
     if (!viewing) {
-      navigate('/admin', { replace: true })
+      navigate(previewBackAfterReload('/admin'), { replace: true })
       return
     }
     // drafts made before they were cleaned on saving: clean on the way in, so a bad field cannot crash the view
@@ -1023,6 +1024,13 @@ export default function ModelLab() {
           {live ? (live.progress?.title || spec ? 'Building…' : '') : routeId === 'preview' && !creationId ? (viewing?.draftId ? (savingDraft ? 'Saving to the draft…' : draftChanged ? 'Draft under review: changes not saved yet' : 'Draft under review: saved') : 'Preview, not saved') : creationId ? (saveState === 'saving' ? 'Saving…' : saveState === 'error' ? 'Not saved: check your connection' : 'Saved') : ''}
         </span>
         <div className="ml-auto flex items-center gap-2">
+          {/* the model as an open .slfy file, at its current sizes: anyone can open it (Create → Open a model file) */}
+          {spec && !live ? (
+            <button type="button" onClick={() => downloadSlfy(spec, params)} title="Download as a model file (.slfy) that anyone can open" aria-label="Download as a model file" className={`${ghostBtn} inline-flex items-center gap-1.5 px-3 py-1.5 text-[12.5px]`}>
+              <Icon.download width={14} height={14} />
+              <span className="max-sm:hidden">Download</span>
+            </button>
+          ) : null}
           {spec && matchedCatalog && loadedCatalogScene && !live ? (
             <button type="button" onClick={() => setViewMode((m) => (m === 'parametric' ? 'catalog' : 'parametric'))} className={`${viewMode === 'catalog' ? ghostBtn : primaryBtn} px-4 py-1.5 text-[12.5px]`}>
               {viewMode === 'parametric' ? `Open the lab model: ${matchedCatalog.scene.title}` : 'Back to your model'}

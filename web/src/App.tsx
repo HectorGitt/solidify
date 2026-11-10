@@ -37,6 +37,7 @@ const PaperPage = lazy(() => import('./cloud/ui/PaperPage'))
 const AdminPage = lazy(() => import('./cloud/ui/AdminPage'))
 const ReviewPage = lazy(() => import('./cloud/ui/ReviewPage'))
 const LibraryPage = lazy(() => import('./cloud/ui/LibraryPage'))
+const OpenFilePage = lazy(() => import('./cloud/ui/OpenFilePage'))
 const LabsPage = lazy(() => import('./ui/LabsPage'))
 // dev only: bare scenes for scripts/capture-tiles.mjs
 const ShotPage = import.meta.env.DEV ? lazy(() => import('./ui/ShotPage')) : null
@@ -83,6 +84,7 @@ export default function App() {
         <Route path="/classes/:classId/papers/:paperId" element={page(<PaperPage />)} />
         <Route path="/create" element={page(<CreatePage />)} />
         <Route path="/create/lab" element={page(<CreationLabPage />)} />
+        <Route path="/create/open" element={page(<OpenFilePage />)} />
         <Route path="/create/:id" element={page(<ModelLab />, <WorkspaceSkeleton />)} />
         <Route path="/read" element={page(<ReadPage />)} />
         <Route path="/admin" element={page(<AdminPage />)} />
