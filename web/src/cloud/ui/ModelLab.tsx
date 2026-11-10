@@ -35,7 +35,8 @@ import { useProfile } from '../profile'
 import { PublishDialog } from './PublishDialog'
 import { LibraryMatches } from './LibraryMatches'
 import { clearPendingBuild, peekPendingBuild } from '../pendingBuild'
-import { peekPreviewModel, setPreviewModel } from '../previewModel'
+import { peekPreviewModel, previewBackAfterReload, setPreviewModel } from '../previewModel'
+import { downloadSlfy } from '@/note3d/slfyFile'
 import { updateDraft } from '../admin'
 import { scoreBuild } from '@/evals/score'
 import { mechanismProblems } from '@/note3d/kinematics'
@@ -749,7 +750,7 @@ export default function ModelLab() {
   useEffect(() => {
     if (routeId !== 'preview') return
     if (!viewing) {
-      navigate('/admin', { replace: true })
+      navigate(previewBackAfterReload('/admin'), { replace: true })
       return
     }
     // drafts made before they were cleaned on saving: clean on the way in, so a bad field cannot crash the view
@@ -1026,6 +1027,13 @@ export default function ModelLab() {
         <div className="ml-auto flex items-center gap-2">
           {/* on a headset: the model (or the question's setup) on the student's table, with its sizes and readings beside it */}
           {spec && !live ? <HeadsetButton what={spec.question ? 'this question' : 'this model'} className="px-3 py-1.5" /> : null}
+          {/* the model as an open .slfy file, at its current sizes: anyone can open it (Create → Open a model file) */}
+          {spec && !live ? (
+            <button type="button" onClick={() => downloadSlfy(spec, params)} title="Download as a model file (.slfy) that anyone can open" aria-label="Download as a model file" className={`${ghostBtn} inline-flex items-center gap-1.5 px-3 py-1.5 text-[12.5px]`}>
+              <Icon.download width={14} height={14} />
+              <span className="max-sm:hidden">Download</span>
+            </button>
+          ) : null}
           {spec && matchedCatalog && loadedCatalogScene && !live ? (
             <button type="button" onClick={() => setViewMode((m) => (m === 'parametric' ? 'catalog' : 'parametric'))} className={`${viewMode === 'catalog' ? ghostBtn : primaryBtn} px-4 py-1.5 text-[12.5px]`}>
               {viewMode === 'parametric' ? `Open the lab model: ${matchedCatalog.scene.title}` : 'Back to your model'}

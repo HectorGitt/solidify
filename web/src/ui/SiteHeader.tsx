@@ -34,6 +34,7 @@ const NAV: NavGroup[] = [
       { to: '/create', label: 'Create in 3D', hint: 'Samples and your recent models' },
       { to: '/create/lab', label: 'My models', hint: 'Everything you have built' },
       { to: '/library', label: 'Library', hint: 'Models checked by the team' },
+      { to: '/create/open', label: 'Open a model file', hint: 'A .slfy file from your computer or a link' },
       { to: '/questions', label: 'Solve a question', hint: 'Paste a problem or a screenshot; get it in 3D, worked out' },
     ],
     match: (p) => p.startsWith('/create') || p === '/library',
