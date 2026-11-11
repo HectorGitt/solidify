@@ -85,13 +85,13 @@ export interface LiveResult extends BuildOrRefineResult {
  * about each size, formula and part as Gemini writes it. Problems are thrown for the page to show.
  */
 export async function streamOrEdit3DScene(
-  req: { prompt: string; currentSpec?: NoteSceneSpec; photoDataUrl?: string; history?: { prompt: string; response: string }[] },
+  req: { prompt: string; currentSpec?: NoteSceneSpec; photoDataUrl?: string; history?: { prompt: string; response: string }[]; plan?: boolean },
   onProgress: (p: LiveProgress) => void,
   signal?: AbortSignal,
 ): Promise<LiveResult> {
   let text = ''
   let lastChars = -1
-  for await (const ev of stream('/v1/create-3d/stream', { prompt: req.prompt, currentSpec: req.currentSpec, photoBase64: req.photoDataUrl, history: req.history?.slice(-12) }, signal)) {
+  for await (const ev of stream('/v1/create-3d/stream', { prompt: req.prompt, currentSpec: req.currentSpec, photoBase64: req.photoDataUrl, history: req.history?.slice(-12), ...(req.plan && !req.currentSpec ? { plan: true } : {}) }, signal)) {
     const data = JSON.parse(ev.data || '{}') as Record<string, unknown>
     if (ev.event === 'delta' && typeof data.text === 'string') {
       text += data.text

@@ -409,3 +409,31 @@ describe('students reporting a model that looks wrong', () => {
     expect((await req('POST', '/v1/reports', { title: 'x', kinds: ['nonsense'] }, asUser('sam'))).status).toBe(400)
   })
 })
+
+describe('planning a model before building it', () => {
+  it('reads a plan and says what is wrong with it', async () => {
+    const { planText } = await import('../src/note3d.js')
+    const good = planText({ parts: [
+      { id: 'base', name: 'Base', held: 'the anchor', moves: 'fixed', standard: 'none' },
+      { id: 'shaft', name: 'Shaft', held: 'in the bores of base', moves: 'drives', standard: 'none' },
+      { id: 'bearing', name: 'Bearing', held: 'on shaft, in base', moves: 'fixed', standard: 'ball bearing' },
+    ] })
+    expect(good.problems).toEqual([])
+    expect(good.text).toMatch(/bearing \(Bearing\): on shaft, in base; fixed; standard part: ball bearing/)
+    const bad = planText({ parts: [
+      { id: 'gear', name: 'Gear', held: 'floating', moves: 'driven' },
+      { id: 'pin', name: 'Pin', held: 'somewhere', moves: 'fixed' },
+    ] })
+    expect(bad.problems.join(' ')).toMatch(/no part is the anchor/)
+    expect(bad.problems.join(' ')).toMatch(/Gear is held by nothing/)
+    expect(bad.problems.join(' ')).toMatch(/Pin does not say which part holds it/)
+    expect(bad.problems.join(' ')).toMatch(/nothing drives/)
+  })
+  it('counts a careful build as two of the day’s builds, refused without using any when only one is left', async () => {
+    const res = await req('POST', '/v1/create-3d', { prompt: 'A gear on a shaft', plan: true }, asUser('pat'))
+    expect(res.status).toBe(429)
+    expect(((await res.json()) as { error: string }).error).toMatch(/needs 2 of today's 3D builds and you have 1 left/)
+    // the one build left is still there
+    expect((await req('POST', '/v1/create-3d', { prompt: 'A gear on a shaft' }, asUser('pat'))).status).toBe(200)
+  })
+})

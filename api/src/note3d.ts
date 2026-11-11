@@ -28,6 +28,8 @@ export const create3dRequest = z.object({
   photoBase64: z.string().max(12_000_000).optional(),
   /** the conversation about this model so far, oldest first */
   history: z.array(z.object({ prompt: z.string().max(2000), response: z.string().max(4000) })).max(12).optional(),
+  /** plan the parts and how each is held first, then build to the plan (a new model only: two model calls) */
+  plan: z.boolean().optional(),
 })
 
 export type Create3dRequest = z.infer<typeof create3dRequest> & {
@@ -110,6 +112,46 @@ export function createParts(req: Create3dRequest): Part[] {
       ? `Build a complete 3D NoteSceneSpec for: "${req.prompt}"\n\nSolidify's library has a checked model of something close to this, "${req.reference!.title}". Start from its layout, parts and relations where they fit the request, and change the parts, sizes, values, calculations and graphs to match exactly what was asked. Give it a new title for this request.\nChecked model:\n${reference}`
       : `Build a complete 3D NoteSceneSpec for: "${req.prompt}"`
   return [...imagePart(req.photoBase64), { text }]
+}
+
+const PLAN_PROMPT = `You plan 3D engineering models for Solidify before they are built. Given a request, list every part the model needs and how each one is held, in words, as an engineer would before drawing anything. The build that follows draws exactly this plan, so a part you leave out, or one held by nothing, will be wrong in the model.
+
+For each part give:
+- id: short snake_case, unique
+- name: what a student would call it
+- held: how it is held, naming the other part by id ("in the bores of base_pedestals", "keyed to input_shaft", "meshes with pinion", "on the crank pin of crank, sliding in the slot of yoke"). The one part that holds the rest (a base, a frame, a casing) says "the anchor". Never "floating", never "nothing".
+- moves: "drives" (exactly one part per mechanism: the motor, input shaft, crank or handwheel), "driven" (moves because of what it is held by), or "fixed".
+- standard: if it is a standard machine part, which one ("ball bearing", "spur gear", "helical gear", "rack", "worm", "key", "universal joint", "spring", "bolt", "nut", "pulley", "sprocket"); otherwise "none".
+
+Rules: a part that turns freely on a pin (a slider in a slot, an idler) is "on" the pin, not fixed to it; every shaft runs in bearings or bores of something fixed; gears in mesh say so; what the student asked about is in the plan. Keep it to the parts that matter (3 to 16).
+
+Return JSON only: { "parts": [ { "id": "", "name": "", "held": "", "moves": "", "standard": "" } ] }`
+
+/** a plan's parts as lines for the build prompt, and what is wrong with it (a part held by nothing, no driver) */
+export function planText(plan: unknown): { text: string; problems: string[] } {
+  const parts = (Array.isArray((plan as { parts?: unknown })?.parts) ? (plan as { parts: unknown[] }).parts : []).filter(
+    (p): p is { id: string; name: string; held: string; moves?: string; standard?: string } => !!p && typeof (p as { id?: unknown }).id === 'string' && typeof (p as { held?: unknown }).held === 'string',
+  )
+  const problems: string[] = []
+  const ids = new Set(parts.map((p) => p.id))
+  const anchors = parts.filter((p) => /\banchor\b/i.test(p.held))
+  if (!parts.length) problems.push('the plan has no parts')
+  if (!anchors.length) problems.push('no part is the anchor that holds the rest')
+  for (const p of parts) {
+    if (/\b(floating|nothing|none)\b/i.test(p.held)) problems.push(`${p.name} is held by nothing`)
+    else if (!/\banchor\b/i.test(p.held) && ![...ids].some((id) => id !== p.id && p.held.includes(id))) problems.push(`${p.name} does not say which part holds it`)
+  }
+  const moving = parts.filter((p) => /driv/i.test(p.moves ?? ''))
+  if (moving.length && !moving.some((p) => /^drives?$/i.test((p.moves ?? '').trim()))) problems.push('nothing drives the mechanism')
+  const text = parts.map((p) => `- ${p.id} (${p.name}): ${p.held}; ${p.moves ?? 'fixed'}${p.standard && p.standard !== 'none' ? `; standard part: ${p.standard}` : ''}`).join('\n')
+  return { text, problems }
+}
+
+/** two calls' tokens together */
+function addUsage(a?: ModelUsage, b?: ModelUsage): ModelUsage | undefined {
+  if (!a) return b
+  if (!b) return a
+  return { ...a, input: (a.input ?? 0) + (b.input ?? 0), output: (a.output ?? 0) + (b.output ?? 0) } as ModelUsage
 }
 
 /** reads Gemini's whole reply into a build result (throws ModelReplyError when it is unusable) */
@@ -249,14 +291,40 @@ export class GeminiNoteVision implements NoteVisionModel {
     return { systemInstruction: CREATE_3D_PROMPT, responseMimeType: 'application/json', temperature: 0.25, maxOutputTokens: 32768, abortSignal: signal }
   }
 
+  /**
+   * For a new model asked to plan first: the parts and how each is held, checked (every part held by a named part,
+   * one anchor, something driving), asked again once if it is not right, then given to the build as what to draw.
+   */
+  private async planned(req: Create3dRequest): Promise<{ req: Create3dRequest; usage?: ModelUsage }> {
+    if (!req.plan || req.currentSpec) return { req }
+    const ask = async (extra: string) => {
+      const res = await this.ai.models.generateContent({
+        model: this.model,
+        contents: [{ role: 'user', parts: [...imagePart(req.photoBase64), { text: `Plan the parts for: "${req.prompt}"${extra}` }] }],
+        config: { systemInstruction: PLAN_PROMPT, responseMimeType: 'application/json', temperature: 0.2, maxOutputTokens: 4096 },
+      })
+      return { plan: planText(parseModelJson(res.text)), usage: usageOf(res.usageMetadata) }
+    }
+    let { plan, usage } = await ask('')
+    if (plan.problems.length) {
+      const again = await ask(`\n\nA first plan had these problems; fix them: ${plan.problems.join('; ')}`)
+      if (again.plan.problems.length < plan.problems.length) plan = again.plan
+      usage = addUsage(usage, again.usage)
+    }
+    if (!plan.text) return { req, usage }
+    return { req: { ...req, prompt: `${req.prompt}\n\nBuild it to this plan (every part held as said, the anchor placed, the rest mounted by those relations; standard parts as the standard shapes):\n${plan.text}` }, usage }
+  }
+
   async createOrEdit3D(req: Create3dRequest) {
-    const res = await this.ai.models.generateContent({ model: this.model, contents: [{ role: 'user', parts: createParts(req) }], config: this.createConfig() })
-    return { ...readCreateReply(res.text ?? '', req), usage: usageOf(res.usageMetadata) }
+    const p = await this.planned(req)
+    const res = await this.ai.models.generateContent({ model: this.model, contents: [{ role: 'user', parts: createParts(p.req) }], config: this.createConfig() })
+    return { ...readCreateReply(res.text ?? '', req), usage: addUsage(p.usage, usageOf(res.usageMetadata)) }
   }
 
   async *streamCreate3D(req: Create3dRequest, signal?: AbortSignal, onUsage?: (u: ModelUsage) => void) {
-    const res = await this.ai.models.generateContentStream({ model: this.model, contents: [{ role: 'user', parts: createParts(req) }], config: this.createConfig(signal) })
-    let usage: ModelUsage | undefined
+    const p = await this.planned(req)
+    const res = await this.ai.models.generateContentStream({ model: this.model, contents: [{ role: 'user', parts: createParts(p.req) }], config: this.createConfig(signal) })
+    let usage: ModelUsage | undefined = p.usage
     for await (const chunk of res) {
       usage = usageOf(chunk.usageMetadata) ?? usage
       const t = chunk.text

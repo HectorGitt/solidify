@@ -172,6 +172,7 @@ function StartPanel({ onBuild, signedIn }: { onBuild: (text: string, photo?: { n
             </button>
           </div>
         </form>
+        <CarefulToggle />
         {/* checked models already in the library that match what is being typed */}
         <LibraryMatches query={text} className="mt-3" />
         <div className="mt-4 flex flex-wrap gap-1.5">
@@ -190,6 +191,41 @@ function StartPanel({ onBuild, signedIn }: { onBuild: (text: string, photo?: { n
         </p>
       </div>
     </div>
+  )
+}
+
+const CAREFUL_KEY = 'solidify.careful'
+/** a careful build: the parts and how each is held are planned first, then built to the plan */
+function carefulBuild(): boolean {
+  try {
+    return localStorage.getItem(CAREFUL_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+/** the student's choice of a careful build, remembered; it says what it costs */
+function CarefulToggle() {
+  const [on, setOn] = useState(carefulBuild)
+  return (
+    <label className="mt-2.5 flex cursor-pointer items-start gap-2 px-2 text-[12.5px] leading-snug text-mute">
+      <input
+        type="checkbox"
+        checked={on}
+        onChange={(e) => {
+          setOn(e.target.checked)
+          try {
+            localStorage.setItem(CAREFUL_KEY, e.target.checked ? '1' : '0')
+          } catch {
+            /* not remembered */
+          }
+        }}
+        className="mt-0.5 accent-[var(--color-accent)]"
+      />
+      <span>
+        <span className="font-medium text-ink">Careful build</span>: plans every part and how it is held first, for fewer mistakes. It takes about half a minute
+        longer and uses 2 of today’s builds.
+      </span>
+    </label>
   )
 }
 
@@ -612,7 +648,7 @@ export default function ModelLab() {
     abortRef.current = ac
     try {
       const res = await streamOrEdit3DScene(
-        { prompt, currentSpec: isNew ? undefined : (spec ?? undefined), photoDataUrl: withPhoto?.url, history: isNew && !followUp ? [] : savedHistory(turns).reverse() },
+        { prompt, currentSpec: isNew ? undefined : (spec ?? undefined), photoDataUrl: withPhoto?.url, history: isNew && !followUp ? [] : savedHistory(turns).reverse(), plan: isNew && carefulBuild() },
         (progress) => {
           if (attached()) setLive((l) => (l ? { ...l, progress } : l))
           task.update(progress.isQuestion ? 'Answering' : progress.parts.length ? `${progress.parts.length} ${progress.parts.length === 1 ? 'part' : 'parts'} placed` : 'Working out the engineering')
