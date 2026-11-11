@@ -166,6 +166,9 @@ export type NoteMountSpec =
   /** the output shaft of a universal (Hooke's) joint: from the end of the input shaft `target`, its axis turned
    *  `angle` degrees off the input's; it turns by Hooke's law, tan θ₂ = tan θ₁ / cos β */
   | { kind: 'hooke'; target: string; angle: DimExpr; shift?: Vec3Expr }
+  /** a key in the keyway of shaft `target`: its long side along the shaft, sunk half its height into it at radius
+   *  `r` (the shaft's radius there), `at` along the shaft, `angle` degrees round it from the top; it turns with the shaft */
+  | { kind: 'keyed'; target: string; r?: DimExpr; at?: DimExpr; offset?: DimExpr; angle?: DimExpr; shift?: Vec3Expr }
 
 export type AxisDir = '+x' | '-x' | '+y' | '-y' | '+z' | '-z'
 
@@ -700,6 +703,7 @@ export const noteMountSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('lever'), target: z.string().min(1).max(80), pivot: z.string().min(1).max(80), throw: dimExprSchema, angle: dimExprSchema.optional(), direction: axisDirSchema.optional(), shift: vec3ExprSchema.optional() }),
   z.object({ kind: z.literal('follower'), target: z.string().min(1).max(80), direction: axisDirSchema, of: z.enum(['pin', 'tip']).optional(), throw: dimExprSchema.optional(), angle: dimExprSchema.optional(), offset: dimExprSchema.optional(), shift: vec3ExprSchema.optional() }),
   z.object({ kind: z.literal('hooke'), target: z.string().min(1).max(80), angle: dimExprSchema, shift: vec3ExprSchema.optional() }),
+  z.object({ kind: z.literal('keyed'), target: z.string().min(1).max(80), r: dimExprSchema.optional(), at: dimExprSchema.optional(), offset: dimExprSchema.optional(), angle: dimExprSchema.optional(), shift: vec3ExprSchema.optional() }),
 ])
 
 export const noteParameterSchema = z.object({
