@@ -47,6 +47,14 @@ export interface LocalInfo {
   hollow: boolean
   /** gear pitch radius (or pulley radius), 0 when it has none */
   pitchR: number
+  /**
+   * The middle of the part's axis: on the line of its main round shape (not the middle of its whole box, which
+   * a base plate, a pedestal or a crank pin pulls off that line), half way along the round shapes on that line.
+   * A frame's bearing boss, a crank's shaft and disc. What "coaxial" lines up. The box centre when nothing is round.
+   */
+  axisCenter: THREE.Vector3
+  /** the extent, along the axis, of the round shapes on that line (the whole part when nothing is round) */
+  axisLength: number
 }
 
 const cache = new Map<string, LocalInfo>()
@@ -73,9 +81,14 @@ function localInfo(part: NotePartSpec, scope: Record<string, number>): LocalInfo
   const adds = part.shapes.filter((s) => s.op !== 'subtract')
   // the axis: a gear's if there is one, else the main round shape's, else the longest side
   const lead = adds.find((s) => GEARS.has(s.kind)) ?? adds.find((s) => ROUND.has(s.kind))
+  // shapes set out in a ring (a bearing's balls, a bolt circle) turn about the ring's axis, the part's Y: taking
+  // the longest side instead laid a ring of balls on its side when it was mounted on its race
+  const ring = !lead && adds.some((s) => evalDim(s.radialCount, scope, 0) > 1)
   const axis = lead
     ? shapeAxis(lead, scope)
-    : size.x >= size.y && size.x >= size.z
+    : ring
+      ? new THREE.Vector3(0, 1, 0)
+      : size.x >= size.y && size.x >= size.z
       ? new THREE.Vector3(1, 0, 0)
       : size.y >= size.z
         ? new THREE.Vector3(0, 1, 0)
@@ -89,7 +102,50 @@ function localInfo(part: NotePartSpec, scope: Record<string, number>): LocalInfo
       ? evalDim(pulley.rOuter ?? pulley.r, scope, 0.06)
       : 0
   const hollow = lead?.kind === 'tube' || part.shapes.some((s) => s.op === 'subtract' && ROUND.has(s.kind)) || /\b(ring gear|annulus|ring)\b/i.test(part.name)
-  const info = { box, center: box.getCenter(new THREE.Vector3()), axis, round: !!lead, hollow, length, pitchR }
+  const center = box.getCenter(new THREE.Vector3())
+  let axisCenter = center.clone()
+  let axisLength = length
+  if (lead) {
+    const at = (s: NoteShapeSpec) => new THREE.Vector3(...evalVec3(s.position, scope, [0, 0, 0]))
+    const p0 = at(lead)
+    // every round shape turning the same way, and which of them lie on the main one's line
+    const parallel = adds.filter((s) => s === lead || (ROUND.has(s.kind) && Math.abs(shapeAxis(s, scope).dot(axis)) > 0.999))
+    const sized = parallel.map((s) => {
+      const g = buildPartGeometry([{ ...s, op: 'add' }], scope)
+      g.computeBoundingBox()
+      const b = g.boundingBox?.clone() ?? new THREE.Box3()
+      g.dispose()
+      const d = at(s).sub(p0)
+      const sz = b.getSize(new THREE.Vector3())
+      return { b, vol: Math.max(1e-12, sz.x * sz.y * sz.z), on: evalDim(s.radialCount, scope, 0) <= 1 && d.addScaledVector(axis, -d.dot(axis)).length() < 1e-3 }
+    })
+    const on = sized.filter((x) => x.on)
+    // one axis only when the shapes on that line are most of the round material: a shaft with its collars, a disc
+    // with its hub, a boss. A row of rivets or a bolt circle has no single axis, and keeps its middle
+    const dominant = on.reduce((t, x) => t + x.vol, 0) >= 0.6 * sized.reduce((t, x) => t + x.vol, 0)
+    if (dominant && on.length) {
+      const off = center.clone().sub(p0)
+      const along = off.dot(axis)
+      const lateral = off.clone().addScaledVector(axis, -along).length()
+      if (lateral > 0.05 * Math.max(size.x, size.y, size.z)) {
+        // a body with a round feature off its middle (a frame and its bearing boss, a pedestal and its bore):
+        // the feature is the axis, end to end
+        let lo = Infinity
+        let hi = -Infinity
+        for (const { b } of on) for (const x of [b.min.x, b.max.x]) for (const y of [b.min.y, b.max.y]) for (const z of [b.min.z, b.max.z]) {
+          const k = new THREE.Vector3(x, y, z).sub(p0).dot(axis)
+          lo = Math.min(lo, k)
+          hi = Math.max(hi, k)
+        }
+        axisCenter = p0.clone().addScaledVector(axis, (lo + hi) / 2)
+        axisLength = hi - lo
+      } else {
+        // round about its own middle (a shaft, a gear, a yoke on its shaft): the whole part, on that line
+        axisCenter = p0.clone().addScaledVector(axis, along)
+      }
+    }
+  }
+  const info = { box, center, axis, round: !!lead || ring, hollow, length, pitchR, axisCenter, axisLength }
   if (cache.size > 200) cache.clear()
   cache.set(key, info)
   return info
@@ -249,7 +305,13 @@ export function resolveAssembly(
     if (m.kind === 'coaxial') {
       quat = alignment(si.axis, tAxis)
       const at = Math.min(1, Math.max(0, evalDim(m.at, scope, 0.5)))
-      point = tCenter.clone().addScaledVector(tAxis, (at - 0.5) * ti.length + evalDim(m.offset, scope, 0))
+      const tMid = ti.axisCenter.clone().applyQuaternion(T.quat).add(T.pos)
+      point = tMid.addScaledVector(tAxis, (at - 0.5) * ti.axisLength + evalDim(m.offset, scope, 0))
+      // the part's own line goes on that line: its axis through its main round shape, its middle along it
+      const own = si.axisCenter.clone().addScaledVector(si.axis, si.center.clone().sub(si.axisCenter).dot(si.axis))
+      const pos = point.sub(own.applyQuaternion(quat)).add(new THREE.Vector3(...evalVec3(m.shift, scope, [0, 0, 0])))
+      done.set(p.id, { pos, quat })
+      return
     } else if (m.kind === 'mesh') {
       quat = alignment(si.axis, tAxis)
       const up = new THREE.Vector3(0, 1, 0)
@@ -404,6 +466,18 @@ export function resolveAssembly(
       const d = cb.sub(ca)
       return d.addScaledVector(ax, -d.dot(ax)).length() < 0.003
     }
+    /** whether a point lies in one of a part's cut-outs (a slot, a pocket, a bore) */
+    const inCutOut = (host: NotePartSpec, point: THREE.Vector3) => {
+      const d = done.get(host.id)!
+      return host.shapes.some((s) => {
+        if (s.op !== 'subtract') return false
+        const g = buildPartGeometry([{ ...s, op: 'add' }], scope)
+        g.computeBoundingBox()
+        const b = g.boundingBox ? worldBox(g.boundingBox, d.quat, d.pos) : null
+        g.dispose()
+        return !!b && b.containsPoint(point)
+      })
+    }
     for (const { p, box } of boxes) {
       const size = box.getSize(new THREE.Vector3()).length()
       const tol = 0.004 + size * 0.02
@@ -412,6 +486,8 @@ export function resolveAssembly(
       if (p.role === 'housing') continue
       for (const o of boxes) {
         if (o.p === p || o.p.role === 'housing' || related(p, o.p) || sameAxis(p.id, o.p.id) || localInfo(o.p, scope).hollow) continue
+        // in a cut-out made for it (a die block in a lever's slot, a roller in a yoke's): not buried
+        if (inCutOut(o.p, box.getCenter(new THREE.Vector3()))) continue
         const overlap = box.clone().intersect(o.box)
         if (overlap.isEmpty()) continue
         if (vol(overlap) / vol(box) > 0.6 && vol(box) < vol(o.box)) {
