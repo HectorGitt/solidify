@@ -397,6 +397,34 @@ export function resolveAssembly(
       const own = si.center.clone().applyQuaternion(b.quat).add(b.pos)
       point = own.addScaledVector(d, F.clone().sub(own).dot(d) + evalDim(m.offset, scope, 0))
       quat = b.quat
+    } else if (m.kind === 'keyed') {
+      // a key in the shaft's keyway: long side along the shaft, thin side radial, its middle at the shaft's surface
+      // (half in the shaft, half in the hub), worked out here so it cannot end up at the centre or lying across
+      const size = si.box.getSize(new THREE.Vector3())
+      const dims = [size.x, size.y, size.z]
+      const iLong = dims.indexOf(Math.max(...dims))
+      const rest = [0, 1, 2].filter((k) => k !== iLong)
+      const iThin = dims[rest[0]] <= dims[rest[1]] ? rest[0] : rest[1]
+      const unit = (k: number) => new THREE.Vector3(k === 0 ? 1 : 0, k === 1 ? 1 : 0, k === 2 ? 1 : 0)
+      const eL = unit(iLong)
+      const eS = unit(iThin)
+      const eT = new THREE.Vector3().crossVectors(eL, eS)
+      let up = new THREE.Vector3(0, 1, 0)
+      if (Math.abs(up.dot(tAxis)) > 0.9) up = new THREE.Vector3(0, 0, 1)
+      up.addScaledVector(tAxis, -up.dot(tAxis)).normalize()
+      const turn = evalDim(m.angle, scope, 0)
+      if (turn) up.applyAxisAngle(tAxis, (turn * Math.PI) / 180)
+      const wT = new THREE.Vector3().crossVectors(tAxis, up)
+      const world = new THREE.Matrix4().makeBasis(tAxis, up, wT)
+      const local = new THREE.Matrix4().makeBasis(eL, eS, eT)
+      quat = new THREE.Quaternion().setFromRotationMatrix(world.multiply(local.transpose()))
+      // the shaft's radius where the key sits; without one, the slimmest the shaft is across its axis
+      const tb = ti.box.getSize(new THREE.Vector3())
+      const across = [tb.x, tb.y, tb.z].filter((_, k) => Math.abs([ti.axis.x, ti.axis.y, ti.axis.z][k]) < 0.5)
+      const r = evalDim(m.r, scope, Math.min(...(across.length ? across : [tb.x, tb.y, tb.z])) / 2)
+      const at = Math.min(1, Math.max(0, evalDim(m.at, scope, 0.5)))
+      const mid = ti.axisCenter.clone().applyQuaternion(T.quat).add(T.pos)
+      point = mid.addScaledVector(tAxis, (at - 0.5) * ti.axisLength + evalDim(m.offset, scope, 0)).addScaledVector(up, r)
     } else if (m.kind === 'hooke') {
       // a universal joint: the output leaves the end of the input shaft, its axis turned by the joint angle
       const beta = (evalDim(m.angle, scope, 30) * Math.PI) / 180

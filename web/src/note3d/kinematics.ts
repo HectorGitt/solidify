@@ -238,6 +238,11 @@ export function buildKinematics(spec: Pick<NoteSceneSpec, 'parts'> | null, scope
   for (const p of parts) {
     const m = p.mount
     const t = m ? byId.get(m.target) : undefined
+    // a key is carried round by its shaft whatever role it was given
+    if (m?.kind === 'keyed' && t && moving(t) && round(t)) {
+      addLink(t.id, p.id, { kind: 'rigid' })
+      continue
+    }
     if (!m || !t || !moving(p) || !moving(t)) continue
     if (m.kind === 'coaxial' && round(t)) {
       // fixed to a turning part: a gear on its shaft, or a pin, a block, a cam carried round with it. Unless the

@@ -71,3 +71,27 @@ describe('what coaxial lines up', () => {
     expect(Math.hypot(c.x, c.y, c.z)).toBeLessThan(0.002)
   })
 })
+
+describe('a keyed mount', () => {
+  const Zr: [number, number, number] = [Math.PI / 2, 0, 0]
+  const shaft: NotePartSpec = { id: 'shaft', name: 'Shaft', role: 'moving', position: [0, 0, 0], rotation: Zr, shapes: [{ kind: 'cylinder', r: 0.02, h: 0.2 }], motion: { kind: 'rotate', axis: 'y', speed: 2 } }
+  // written lying across (its length along X), with the wrong role: the mount puts it right
+  const key: NotePartSpec = { id: 'key', name: 'Parallel key', role: 'static', shapes: [{ kind: 'box', sx: 0.05, sy: 0.008, sz: 0.01 }], mount: { kind: 'keyed', target: 'shaft', r: 0.02 } }
+  it('lays the key along the shaft, half sunk into its top', () => {
+    const box = resolveAssembly({ parts: [shaft, key] }, {}).frames.get('key')!.box
+    // the shaft runs along Z: the key's 50 mm is along Z, its 8 mm height straddles the surface at y = 20 mm
+    expect(box.max.z - box.min.z).toBeCloseTo(0.05, 4)
+    expect(box.min.y).toBeCloseTo(0.016, 4)
+    expect(box.max.y).toBeCloseTo(0.024, 4)
+    expect((box.min.x + box.max.x) / 2).toBeCloseTo(0, 4)
+  })
+  it('turns with the shaft, and passes the fixed-parts check', async () => {
+    const { buildKinematics } = await import('./kinematics')
+    const { fixedParts } = await import('@/evals/score')
+    const kin = buildKinematics({ parts: [shaft, key] }, {})
+    expect(kin.derived.has('key')).toBe(true)
+    kin.update(1)
+    expect(kin.move('key')!.pos.length()).toBeGreaterThan(0.005)
+    expect(fixedParts({ parts: [shaft, key] } as never, {}).problems).toEqual([])
+  })
+})
