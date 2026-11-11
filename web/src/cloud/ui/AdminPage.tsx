@@ -3,6 +3,8 @@ import { create } from 'zustand'
 import { startTask } from '@/ui/tasks'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { EVAL_CASES } from '@/evals/cases'
+import { CHECKS_VERSION, LOOKS, SERIOUS, repairRequest, seriousFaults } from '@/evals/faults'
+import { buildWithRepair, type BuiltReply } from '@/evals/repair'
 import { scoreBuild } from '@/evals/score'
 import { mechanismProblems } from '@/note3d/kinematics'
 import { sanitizeGeneratedSpec } from '@/note3d/sanitize'
@@ -37,6 +39,7 @@ import {
   type ReviewChecklist,
   nextTopics,
   getLibraryItem,
+  lookAtModel,
   listLibrary,
   unpublish,
   updateLibraryItem,
@@ -75,6 +78,23 @@ function scoreReply(prompt: string, reply: BuildReply, caseId?: string) {
   const { score, checks, spec } = scoreBuild(c, reply as unknown as Record<string, unknown>, reply.ms / 1000)
   // drafts keep the cleaned model, as the app builds it, not Gemini's raw answer
   return { score, checks, spec: (spec ?? reply.spec) as unknown as Record<string, unknown> }
+}
+
+/** a build for the library: sent back to Gemini with its faults named while it fails a serious check (twice at most) */
+const draftBuild = (prompt: string) => buildWithRepair((req) => adminBuild(req) as unknown as Promise<BuiltReply>, prompt)
+
+/** every part's name, the ones carried inside others included (what the picture check is told is in the model) */
+function partNames(spec: Record<string, unknown>): string[] {
+  const out: string[] = []
+  const walk = (list: unknown) => {
+    if (!Array.isArray(list)) return
+    for (const p of list as { name?: unknown; children?: unknown }[]) {
+      if (typeof p?.name === 'string') out.push(p.name.slice(0, 120))
+      walk(p?.children)
+    }
+  }
+  walk(spec.parts)
+  return out.slice(0, 60)
 }
 
 function FailedChecks({ checks }: { checks: EvalCheck[] }) {
@@ -126,15 +146,6 @@ function draftMechanismNow(d: LibraryDraft): string[] {
  * floating or buried, moving parts aren't joined or move wrongly, sums don't work). Overlapping labels, build
  * time and the like show on the card but don't call for a rebuild.
  */
-const SERIOUS: Record<string, string> = {
-  builds: 'do not build',
-  'every shape drawable': 'shapes dropped',
-  layout: 'parts out of place',
-  'moving parts connected': 'moving parts not connected',
-  'fixed parts ride along': 'a key or sleeve not riding with its part',
-  'mechanism moves right': 'move wrongly',
-  'calculations work': 'calculations broken',
-}
 /** what makes a draft worth rebuilding, by today's checks */
 function draftFaults(d: LibraryDraft, now = false): string[] {
   return (now ? draftLiveNow(d) : draftLive(d))
@@ -146,7 +157,7 @@ const liveCache = new WeakMap<object, { score: number; checks: EvalCheck[] }>()
 /** scores a draft now (slow: it builds every part's shape; hundreds of milliseconds, seconds for a ball bearing) */
 function draftLiveNow(d: LibraryDraft): { score: number; checks: EvalCheck[] } {
   const hit = liveCache.get(d.spec)
-  if (hit) return hit
+  if (hit) return withLook(d, hit)
   let out = { score: d.score, checks: d.checks ?? [] }
   try {
     const timed = (d.checks ?? []).find((x) => x.name === 'under two minutes')
@@ -157,7 +168,14 @@ function draftLiveNow(d: LibraryDraft): { score: number; checks: EvalCheck[] } {
     // keep the stored ones
   }
   liveCache.set(d.spec, out)
-  return out
+  return withLook(d, out)
+}
+/** today's checks with the draft's picture check added (made when its picture was drawn, kept with the draft) */
+function withLook(d: LibraryDraft, out: { score: number; checks: EvalCheck[] }) {
+  const look = (d.checks ?? []).find((x) => x.name === LOOKS)
+  if (!look) return out
+  const checks = [...out.checks.filter((x) => x.name !== LOOKS), look]
+  return { score: Math.round((100 * checks.filter((x) => x.ok).length) / Math.max(1, checks.length)), checks }
 }
 
 // Scoring every draft while the page first draws froze it for about ten seconds (18 drafts). The page shows the
@@ -193,7 +211,7 @@ function useLiveScores() {
 /** a draft's checks and score: today's once worked out (in the background), the stored ones until then */
 function draftLive(d: LibraryDraft): { score: number; checks: EvalCheck[] } {
   const hit = liveCache.get(d.spec)
-  if (hit) return hit
+  if (hit) return withLook(d, hit)
   if (!liveQueue.some((x) => x.spec === d.spec)) liveQueue.push(d)
   if (!liveRunning) {
     liveRunning = true
@@ -524,15 +542,22 @@ function RunNow({ onFinished }: { onFinished: () => void }) {
           const r = list[i]
           update(i, { state: 'building' })
           try {
-            const reply = await adminBuild({ prompt: r.prompt })
-            const { score, checks, spec } = scoreReply(r.prompt, reply, r.kind === 'case' ? r.id : undefined)
-            let queued = false
-            if (r.kind === 'draft' && score >= (settings?.draftMin ?? 85)) {
-              const title = typeof spec.title === 'string' && spec.title.trim() ? spec.title.trim().slice(0, 120) : r.prompt.slice(0, 120)
-              await addDraft({ title, prompt: r.prompt, topic: r.topic, spec, explanation: reply.explanation.slice(0, 4000), score, checks })
-              queued = true
+            // a test case is scored as it was built (the night's score measures the model); a draft for the
+            // library is sent back with its faults until it passes the serious checks, twice at most
+            if (r.kind === 'draft') {
+              const b = await draftBuild(r.prompt)
+              let queued = false
+              if (b.score >= (settings?.draftMin ?? 85)) {
+                const title = typeof b.spec.title === 'string' && b.spec.title.trim() ? b.spec.title.trim().slice(0, 120) : r.prompt.slice(0, 120)
+                await addDraft({ title, prompt: r.prompt, topic: r.topic, spec: b.spec, explanation: String(b.reply.explanation ?? '').slice(0, 4000), score: b.score, checks: b.checks, ...(b.repairs ? { repairs: b.repairs } : {}) })
+                queued = true
+              }
+              update(i, { state: 'done', score: b.score, checks: b.checks, seconds: Math.round(b.seconds), queued, tokensIn: b.tokensIn, tokensOut: b.tokensOut })
+              continue
             }
-            update(i, { state: 'done', score, checks, seconds: Math.round(reply.ms / 1000), queued, tokensIn: reply.usage?.input, tokensOut: reply.usage?.output })
+            const reply = await adminBuild({ prompt: r.prompt })
+            const { score, checks } = scoreReply(r.prompt, reply, r.id)
+            update(i, { state: 'done', score, checks, seconds: Math.round(reply.ms / 1000), queued: false, tokensIn: reply.usage?.input, tokensOut: reply.usage?.output })
           } catch (e) {
             update(i, { state: 'failed', score: 0, error: e instanceof ApiError ? e.message : 'The build failed.' })
           }
@@ -770,6 +795,9 @@ function DraftCard({ d, onDone, onChanged, backTo }: { d: LibraryDraft; onDone: 
   useLiveScores()
   const now = draftLive(d)
   const mech = draftMechanism(d)
+  // the gate: a draft failing a serious check is not published without saying so
+  const blocking = seriousFaults(now.checks)
+  const [confirmOverride, setConfirmOverride] = useState(false)
   // everything wrong, as plain lines: the motion check's reasons, then each other failed check
   const problems = [...mech, ...now.checks.filter((x) => !x.ok && x.name !== 'mechanism moves right' && x.name !== 'under two minutes').map((x) => (x.detail ? `${x.name}: ${x.detail}` : x.name))]
   const tick = (k: keyof ReviewChecklist, v: boolean) => {
@@ -788,12 +816,16 @@ function DraftCard({ d, onDone, onChanged, backTo }: { d: LibraryDraft; onDone: 
   const remake = async (kind: 'fix' | 'rebuild') => {
     setBusy(kind)
     try {
-      const reply =
-        kind === 'fix'
-          ? await adminBuild({ prompt: note.trim(), currentSpec: d.spec, history: d.explanation ? [{ prompt: d.prompt, response: d.explanation.slice(0, 2000) }] : [] })
-          : await adminBuild({ prompt: d.prompt })
-      const { score, checks, spec } = scoreReply(d.prompt, reply)
-      const updated = await updateDraft(d.id, { thumbnail: undefined, spec, explanation: reply.explanation.slice(0, 4000), score, checks })
+      let made: { score: number; checks: EvalCheck[]; spec: Record<string, unknown>; explanation: string; repairs: number }
+      if (kind === 'fix') {
+        const reply = await adminBuild({ prompt: note.trim(), currentSpec: d.spec, history: d.explanation ? [{ prompt: d.prompt, response: d.explanation.slice(0, 2000) }] : [] })
+        made = { ...scoreReply(d.prompt, reply), explanation: reply.explanation, repairs: d.repairs ?? 0 }
+      } else {
+        const b = await draftBuild(d.prompt)
+        made = { score: b.score, checks: b.checks, spec: b.spec, explanation: String(b.reply.explanation ?? ''), repairs: b.repairs }
+      }
+      const { score, checks, spec } = made
+      const updated = await updateDraft(d.id, { thumbnail: undefined, spec, explanation: made.explanation.slice(0, 4000), score, checks, repairs: made.repairs })
       onChanged({ ...updated, thumbnail: undefined })
       setFixing(false)
       setNote('')
@@ -805,7 +837,7 @@ function DraftCard({ d, onDone, onChanged, backTo }: { d: LibraryDraft; onDone: 
     }
   }
 
-  const act = async (kind: 'open' | 'approve' | 'reject') => {
+  const act = async (kind: 'open' | 'approve' | 'reject', override = false) => {
     setBusy(kind)
     try {
       if (kind === 'open') {
@@ -814,7 +846,12 @@ function DraftCard({ d, onDone, onChanged, backTo }: { d: LibraryDraft; onDone: 
         navigate('/create/preview')
         return
       }
-      if (kind === 'approve') await approveDraft(d.id, title.trim() && title.trim() !== d.title ? title.trim() : undefined)
+      if (kind === 'approve') {
+        // the server's gate reads the draft's stored checks: store today's first (the draft may predate them)
+        const live = draftLiveNow(d)
+        if (live.score !== d.score || JSON.stringify(live.checks) !== JSON.stringify(d.checks ?? [])) await updateDraft(d.id, { score: live.score, checks: live.checks })
+        await approveDraft(d.id, title.trim() && title.trim() !== d.title ? title.trim() : undefined, override)
+      }
       else await rejectDraft(d.id, reason.trim() || undefined)
       toast(kind === 'approve' ? `Published “${title.trim() || d.title}”.` : 'Draft rejected.')
       onDone(kind === 'approve')
@@ -846,6 +883,7 @@ function DraftCard({ d, onDone, onChanged, backTo }: { d: LibraryDraft; onDone: 
       <p className="text-[12.5px] leading-snug text-mute">{d.prompt}</p>
       <p className="text-[11.5px] text-dim">
         {d.parts} parts · drafted {dateTime(d.createdAt)}
+        {d.repairs ? ` · repaired automatically ${d.repairs === 1 ? 'once' : `${d.repairs} times`}` : ''}
       </p>
 
       {/* what is wrong: one line that opens */}
@@ -899,6 +937,39 @@ function DraftCard({ d, onDone, onChanged, backTo }: { d: LibraryDraft; onDone: 
         ) : null}
       </div>
 
+      {confirmOverride ? (
+        <div className="rounded-xl border border-warn/40 bg-warn/10 p-3 text-[12px] leading-snug" role="alertdialog" aria-label="Publish over failed checks">
+          <p className="font-medium text-warn">
+            This draft fails {blocking.length === 1 ? 'a check' : `${blocking.length} checks`} that should pass before publishing:
+          </p>
+          <ul className="mt-1 space-y-0.5 text-ink/80">
+            {blocking.map((x) => (
+              <li key={x.name}>
+                · {SERIOUS[x.name]}
+                {x.detail ? `: ${x.detail}` : ''}
+              </li>
+            ))}
+          </ul>
+          <p className="mt-1.5 text-mute">Fix or rebuild it (under More) if you can. Publishing anyway is recorded in the history.</p>
+          <div className="mt-2 flex gap-2">
+            <button
+              type="button"
+              disabled={!!busy}
+              onClick={() => {
+                setConfirmOverride(false)
+                void act('approve', true)
+              }}
+              className={`${smallBtn} border border-warn/50 text-warn hover:bg-warn/10`}
+            >
+              Publish anyway
+            </button>
+            <button type="button" onClick={() => setConfirmOverride(false)} className={`${smallBtn} border border-line-2 text-ink/90 hover:border-ink/40`}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : null}
+
       {/* two main actions; everything else under More */}
       <div className="mt-auto flex items-center gap-2 pt-1">
         <button type="button" disabled={!!busy} onClick={() => void act('open')} className={`${smallBtn} flex-1 border border-line-2 text-ink/90 hover:border-ink/40 sm:flex-none`}>
@@ -907,11 +978,11 @@ function DraftCard({ d, onDone, onChanged, backTo }: { d: LibraryDraft; onDone: 
         <button
           type="button"
           disabled={!!busy || !allChecked}
-          onClick={() => void act('approve')}
-          title={allChecked ? 'Publish it to the library' : 'Tick all three review checks first'}
-          className={`${smallBtn} flex-1 bg-accent text-accent-ink hover:opacity-90 sm:flex-none`}
+          onClick={() => (blocking.length ? setConfirmOverride(true) : void act('approve'))}
+          title={!allChecked ? 'Tick all three review checks first' : blocking.length ? 'It fails checks that should pass before publishing' : 'Publish it to the library'}
+          className={`${smallBtn} flex-1 sm:flex-none ${blocking.length ? 'border border-warn/50 text-warn hover:bg-warn/10' : 'bg-accent text-accent-ink hover:opacity-90'}`}
         >
-          {busy === 'approve' ? 'Publishing…' : 'Approve'}
+          {busy === 'approve' ? 'Publishing…' : blocking.length ? 'Publish anyway…' : 'Approve'}
         </button>
         <div className="relative ml-auto">
           <button type="button" disabled={!!busy && busy !== 'fix' && busy !== 'rebuild'} onClick={() => setMoreOpen((o) => !o)} aria-expanded={moreOpen} aria-haspopup="menu" className={`${smallBtn} border border-line-2 text-ink/90 hover:border-ink/40`}>
@@ -1093,9 +1164,8 @@ function RebuildFlagged({ flagged, onChanged }: { flagged: LibraryDraft[]; onCha
         const d = list[i]
         task.update(`“${d.title}”`, i, list.length)
         try {
-          const reply = await adminBuild({ prompt: d.prompt })
-          const { score, checks, spec } = scoreReply(d.prompt, reply)
-          const updated = await updateDraft(d.id, { thumbnail: undefined, spec, explanation: reply.explanation.slice(0, 4000), score, checks })
+          const b = await draftBuild(d.prompt)
+          const updated = await updateDraft(d.id, { thumbnail: undefined, spec: b.spec, explanation: String(b.reply.explanation ?? '').slice(0, 4000), score: b.score, checks: b.checks, repairs: b.repairs })
           const next = { ...d, ...updated, thumbnail: undefined }
           onChanged(next)
           ok++
@@ -1152,20 +1222,52 @@ export function ReviewQueue({ canDraft = true, backTo = '/admin?tab=review' }: {
   // drafts without a picture get one drawn, one at a time (each uses the page's one 3D view)
   const tried = useRef(new Set<string>())
   const [, bump] = useState(0)
-  const missing = data?.drafts.find((d) => !d.thumbnail && !tried.current.has(`${d.id}:${d.score}:${d.parts}`))
+  // ...and every draft's picture is looked at once by a vision model, as a reviewer would (a draft from before
+  // the picture check, or one changed since, is drawn afresh for it)
+  const looked = (d: LibraryDraft) => (d.checks ?? []).some((x) => x.name === LOOKS)
+  const drawKey = (d: LibraryDraft) => `${d.id}:${d.score}:${d.parts}:${d.repairs ?? 0}`
+  const missing = data?.drafts.find((d) => (!d.thumbnail || !looked(d)) && !tried.current.has(drawKey(d)))
+  const patchDraft = (id: string, patch: Partial<LibraryDraft>) => setData((cur) => (cur ? { drafts: cur.drafts.map((x) => (x.id === id ? { ...x, ...patch } : x)) } : cur))
+  /** looks at a draft's new picture, records what was seen as a check, and sends a draft that looks wrong back once */
+  const lookAt = async (d: LibraryDraft, url: string) => {
+    let seen: { ok: boolean; problems: string[] }
+    try {
+      seen = await lookAtModel({ image: url, title: d.title, prompt: d.prompt, parts: partNames(d.spec) })
+    } catch {
+      // the look could not be had (a limit, the network): the picture is kept, the look is tried another day
+      void updateDraft(d.id, { thumbnail: url }).catch(() => {})
+      return
+    }
+    const live = draftLiveNow(d)
+    const checks: EvalCheck[] = [...live.checks.filter((x) => x.name !== LOOKS), { name: LOOKS, ok: seen.ok, ...(seen.ok ? {} : { detail: seen.problems.join('; ').slice(0, 300) }) }]
+    const score = Math.round((100 * checks.filter((x) => x.ok).length) / Math.max(1, checks.length))
+    patchDraft(d.id, { thumbnail: url, checks, score })
+    await updateDraft(d.id, { thumbnail: url, checks, score }).catch(() => {})
+    if (seen.ok || (d.repairs ?? 0) >= 3) return
+    try {
+      const reply = await adminBuild({ prompt: repairRequest(checks), currentSpec: d.spec, history: d.explanation ? [{ prompt: d.prompt, response: d.explanation.slice(0, 2000) }] : [] })
+      if (!reply.spec) return
+      const made = scoreReply(d.prompt, reply)
+      const updated = await updateDraft(d.id, { spec: made.spec, explanation: reply.explanation.slice(0, 4000), score: made.score, checks: made.checks, repairs: (d.repairs ?? 0) + 1 })
+      // its picture is now out of date: it is drawn and looked at again
+      patchDraft(d.id, { ...updated, thumbnail: undefined })
+    } catch {
+      // the repair failed: the draft stays as it is, flagged by what was seen
+    }
+  }
   return (
     <>
       {missing ? (
         <ThumbnailMaker
-          key={`${missing.id}:${missing.score}:${missing.parts}`}
+          key={drawKey(missing)}
           spec={missing.spec}
           prompt={missing.prompt}
           onDone={(url) => {
-            tried.current.add(`${missing.id}:${missing.score}:${missing.parts}`)
+            tried.current.add(drawKey(missing))
             bump((n) => n + 1)
             if (!url) return
-            setData((cur) => (cur ? { drafts: cur.drafts.map((x) => (x.id === missing.id ? { ...x, thumbnail: url } : x)) } : cur))
-            void updateDraft(missing.id, { thumbnail: url }).catch(() => {})
+            patchDraft(missing.id, { thumbnail: url })
+            void lookAt(missing, url)
           }}
         />
       ) : null}
@@ -1205,7 +1307,7 @@ export function ReviewQueue({ canDraft = true, backTo = '/admin?tab=review' }: {
 
 /* ------------------------------------------------------------------ library */
 
-function LibraryRow({ item, onChanged, onRemoved }: { item: LibraryCard; onChanged: (patch: Partial<LibraryCard>) => void; onRemoved: () => void }) {
+function LibraryRow({ item, faults, onChanged, onRemoved }: { item: LibraryCard; faults?: string[]; onChanged: (patch: Partial<LibraryCard>) => void; onRemoved: () => void }) {
   const navigate = useNavigate()
   const [title, setTitle] = useState(item.title)
   const [topic, setTopic] = useState(item.topic ?? '')
@@ -1260,6 +1362,7 @@ function LibraryRow({ item, onChanged, onRemoved }: { item: LibraryCard; onChang
           {item.parts} parts · score {item.score} · published {item.publishedAt ? date(item.publishedAt) : '—'}
           {item.reviewedBy ? ` by ${item.reviewedBy.name}` : ''} · {item.prompt}
         </p>
+        {faults?.length ? <p className="text-[11.5px] leading-snug text-warn sm:col-span-2">Fails today’s checks: {faults.join('; ')}</p> : null}
       </div>
       <div className="flex flex-wrap items-center gap-2">
         {dirty ? (
@@ -1299,8 +1402,69 @@ function LibraryRow({ item, onChanged, onRemoved }: { item: LibraryCard; onChang
   )
 }
 
+/**
+ * The standing re-check of what is published: each model is scored again with today's checks, in the background,
+ * the first time this page is opened after the checks change (CHECKS_VERSION) or the model does. What fails a
+ * serious check is flagged on its row and counted at the top. Results are remembered in this browser.
+ */
+const healthKey = (item: LibraryCard) => `solidify.libcheck.${CHECKS_VERSION}.${item.id}.${item.publishedAt ?? item.createdAt}`
+function readHealth(item: LibraryCard): string[] | null {
+  try {
+    const raw = localStorage.getItem(healthKey(item))
+    return raw ? (JSON.parse(raw) as string[]) : null
+  } catch {
+    return null
+  }
+}
+function useLibraryHealth(items: LibraryCard[] | undefined) {
+  const [health, setHealth] = useState<Record<string, string[]>>({})
+  const [checking, setChecking] = useState(0)
+  useEffect(() => {
+    if (!items?.length) return
+    let stop = false
+    const known: Record<string, string[]> = {}
+    const todo: LibraryCard[] = []
+    for (const item of items) {
+      const hit = readHealth(item)
+      if (hit) known[item.id] = hit
+      else todo.push(item)
+    }
+    setHealth(known)
+    setChecking(todo.length)
+    void (async () => {
+      for (const item of todo) {
+        if (stop) return
+        try {
+          const full = await getLibraryItem(item.id)
+          // scoring builds every shape: give the page a moment first
+          await new Promise((r) => setTimeout(r, 60))
+          const { checks } = scoreBuild({ id: 'draft', prompt: full.prompt }, { spec: full.spec, explanation: full.explanation ?? '' }, 0)
+          const faults = seriousFaults(checks).map((x) => `${SERIOUS[x.name]}${x.detail ? `: ${x.detail}` : ''}`)
+          try {
+            localStorage.setItem(healthKey(item), JSON.stringify(faults))
+          } catch {
+            // no storage: checked again next time
+          }
+          if (!stop) setHealth((h) => ({ ...h, [item.id]: faults }))
+        } catch {
+          // one that cannot be fetched or scored is left for next time
+        }
+        if (!stop) setChecking((n) => Math.max(0, n - 1))
+      }
+    })()
+    return () => {
+      stop = true
+    }
+    // the list's identity changes with every edit; its ids and dates are what matter
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items?.map((x) => `${x.id}:${x.publishedAt ?? x.createdAt}`).join(',')])
+  return { health, checking }
+}
+
 function Library() {
   const { data, setData, error, reload } = useLoad(listLibrary)
+  const { health, checking } = useLibraryHealth(data?.items)
+  const failing = data?.items.filter((x) => health[x.id]?.length) ?? []
   // published before pictures were kept: draw them, one at a time
   const tried = useRef(new Set<string>())
   const [drawing, setDrawing] = useState<{ id: string; spec: Record<string, unknown>; prompt: string } | null>(null)
@@ -1335,11 +1499,31 @@ function Library() {
             <p className="mb-3 text-[12.5px] text-mute">
               {data.items.length} published, shown to everyone on the Create page, newest first. Unpublishing removes it from the page; students who already opened it keep their own copy. Models free to view can be opened by anyone, signed in or not (until you choose any, the six best scored are); the rest need sign-in.
             </p>
+            {failing.length ? (
+              <div className="mb-3 rounded-xl border border-warn/40 bg-warn/10 px-3 py-2 text-[12.5px] leading-snug" role="status">
+                <p className="font-medium text-warn">
+                  {failing.length} published model{failing.length === 1 ? ' fails' : 's fail'} today’s checks
+                </p>
+                <ul className="mt-1 space-y-0.5 text-ink/80">
+                  {failing.map((x) => (
+                    <li key={x.id}>
+                      · {x.title}: {health[x.id].join('; ')}
+                    </li>
+                  ))}
+                </ul>
+                <p className="mt-1 text-mute">Open each one to look, then unpublish it or fix it.</p>
+              </div>
+            ) : checking ? (
+              <p className="mb-3 text-[12px] text-dim">Checking {checking} published model{checking === 1 ? '' : 's'} against today’s checks…</p>
+            ) : (
+              <p className="mb-3 text-[12px] text-dim">All published models pass today’s checks.</p>
+            )}
             <ul className={`${card} divide-y divide-line`}>
               {data.items.map((item) => (
                 <LibraryRow
                   key={item.id}
                   item={item}
+                  faults={health[item.id]}
                   onChanged={(patch) => setData({ items: data.items.map((x) => (x.id === item.id ? { ...x, ...patch } : x)) })}
                   onRemoved={() => setData({ items: data.items.filter((x) => x.id !== item.id) })}
                 />
