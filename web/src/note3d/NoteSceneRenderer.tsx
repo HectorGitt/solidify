@@ -55,7 +55,7 @@ function KinClock({ kin }: { kin: Kinematics }) {
   useFrame((_, dt) => {
     const sim = useSim.getState()
     const playing = inline ? inline.playing : sim.playing
-    if (playing) t.current += Math.min(dt, 0.1) * (inline ? 1 : sim.timeScale)
+    if (playing) t.current += Math.min(dt, 0.1) * (inline ? 1 : sim.timeScale) * kin.pace
     else if (!inline && sim.stepRequest !== lastStep.current) t.current += sim.stepSize
     lastStep.current = sim.stepRequest
     kin.update(t.current)
@@ -145,7 +145,7 @@ function LocalPartNode({
     if (!g || !part.motion) return
     const playing = inline ? inline.playing : useSim.getState().playing
     if (playing) {
-      timeRef.current += dt * (inline ? 1 : useSim.getState().timeScale)
+      timeRef.current += dt * (inline ? 1 : useSim.getState().timeScale) * (kinCtx?.kin.pace ?? 1)
     }
     const t = timeRef.current
     const { kind, axis, phase = 0 } = part.motion

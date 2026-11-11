@@ -1,7 +1,7 @@
 import * as THREE from 'three'
 import { describe, expect, it } from 'vitest'
 import { resolveAssembly } from './assembly'
-import { buildKinematics, mechanismProblems } from './kinematics'
+import { buildKinematics, mechanismProblems, playbackPace } from './kinematics'
 import type { NotePartSpec } from './schema'
 
 const M = 0.004
@@ -254,5 +254,24 @@ describe('motion from the mounts', () => {
   it('parts in no mechanism are left to their own motion', () => {
     const parts: NotePartSpec[] = [{ id: 'fan', name: 'fan', role: 'moving', shapes: [{ kind: 'box', sx: 0.1, sy: 0.01, sz: 0.01 }], motion: turn(2) }]
     expect(buildKinematics({ parts }, {}).derived.size).toBe(0)
+  })
+})
+
+describe('playback pace', () => {
+  const shaft = (speed: number | string): NotePartSpec => ({ id: 's', name: 'shaft', role: 'moving', shapes: [{ kind: 'cylinder', r: 0.01, h: 0.2 }], motion: { kind: 'rotate', axis: 'y', speed } })
+  const wheel = (teeth: number): NotePartSpec => ({ id: 'g', name: 'gear', role: 'moving', shapes: [{ kind: 'gear', teeth, module: 0.003 }], mount: { kind: 'coaxial', target: 's' } })
+  it('leaves slow models in real time', () => {
+    expect(playbackPace([shaft(1.5)], {})).toBe(1)
+  })
+  it('slows a 1,200 rpm geared shaft until its teeth move under half a pitch a frame', () => {
+    const w = (1200 * 2 * Math.PI) / 60
+    const shown = w * playbackPace([shaft(w), wheel(28)], {})
+    expect(shown).toBeGreaterThan(2)
+    expect(shown / 60).toBeLessThan((0.5 * 2 * Math.PI) / 28)
+  })
+  it('a faster setting still looks faster', () => {
+    const at = (rpm: number) => ((rpm * 2 * Math.PI) / 60) * playbackPace([shaft('rpm * 2 * pi / 60'), wheel(28)], { rpm })
+    expect(at(3000)).toBeGreaterThan(at(1200))
+    expect(at(1200)).toBeGreaterThan(at(400))
   })
 })

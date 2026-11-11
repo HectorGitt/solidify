@@ -40,6 +40,39 @@ export interface Kinematics {
   update(t: number): void
   /** how a part moves now (after update), or null if it doesn't move by relation */
   move(id: string): PartMove | null
+  /** how much slower than real time the model is played so its motion can be followed (1 = real time) */
+  pace: number
+}
+
+/**
+ * How much slower than real time to play a model. Machines turn far faster than a screen can show: at 1,200 rpm
+ * a shaft makes a third of a turn between two frames, so its gear teeth and its keyway each strobe their own way
+ * and seem to turn at unrelated speeds (and a different way at every rpm). The whole model is slowed by one
+ * factor, so ratios hold: slow motion (under 2 rad/s) is left alone; faster is squeezed in under the speed at
+ * which the smallest gear's teeth (the fastest gear, as a rule) still read frame to frame, rising gently with the real speed so a faster setting
+ * still looks faster.
+ */
+export function playbackPace(parts: NotePartSpec[], scope: Record<string, number>): number {
+  let fastest = 0
+  let teeth = 0
+  const walk = (list: NotePartSpec[]) => {
+    for (const p of list) {
+      if (p.motion) {
+        const s = Math.abs(evalDim(p.motion.speed, scope, 1))
+        const w = p.motion.kind === 'rotate' ? s : s * 2 * Math.PI
+        if (Number.isFinite(w)) fastest = Math.max(fastest, w)
+      }
+      for (const sh of p.shapes) if (GEARS.has(sh.kind) && sh.op !== 'subtract') teeth = Math.min(teeth || Infinity, Math.max(6, Math.round(evalDim(sh.teeth, scope, 20))))
+      if (p.children?.length) walk(p.children)
+    }
+  }
+  walk(parts)
+  const EASY = 2
+  if (fastest <= EASY) return 1
+  // a tooth must move well under one pitch per frame (60 a second) to be seen turning the right way
+  const top = teeth ? Math.min(12, (0.8 * Math.PI * 60) / teeth) : 12
+  const shown = top <= EASY ? top : EASY + (top - EASY) * Math.min(1, Math.log(fastest / EASY) / Math.log(500 / EASY))
+  return Math.min(1, shown / fastest)
 }
 
 const lead = (part: NotePartSpec): NoteShapeSpec | undefined => {
@@ -154,7 +187,7 @@ export function mechanismProblems(spec: Pick<NoteSceneSpec, 'parts'>, scope: Rec
 }
 
 export function buildKinematics(spec: Pick<NoteSceneSpec, 'parts'> | null, scope: Record<string, number>): Kinematics {
-  const empty: Kinematics = { derived: new Set(), drivers: new Set(), update: () => {}, move: () => null }
+  const empty: Kinematics = { derived: new Set(), drivers: new Set(), update: () => {}, move: () => null, pace: 1 }
   if (!spec?.parts?.length) return empty
   const parts = spec.parts
   const byId = new Map(parts.map((p) => [p.id, p]))
@@ -398,6 +431,7 @@ export function buildKinematics(spec: Pick<NoteSceneSpec, 'parts'> | null, scope
       }
     },
     move: (id) => moves.get(id) ?? null,
+    pace: playbackPace(parts, scope),
   }
   // find every part a linkage carries along (it shows up once the mechanism has turned), then start at rest
   kin.update(0.37)

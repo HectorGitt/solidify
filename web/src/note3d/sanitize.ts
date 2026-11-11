@@ -74,6 +74,15 @@ const cleanStep = (c: NoteCalculationSpec): NoteCalculationSpec => {
   return out
 }
 
+const GREEK: Record<string, string> = { alpha: 'α', beta: 'β', gamma: 'γ', delta: 'δ', Delta: 'Δ', theta: 'θ', eta: 'η', mu: 'μ', rho: 'ρ', sigma: 'σ', tau: 'τ', phi: 'φ', omega: 'ω', Omega: 'Ω', pi: 'π', lambda: 'λ', epsilon: 'ε' }
+/** a 3D label is drawn as plain text: LaTeX written into one ("T_{in}", a Greek letter by name) is turned into what it means */
+export function plainLabel(label: string): string {
+  return label
+    .replace(/\\([A-Za-z]+)/g, (_, w: string) => GREEK[w] ?? w)
+    .replace(/[{}$]/g, '')
+    .trim()
+}
+
 export function sanitizeGeneratedSpec(raw: Record<string, unknown>, fallbackTitle: string): NoteSceneSpec | null {
   try {
     const candidate = (raw.spec ?? raw) as Record<string, unknown>
@@ -100,7 +109,7 @@ export function sanitizeGeneratedSpec(raw: Record<string, unknown>, fallbackTitl
       annotations: (Array.isArray(candidate.annotations) ? candidate.annotations : [])
         .map((a) => noteAnnotationSchema.safeParse(a))
         .filter((r) => r.success)
-        .map((r) => r.data)
+        .map((r) => ({ ...r.data, label: plainLabel(r.data.label) }))
         // an arrow needs a part to attach to or a place of its own
         .filter((a) => a.anchor || a.from)
         .slice(0, 16),
