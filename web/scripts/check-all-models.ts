@@ -4,6 +4,7 @@ import path from 'node:path'
 import { sanitizeGeneratedSpec } from '../src/note3d/sanitize'
 import { resolveAssembly } from '../src/note3d/assembly'
 import { buildKinematics, mechanismProblems, playbackPace } from '../src/note3d/kinematics'
+import { fixedParts } from '../src/evals/score'
 import { evalDim, evaluateCalculations, type NotePartSpec } from '../src/note3d/schema'
 const dir = process.argv[2]
 const tally: Record<string, string[]> = {}
@@ -27,6 +28,8 @@ for (const f of fs.readdirSync(dir).filter((x) => x.endsWith('.json')).sort()) {
   if (res.issues.length) { flags.push(`layout: ${res.issues.map((i) => i.message).join('; ')}`); note(res.issues.some((i) => i.kind === 'floating') ? 'floating parts' : 'buried parts', tag) }
   if (mech.problems.length) { flags.push(`motion: ${mech.problems.join('; ')}`); note('mechanism not driven by mounts', tag) }
   if (fastest > 12) { flags.push(`too fast to see: ${fastest.toFixed(0)} rad/s (now played at ${(fastest * playbackPace(spec.parts, scope)).toFixed(1)})`); note('real speed too fast for the screen', tag) }
+  const fx = fixedParts(spec, scope)
+  if (fx.problems.length) { flags.push(`fixed parts: ${fx.problems.join('; ')}`); note('keys/sleeves that do not ride with their part', tag) }
   const extra = motions.filter((p) => kin.derived.has(p.id))
   if (extra.length) { flags.push(`own motion ignored on ${extra.length} mounted part(s)`); note('motion written on mounted parts', tag) }
   const osc = motions.filter((p) => p.motion!.kind !== 'rotate' && !kin.derived.has(p.id))

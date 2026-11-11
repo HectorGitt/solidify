@@ -128,6 +128,7 @@ const SERIOUS: Record<string, string> = {
   'every shape drawable': 'shapes dropped',
   layout: 'parts out of place',
   'moving parts connected': 'moving parts not connected',
+  'fixed parts ride along': 'a key or sleeve not riding with its part',
   'mechanism moves right': 'move wrongly',
   'calculations work': 'calculations broken',
 }

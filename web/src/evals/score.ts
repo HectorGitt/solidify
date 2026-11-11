@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 import { resolveAnnotation, resolveAssembly, type PartFrame } from '@/note3d/assembly'
-import { mechanismProblems } from '@/note3d/kinematics'
+import { buildKinematics, mechanismProblems } from '@/note3d/kinematics'
 import { sanitizeGeneratedSpec } from '@/note3d/sanitize'
 import { evalVec3, evaluateCalculations, evaluateChart, type NoteSceneSpec } from '@/note3d/schema'
 import type { EvalCase } from './cases'
@@ -48,6 +48,34 @@ export function looseMovingParts(spec: NoteSceneSpec): { checked: boolean; probl
   for (const p of spec.parts.filter((x) => hasShaft && ON_SHAFT.test(x.name) && !NOT_ON_SHAFT.test(x.name))) {
     checked = true
     if (p.mount?.kind !== 'coaxial' && p.mount?.kind !== 'mesh') problems.push(`${p.name} is not mounted on its shaft`)
+  }
+  return { checked, problems }
+}
+
+const FIXED_IN = /\b(key|set ?screw|grub screw|dowel|circlip|rivet|split pin|cotter)\b/i
+const CARRIES = /sleeve|muff|coupling|hub|flange|collar/i
+
+/**
+ * Small parts fixed in another part (a key, a setscrew, a dowel) must ride with it, and a sleeve or hub fixed on
+ * a shaft must turn with the shaft. A key given a motion of its own spins on the spot at the shaft's centre;
+ * a coupling sleeve left still has its shafts turning inside it. `checked` is false when there are none.
+ */
+export function fixedParts(spec: NoteSceneSpec, scope: Record<string, number>): { checked: boolean; problems: string[] } {
+  const problems: string[] = []
+  let checked = false
+  const kin = buildKinematics(spec, scope)
+  const turns = (id: string) => kin.drivers.has(id) || kin.derived.has(id)
+  for (const p of spec.parts) {
+    if (FIXED_IN.test(p.name)) {
+      checked = true
+      if (p.motion) problems.push(`${p.name} has a motion of its own: fix it in the part it sits in (its children)`)
+    } else if (CARRIES.test(p.name) && !/shaft|bearing/i.test(p.name) && !turns(p.id) && !p.motion) {
+      const inside = spec.parts.filter((q) => q.id !== p.id && turns(q.id) && (q.mount?.target === p.id || p.mount?.target === q.id))
+      if (inside.length) {
+        checked = true
+        problems.push(`${p.name} stands still while ${inside[0].name} turns in it`)
+      }
+    }
   }
   return { checked, problems }
 }
@@ -113,6 +141,8 @@ export function scoreBuild(c: EvalCase, reply: Record<string, unknown>, seconds:
 
   const loose = looseMovingParts(spec)
   if (loose.checked) add('moving parts connected', loose.problems.length === 0, loose.problems.join('; ') || undefined)
+  const fixed = fixedParts(spec, scope)
+  if (fixed.checked) add('fixed parts ride along', fixed.problems.length === 0, fixed.problems.join('; ') || undefined)
   const mech = mechanismProblems(spec, scope, `${c.prompt} ${spec.title ?? ''}`)
   if (mech.checked) add('mechanism moves right', mech.problems.length === 0, mech.problems.join('; ') || undefined)
 
