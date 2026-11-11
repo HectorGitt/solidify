@@ -158,7 +158,10 @@ export function drawPanel(g: CanvasRenderingContext2D, m: PanelModel): { hits: H
         g.stroke()
       }
       g.fillStyle = b.primary || b.on ? C.accentInk : C.ink
-      g.font = `600 22px ${SANS}`
+      // a long label ("Cut: Through the middle") is set smaller before it is cut short
+      let px = 22
+      g.font = `600 ${px}px ${SANS}`
+      while (px > 16 && g.measureText(b.label).width > bw - 16) g.font = `600 ${(px -= 1)}px ${SANS}`
       g.textAlign = 'center'
       g.textBaseline = 'middle'
       g.fillText(fit(g, b.label, bw - 16), x + bw / 2, y + 36)

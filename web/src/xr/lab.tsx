@@ -221,6 +221,7 @@ function Lab({ scene }: { scene: SceneDef }) {
   const measure = () => {
     const parts = useParts.getState().parts
     const boxes: THREE.Box3[] = []
+    const owners: THREE.Object3D[] = []
     for (const p of Object.values(parts)) {
       if (p.parentId && parts[p.parentId]) continue
       const o = partObjects.get(p.id)
@@ -235,15 +236,26 @@ function Lab({ scene }: { scene: SceneDef }) {
         if (!geo.boundingBox) geo.computeBoundingBox()
         b.union(g.copy(geo.boundingBox!).applyMatrix4(m.matrixWorld))
       })
-      if (!b.isEmpty()) boxes.push(b)
+      if (!b.isEmpty()) {
+        boxes.push(b)
+        owners.push(o)
+      }
     }
-    const tallest = Math.max(0, ...boxes.map((b) => b.max.y - b.min.y))
+    // ground and scenery don't count either: a part much wider than it is tall, and far wider than the biggest
+    // bulky part, is the field round a tractor (a configurator's 68 m of crop made the tractor a speck on the
+    // horizon). A gearbox's base plate is about as wide as the gears on it, so it stays.
+    const foot = (b: THREE.Box3) => Math.max(b.max.x - b.min.x, b.max.z - b.min.z)
+    const flat = (b: THREE.Box3) => b.max.y - b.min.y < 0.15 * foot(b)
+    const bulky = Math.max(0, ...boxes.filter((b) => !flat(b)).map(foot))
+    const scenery = (b: THREE.Box3) => bulky > 0 && flat(b) && foot(b) > 3 * bulky
+    const machine = boxes.filter((b) => !scenery(b))
+    const tallest = Math.max(0, ...machine.map((b) => b.max.y - b.min.y))
     const box = new THREE.Box3()
-    for (const b of boxes) if (b.max.y - b.min.y > tallest * 0.05) box.union(b)
+    for (const b of machine) if (b.max.y - b.min.y > tallest * 0.05) box.union(b)
     if (box.isEmpty()) return null
     const s = box.getSize(new THREE.Vector3())
     const c = box.getCenter(new THREE.Vector3())
-    return { size: Math.max(s.x, s.y, s.z), foot: Math.max(s.x, s.z), x: c.x, z: c.z }
+    return { size: Math.max(s.x, s.y, s.z), foot: Math.max(s.x, s.z), x: c.x, z: c.z, scenery: owners.filter((_, i) => scenery(boxes[i])) }
   }
   const [measured, setMeasured] = useState<ReturnType<typeof measure>>(null)
   const tries = useRef(0)
@@ -253,6 +265,15 @@ function Lab({ scene }: { scene: SceneDef }) {
     const m = measure()
     if (m) setMeasured(m)
   })
+  // the scenery is not drawn in the headset: on the real table (or the real floor) a 68 m field would cover the
+  // room; the machine is the subject. It comes back when the session ends.
+  useEffect(() => {
+    const hidden = (measured?.scenery ?? []).filter((o) => o.visible)
+    for (const o of hidden) o.visible = false
+    return () => {
+      for (const o of hidden) o.visible = true
+    }
+  }, [measured])
   const fit = useMemo(() => measured ?? { size: Math.max(scene.extent, 0.05), foot: Math.max(scene.extent, 0.05), x: scene.camera.target[0], z: scene.camera.target[2] }, [measured, scene])
   // everything at its real size: on the table if it fits there, standing on the floor if not (a tractor);
   // a big machine can be made a table model to turn in the hands
