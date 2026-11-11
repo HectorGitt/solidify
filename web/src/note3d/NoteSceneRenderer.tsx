@@ -11,6 +11,7 @@ import { Part, PartMesh } from '@/render/Part'
 import { useView } from '@/render/view'
 import { GEARS, ROUND, labelPoint, resolveAnnotation, resolveAssembly, type Placement } from './assembly'
 import { buildKinematics, type Kinematics } from './kinematics'
+import { HookeJoint, JOINT_PIECE, hookeJoints } from './HookeJoint'
 
 /** how the model's mechanism moves now: one clock for every part, worked out from the mounts */
 const KinCtx = createContext<{ kin: Kinematics } | null>(null)
@@ -570,6 +571,7 @@ export function NoteSceneViewport({
     [spec.annotations, assembly, scope],
   )
   const labelSet = useMemo(() => new Set<THREE.Sprite>(), [])
+  const joints = useMemo(() => hookeJoints(spec.parts), [spec.parts])
   const projMode = projectionOverride ?? spec.showProjectionPlanes ?? 'none'
   const extent = spec.extent ?? 0.35
 
@@ -579,8 +581,16 @@ export function NoteSceneViewport({
       <KinClock kin={kinValue.kin} />
       <LocalClippingEnabler />
       <group>
-        {spec.parts.map((part) => (
-          <LocalPartNode key={part.id} part={part} params={scope} clipPlane={clipPlane} placed={part.mount ? assembly.placements.get(part.id) : undefined} />
+        {spec.parts
+          // the app draws a universal joint itself (HookeJoint): yokes and a cross the model drew are left out
+          .filter((part) => !(joints.length && JOINT_PIECE.test(part.name) && !/shaft/i.test(part.name) && part.mount?.kind !== 'hooke'))
+          // ...and a joined shaft keeps only its round shapes (a model that drew its yoke's ears as boxes on the shaft)
+          .map((part) => (joints.some((j) => j.input === part.id || j.output === part.id) ? { ...part, shapes: part.shapes.filter((s) => s.op !== 'subtract' && s.kind !== 'box') } : part))
+          .map((part) => (
+            <LocalPartNode key={part.id} part={part} params={scope} clipPlane={clipPlane} placed={part.mount ? assembly.placements.get(part.id) : undefined} />
+          ))}
+        {joints.map((j) => (
+          <HookeJoint key={j.output} joint={j} frames={assembly.frames} />
         ))}
         <LabelLayoutCtx.Provider value={labelSet}>
           {annotations.map((ann) => (
