@@ -273,5 +273,7 @@ describe('playback pace', () => {
     const at = (rpm: number) => ((rpm * 2 * Math.PI) / 60) * playbackPace([shaft('rpm * 2 * pi / 60'), wheel(28)], { rpm })
     expect(at(3000)).toBeGreaterThan(at(1200))
     expect(at(1200)).toBeGreaterThan(at(400))
+    // clearly so: 3,000 rpm is shown at least half as fast again as 400 rpm
+    expect(at(3000) / at(400)).toBeGreaterThan(1.5)
   })
 })
