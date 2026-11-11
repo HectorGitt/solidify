@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js'
 import {
   box,
   csg,
@@ -32,13 +33,23 @@ const standUp = (g: THREE.BufferGeometry) => xform(g, STAND_UP)
 function buildSingleShapeGeometry(
   spec: NoteShapeSpec,
   params: Record<string, number>,
+  /** round a box's edges (only in a part with no cuts: a rounded box does not combine reliably) */
+  roundBoxes = false,
 ): THREE.BufferGeometry {
   switch (spec.kind) {
     case 'box': {
       const sx = Math.max(0.002, evalDim(spec.sx, params, 0.08))
       const sy = Math.max(0.002, evalDim(spec.sy, params, 0.08))
       const sz = Math.max(0.002, evalDim(spec.sz, params, 0.08))
-      return box(sx, sy, sz)
+      // edges rounded a little, as the lab rigs' castings and plates are: a sharp-edged slab catches no light on
+      // its edges and reads as flat cardboard
+      const r = Math.min(0.003, 0.08 * Math.min(sx, sy, sz))
+      if (!roundBoxes || r < 0.0004) return box(sx, sy, sz)
+      const g = new RoundedBoxGeometry(sx, sy, sz, 2, r)
+      g.deleteAttribute('uv')
+      const out = g.index ? g.toNonIndexed() : g
+      out.computeBoundingBox()
+      return out
     }
     case 'cylinder': {
       const rTop = evalDim(spec.rTop ?? spec.r, params, 0.04)
@@ -240,10 +251,11 @@ export function buildPartGeometry(
   if (!Array.isArray(shapes) || !shapes.length) return box(0.05, 0.05, 0.05)
 
   const expanded: { op: 'add' | 'subtract' | 'intersect'; geom: THREE.BufferGeometry; matrix: THREE.Matrix4 }[] = []
+  const uncut = shapes.every((s) => !s || typeof s !== 'object' || (s.op ?? 'add') === 'add')
 
   for (const s of shapes) {
     if (!s || typeof s !== 'object') continue
-    const baseGeom = buildSingleShapeGeometry(s, params)
+    const baseGeom = buildSingleShapeGeometry(s, params, uncut)
     const pos = evalVec3(s.position, params, [0, 0, 0])
     const rot = evalVec3(s.rotation, params, [0, 0, 0])
     const op = s.op ?? 'add'
