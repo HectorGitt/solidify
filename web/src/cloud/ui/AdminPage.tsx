@@ -39,6 +39,7 @@ import {
   type ReviewChecklist,
   nextTopics,
   getLibraryItem,
+  getReports,
   lookAtModel,
   listLibrary,
   unpublish,
@@ -1309,7 +1310,20 @@ export function ReviewQueue({ canDraft = true, backTo = '/admin?tab=review' }: {
 
 /* ------------------------------------------------------------------ library */
 
-function LibraryRow({ item, faults, onChanged, onRemoved }: { item: LibraryCard; faults?: string[]; onChanged: (patch: Partial<LibraryCard>) => void; onRemoved: () => void }) {
+const REPORT_WORDS: Record<string, string> = { floating: 'floating', hitting: 'parts through each other', motion: 'moves wrongly', numbers: 'numbers', labels: 'labels', other: 'other' }
+function LibraryRow({
+  item,
+  faults,
+  reported,
+  onChanged,
+  onRemoved,
+}: {
+  item: LibraryCard
+  faults?: string[]
+  reported?: { reports: number; notes: { at: number; kinds: string[]; note?: string }[] }
+  onChanged: (patch: Partial<LibraryCard>) => void
+  onRemoved: () => void
+}) {
   const navigate = useNavigate()
   const [title, setTitle] = useState(item.title)
   const [topic, setTopic] = useState(item.topic ?? '')
@@ -1365,6 +1379,17 @@ function LibraryRow({ item, faults, onChanged, onRemoved }: { item: LibraryCard;
           {item.reviewedBy ? ` by ${item.reviewedBy.name}` : ''} · {item.prompt}
         </p>
         {faults?.length ? <p className="text-[11.5px] leading-snug text-warn sm:col-span-2">Fails today’s checks: {faults.join('; ')}</p> : null}
+        {reported?.reports ? (
+          <p className="text-[11.5px] leading-snug text-warn sm:col-span-2">
+            Reported by students {reported.reports === 1 ? 'once' : `${reported.reports} times`}
+            {reported.notes.length
+              ? `: ${reported.notes
+                  .slice(0, 3)
+                  .map((n) => `${n.kinds.map((k) => REPORT_WORDS[k] ?? k).join(', ')}${n.note ? ` (“${n.note}”)` : ''}`)
+                  .join('; ')}`
+              : ''}
+          </p>
+        ) : null}
       </div>
       <div className="flex flex-wrap items-center gap-2">
         {dirty ? (
@@ -1466,6 +1491,13 @@ function useLibraryHealth(items: LibraryCard[] | undefined) {
 function Library() {
   const { data, setData, error, reload } = useLoad(listLibrary)
   const { health, checking } = useLibraryHealth(data?.items)
+  // what students reported on each model
+  const [reports, setReports] = useState<Record<string, { reports: number; notes: { at: number; kinds: string[]; note?: string }[] }>>({})
+  useEffect(() => {
+    getReports()
+      .then((r) => setReports(r.library))
+      .catch(() => setReports({}))
+  }, [])
   const failing = data?.items.filter((x) => health[x.id]?.length) ?? []
   // published before pictures were kept: draw them, one at a time
   const tried = useRef(new Set<string>())
@@ -1526,6 +1558,7 @@ function Library() {
                   key={item.id}
                   item={item}
                   faults={health[item.id]}
+                  reported={reports[item.id]}
                   onChanged={(patch) => setData({ items: data.items.map((x) => (x.id === item.id ? { ...x, ...patch } : x)) })}
                   onRemoved={() => setData({ items: data.items.filter((x) => x.id !== item.id) })}
                 />

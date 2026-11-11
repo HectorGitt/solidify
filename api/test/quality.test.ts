@@ -384,3 +384,28 @@ describe('people and roles', () => {
     expect((await req('GET', '/v1/library/drafts', undefined, { Authorization: 'Bearer user:rita:Rita' })).status).toBe(200)
   })
 })
+
+describe('students reporting a model that looks wrong', () => {
+  const boss = { Authorization: 'Bearer user:boss:Boss' }
+  const model = { title: 'Worm gear set', prompt: 'A worm and worm wheel, 30 : 1', topic: 'gears', spec: { title: 'Worm gear set', parts: [{ id: 'worm' }] }, score: 100, checks: [] }
+  it('counts a report on the library model it came from, keeps the note for reviewers only', async () => {
+    const { id } = (await (await req('POST', '/v1/library/drafts', model, { 'x-eval-token': TOKEN })).json()) as { id: string }
+    await req('POST', `/v1/library/drafts/${id}/approve`, {}, boss)
+    expect((await req('POST', '/v1/reports', { title: 'Worm gear set', kinds: ['floating'] })).status).toBe(401)
+    const res = await req('POST', '/v1/reports', { title: 'Worm gear set', prompt: model.prompt, kinds: ['floating', 'hitting'], note: 'the wheel hangs in the air' }, asUser('sam'))
+    expect(res.status).toBe(201)
+    expect(((await res.json()) as { library: boolean }).library).toBe(true)
+    // a report on a student's own model is kept, but counts against no library model
+    expect(((await (await req('POST', '/v1/reports', { title: 'My crane', prompt: 'a crane', kinds: ['other'] }, asUser('sam'))).json()) as { library: boolean }).library).toBe(false)
+    expect((await req('GET', '/v1/admin/reports', undefined, asUser('sam'))).status).toBe(403)
+    const seen = (await (await req('GET', '/v1/admin/reports', undefined, boss)).json()) as { library: Record<string, { reports: number; notes: { note?: string }[] }>; recent: unknown[] }
+    expect(seen.library[id].reports).toBe(1)
+    expect(seen.library[id].notes[0].note).toBe('the wheel hangs in the air')
+    expect(seen.recent).toHaveLength(2)
+    // students opening the model see none of it
+    const full = (await (await req('GET', `/v1/library/${id}`, undefined, asUser('sam'))).json()) as Record<string, unknown>
+    expect(full.reports).toBeUndefined()
+    expect(full.reportNotes).toBeUndefined()
+    expect((await req('POST', '/v1/reports', { title: 'x', kinds: ['nonsense'] }, asUser('sam'))).status).toBe(400)
+  })
+})

@@ -42,6 +42,7 @@ import { updateDraft } from '../admin'
 import { scoreBuild } from '@/evals/score'
 import { mechanismProblems } from '@/note3d/kinematics'
 import { ghostBtn, inputCls, primaryBtn } from './Modal'
+import { ReportProblem } from './ReportProblem'
 import { PartInspector } from './PartInspector'
 import { WorkspaceBodySkeleton } from '@/ui/Skeleton'
 import { dismissTask, startTask } from '@/ui/tasks'
@@ -1030,6 +1031,8 @@ export default function ModelLab() {
         <div className="ml-auto flex items-center gap-2">
           {/* on a headset: the model (or the question's setup) on the student's table, with its sizes and readings beside it */}
           {spec && !live ? <HeadsetButton what={spec.question ? 'this question' : 'this model'} className="px-3 py-1.5" /> : null}
+          {/* something looks wrong: a student tells the review team (a library model's report is counted on it) */}
+          {spec && !live && authStatus === 'signed-in' && !viewing?.draftId ? <ReportProblem title={spec.title ?? 'Model'} prompt={turns[0]?.prompt ?? viewing?.prompt} /> : null}
           {/* the model as an open .slfy file, at its current sizes: anyone can open it (Create → Open a model file) */}
           {spec && !live ? (
             <button type="button" onClick={() => downloadSlfy(spec, params)} title="Download as a model file (.slfy) that anyone can open" aria-label="Download as a model file" className={`${ghostBtn} inline-flex items-center gap-1.5 px-3 py-1.5 text-[12.5px]`}>
