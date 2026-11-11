@@ -351,26 +351,46 @@ export function buildKinematics(spec: Pick<NoteSceneSpec, 'parts'> | null, scope
   const moves = new Map<string, PartMove>()
   const ident = () => ({ quat: new THREE.Quaternion(), pos: new THREE.Vector3(), spin: 0 })
 
+  /** every turning part's angle, from the drivers' (given by `drive`) down the chain of mounts */
+  let swing: number | undefined
+  const chain = (drive: (s: { w: number; phase: number }) => number) => {
+    angles.clear()
+    for (const o of order) {
+      let th = 0
+      if (!o.from) {
+        th = drive(speed.get(o.id)!)
+      } else {
+        const a = angles.get(o.from)!
+        const l = o.link!
+        if (l.kind === 'rigid') th = a
+        else if (l.kind === 'gear') th = l.k * a + l.phase
+        else if (l.forward) th = near(Math.atan2(Math.sin(a), Math.cos(a) * Math.cos(l.beta)), a)
+        else th = near(Math.atan2(Math.sin(a) * Math.cos(l.beta), Math.cos(a)), a)
+      }
+      angles.set(o.id, th)
+    }
+  }
   const kin: Kinematics = {
     derived,
     drivers: new Set(order.filter((o) => !o.from).map((o) => o.id)),
     update(t: number) {
-      angles.clear()
-      for (const o of order) {
-        let th = 0
-        if (!o.from) {
-          const s = speed.get(o.id)!
-          th = s.w * t + s.phase
-        } else {
-          const a = angles.get(o.from)!
-          const l = o.link!
-          if (l.kind === 'rigid') th = a
-          else if (l.kind === 'gear') th = l.k * a + l.phase
-          else if (l.forward) th = near(Math.atan2(Math.sin(a), Math.cos(a) * Math.cos(l.beta)), a)
-          else th = near(Math.atan2(Math.sin(a) * Math.cos(l.beta), Math.cos(a)), a)
+      // a pinion on a rack cannot turn one way for ever (the rack would run out of the model): the driver
+      // swings instead, at its own speed through the middle, far enough for the rack to use most of its length
+      if (swing === undefined) {
+        swing = 0
+        if (racks.size) {
+          chain(() => 1)
+          let lim = Infinity
+          for (const [id, r] of racks) {
+            const g = Math.abs(angles.get(r.gear) ?? 0)
+            const len = Math.max(...info.get(id)!.box.getSize(new THREE.Vector3()).toArray())
+            if (g > 1e-9 && r.r > 1e-9) lim = Math.min(lim, (0.32 * len) / (r.r * g))
+          }
+          if (Number.isFinite(lim)) swing = lim
         }
-        angles.set(o.id, th)
       }
+      const A = swing
+      chain((s) => (A ? A * Math.sin((s.w * t) / A) + s.phase : s.w * t + s.phase))
       moves.clear()
       for (const id of spinning) {
         const m = ident()
