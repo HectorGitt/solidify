@@ -105,6 +105,9 @@ function LocalPartNode({
     if (part.motion?.kind !== 'rotate' && !derived) return null
     const adds = part.shapes.filter((sh) => sh.op !== 'subtract')
     const lead = adds.find((sh) => GEARS.has(sh.kind)) ?? adds.find((sh) => ROUND.has(sh.kind))
+    // a ring of shapes (a bearing's balls) turns about the ring's own axis, the part's Y through its origin;
+    // without this the balls stood still while their cage went round, its pockets sweeping through them
+    if (!lead && adds.some((sh) => evalDim(sh.radialCount, params, 0) > 1)) return { axis: new THREE.Vector3(0, 1, 0), pivot: new THREE.Vector3() }
     if (!lead) return null
     const r = evalVec3(lead.rotation, params, [0, 0, 0])
     const axis = new THREE.Vector3(0, 1, 0).applyEuler(new THREE.Euler(r[0], r[1], r[2], 'XYZ')).normalize()

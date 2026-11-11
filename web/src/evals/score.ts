@@ -1,6 +1,8 @@
 import * as THREE from 'three'
 import { labelPoint, resolveAnnotation, resolveAssembly, type PartFrame } from '@/note3d/assembly'
 import { annotationProblems } from '@/note3d/annotationCheck'
+import { motionProblems } from '@/note3d/motionCheck'
+import { MOVES } from './faults'
 import { heldProblems } from '@/note3d/held'
 import { buildKinematics, mechanismProblems } from '@/note3d/kinematics'
 import { sanitizeGeneratedSpec } from '@/note3d/sanitize'
@@ -124,7 +126,13 @@ export function overlappingLabels(spec: NoteSceneSpec, frames: Map<string, PartF
  * cleans it, laid out by the assembly solver, and its calculations and charts worked out from the default
  * sizes. Score = the share of checks that pass, 0 to 100.
  */
-export function scoreBuild(c: EvalCase, reply: Record<string, unknown>, seconds: number): { score: number; checks: EvalCheck[]; spec: NoteSceneSpec | null } {
+export function scoreBuild(
+  c: EvalCase,
+  reply: Record<string, unknown>,
+  seconds: number,
+  /** motion: run the machine through a cycle (a second or more on a big model: off where scoring must be quick) */
+  opts: { motion?: boolean } = {},
+): { score: number; checks: EvalCheck[]; spec: NoteSceneSpec | null } {
   const checks: EvalCheck[] = []
   const add = (name: string, ok: boolean, detail?: string) => checks.push({ name, ok, ...(detail ? { detail: detail.slice(0, 300) } : {}) })
   // nothing to build: judged as a written answer
@@ -160,6 +168,11 @@ export function scoreBuild(c: EvalCase, reply: Record<string, unknown>, seconds:
   if ((spec.annotations ?? []).some((a) => a.kind === 'force' || a.kind === 'moment')) add('loads act right', arrows.length === 0, arrows.join('; ') || undefined)
   const held = heldProblems(spec, scope)
   if (spec.parts.length > 1) add('every part held', held.length === 0, held.join('; ') || undefined)
+  if (opts.motion !== false) {
+    const moving = motionProblems(spec, scope)
+    if (spec.parts.some((p) => p.motion || p.mount?.kind === 'mesh' || p.mount?.kind === 'hooke' || p.mount?.kind === 'slider' || p.mount?.kind === 'lever' || p.mount?.kind === 'follower' || p.mount?.kind === 'link'))
+      add(MOVES, moving.length === 0, moving.join('; ') || undefined)
+  }
   const fixed = fixedParts(spec, scope)
   if (fixed.checked) add('fixed parts ride along', fixed.problems.length === 0, fixed.problems.join('; ') || undefined)
   const mech = mechanismProblems(spec, scope, `${c.prompt} ${spec.title ?? ''}`)

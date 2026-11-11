@@ -16,6 +16,7 @@ export const SERIOUS: Record<string, string> = {
   'mechanism moves right': 'move wrongly',
   'calculations work': 'calculations broken',
   'loads act right': 'a force or moment drawn wrongly',
+  'moves freely': 'parts hit each other or come apart as it moves',
   'looks right': 'looks wrong in its picture',
 }
 
@@ -23,7 +24,10 @@ export const SERIOUS: Record<string, string> = {
  * Bump when a check is added or changed: stored models are then re-checked (the admin Library tab re-scores
  * each published model once per version; the review queue always scores drafts afresh).
  */
-export const CHECKS_VERSION = 5
+export const CHECKS_VERSION = 6
+
+/** the motion check's name: worked out when a model is built, kept with the draft (too slow to redo on every page load) */
+export const MOVES = 'moves freely'
 
 /** the picture check's name: made by a vision model looking at the drawn model, kept with the draft's checks */
 export const LOOKS = 'looks right'
@@ -47,6 +51,7 @@ export function repairRequest(checks: EvalCheck[]): string {
     '- A key, setscrew, pin or dowel: put it in the "children" of the part it is fixed in, with no mount and no motion. A sleeve, hub or coupling on a turning shaft: mount them coaxial and give the motion to one of them only.',
     '- A part that moves wrongly: only the driving part has a motion; everything else moves from its mount (mesh, coaxial, slider, link, lever, follower, hooke).',
     '- A buried part: move it out of the solid it is inside, or cut the pocket, slot or bore it sits in.',
+    '- Parts that hit each other or come apart as it moves: a part that turns freely on a pin (a slider in a slot) is a round roller, not a block fixed to the crank; balls and their cage go round together (mount both on the same part); give moving parts clearance (slots and bores a little wider than what runs in them); keep joined parts joined by their mounts, not by coordinates.',
     '- A force or moment drawn wrongly: attach each arrow to a face of the part it acts on (not its centre), with "direction" the way it acts: an axial or thrust force along the shaft or gear axis, a radial force across it, a tangential force across both the axis and the radius at that face, a reaction against the load. A bending moment needs "direction": the axis it bends about, across the member (a beam along X bends about Z); a torque turns about the shaft’s own axis.',
   ].join('\n')
 }
