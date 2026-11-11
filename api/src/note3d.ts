@@ -43,7 +43,31 @@ export interface NoteVisionModel {
   streamCreate3D(req: Create3dRequest, signal?: AbortSignal, onUsage?: (u: ModelUsage) => void): AsyncIterable<string>
   /** new requests for the model library, none of them already in `avoid` */
   suggestTopics(count: number, avoid: string[]): Promise<{ topic: string; prompt: string }[]>
+  /** looks at a picture of a built model, as a reviewer would, and says what is visibly wrong with it */
+  lookAtModel(req: LookRequest): Promise<{ ok: boolean; problems: string[]; usage?: ModelUsage }>
 }
+
+/** a drawn model to look at: its picture, what it is meant to be, and its parts by name */
+export const lookRequest = z.object({
+  image: z.string().max(1_500_000).regex(/^data:image\/(jpeg|webp|png);base64,/),
+  title: z.string().trim().max(200),
+  prompt: z.string().trim().max(2000).optional(),
+  parts: z.array(z.string().max(120)).max(60).optional(),
+})
+export type LookRequest = z.infer<typeof lookRequest>
+
+const LOOK_PROMPT = `You check 3D engineering models for Solidify, an engineering-education app. You are shown a picture of a model that was built automatically, with what it is meant to be and the names of its parts. Look at it as an engineering lecturer would before showing it to a class, and say only what is plainly, visibly wrong with how it is put together:
+
+- a part hanging in mid-air, or a group of parts not joined to the rest (a gear and shaft above a base with nothing holding them; a bearing block with no pedestal under it)
+- a part in the wrong place for what it is (a worm wheel outside its gearbox; a key at the centre of a shaft; balls not between their races; a piston beside its cylinder)
+- parts that pass through each other where they should not (gear teeth cutting deep into each other; a lever through a ram), or that should touch and do not (gears that do not reach each other; a shaft above its bearing)
+- a part lying the wrong way (a rack along the shaft; a ring of balls on its side)
+- a main part of the named machine plainly missing
+
+Do not report: style, colours, proportions, level of detail, simplified shapes, labels or arrows, a housing shown cut open (cut faces are hatched; parts inside a cut-away are meant to show, and in a half section the parts that are not cut stand clear of the cut half), anything you cannot actually see in the picture, or anything you are unsure of. A correct model has no problems: say so. Never invent a fault to have something to say.
+
+Return JSON only: { "ok": true | false, "problems": [ "<one short plain sentence naming the part and what is wrong>" ] }. At most 4 problems, the worst first. "ok" is false only if there is at least one problem.`
+
 
 const TOPICS_PROMPT = `You plan the model library of Solidify, an engineering-education app where each request is built as an interactive 3D model with its engineering worked out (sizes on sliders, calculations, graphs, loads as arrows).
 
@@ -189,6 +213,20 @@ export class GeminiNoteVision implements NoteVisionModel {
       .map((t) => ({ topic: String(t.topic).trim().slice(0, 60), prompt: String(t.prompt).trim().slice(0, 400) }))
   }
 
+  async lookAtModel(req: LookRequest) {
+    const res = await this.ai.models.generateContent({
+      model: this.model,
+      contents: [{ role: 'user', parts: [...imagePart(req.image), { text: `Model: ${req.title}\n${req.prompt ? `Asked for: ${req.prompt}\n` : ''}Parts: ${(req.parts ?? []).join('; ') || '(not given)'}` }] }],
+      config: { systemInstruction: LOOK_PROMPT, responseMimeType: 'application/json', temperature: 0.1, maxOutputTokens: 2048 },
+    })
+    const parsed = parseModelJson<{ ok?: unknown; problems?: unknown }>(res.text)
+    const problems = (Array.isArray(parsed.problems) ? parsed.problems : [])
+      .filter((x): x is string => typeof x === 'string' && x.trim().length > 3)
+      .map((x) => x.trim().slice(0, 200))
+      .slice(0, 4)
+    return { ok: problems.length === 0, problems, usage: usageOf(res.usageMetadata) }
+  }
+
   async analyzePage(req: NoteAnalyzeRequest): Promise<{ figures: unknown[] }> {
     const parsed = await this.json<{ figures?: unknown[] }>(
       NOTE_SYSTEM_PROMPT,
@@ -249,6 +287,11 @@ export class FakeNoteVision implements NoteVisionModel {
 
   async refineSpec(req: NoteRefineRequest): Promise<{ spec: Record<string, unknown> }> {
     return { spec: { ...req.currentSpec, refinedWith: req.instruction } }
+  }
+
+  /** tests: a model titled "floating ..." is seen to have a floating part; anything else looks right */
+  async lookAtModel(req: LookRequest) {
+    return /floating/i.test(req.title) ? { ok: false, problems: ['The gear is hanging in mid-air above the base.'] } : { ok: true, problems: [] }
   }
 
   /** a small working model: a shaft with a gear, so tests can build, change and stream it */
