@@ -48,7 +48,8 @@ describe('scoring a build', () => {
     expect(Object.keys(failed).sort()).toEqual(['every shape drawable', 'loads as attached arrows', 'no test rig', 'right answer', 'under two minutes'].sort())
     expect(failed['right answer']).toMatch(/expected 10/)
     expect(failed['no test rig']).toMatch(/dial indicator/i)
-    expect(score).toBeLessThan(60)
+    // five of its checks fail; the rest (now including "every part held") pass
+    expect(score).toBeLessThan(65)
   })
 
   it('scores an unusable answer zero', () => {

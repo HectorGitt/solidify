@@ -1,5 +1,6 @@
 import * as THREE from 'three'
 import { resolveAnnotation, resolveAssembly, type PartFrame } from '@/note3d/assembly'
+import { heldProblems } from '@/note3d/held'
 import { buildKinematics, mechanismProblems } from '@/note3d/kinematics'
 import { sanitizeGeneratedSpec } from '@/note3d/sanitize'
 import { evalVec3, evaluateCalculations, evaluateChart, type NoteSceneSpec } from '@/note3d/schema'
@@ -69,6 +70,7 @@ export function fixedParts(spec: NoteSceneSpec, scope: Record<string, number>): 
     if (FIXED_IN.test(p.name)) {
       checked = true
       if (p.motion) problems.push(`${p.name} has a motion of its own: fix it in the part it sits in (its children)`)
+      else if (p.mount && turns(p.mount.target) && !turns(p.id)) problems.push(`${p.name} does not turn with ${spec.parts.find((q) => q.id === p.mount!.target)?.name ?? 'its part'}: fix it in that part (its children) or key it on`)
     } else if (CARRIES.test(p.name) && !/shaft|bearing/i.test(p.name) && !turns(p.id) && !p.motion) {
       const inside = spec.parts.filter((q) => q.id !== p.id && turns(q.id) && (q.mount?.target === p.id || p.mount?.target === q.id))
       if (inside.length) {
@@ -141,6 +143,8 @@ export function scoreBuild(c: EvalCase, reply: Record<string, unknown>, seconds:
 
   const loose = looseMovingParts(spec)
   if (loose.checked) add('moving parts connected', loose.problems.length === 0, loose.problems.join('; ') || undefined)
+  const held = heldProblems(spec, scope)
+  if (spec.parts.length > 1) add('every part held', held.length === 0, held.join('; ') || undefined)
   const fixed = fixedParts(spec, scope)
   if (fixed.checked) add('fixed parts ride along', fixed.problems.length === 0, fixed.problems.join('; ') || undefined)
   const mech = mechanismProblems(spec, scope, `${c.prompt} ${spec.title ?? ''}`)
