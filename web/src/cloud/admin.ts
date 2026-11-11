@@ -172,7 +172,7 @@ export const saveTopics = (items: TopicItem[]) => api<{ topics: TopicItem[] }>('
 export const resetTopics = () => api<{ topics: null }>('/v1/admin/topics', { method: 'DELETE' })
 /** the next unused topics from the drafting pool (topped up by Gemini when it runs low); each is then used */
 export const nextTopics = (want: number, fallback: TopicItem[]) => api<{ topics: TopicItem[]; added: number }>('/v1/admin/topics/next', { method: 'POST', body: { want, fallback: fallback.slice(0, 300) } })
-export const adminBuild = (req: { prompt: string; currentSpec?: Record<string, unknown>; history?: { prompt: string; response: string }[] }) => api<BuildReply>('/v1/admin/build', { method: 'POST', body: req })
+export const adminBuild = (req: { prompt: string; currentSpec?: Record<string, unknown>; history?: { prompt: string; response: string }[]; plan?: boolean }) => api<BuildReply>('/v1/admin/build', { method: 'POST', body: req })
 /** saves a run made on the admin page with the nightly ones */
 export const saveRun = (run: Omit<EvalRun, 'cases'> & { cases: EvalRun['cases'] }) => api<{ ok: true }>('/v1/evals/runs', { method: 'POST', body: run })
 

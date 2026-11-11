@@ -65,13 +65,13 @@ interface CaseResult {
 }
 
 /** one build; if the model is still busy after the API's own retries, one more try half a minute later (timed from that try) */
-async function buildOne(prompt: string): Promise<{ reply: Record<string, unknown>; seconds: number }> {
+async function buildOne(prompt: string, plan = false): Promise<{ reply: Record<string, unknown>; seconds: number }> {
   for (let attempt = 0; ; attempt++) {
     const t0 = Date.now()
     const res = await fetch(`${API}/v1/evals/build`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-eval-token': TOKEN },
-      body: JSON.stringify({ prompt }),
+      body: JSON.stringify({ prompt, ...(plan ? { plan: true } : {}) }),
       signal: AbortSignal.timeout(240_000),
     })
     if (res.ok) return { reply: (await res.json()) as Record<string, unknown>, seconds: (Date.now() - t0) / 1000 }
@@ -87,7 +87,8 @@ async function buildOne(prompt: string): Promise<{ reply: Record<string, unknown
 const buildFor = async (req: { prompt: string; currentSpec?: Record<string, unknown>; history?: { prompt: string; response: string }[] }): Promise<BuiltReply> => {
   const t0 = Date.now()
   if (!req.currentSpec) {
-    const { reply, seconds } = await buildOne(req.prompt)
+    // library drafts are planned first (the night's test cases are not, so the night's score measures the plain build)
+    const { reply, seconds } = await buildOne(req.prompt, true)
     return { ...reply, ms: seconds * 1000 } as BuiltReply
   }
   const res = await fetch(`${API}/v1/evals/build`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-eval-token': TOKEN }, body: JSON.stringify(req), signal: AbortSignal.timeout(240_000) })

@@ -82,7 +82,7 @@ function scoreReply(prompt: string, reply: BuildReply, caseId?: string) {
 }
 
 /** a build for the library: sent back to Gemini with its faults named while it fails a serious check (twice at most) */
-const draftBuild = (prompt: string) => buildWithRepair((req) => adminBuild(req) as unknown as Promise<BuiltReply>, prompt)
+const draftBuild = (prompt: string) => buildWithRepair((req) => adminBuild({ ...req, ...(req.currentSpec ? {} : { plan: true }) }) as unknown as Promise<BuiltReply>, prompt)
 
 /** every part's name, the ones carried inside others included (what the picture check is told is in the model) */
 function partNames(spec: Record<string, unknown>): string[] {

@@ -387,8 +387,13 @@ export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision
   /* ------------------------------------------------------------------ notes / textbook -> 3D */
 
   /** counts one use against a per-user daily allowance, failing once it is spent */
-  const spend = async (uid: string, bucket: string, limit: number, what: string) => {
-    const usage = await db.transact<{ count: number }>(`${bucket}/${uid}_${day(now())}`, (prev) => ({ count: (prev?.count ?? 0) + 1 }))
+  const spend = async (uid: string, bucket: string, limit: number, what: string, cost = 1) => {
+    // a request that needs more than is left is refused without using any of it
+    if (cost > 1) {
+      const used = (await db.get<{ count: number }>(`${bucket}/${uid}_${day(now())}`))?.count ?? 0
+      if (used + cost > limit) throw fail(429, `This needs ${cost} of today's ${what} and you have ${Math.max(0, limit - used)} left. They reset at midnight UTC.`)
+    }
+    const usage = await db.transact<{ count: number }>(`${bucket}/${uid}_${day(now())}`, (prev) => ({ count: (prev?.count ?? 0) + cost }))
     if (usage.count > limit) throw fail(429, `You've reached today's limit of ${limit} ${what}. It resets at midnight UTC.`)
     return limit - usage.count
   }
@@ -440,7 +445,8 @@ export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision
   app.post('/v1/create-3d', async (c) => {
     const u = requireUser(c)
     const req = await withReference(await body(c, create3dRequest))
-    const remaining = await spend(u.uid, 'createUsage', config.createDailyLimit ?? 15, '3D builds')
+    // a careful build (planned first) is two model calls, and counts as two builds
+    const remaining = await spend(u.uid, 'createUsage', config.createDailyLimit ?? 15, '3D builds', req.plan && !req.currentSpec ? 2 : 1)
     const { usage, ...out } = await model(() => noteVision.createOrEdit3D(req))
     await recordUsage(actionOf(req, out.isQuestion, out.answerOnly), usage)
     return c.json({ ...out, remaining })
@@ -454,7 +460,8 @@ export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision
   app.post('/v1/create-3d/stream', async (c) => {
     const u = requireUser(c)
     const req = await withReference(await body(c, create3dRequest))
-    const remaining = await spend(u.uid, 'createUsage', config.createDailyLimit ?? 15, '3D builds')
+    // a careful build (planned first) is two model calls, and counts as two builds
+    const remaining = await spend(u.uid, 'createUsage', config.createDailyLimit ?? 15, '3D builds', req.plan && !req.currentSpec ? 2 : 1)
     return streamSSE(c, async (stream) => {
       const ac = new AbortController()
       stream.onAbort(() => ac.abort())
