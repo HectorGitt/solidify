@@ -1,7 +1,7 @@
 import { Line } from '@react-three/drei'
 import { Html } from '@/render/Html'
 import { useFrame, useThree, type ThreeEvent } from '@react-three/fiber'
-import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
+import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createStore, useStore } from 'zustand'
 import * as THREE from 'three'
 import { useSim } from '@/core/sim'
@@ -261,9 +261,27 @@ function LabelLayout() {
   return null
 }
 
+/** the page's theme as it is drawn (<html data-theme>), followed as it changes: the app and the .slfy viewer both set it */
+function usePageTheme(): 'light' | 'dark' {
+  const read = () => (typeof document !== 'undefined' && document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark')
+  const [theme, setTheme] = useState<'light' | 'dark'>(read)
+  useEffect(() => {
+    const obs = new MutationObserver(() => setTheme(read()))
+    obs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] })
+    return () => obs.disconnect()
+  }, [])
+  return theme
+}
+
+/** on a light background the bright arrow colours are too pale for text: their deeper shades */
+const ON_LIGHT: Record<string, string> = { '#ef4444': '#c81e1e', '#f59e0b': '#a65d05', '#38bdf8': '#0369a1', '#10b981': '#047857' }
+
 function LabelSprite({ position, label, value, color }: { position: [number, number, number]; label: string; value: string; color: string }) {
   const layout = useContext(LabelLayoutCtx)
+  const theme = usePageTheme()
   const sprite = useMemo(() => {
+    const light = theme === 'light'
+    const ink = light ? ON_LIGHT[color.toLowerCase()] ?? color : color
     const ratio = 2
     const font = `600 ${13 * ratio}px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace`
     const measure = document.createElement('canvas').getContext('2d')!
@@ -285,30 +303,32 @@ function LabelSprite({ position, label, value, color }: { position: [number, num
     ctx.arcTo(0, h, 0, 0, r)
     ctx.arcTo(0, 0, w, 0, r)
     ctx.closePath()
-    ctx.fillStyle = 'rgba(10, 14, 18, 0.86)'
+    // a light card on a light page, a dark one on a dark page; the border and value in the arrow's colour
+    ctx.fillStyle = light ? 'rgba(255, 255, 255, 0.94)' : 'rgba(10, 14, 18, 0.86)'
     ctx.fill()
     ctx.lineWidth = 1.5 * ratio
-    ctx.strokeStyle = color
-    ctx.globalAlpha = 0.75
+    ctx.strokeStyle = ink
+    ctx.globalAlpha = light ? 0.55 : 0.75
     ctx.stroke()
     ctx.globalAlpha = 1
     ctx.font = font
     ctx.textBaseline = 'middle'
-    ctx.fillStyle = '#f3f4f6'
+    ctx.fillStyle = light ? '#1f2421' : '#f3f4f6'
     ctx.fillText(head, padX, h / 2 + ratio)
-    ctx.fillStyle = color
+    ctx.fillStyle = ink
     ctx.fillText(tail, padX + ctx.measureText(head).width, h / 2 + ratio)
     const tex = new THREE.CanvasTexture(canvas)
     tex.colorSpace = THREE.SRGBColorSpace
     tex.anisotropy = 4
     const mat = new THREE.SpriteMaterial({ map: tex, depthTest: false, depthWrite: false, sizeAttenuation: false, toneMapped: false })
     const sp = new THREE.Sprite(mat)
-    const height = 0.034
+    // about 4 % of the view's height: readable without covering the parts it labels
+    const height = 0.025
     sp.scale.set((height * w) / h, height, 1)
     sp.center.set(0.5, -0.35)
     sp.renderOrder = 999
     return sp
-  }, [label, value, color])
+  }, [label, value, color, theme])
   useEffect(
     () => () => {
       sprite.material.map?.dispose()
