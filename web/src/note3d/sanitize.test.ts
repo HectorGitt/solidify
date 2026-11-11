@@ -18,3 +18,12 @@ describe('the section plane Gemini suggests', () => {
     expect(spec?.recommendedCut?.normal).toEqual([0, 0, 1])
   })
 })
+
+describe('3D labels', () => {
+  it('turns LaTeX written into a label into plain text', async () => {
+    const { plainLabel } = await import('./sanitize')
+    expect(plainLabel('T_{in}')).toBe('T_in')
+    expect(plainLabel(String.raw`\tau_{max}`)).toBe('τ_max')
+    expect(plainLabel('F_t')).toBe('F_t')
+  })
+})
