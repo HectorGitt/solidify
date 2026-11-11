@@ -2,9 +2,13 @@ import { CameraControls, ContactShadows, Environment, Grid, Lightformer, Line } 
 import { Html } from '@/render/Html'
 import { BuildController } from '@/render/BuildController'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
-import { Component, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { Component, Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { hasWebGL } from './webgl'
 import { Media } from './labsCatalog'
+import { useXRSession } from '@/xr/session'
+
+// the headset layer: its own file, fetched only on a device that can use it
+const XRLayer = lazy(() => import('@/xr/lab').then((m) => ({ default: m.XRLayer })))
 import type CameraControlsImpl from 'camera-controls'
 import * as THREE from 'three'
 import { SimClockDriver } from '@/core/sim'
@@ -444,6 +448,7 @@ export function Stage({
   cover = true,
   viewKey,
   poster,
+  xr = false,
 }: {
   scene: SceneDef
   smooth?: boolean
@@ -459,9 +464,11 @@ export function Stage({
   viewKey?: string
   /** the model's picture (a media name, e.g. "scenes/engine--cooling"), shown if this browser can't draw 3D */
   poster?: string
+  /** the rig can be opened in a headset (rig pages) */
+  xr?: boolean
 }) {
   if (!hasWebGL()) return <NoWebGL poster={poster} title={scene.title} quiet={pageScroll} />
-  return <GLBoundary fallback={<NoWebGL poster={poster} title={scene.title} quiet={pageScroll} />}><StageView scene={scene} smooth={smooth} pageScroll={pageScroll} frame={frame} loadingLabel={loadingLabel} veil={veil} cover={cover} viewKey={viewKey} /></GLBoundary>
+  return <GLBoundary fallback={<NoWebGL poster={poster} title={scene.title} quiet={pageScroll} />}><StageView scene={scene} smooth={smooth} pageScroll={pageScroll} frame={frame} loadingLabel={loadingLabel} veil={veil} cover={cover} viewKey={viewKey} xr={xr} /></GLBoundary>
 }
 
 function StageView({
@@ -473,6 +480,7 @@ function StageView({
   veil = false,
   cover = true,
   viewKey,
+  xr = false,
 }: {
   scene: SceneDef
   smooth?: boolean
@@ -482,7 +490,11 @@ function StageView({
   veil?: boolean
   cover?: boolean
   viewKey?: string
+  /** the rig can be opened in a headset (rig pages) */
+  xr?: boolean
 }) {
+  const xrLoaded = useXRSession((s) => s.loaded) && xr
+  const inXR = useXRSession((s) => s.active) && xr
   const camKey = viewKey ?? scene.id
   const ref = useRef<CameraControlsImpl>(null)
   const select = useView((s) => s.select)
@@ -548,8 +560,13 @@ function StageView({
       // 3D labels (drei Html) carry huge z-indexes; keep them inside the canvas so cards and modals stay on top
       style={{ isolation: 'isolate', zIndex: 0 }}
     >
-      <color attach="background" args={[bgColor]} />
-      <fog attach="fog" args={[bgColor, scene.extent * 6, scene.extent * 16]} />
+      {inXR ? null : <color attach="background" args={[bgColor]} />}
+      {inXR ? null : <fog attach="fog" args={[bgColor, scene.extent * 6, scene.extent * 16]} />}
+      {xrLoaded ? (
+        <Suspense fallback={null}>
+          <XRLayer scene={scene} />
+        </Suspense>
+      ) : null}
       <SimClockDriver />
       <HoverTelemetry />
       <InsideHider />
@@ -563,9 +580,10 @@ function StageView({
       <Suspense fallback={null}>
         <scene.Viewport />
       </Suspense>
-      <Floor y={scene.floorY ?? 0} extent={scene.extent} />
+      {inXR ? null : <Floor y={scene.floorY ?? 0} extent={scene.extent} />}
       {scene.follow ? <FollowCamera partId={scene.follow} pose={pose} /> : null}
       <CutPlaneHelpers size={scene.extent * 1.2} />
+      {inXR ? null : (
       <CameraControls
         ref={attach}
         makeDefault
@@ -574,6 +592,7 @@ function StageView({
         dollySpeed={0.6}
         smoothTime={smooth ? 0.35 : 0}
       />
+      )}
     </Canvas>
     {cover ? <BuildCover key={scene.id} label={loadingLabel} veil={veil} /> : null}
     </div>

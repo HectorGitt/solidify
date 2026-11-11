@@ -277,7 +277,14 @@ export function PartMesh({ geometry, material, customMaterial, ...rest }: PartMe
   const onClick = (e: ThreeEvent<MouseEvent>) => {
     if (!id) return
     e.stopPropagation()
-    if (e.delta > 4) return // was a drag
+    // was a drag (hand pointers in a headset can't say how far they moved: reading it throws)
+    let moved = 0
+    try {
+      moved = e.delta
+    } catch {
+      /* a headset hand */
+    }
+    if (moved > 4) return
     
     const view = useView.getState()
     if (view.caliperMode) {

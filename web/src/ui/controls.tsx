@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { sectionForAudience, useAcademic } from './audience'
+import { nodeText, useMirrored } from '@/xr/mirror'
 
 export function fmt(v: number, digits = 3) {
   if (!Number.isFinite(v)) return '—'
@@ -53,6 +54,7 @@ export function Slider({
   disabled?: boolean
 }) {
   const fill = ((value - min) / (max - min)) * 100
+  useMirrored({ kind: 'slider', label: nodeText(label), value, min, max, step, unit, digits }, onChange)
   return (
     <label className={`mb-2.5 block ${disabled ? 'cursor-not-allowed opacity-50' : ''}`} title={hint}>
       <div className="mb-0.5 flex items-baseline justify-between text-[12.5px]">
@@ -90,6 +92,7 @@ export function Segmented<T extends string>({
   label?: string
   size?: 'sm' | 'md'
 }) {
+  useMirrored({ kind: 'segmented', label: label ?? '', value, options: options.map((o) => ({ value: o.value, label: nodeText(o.label) || o.value })) }, onChange)
   return (
     <div className="mb-2.5">
       {label ? <div className="mb-1 text-[12.5px] font-medium text-ink/90">{label}</div> : null}
@@ -114,6 +117,7 @@ export function Segmented<T extends string>({
 }
 
 export function Toggle({ label, checked, onChange, hint }: { label: ReactNode; checked: boolean; onChange: (v: boolean) => void; hint?: string }) {
+  useMirrored({ kind: 'toggle', label: nodeText(label), checked }, onChange)
   return (
     <label className="mb-2 flex cursor-pointer items-center justify-between gap-3 text-[12.5px]" title={hint}>
       <span className="text-ink/90">{label}</span>
@@ -131,6 +135,7 @@ export function Toggle({ label, checked, onChange, hint }: { label: ReactNode; c
 
 export function Readout({ label, value, unit, tone = 'ink' }: { label: ReactNode; value: ReactNode; unit?: string; tone?: 'ink' | 'accent' | 'warn' | 'info' }) {
   const toneCls = { ink: 'text-ink', accent: 'text-accent', warn: 'text-warn', info: 'text-info' }[tone]
+  useMirrored({ kind: 'readout', label: nodeText(label), value: nodeText(value), unit, tone })
   return (
     <div data-readout className="rounded-xl border border-line bg-panel-2/90 px-3 py-2 shadow-sm ring-1 ring-ink/[0.02]">
       <div data-readout-label className="text-[10px] font-medium uppercase tracking-wider text-dim">{label}</div>

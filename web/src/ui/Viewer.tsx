@@ -36,6 +36,8 @@ import { SceneMark } from '@/study/ui/badges'
 import { InSceneExam, questionsForScene } from '@/study/ui/InSceneExam'
 import { SceneMenu } from './SceneMenu'
 import { TutorButton, TutorPanel } from '@/cloud/ui/Tutor'
+import { useXRSession } from '@/xr/session'
+import { HeadsetButton } from '@/xr/HeadsetButton'
 import { FoldChevron, usePersisted } from './usePersisted'
 import { usePageTourOn } from './PageTour'
 
@@ -75,6 +77,13 @@ export function Viewer() {
     !!scene,
   )
   const [rightTab, setRightTab] = useState<'controls' | 'exam'>('controls')
+  // in a headset: the rig's panel must be showing, as the panel in the headset copies its controls
+  const xrActive = useXRSession((s) => s.active)
+  useEffect(() => {
+    if (!xrActive) return
+    setRightOpen(true)
+    setRightTab('controls')
+  }, [xrActive])
   const [detailsOpen, setDetailsOpen] = usePersisted('solidify.panel.details', true)
   const tourActive = useTour((s) => s.active)
   const academic = useAcademic()
@@ -332,6 +341,7 @@ export function Viewer() {
               <span className="hidden sm:inline">{tourActive ? 'End tour' : 'Guided tour'}</span>
             </button>
           ) : null}
+          {scene ? <HeadsetButton /> : null}
           {scene ? <TutorButton /> : null}
           <span className="mx-0.5 hidden h-5 w-px bg-line sm:block" aria-hidden />
           <button data-tour="rig-parts" aria-label="Toggle parts panel" aria-pressed={leftOpen} onClick={() => setLeftOpen((o) => !o)} className={`grid h-8 w-8 place-items-center rounded-md ${leftOpen ? 'text-accent' : 'text-mute'} hover:bg-panel-3`}>
@@ -390,7 +400,7 @@ export function Viewer() {
         ) : null}
 
         <main className="relative min-w-0 flex-1 bg-bg">
-          {scene ? <Stage key={scene.id} scene={scene} loadingLabel="Building the model" poster={mod && entry ? `scenes/${mod.id}--${entry.id}` : undefined} /> : null}
+          {scene ? <Stage key={scene.id} scene={scene} loadingLabel="Building the model" poster={mod && entry ? `scenes/${mod.id}--${entry.id}` : undefined} xr /> : null}
           {!scene && !error ? (
             entry?.load ? <Loader label="Building the model" className="absolute inset-0" /> : <div className="absolute inset-0 grid place-items-center text-[13px] text-mute">This scene is coming soon.</div>
           ) : null}
@@ -493,7 +503,12 @@ export function Viewer() {
               ) : (
                 <>
                   <ComparePanel key={scene.id} scene={scene} />
-                  {scene.Panel ? <scene.Panel /> : null}
+                  {/* data-xr-panel: the headset panel also offers this panel's own buttons (levers, tests, modes) */}
+                  {scene.Panel ? (
+                    <div data-xr-panel>
+                      <scene.Panel />
+                    </div>
+                  ) : null}
                 </>
               )}
             </div>
