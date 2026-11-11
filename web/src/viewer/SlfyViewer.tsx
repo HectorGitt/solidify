@@ -24,6 +24,8 @@ const MAX_BYTES = 2_000_000
 const query = new URLSearchParams(location.search)
 const EMBED = query.get('embed') === '1'
 // ?shot=1: the model alone, no controls (the format site's pictures of the examples)
+/** every part, the ones carried inside another part (children) included */
+const flatParts = (parts: NotePartSpec[]): NotePartSpec[] => parts.flatMap((p) => [p, ...flatParts(p.children ?? [])])
 const SHOT = query.get('shot') === '1'
 
 interface Loaded {
@@ -376,7 +378,7 @@ export function SlfyViewer() {
 
               <Section title="Parts">
                 <ul className="flex flex-wrap gap-1.5">
-                  {spec.parts.map((p) => (
+                  {flatParts(spec.parts).map((p) => (
                     <li key={p.id}>
                       <button type="button" onClick={() => setSelected(p)} className={`rounded-full border px-2.5 py-1 text-[12px] ${selected?.id === p.id ? 'border-accent text-ink' : 'border-line-2 text-mute hover:text-ink'}`}>
                         {p.name}

@@ -75,7 +75,7 @@
     "file": "muff-coupling.slfy",
     "title": "Rigid Sleeve (Muff) Coupling",
     "summary": "A rigid sleeve coupling connecting two collinear 30 mm shafts via a solid cast iron sleeve and a sunk key, featuring torsional shear and crushing stress analyses.",
-    "parts": 5,
+    "parts": 3,
     "calculations": 4,
     "question": false
   }
