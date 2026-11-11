@@ -151,7 +151,7 @@ export function scoreBuild(c: EvalCase, reply: Record<string, unknown>, seconds:
   if (c.parts) add('part count', spec.parts.length >= c.parts[0] && spec.parts.length <= c.parts[1], `${spec.parts.length} parts (expected ${c.parts[0]} to ${c.parts[1]})`)
   add('every shape drawable', keptShapes === rawShapes, keptShapes === rawShapes ? undefined : `${rawShapes - keptShapes} of ${rawShapes} shapes dropped`)
 
-  const { issues, frames } = resolveAssembly(spec, scope)
+  const { issues } = resolveAssembly(spec, scope)
   add('layout', issues.length === 0, issues.map((i) => i.message).join('; ') || undefined)
 
   const loose = looseMovingParts(spec)
@@ -165,8 +165,9 @@ export function scoreBuild(c: EvalCase, reply: Record<string, unknown>, seconds:
   const mech = mechanismProblems(spec, scope, `${c.prompt} ${spec.title ?? ''}`)
   if (mech.checked) add('mechanism moves right', mech.problems.length === 0, mech.problems.join('; ') || undefined)
 
-  const clash = overlappingLabels(spec, frames, scope)
-  add('labels clear', clash.length === 0, clash.length ? `${clash.join('; ')} overlap` : undefined)
+  // overlapping labels are no longer scored: whether two labels meet depends on where the model is seen from,
+  // and the renderer lays labels out on screen every frame so none covers another from any angle
+  // (`overlappingLabels` stays for scripts that look for crowded models)
   if (spec.parts.length >= 3) {
     const mounted = spec.parts.filter((p) => p.mount).length
     add('assembled by relation', mounted >= 0.6 * (spec.parts.length - 1), `${mounted} of ${spec.parts.length - 1} non-anchor parts mounted`)

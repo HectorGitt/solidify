@@ -104,16 +104,17 @@ describe('mechanisms and labels', () => {
     },
   }
 
-  it('finds rods, pistons and a flywheel not joined the way they move, and labels on top of each other', () => {
+  it('finds rods, pistons and a flywheel not joined the way they move', () => {
     const { checks } = scoreBuild({ id: 'compressor', prompt: 'A two-stage compressor' }, compressor, 60)
     const failed = Object.fromEntries(checks.filter((c) => !c.ok).map((c) => [c.name, c.detail ?? '']))
     expect(failed['moving parts connected']).toMatch(/LP connecting rod is not linked/)
     expect(failed['moving parts connected']).toMatch(/LP piston does not slide/)
     expect(failed['moving parts connected']).toMatch(/Flywheel is not mounted on its shaft/)
-    expect(failed['labels clear']).toMatch(/Interstage cooling.*Suction/)
+    // labels are laid out on screen, not scored
+    expect(failed['labels clear']).toBeUndefined()
   })
 
-  it('passes the same machine joined properly, with its labels apart', () => {
+  it('passes the same machine joined properly', () => {
     const fixed = structuredClone(compressor)
     const parts = fixed.spec.parts as Record<string, unknown>[]
     Object.assign(parts[2], { mount: { kind: 'coaxial', target: 'crank', at: 1 }, position: undefined, rotation: undefined })
@@ -122,7 +123,6 @@ describe('mechanisms and labels', () => {
     ;(fixed.spec.annotations[1].anchor as Record<string, unknown>).at = '-x'
     const { checks } = scoreBuild({ id: 'compressor', prompt: 'A two-stage compressor' }, fixed, 60)
     expect(checks.find((c) => c.name === 'moving parts connected')!.ok).toBe(true)
-    expect(checks.find((c) => c.name === 'labels clear')!.ok).toBe(true)
   })
 })
 
