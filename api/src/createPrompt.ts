@@ -88,7 +88,9 @@ GEOMETRY RULES
    - { "kind": "lever", "target": "bull_gear", "pivot": "lever_pivot", "throw": "r", "angle": 0 }: a slotted lever (rocker) pivoting on the centre of the part "pivot" (a pin or boss, itself mounted) and always pointing through the crank pin of target (crank radius throw); its longest side lies along it. For a quick-return or Whitworth mechanism, a rocker driven by a crank.
    - { "kind": "follower", "target": "lever", "direction": "+x", "of": "tip" }: a part that slides along direction with a point of target, staying where it is across it: of "tip" follows the far end of a lever (a shaper's ram), of "pin" with "throw" (and "angle") follows a crank pin (the slotted yoke of a scotch yoke). Unlike other mounted parts, a follower also has a "position": where it sits on its guide; only its place along direction comes from target.
    - { "kind": "hooke", "target": "input_shaft", "angle": 30 }: the output shaft of a universal (Hooke's) joint, starting at the end of the input shaft, its axis turned "angle" degrees off the input's. Put the yokes and cross on the shafts (coaxial).
-   - Any mount may add "shift": [dx, dy, dz] in metres for a small move that no relation describes.
+   - Any mount may add "shift": [dx, dy, dz] in metres for a small move that no relation describes Never more than about 0.03: a larger shift is placing by coordinates, and the part will drift off when a slider moves. If a part needs a big shift, it has the wrong relation or the wrong target.
+   - Small parts fixed IN another part (a key in its keyway, a setscrew, a grub screw, a dowel, a crank pin, a rivet, a circlip): put them in that part's "children" (the same fields as a part, "position" and "rotation" in the parent's own frame, no mount and no motion). They then turn and move with it as one piece. Mounted coaxial with a shift instead, a key spins on the spot at the shaft's centre. A key sits half in the shaft and half in the hub: its centre at the shaft radius, its long side along the shaft's axis.
+   - A coupling, a hub or a wheel fixed on a shaft turns with it: mount the shafts and the sleeve coaxial with each other and give the motion to one of them only, never a sleeve standing still round turning shafts.
    Choosing the relation:
    - Bearings, bushes, collars, end caps, seals, pulleys, flywheels, sprockets, cams, impellers and discs on a shaft: coaxial with the shaft (or crankshaft), at 0 or 1 for its ends (or a fraction for a point between). Never centered, never by coordinates: a flywheel placed by coordinates ends up tilted through the casing.
    - Gears in mesh: mesh. A shaft carrying a gear: coaxial with that gear (or the gear coaxial with the shaft). A rack meshes with its pinion: mesh with target = the pinion (the rack is a "rack" shape, long along X).
@@ -115,7 +117,7 @@ GEOMETRY RULES
    - kind "moment": a curved arrow about the anchored part's axis at the anchor point (a torque on a shaft: anchor { part: "shaft", at: "end" }).
    - kind "dimension": anchored to a part, it spans that part's length (a beam's span), with the size in magnitude.
    - Each label is drawn at its arrow's tail, so keep labels apart: never two annotations on the same anchor point; give arrows on one part different "along" values or faces, and no more than 4 annotations in all.
-   - magnitude is an expression of parameter or calculation ids (e.g. "P", "R_A", "T") so the arrow's value follows the sliders; unit is its unit (N, kN, N·m). Label is the symbol (P, R_A, T).
+   - magnitude is an expression of parameter or calculation ids (e.g. "P", "R_A", "T") so the arrow's value follows the sliders; unit is its unit (N, kN, N·m). Label is the symbol (P, R_A, T). Labels are drawn as plain text: write subscripts with an underscore and no braces (T_in, F_rack, R_A), never LaTeX (not T_{in}); Greek letters as the letter itself (τ, σ, ω).
    - Give every load and every support reaction an arrow; the student reads the free-body diagram from them.
 
 8. Lab models: Solidify already has detailed, working models of these machines (id: title):
@@ -165,7 +167,7 @@ Return ONLY this JSON:
     "calculations": [...] (for a problem, each with "step" and, for what is asked, "answer": true),
     "charts": [...],
     "annotations": [...],
-    "parts": [{ "id", "name", "material", "role", "cut", "mount" (or "position" for the anchor only), "rotation"?, "explode", "motion"?, "info", "shapes": [...] }]
+    "parts": [{ "id", "name", "material", "role", "cut", "mount" (or "position" for the anchor only), "rotation"?, "explode", "motion"?, "info", "shapes": [...], "children"? }]
   }
 }
 When changing the current model, keep everything the user did not ask to change and set "isNewMachine": false.
