@@ -64,6 +64,31 @@ function KinClock({ kin }: { kin: Kinematics }) {
   return null
 }
 
+/**
+ * The lab rigs' finishes, by what a part is: a generated model picks among half a dozen greys for its steel
+ * (mirror chrome beside dark forged beside flat cast iron), so the same light looks patchy. Its metal greys are
+ * mapped to the rigs' few: castings and frames cast iron, turned and moving parts machined steel, broad moving
+ * faces ground steel, fasteners heat-treated steel. Anything else it chose (bronze, brass, rubber, paint, a
+ * fluid, glass) is kept.
+ */
+const METAL_GREYS = new Set(['steel', 'steelMatte', 'steelDark', 'chrome', 'forged', 'castIron', 'galvanised', 'paintGrey'])
+function finishFor(part: NotePartSpec, params: Record<string, number>, drive = false): MaterialKey {
+  const chosen: MaterialKey = part.material && part.material in MATERIALS ? (part.material as MaterialKey) : 'steel'
+  if (!METAL_GREYS.has(chosen)) return chosen
+  // as the lab rigs colour the power path: what the mechanism drives, in orange, so it reads at a glance
+  if (drive && part.role !== 'housing' && part.role !== 'static') return 'paintOrange'
+  const adds = part.shapes.filter((s) => s.op !== 'subtract')
+  if (adds.length && adds.every((s) => s.kind === 'hexBolt' || s.kind === 'hexNut')) return 'steelDark'
+  if (part.role === 'housing' || part.role === 'fluid') return 'castIron'
+  const gear = adds.some((s) => GEARS.has(s.kind) || s.kind === 'rack')
+  if (gear) return 'steelMatte'
+  // a long round part (a shaft, a pin, a rod) is turned steel; other moving parts ground steel; a still body cast iron
+  const lead = adds.find((s) => ROUND.has(s.kind))
+  const long = !!lead && evalDim(lead.h, params, 0) > 2.5 * evalDim(lead.r ?? lead.rOuter, params, 1)
+  if (long) return 'steel'
+  return part.role === 'moving' || part.motion ? 'steelMatte' : 'castIron'
+}
+
 function LocalPartNode({
   part,
   params,
@@ -173,7 +198,8 @@ function LocalPartNode({
     }
   })
 
-  const matKey: MaterialKey = part.material && part.material in MATERIALS ? part.material : 'steel'
+  // the drive (every part the mechanism turns or slides) in the labs' power-path orange
+  const matKey: MaterialKey = finishFor(part, params, !!kinCtx && (kinCtx.kin.derived.has(part.id) || kinCtx.kin.drivers.has(part.id)))
 
   return (
     <group ref={dropRef} position={[0, drop.current < 1 ? 0.16 * (1 - drop.current) : 0, 0]} scale={drop.current < 1 ? 0.72 + 0.28 * drop.current : 1}>

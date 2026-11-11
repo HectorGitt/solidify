@@ -5,7 +5,8 @@ import type { NoteSceneSpec } from './schema'
 
 describe('part inspector facts', () => {
   it('measures a part’s volume from its built solid', () => {
-    expect(meshVolume(buildPartGeometry([{ kind: 'box', sx: 0.2, sy: 0.1, sz: 0.05 }], {}))).toBeCloseTo(0.001, 6)
+    // (its edges are rounded by about 2 mm, a few tenths of a percent of its volume)
+    expect(meshVolume(buildPartGeometry([{ kind: 'box', sx: 0.2, sy: 0.1, sz: 0.05 }], {}))).toBeCloseTo(0.001, 5)
     // a 40 mm × 100 mm cylinder: π r² h
     expect(meshVolume(buildPartGeometry([{ kind: 'cylinder', r: 0.02, h: 0.1 }], {}))).toBeCloseTo(Math.PI * 0.02 ** 2 * 0.1, 5)
   })
