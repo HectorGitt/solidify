@@ -1,5 +1,6 @@
 import { it } from 'vitest'
 import { EVAL_CASES } from './cases'
+import { buildWithRepair, type BuiltReply } from './repair'
 import { scoreBuild, type EvalCheck } from './score'
 import { DRAFT_TOPICS, topicsFor, type DraftTopic } from './topics'
 
@@ -82,6 +83,18 @@ async function buildOne(prompt: string): Promise<{ reply: Record<string, unknown
   }
 }
 
+/** a build or a change through the nightly API, shaped for the repair loop */
+const buildFor = async (req: { prompt: string; currentSpec?: Record<string, unknown>; history?: { prompt: string; response: string }[] }): Promise<BuiltReply> => {
+  const t0 = Date.now()
+  if (!req.currentSpec) {
+    const { reply, seconds } = await buildOne(req.prompt)
+    return { ...reply, ms: seconds * 1000 } as BuiltReply
+  }
+  const res = await fetch(`${API}/v1/evals/build`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-eval-token': TOKEN }, body: JSON.stringify(req), signal: AbortSignal.timeout(240_000) })
+  if (!res.ok) throw new Error(`repair ${res.status}: ${(await res.text()).slice(0, 200)}`)
+  return { ...((await res.json()) as Record<string, unknown>), ms: Date.now() - t0 } as BuiltReply
+}
+
 it('nightly test run', { timeout: 150 * 60_000 }, async () => {
   if (!API || !TOKEN) throw new Error('Set EVAL_API and EVAL_TOKEN.')
   const { settings, topics: topicList } = await nightSettings()
@@ -138,15 +151,16 @@ it('nightly test run', { timeout: 150 * 60_000 }, async () => {
   if (topics.length) console.log(`\ndrafting ${topics.length} new models`)
   await pool(topics, async (t) => {
     try {
-      const { reply, seconds } = await buildOne(t.prompt)
-      const { score, checks, spec: clean } = scoreBuild({ id: 'draft', prompt: t.prompt }, reply, seconds)
-      // the cleaned model, as the app would build it, not Gemini's raw answer
-      const spec = clean as unknown as Record<string, unknown> | null
+      // sent back with its faults named while it fails a serious check (twice at most): bad drafts are
+      // repaired here, before they reach the review queue. The night's test cases above are scored as built.
+      const built = await buildWithRepair(buildFor, t.prompt)
+      const { score, checks, reply, repairs } = built
+      const spec = built.reply.spec ? built.spec : null
       const queued = score >= DRAFT_MIN && !!spec
-      console.log(`${String(score).padStart(3)}  ${queued ? 'queued ' : 'dropped'}  ${t.prompt}`)
+      console.log(`${String(score).padStart(3)}  ${queued ? 'queued ' : 'dropped'}  ${repairs ? `(repaired ${repairs}×) ` : ''}${t.prompt}`)
       if (queued && !DRY) {
         const title = typeof spec.title === 'string' && spec.title.trim() ? spec.title.trim().slice(0, 120) : t.prompt.slice(0, 120)
-        await post('/v1/library/drafts', { title, prompt: t.prompt, topic: t.topic, spec, explanation: typeof reply.explanation === 'string' ? reply.explanation.slice(0, 4000) : undefined, score, checks })
+        await post('/v1/library/drafts', { title, prompt: t.prompt, topic: t.topic, spec, explanation: typeof reply.explanation === 'string' ? reply.explanation.slice(0, 4000) : undefined, score, checks, ...(repairs ? { repairs } : {}) })
       }
     } catch (e) {
       console.log(`  0  failed   ${t.prompt}: ${String(e).slice(0, 200)}`)

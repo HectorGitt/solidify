@@ -58,6 +58,8 @@ export interface LibraryDraft {
   thumbnail?: string
   reviewNotes?: string
   checklist?: ReviewChecklist
+  /** how many times it was sent back to be repaired automatically */
+  repairs?: number
 }
 
 /** what a reviewer has checked on a draft */
@@ -118,7 +120,11 @@ export const getEvals = () => api<{ runs: Omit<EvalRun, 'cases'>[]; latest: Eval
 export const getAiUsage = () => api<{ days: ({ day: string } & Record<string, number | string>)[]; price: ModelPrice | null }>('/v1/ai-usage')
 export const getEventSummary = () => api<{ days: EventDay[]; notes: EventNote[] }>('/v1/events/summary')
 export const getDrafts = () => api<{ drafts: LibraryDraft[] }>('/v1/library/drafts')
-export const approveDraft = (id: string, title?: string) => api<{ ok: true }>(`/v1/library/drafts/${encodeURIComponent(id)}/approve`, { method: 'POST', body: title ? { title } : {} })
+/** publishes a draft; `override` publishes it although it fails a serious check (the trail records that) */
+export const approveDraft = (id: string, title?: string, override = false) =>
+  api<{ ok: true }>(`/v1/library/drafts/${encodeURIComponent(id)}/approve`, { method: 'POST', body: { ...(title ? { title } : {}), ...(override ? { override: true } : {}) } })
+/** the picture check: a vision model looks at a drawn model and says what is visibly wrong with it */
+export const lookAtModel = (req: { image: string; title: string; prompt?: string; parts?: string[] }) => api<{ ok: boolean; problems: string[] }>('/v1/admin/look', { method: 'POST', body: req })
 export const rejectDraft = (id: string, reason?: string) => api<{ ok: true }>(`/v1/library/drafts/${encodeURIComponent(id)}${reason ? `?reason=${encodeURIComponent(reason.slice(0, 500))}` : ''}`, { method: 'DELETE' })
 export const getReviewers = () => api<{ emails: string[] }>('/v1/admin/reviewers')
 export const saveReviewers = (emails: string[]) => api<{ emails: string[] }>('/v1/admin/reviewers', { method: 'PUT', body: { emails } })
@@ -172,6 +178,8 @@ export interface DraftFields {
   score: number
   checks?: EvalCheck[]
   thumbnail?: string
+  /** how many times it was sent back to be repaired automatically */
+  repairs?: number
 }
 export const addDraft = (d: DraftFields) => api<{ id: string }>('/v1/library/drafts', { method: 'POST', body: d })
 export const updateDraft = (id: string, patch: Partial<DraftFields> & { reviewNotes?: string; checklist?: ReviewChecklist }) => api<LibraryDraft>(`/v1/library/drafts/${encodeURIComponent(id)}`, { method: 'PUT', body: patch })
