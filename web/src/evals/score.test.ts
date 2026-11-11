@@ -124,3 +124,31 @@ describe('mechanisms and labels', () => {
     expect(checks.find((c) => c.name === 'labels clear')!.ok).toBe(true)
   })
 })
+
+describe('fixed parts ride along', () => {
+  const shaft = { id: 'shaft', name: 'Input shaft', role: 'moving', shapes: [{ kind: 'cylinder', r: 0.015, h: 0.2 }], motion: { kind: 'rotate', axis: 'y', speed: 2 } }
+  it('names a key with a motion of its own and a sleeve left standing', async () => {
+    const { fixedParts } = await import('./score')
+    const spec = {
+      parts: [
+        { id: 'sleeve', name: 'Muff sleeve', role: 'housing', position: [0, 0, 0], shapes: [{ kind: 'tube', rOuter: 0.03, rInner: 0.015, h: 0.1 }] },
+        { ...shaft, mount: { kind: 'coaxial', target: 'sleeve' } },
+        { id: 'key', name: 'Sunk key', role: 'moving', shapes: [{ kind: 'box', sx: 0.006, sy: 0.08, sz: 0.008 }], mount: { kind: 'coaxial', target: 'sleeve' }, motion: { kind: 'rotate', axis: 'y', speed: 2 } },
+      ],
+    } as never
+    const r = fixedParts(spec, {})
+    expect(r.checked).toBe(true)
+    expect(r.problems.join(' ')).toMatch(/Sunk key has a motion of its own/)
+    expect(r.problems.join(' ')).toMatch(/Muff sleeve stands still while Input shaft turns/)
+  })
+  it('passes a sleeve that drives, with its key as a child', async () => {
+    const { fixedParts } = await import('./score')
+    const spec = {
+      parts: [
+        { id: 'sleeve', name: 'Muff sleeve', role: 'moving', position: [0, 0, 0], shapes: [{ kind: 'tube', rOuter: 0.03, rInner: 0.015, h: 0.1 }], motion: { kind: 'rotate', axis: 'y', speed: 2 }, children: [{ id: 'key', name: 'Sunk key', shapes: [{ kind: 'box', sx: 0.006, sy: 0.08, sz: 0.008 }], position: [0.015, 0, 0] }] },
+        { id: 'shaft', name: 'Input shaft', role: 'moving', shapes: [{ kind: 'cylinder', r: 0.015, h: 0.2 }], mount: { kind: 'coaxial', target: 'sleeve' } },
+      ],
+    } as never
+    expect(fixedParts(spec, {}).problems).toEqual([])
+  })
+})

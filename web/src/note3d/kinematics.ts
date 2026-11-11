@@ -99,7 +99,7 @@ type Link =
 
 const SWINGS = /slotted lever|rocker|rocking lever|quick.?return lever/i
 const RIDES = /\bram\b|slotted yoke|scotch.?yoke|yoke slide|\bslide block|tool slide/i
-const FIXTURE = /(pin|pivot|bearing|bush|bracket|shaft|frame|guide|column|housing|base)/i
+const FIXTURE = /\b(pin|pivot|bearing|bush|bracket|shaft|frame|guide|column|housing|base)\b/i
 const LINKAGE_MEMBER = /lever|rocker|\bram\b|yoke|slider|piston|crosshead|rack|follower|rod\b|link\b/i
 
 /**
