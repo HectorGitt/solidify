@@ -72,9 +72,10 @@ describe('motion from the mounts', () => {
       { id: 'rack', name: 'rack', role: 'moving', shapes: [{ kind: 'box', sx: 0.3, sy: 0.02, sz: 0.02 }], mount: { kind: 'mesh', target: 'pinion', side: '+z' } },
     ]
     const kin = buildKinematics({ parts }, {})
-    kin.update(1)
+    // early in its travel (a rack swings back and forth, so it is r·θ only while θ is small)
+    kin.update(0.01)
     const r = (M * 20) / 2
-    expect(kin.move('rack')!.pos.length()).toBeCloseTo(r * 1, 6)
+    expect(kin.move('rack')!.pos.length()).toBeCloseTo(r * 0.01, 6)
   })
 
   it('a piston follows its crank: r cos θ + √(l² − r² sin² θ)', () => {
@@ -275,5 +276,32 @@ describe('playback pace', () => {
     expect(at(1200)).toBeGreaterThan(at(400))
     // clearly so: 3,000 rpm is shown at least half as fast again as 400 rpm
     expect(at(3000) / at(400)).toBeGreaterThan(1.5)
+  })
+})
+
+describe('a rack on its pinion', () => {
+  const parts: NotePartSpec[] = [
+    gear('pinion', 20, { motion: turn(3) }),
+    { id: 'rack', name: 'rack', role: 'moving', shapes: [{ kind: 'rack', sx: 0.36, sy: 0.0105, sz: 0.02, module: M }], mount: { kind: 'mesh', target: 'pinion', side: '+x' } },
+  ]
+  it('lies along the turning direction, its pitch line on the pitch circle (not half its length away)', () => {
+    const { frames } = resolveAssembly({ parts }, {})
+    const box = frames.get('rack')!.box
+    const size = box.getSize(new THREE.Vector3())
+    // long across the pinion's axis (Y) and across the side it sits on (+x), its teeth towards the pinion
+    expect(size.z).toBeCloseTo(0.36, 3)
+    expect(size.x).toBeCloseTo(0.0105, 3)
+    const r = (M * 20) / 2
+    expect(box.min.x).toBeCloseTo(r - M, 4)
+  })
+  it('runs back and forth within its length instead of out of the model', () => {
+    const kin = buildKinematics({ parts }, {})
+    let far = 0
+    for (let t = 0; t < 40; t += 0.05) {
+      kin.update(t)
+      far = Math.max(far, kin.move('rack')!.pos.length())
+    }
+    expect(far).toBeGreaterThan(0.05)
+    expect(far).toBeLessThan(0.36 / 2)
   })
 })

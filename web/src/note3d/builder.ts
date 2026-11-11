@@ -156,7 +156,33 @@ function buildSingleShapeGeometry(
       const sx = Math.max(0.02, evalDim(spec.sx, params, 0.24))
       const sy = Math.max(0.008, evalDim(spec.sy, params, 0.024))
       const sz = Math.max(0.008, evalDim(spec.sz ?? spec.depth, params, 0.024))
-      return box(sx, sy, sz)
+      // a real rack: straight-sided teeth (20° flanks) along +Y, pitch π·module, tips at the top face, so it
+      // reads as a rack and its teeth sit in the pinion's (it was drawn as a plain bar)
+      const m = rackModule(spec, params)
+      const pitch = Math.PI * m
+      const n = Math.floor(sx / pitch)
+      if (n < 2 || n > 400 || sy < 2.6 * m) return box(sx, sy, sz)
+      const top = sy / 2
+      const root = top - 2.25 * m
+      const tan = Math.tan((20 * Math.PI) / 180)
+      const tip = pitch / 4 - m * tan
+      const foot = pitch / 4 + 1.25 * m * tan
+      const shape = new THREE.Shape()
+      shape.moveTo(-sx / 2, -sy / 2)
+      shape.lineTo(sx / 2, -sy / 2)
+      shape.lineTo(sx / 2, root)
+      // teeth centred on multiples of the pitch from the rack's middle, right to left
+      for (let i = Math.floor(n / 2); i >= -Math.floor(n / 2); i--) {
+        const c = i * pitch
+        if (c + foot > sx / 2 || c - foot < -sx / 2) continue
+        shape.lineTo(c + foot, root)
+        shape.lineTo(c + tip, top)
+        shape.lineTo(c - tip, top)
+        shape.lineTo(c - foot, root)
+      }
+      shape.lineTo(-sx / 2, root)
+      shape.closePath()
+      return extrude(shape, sz)
     }
     case 'spring': {
       const r = Math.max(0.005, evalDim(spec.r ?? spec.rOuter, params, 0.025))
@@ -200,6 +226,12 @@ function shapeMatrix(
 
 /** a finite angle within its range, or the fallback */
 const angleIn = (v: number, min: number, max: number, fallback: number) => (Number.isFinite(v) ? Math.min(max, Math.max(min, v)) : fallback)
+
+/** a rack's module: as written, else from its height (the prompt's racks are about 3.5 modules tall) */
+export function rackModule(spec: NoteShapeSpec, params: Record<string, number>) {
+  const sy = Math.max(0.008, evalDim(spec.sy, params, 0.024))
+  return Math.max(0.0005, evalDim(spec.module, params, sy / 3.5))
+}
 
 export function buildPartGeometry(
   shapes: NoteShapeSpec[],

@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import { buildPartGeometry } from './builder'
+import { buildPartGeometry, rackModule } from './builder'
 import { evalDim, evalVec3, type AxisDir, type NoteAnnotationSpec, type NotePartSpec, type NoteSceneSpec, type NoteShapeSpec } from './schema'
 
 /**
@@ -265,6 +265,15 @@ export function resolveAssembly(
       // inside a ring gear (an annulus): the planet's centre sits the difference of the radii from the ring's
       const ring = ti.hollow && /\b(ring|annulus|internal)\b/i.test(`${target.id.replace(/_/g, ' ')} ${target.name}`) && radial(ti) > radial(si) * 1.2
       point = tCenter.clone().addScaledVector(side, ring ? radial(ti) - radial(si) : radial(si) + radial(ti))
+      // a rack lies along the pinion's turning direction, teeth (its +Y) towards the pinion, its pitch line
+      // touching the pitch circle. Placed like a gear it lay along the shaft, half its own length away
+      const rack = p.shapes.find((s) => s.kind === 'rack' && s.op !== 'subtract')
+      if (rack) {
+        const along = new THREE.Vector3().crossVectors(tAxis, side).normalize()
+        quat = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(along, side.clone().negate(), new THREE.Vector3().crossVectors(along, side.clone().negate())))
+        const sy = Math.max(0.008, evalDim(rack.sy, scope, 0.024))
+        point = tCenter.clone().addScaledVector(side, radial(ti) + sy / 2 - rackModule(rack, scope))
+      }
     } else if (m.kind === 'slider') {
       // piston position for crank radius r, rod length l, crank angle θ from top dead centre
       // (from the pin: r cos θ along the line, r sin θ across it; the pin as drawn when there is one)
