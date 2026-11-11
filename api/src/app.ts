@@ -730,6 +730,44 @@ export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision
     return c.json({ ok: true }, 201)
   })
 
+  /**
+   * "Something looks wrong" from a student on a model: what they saw, in a few words and a choice of kinds. Kept
+   * for the review team (who sent it is not shown to them); when the model is a library model (matched by its
+   * request, as a student's copy no longer carries the library id) its count goes up and the latest notes are kept
+   * on it, so the Library tab shows which published models people find wrong.
+   */
+  const REPORT_KINDS = ['floating', 'hitting', 'motion', 'numbers', 'labels', 'other'] as const
+  const reportInput = z.object({
+    title: z.string().trim().min(1).max(200),
+    prompt: z.string().trim().max(2000).optional(),
+    kinds: z.array(z.enum(REPORT_KINDS)).min(1).max(6),
+    note: z.string().trim().max(500).optional(),
+  })
+  app.post('/v1/reports', async (c) => {
+    const u = requireUser(c)
+    const r = await body(c, reportInput)
+    await spend(u.uid, 'reportUsage', 30, 'reports')
+    const at = now()
+    const lib = r.prompt ? (await db.list<LibraryDoc>('library', { limit: 500 })).find((row) => row.data.prompt?.trim() === r.prompt!.trim()) : undefined
+    await db.set(`reports/${at}_${randomId()}`, { ...r, at, ...(lib ? { libraryId: lib.id } : {}) })
+    if (lib) {
+      await db.transact<LibraryDoc & { reports?: number; reportNotes?: { at: number; kinds: string[]; note?: string }[] }>(`library/${lib.id}`, (prev) => ({
+        ...(prev as LibraryDoc),
+        reports: ((prev as { reports?: number } | null)?.reports ?? 0) + 1,
+        reportNotes: [{ at, kinds: r.kinds, ...(r.note ? { note: r.note } : {}) }, ...((prev as { reportNotes?: { at: number; kinds: string[]; note?: string }[] } | null)?.reportNotes ?? [])].slice(0, 5),
+      }))
+    }
+    return c.json({ ok: true, library: !!lib }, 201)
+  })
+
+  /** what students reported: per library model (count and latest notes), and the latest reports on any model */
+  app.get('/v1/admin/reports', async (c) => {
+    await requireReviewer(c)
+    const lib = (await db.list<LibraryDoc & { reports?: number; reportNotes?: unknown[] }>('library', { limit: 500 })).filter((r) => r.data.reports)
+    const recent = (await db.list<{ title: string; kinds: string[]; note?: string; at: number; libraryId?: string }>('reports', { limit: 2000 })).map((r) => r.data).sort((a, b) => b.at - a.at).slice(0, 50)
+    return c.json({ library: Object.fromEntries(lib.map((r) => [r.id, { reports: r.data.reports, notes: r.data.reportNotes ?? [] }])), recent })
+  })
+
   /** the last 14 days of counts, and the latest notes, for the quality page */
   app.get('/v1/events/summary', async (c) => {
     await requireAdmin(c)
@@ -763,7 +801,9 @@ export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision
     if (!/^[a-z0-9]{6,20}$/.test(id)) throw fail(404, 'Not found.')
     return id
   }
-  const libraryCard = ({ spec, checks: _c, explanation: _e, embedding: _v, ...rest }: LibraryDoc, id: string) => {
+  const libraryCard = ({ spec, checks: _c, explanation: _e, embedding: _v, reports: _r, reportNotes: _n, ...rest }: LibraryDoc, id: string) => {
+    void _r
+    void _n
     void _c
     void _e
     void _v
@@ -1150,9 +1190,12 @@ export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision
     } else if (!can(await rolesOfEmail(u.email), 'review')) await spend(u.uid, 'libraryFetchUsage', 100, 'library models')
     const item = await db.get<LibraryDoc>(`library/${id}`)
     if (!item) throw fail(404, 'Not found.')
-    const { checks: _c, embedding: _v, ...rest } = item
+    // what students reported is for the review team only
+    const { checks: _c, embedding: _v, reports: _r, reportNotes: _n, ...rest } = item as LibraryDoc & { reports?: unknown; reportNotes?: unknown }
     void _c
     void _v
+    void _r
+    void _n
     return c.json({ id: c.req.param('id'), ...rest })
   })
 

@@ -128,6 +128,13 @@ export const lookAtModel = (req: { image: string; title: string; prompt?: string
 export const rejectDraft = (id: string, reason?: string) => api<{ ok: true }>(`/v1/library/drafts/${encodeURIComponent(id)}${reason ? `?reason=${encodeURIComponent(reason.slice(0, 500))}` : ''}`, { method: 'DELETE' })
 export const getReviewers = () => api<{ emails: string[] }>('/v1/admin/reviewers')
 export const saveReviewers = (emails: string[]) => api<{ emails: string[] }>('/v1/admin/reviewers', { method: 'PUT', body: { emails } })
+/** what students reported: per library model (count and latest notes), and the latest reports on any model */
+export interface ReportNote {
+  at: number
+  kinds: string[]
+  note?: string
+}
+export const getReports = () => api<{ library: Record<string, { reports: number; notes: ReportNote[] }>; recent: (ReportNote & { title: string; libraryId?: string })[] }>('/v1/admin/reports')
 export const unpublish = (id: string) => api<{ ok: true }>(`/v1/library/${encodeURIComponent(id)}`, { method: 'DELETE' })
 export const getFeedback = () => api<{ feedback: FeedbackItem[] }>('/v1/feedback')
 export const getWaitlist = () => api<{ count: number; entries: WaitlistEntry[] }>('/v1/waitlist')
