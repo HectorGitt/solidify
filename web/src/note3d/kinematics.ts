@@ -71,7 +71,8 @@ export function playbackPace(parts: NotePartSpec[], scope: Record<string, number
   if (fastest <= EASY) return 1
   // a tooth must move well under one pitch per frame (60 a second) to be seen turning the right way
   const top = teeth ? Math.min(12, (0.8 * Math.PI * 60) / teeth) : 12
-  const shown = top <= EASY ? top : EASY + (top - EASY) * Math.min(1, Math.log(fastest / EASY) / Math.log(500 / EASY))
+  // squared, so the settings a slider usually spans (a few hundred to a few thousand rpm) spread out visibly
+  const shown = top <= EASY ? top : EASY + (top - EASY) * Math.min(1, Math.log(fastest / EASY) / Math.log(500 / EASY)) ** 2
   return Math.min(1, shown / fastest)
 }
 
