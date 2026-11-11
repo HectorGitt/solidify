@@ -41,6 +41,9 @@ export function annotationProblems(spec: Pick<NoteSceneSpec, 'parts' | 'annotati
     const name = `"${a.label}"`
     if (a.kind !== 'force' && a.kind !== 'moment') continue
     if (a.magnitude !== undefined && !Number.isFinite(evalDim(a.magnitude, scope, NaN))) out.push(`${name} has no value: its magnitude does not work out to a number`)
+    // a load drawn with no value at all ("T_in" and nothing) tells the student nothing: give it a magnitude, or leave it out
+    // (a label in words, "Hot shell in", is a flow or a direction, not a load: it needs no number)
+    if (a.magnitude === undefined && !a.value && /^[A-Za-zͰ-Ͽ][A-Za-z0-9_Ͱ-Ͽ]{0,7}$/.test(a.label.trim())) out.push(`${name} has no value: give it a magnitude from the model's numbers, or leave it out`)
     if (!a.anchor) continue
     const fr = frames.get(a.anchor.part)
     if (!fr) {

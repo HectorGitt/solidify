@@ -23,7 +23,7 @@ export const SERIOUS: Record<string, string> = {
  * Bump when a check is added or changed: stored models are then re-checked (the admin Library tab re-scores
  * each published model once per version; the review queue always scores drafts afresh).
  */
-export const CHECKS_VERSION = 4
+export const CHECKS_VERSION = 5
 
 /** the picture check's name: made by a vision model looking at the drawn model, kept with the draft's checks */
 export const LOOKS = 'looks right'

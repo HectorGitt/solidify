@@ -50,4 +50,8 @@ describe('load arrows', () => {
     expect(push.from[0]).toBeCloseTo(0.6, 4)
     expect(push.to[0]).toBeCloseTo(0.5, 4)
   })
+  it('names a load drawn with no value', () => {
+    const p = annotationProblems(model([beam], [{ id: 't', kind: 'moment', label: 'T_in', anchor: { part: 'beam', at: 'start' }, direction: '+z' }]))
+    expect(p.join(' ')).toMatch(/"T_in" has no value/)
+  })
 })
