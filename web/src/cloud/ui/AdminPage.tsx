@@ -3,7 +3,7 @@ import { create } from 'zustand'
 import { startTask } from '@/ui/tasks'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { EVAL_CASES } from '@/evals/cases'
-import { CHECKS_VERSION, LOOKS, SERIOUS, repairRequest, seriousFaults } from '@/evals/faults'
+import { CHECKS_VERSION, LOOKS, MOVES, SERIOUS, repairRequest, seriousFaults } from '@/evals/faults'
 import { buildWithRepair, type BuiltReply } from '@/evals/repair'
 import { scoreBuild } from '@/evals/score'
 import { mechanismProblems } from '@/note3d/kinematics'
@@ -161,8 +161,10 @@ function draftLiveNow(d: LibraryDraft): { score: number; checks: EvalCheck[] } {
   let out = { score: d.score, checks: d.checks ?? [] }
   try {
     const timed = (d.checks ?? []).find((x) => x.name === 'under two minutes')
-    const { checks } = scoreBuild({ id: 'draft', prompt: d.prompt }, { spec: d.spec, explanation: d.explanation ?? '' }, 0)
-    const merged = checks.map((x) => (x.name === 'under two minutes' && timed ? timed : x))
+    const { checks } = scoreBuild({ id: 'draft', prompt: d.prompt }, { spec: d.spec, explanation: d.explanation ?? '' }, 0, { motion: false })
+    // the motion check is made when the draft is built (it takes a second or more) and kept with it
+    const moved = (d.checks ?? []).find((x) => x.name === MOVES)
+    const merged = [...checks.map((x) => (x.name === 'under two minutes' && timed ? timed : x)), ...(moved ? [moved] : [])]
     out = { score: Math.round((100 * merged.filter((x) => x.ok).length) / Math.max(1, merged.length)), checks: merged }
   } catch {
     // keep the stored ones
@@ -1438,7 +1440,7 @@ function useLibraryHealth(items: LibraryCard[] | undefined) {
           const full = await getLibraryItem(item.id)
           // scoring builds every shape: give the page a moment first
           await new Promise((r) => setTimeout(r, 60))
-          const { checks } = scoreBuild({ id: 'draft', prompt: full.prompt }, { spec: full.spec, explanation: full.explanation ?? '' }, 0)
+          const { checks } = scoreBuild({ id: 'draft', prompt: full.prompt }, { spec: full.spec, explanation: full.explanation ?? '' }, 0, { motion: false })
           const faults = seriousFaults(checks).map((x) => `${SERIOUS[x.name]}${x.detail ? `: ${x.detail}` : ''}`)
           try {
             localStorage.setItem(healthKey(item), JSON.stringify(faults))

@@ -18,7 +18,7 @@ import type { PartFrame } from './assembly'
  */
 
 /** names of the pieces a model may have drawn itself for the joint: not drawn when the app draws the joint */
-export const JOINT_PIECE = /\b(yoke|spider|cross|trunnion|cardan|universal joint|u-?joint|hooke'?s? joint)\b/i
+export { JOINT_PIECE } from './jointPieces'
 
 export interface HookeJointSpec {
   input: string
