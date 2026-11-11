@@ -90,6 +90,33 @@ describe('the model library and its review queue', () => {
     expect(((await (await req('GET', '/v1/library/drafts', undefined, boss)).json()) as { drafts: unknown[] }).drafts).toEqual([])
   })
 
+  it('will not publish a draft that fails a serious check, unless the reviewer overrides; the trail says so', async () => {
+    const broken = { ...draft, score: 78, checks: [{ name: 'layout', ok: true }, { name: 'every part held', ok: false, detail: 'Gear is not held by anything' }, { name: 'labels clear', ok: false }] }
+    const { id } = (await (await req('POST', '/v1/library/drafts', broken, { 'x-eval-token': TOKEN })).json()) as { id: string }
+    const refused = await req('POST', `/v1/library/drafts/${id}/approve`, {}, boss)
+    expect(refused.status).toBe(409)
+    expect(((await refused.json()) as { error: string }).error).toMatch(/every part held/)
+    expect(((await (await req('GET', '/v1/library')).json()) as { items: unknown[] }).items).toEqual([])
+    expect((await req('POST', `/v1/library/drafts/${id}/approve`, { override: true }, boss)).status).toBe(200)
+    const audit = (await (await req('GET', '/v1/admin/audit', undefined, boss)).json()) as { entries: { action: string; detail?: string }[] }
+    expect(audit.entries.some((e) => e.action === 'published over failed checks' && /every part held/.test(e.detail ?? ''))).toBe(true)
+    // a draft failing only a minor check (overlapping labels) publishes as before
+    const minor = { ...draft, checks: [{ name: 'labels clear', ok: false }] }
+    const second = (await (await req('POST', '/v1/library/drafts', minor, { 'x-eval-token': TOKEN })).json()) as { id: string }
+    expect((await req('POST', `/v1/library/drafts/${second.id}/approve`, {}, boss)).status).toBe(200)
+  })
+
+  it('looks at a model’s picture for reviewers only, and says what is visibly wrong', async () => {
+    const image = 'data:image/jpeg;base64,AAAA'
+    expect((await req('POST', '/v1/admin/look', { image, title: 'Gear pair' }, asUser('sam'))).status).toBe(403)
+    const fine = (await (await req('POST', '/v1/admin/look', { image, title: 'Gear pair', parts: ['Pinion', 'Wheel'] }, boss)).json()) as { ok: boolean; problems: string[] }
+    expect(fine).toMatchObject({ ok: true, problems: [] })
+    const bad = (await (await req('POST', '/v1/admin/look', { image, title: 'floating gear' }, boss)).json()) as { ok: boolean; problems: string[] }
+    expect(bad.ok).toBe(false)
+    expect(bad.problems[0]).toMatch(/mid-air/)
+    expect((await req('POST', '/v1/admin/look', { image: 'not a picture', title: 'x' }, boss)).status).toBe(400)
+  })
+
   it('drops a rejected draft, and lets an admin take a model down', async () => {
     const { id } = (await (await req('POST', '/v1/library/drafts', draft, { 'x-eval-token': TOKEN })).json()) as { id: string }
     expect((await req('DELETE', `/v1/library/drafts/${id}`, undefined, boss)).status).toBe(200)

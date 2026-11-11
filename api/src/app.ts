@@ -10,7 +10,7 @@ import type { AuthUser, Verifier } from './auth.js'
 import type { Db, Row } from './db.js'
 import { MAX_ENTRIES, emptyProgress, entryCount, mergeProgress, progressSchema, type Progress } from './progress.js'
 import { SYSTEM_PROMPT, buildTurns, tutorRequest, type TutorModel } from './tutor.js'
-import { FakeNoteVision, ModelReplyError, create3dRequest, noteAnalyzeRequest, noteRefineRequest, readCreateReply, type Create3dRequest, type ModelUsage, type NoteVisionModel } from './note3d.js'
+import { FakeNoteVision, ModelReplyError, create3dRequest, lookRequest, noteAnalyzeRequest, noteRefineRequest, readCreateReply, type Create3dRequest, type ModelUsage, type NoteVisionModel } from './note3d.js'
 
 export interface Config {
   /** browser origins allowed to call the API */
@@ -511,6 +511,8 @@ export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision
   })
 
   const evalCheck = z.object({ name: z.string().max(80), ok: z.boolean(), detail: z.string().max(300).optional() })
+  /** the checks a draft must pass to be published without an override (the same list as web/src/evals/faults.ts) */
+  const SERIOUS_CHECKS = new Set(['builds', 'every shape drawable', 'layout', 'every part held', 'moving parts connected', 'fixed parts ride along', 'mechanism moves right', 'calculations work', 'looks right'])
   const evalRun = z.object({
     runAt: z.number().int().positive(),
     label: z.string().max(80).optional(),
@@ -695,6 +697,19 @@ export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision
   })
 
 
+  /**
+   * The picture check: a vision model looks at a drawn model the way a reviewer would and says what is visibly
+   * wrong (a part in mid-air, a wheel outside its housing). From the admin page, once for each draft's picture.
+   */
+  app.post('/v1/admin/look', async (c) => {
+    const u = await requireReviewer(c)
+    const req = await body(c, lookRequest)
+    if (await isAdmin(u)) await spend('admin', 'adminLookUsage', 300, 'picture checks')
+    else await spend(u.uid, 'reviewLookUsage', 100, 'picture checks')
+    const out = await model(() => noteVision.lookAtModel(req))
+    return c.json(out)
+  })
+
   /* what students do with the models: counted by day and kind, with no one's identity; a thumbs-down keeps its note */
   const EVENT_KINDS = ['rating-up', 'rating-down', 'fix-layout', 'layout-issue', 'rebuild', 'delete'] as const
   const eventInput = z.object({
@@ -740,6 +755,8 @@ export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision
     checks: z.array(evalCheck).max(24).optional(),
     /** a small JPEG of the model for its card */
     thumbnail: z.string().max(150_000).regex(/^data:image\/(jpeg|webp|png);base64,/).optional(),
+    /** how many times it was sent back to be repaired automatically (after failed checks, or after its picture was looked at) */
+    repairs: z.number().int().min(0).max(20).optional(),
   })
   type LibraryDoc = z.infer<typeof libraryInput> & { [k: string]: unknown; parts: number; createdAt: number; publishedAt?: number }
   const libraryId = (id: string) => {
@@ -890,14 +907,17 @@ export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision
     const id = libraryId(c.req.param('id'))
     const draft = await db.get<LibraryDoc>(`libraryDrafts/${id}`)
     if (!draft) throw fail(404, 'Draft not found.')
-    const patch = await body(c, z.object({ title: libraryInput.shape.title.optional() }))
+    const patch = await body(c, z.object({ title: libraryInput.shape.title.optional(), override: z.boolean().optional() }))
+    // the gate: a draft failing a serious check is not published unless the reviewer says so in as many words
+    const faults = (draft.checks ?? []).filter((x) => !x.ok && SERIOUS_CHECKS.has(x.name))
+    if (faults.length && !patch.override) throw fail(409, `This draft fails ${faults.length === 1 ? 'a check' : 'checks'} that must pass before publishing: ${faults.map((x) => x.name).join(', ')}. Fix or rebuild it, or publish anyway.`)
     // who checked it, and when, goes with it into the library
     const by = await whoIs(u)
     const reviewedBy = { uid: by.uid, name: by.name }
     const published = { ...draft, ...(patch.title ? { title: patch.title } : {}), reviewedBy, publishedAt: now() }
     await db.set(`library/${id}`, published)
     await db.delete(`libraryDrafts/${id}`)
-    await audit(by, 'approved and published', { type: 'library', id, title: published.title }, `score ${draft.score}`)
+    await audit(by, faults.length ? 'published over failed checks' : 'approved and published', { type: 'library', id, title: published.title }, faults.length ? `score ${draft.score}; failing: ${faults.map((x) => x.name).join(', ')}` : `score ${draft.score}`)
     await embedOne(id, published)
     return c.json({ ok: true })
   })
