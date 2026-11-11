@@ -35,7 +35,7 @@
     "file": "helical-gear-pair.slfy",
     "title": "Helical Gear Pair on Parallel Shafts",
     "summary": "Single-stage parallel-shaft helical gear pair with 25-tooth pinion and 50-tooth gear showing pitch geometry, center distance, and axial thrust generation.",
-    "parts": 6,
+    "parts": 7,
     "calculations": 8,
     "question": false
   },
@@ -59,7 +59,7 @@
     "file": "scotch-yoke.slfy",
     "title": "Scotch Yoke Mechanism",
     "summary": "A Scotch yoke converting rotary motion into exact simple harmonic reciprocating linear motion via a slotted crosshead.",
-    "parts": 4,
+    "parts": 5,
     "calculations": 4,
     "question": false
   },
