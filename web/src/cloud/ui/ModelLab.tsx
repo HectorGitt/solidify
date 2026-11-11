@@ -10,6 +10,7 @@ import { ChartView, fmtNum } from '@/note3d/ChartView'
 import { resolveAssembly } from '@/note3d/assembly'
 import { cleanCut, sanitizeGeneratedSpec } from '@/note3d/sanitize'
 import { findPart } from '@/note3d/partInfo'
+import { openingCut } from '@/note3d/openingCut'
 import { ALLOWED_MATERIALS, evaluateCalculations, evaluateChart, type EvaluatedCalculation, type EvaluatedChart, type NoteParameterSpec, type NotePartSpec, type NoteSceneSpec, type NoteShapeKind } from '@/note3d/schema'
 import { MATERIALS, type MaterialKey } from '@/render/materials'
 import { requestSnapshot } from '@/render/snapshot'
@@ -456,7 +457,9 @@ export default function ModelLab() {
   useEffect(() => {
     if (!spec) return
     // saved models may hold a section plane written before it was checked
-    const rec = spec.recommendedCut ? cleanCut(spec.recommendedCut) : undefined
+    let rec = spec.recommendedCut ? cleanCut(spec.recommendedCut) : undefined
+    // a mechanism closed inside its housing opens cut away, whatever the model asked for
+    if (!rec?.enabled) rec = openingCut(spec as NoteSceneSpec) ?? rec
     if (rec) {
       useView.getState().setCut({ enabled: rec.enabled, planes: [{ normal: rec.normal, pos: rec.pos }] })
     } else useView.getState().setCut({ enabled: false, planes: [{ normal: [0, 0, 1], pos: 0 }] })
