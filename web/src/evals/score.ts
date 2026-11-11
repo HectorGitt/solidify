@@ -85,7 +85,7 @@ export function fixedParts(spec: NoteSceneSpec, scope: Record<string, number>): 
 
 /**
  * Labels drawn on top of each other: each arrow or label's text sits at its tail, about as wide as a line of
- * text and one line high (measured on screen: about 0.42 and 0.09 of the model's size), so two tails closer than
+ * text and one line high (measured on screen: about 0.31 and 0.066 of the model's size), so two tails closer than
  * that collide. Seen the way the model opens (its camera's
  * direction, or the workspace's default three-quarter view), not straight from the front: two labels on a
  * shaft's axis are apart in the opening view though one hides the other from the front, and the other way round.
@@ -114,7 +114,7 @@ export function overlappingLabels(spec: NoteSceneSpec, frames: Map<string, PartF
   for (let i = 0; i < spots.length; i++)
     for (let j = i + 1; j < spots.length; j++) {
       const a = spots[i], b = spots[j]
-      if (Math.abs(a.x - b.x) < 0.42 * extent && Math.abs(a.y - b.y) < 0.09 * extent) clashes.push(`“${a.label}” and “${b.label}”`)
+      if (Math.abs(a.x - b.x) < 0.31 * extent && Math.abs(a.y - b.y) < 0.066 * extent) clashes.push(`“${a.label}” and “${b.label}”`)
     }
   return clashes
 }
