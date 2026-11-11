@@ -512,7 +512,7 @@ export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision
 
   const evalCheck = z.object({ name: z.string().max(80), ok: z.boolean(), detail: z.string().max(300).optional() })
   /** the checks a draft must pass to be published without an override (the same list as web/src/evals/faults.ts) */
-  const SERIOUS_CHECKS = new Set(['builds', 'every shape drawable', 'layout', 'every part held', 'moving parts connected', 'fixed parts ride along', 'mechanism moves right', 'calculations work', 'looks right'])
+  const SERIOUS_CHECKS = new Set(['builds', 'every shape drawable', 'layout', 'every part held', 'moving parts connected', 'fixed parts ride along', 'mechanism moves right', 'calculations work', 'loads act right', 'looks right'])
   const evalRun = z.object({
     runAt: z.number().int().positive(),
     label: z.string().max(80).optional(),

@@ -1,5 +1,6 @@
 import * as THREE from 'three'
-import { resolveAnnotation, resolveAssembly, type PartFrame } from '@/note3d/assembly'
+import { labelPoint, resolveAnnotation, resolveAssembly, type PartFrame } from '@/note3d/assembly'
+import { annotationProblems } from '@/note3d/annotationCheck'
 import { heldProblems } from '@/note3d/held'
 import { buildKinematics, mechanismProblems } from '@/note3d/kinematics'
 import { sanitizeGeneratedSpec } from '@/note3d/sanitize'
@@ -84,24 +85,36 @@ export function fixedParts(spec: NoteSceneSpec, scope: Record<string, number>): 
 
 /**
  * Labels drawn on top of each other: each arrow or label's text sits at its tail, about as wide as a line of
- * text and one line high, so two tails closer than that (seen from the front) collide.
+ * text and one line high (measured on screen: about 0.42 and 0.09 of the model's size), so two tails closer than
+ * that collide. Seen the way the model opens (its camera's
+ * direction, or the workspace's default three-quarter view), not straight from the front: two labels on a
+ * shaft's axis are apart in the opening view though one hides the other from the front, and the other way round.
  */
 export function overlappingLabels(spec: NoteSceneSpec, frames: Map<string, PartFrame>, scope: Record<string, number>): string[] {
   const size = new THREE.Box3()
   for (const f of frames.values()) size.union(f.box)
   const extent = Math.max(0.05, ...size.getSize(new THREE.Vector3()).toArray())
+  const cam = spec.camera ? new THREE.Vector3(...spec.camera.position).sub(new THREE.Vector3(...spec.camera.target)) : null
+  const view = cam && cam.lengthSq() > 1e-9 ? cam.normalize() : new THREE.Vector3(1.45, 1.05, 1.55).normalize()
+  const right = new THREE.Vector3().crossVectors(new THREE.Vector3(0, 1, 0), view)
+  if (right.lengthSq() < 1e-9) right.set(1, 0, 0)
+  right.normalize()
+  const up = new THREE.Vector3().crossVectors(view, right).normalize()
   const spots = (spec.annotations ?? [])
     .filter((a) => a.kind !== 'dimension')
     .map((a) => {
-      const at = resolveAnnotation(a, frames, scope)?.from ?? (a.from ? evalVec3(a.from, scope, [0, 0, 0]) : null)
-      return at ? { label: a.label, x: at[0], y: at[1] } : null
+      const r = resolveAnnotation(a, frames, scope)
+      const at = r ? labelPoint(a.kind, r.from, r.to) : a.from ? labelPoint(a.kind, evalVec3(a.from, scope, [0, 0, 0]), a.to ? evalVec3(a.to, scope, [0, 0, 0]) : evalVec3(a.from, scope, [0, 0, 0])) : null
+      if (!at) return null
+      const p = new THREE.Vector3(...at)
+      return { label: a.label, x: p.dot(right), y: p.dot(up) }
     })
     .filter((s): s is { label: string; x: number; y: number } => !!s)
   const clashes: string[] = []
   for (let i = 0; i < spots.length; i++)
     for (let j = i + 1; j < spots.length; j++) {
       const a = spots[i], b = spots[j]
-      if (Math.abs(a.x - b.x) < 0.25 * extent && Math.abs(a.y - b.y) < 0.05 * extent) clashes.push(`“${a.label}” and “${b.label}”`)
+      if (Math.abs(a.x - b.x) < 0.42 * extent && Math.abs(a.y - b.y) < 0.09 * extent) clashes.push(`“${a.label}” and “${b.label}”`)
     }
   return clashes
 }
@@ -143,6 +156,8 @@ export function scoreBuild(c: EvalCase, reply: Record<string, unknown>, seconds:
 
   const loose = looseMovingParts(spec)
   if (loose.checked) add('moving parts connected', loose.problems.length === 0, loose.problems.join('; ') || undefined)
+  const arrows = annotationProblems(spec)
+  if ((spec.annotations ?? []).some((a) => a.kind === 'force' || a.kind === 'moment')) add('loads act right', arrows.length === 0, arrows.join('; ') || undefined)
   const held = heldProblems(spec, scope)
   if (spec.parts.length > 1) add('every part held', held.length === 0, held.join('; ') || undefined)
   const fixed = fixedParts(spec, scope)

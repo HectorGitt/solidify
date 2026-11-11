@@ -533,6 +533,26 @@ export function resolveAssembly(
  * acts along its direction; a moment turns about the part's axis; a dimension spans the part's length,
  * drawn just below it. Null when it is not attached (its own from / to stand).
  */
+/**
+ * Where an arrow's label is drawn: a force's at the middle of its arrow, a moment's at the end of its arc (three
+ * quarters of a turn round its axis), anything else at its tip. The renderer and the label-overlap check both use
+ * this, so the check sees the labels where the reader does.
+ */
+export function labelPoint(kind: NoteAnnotationSpec['kind'], from: Vec3, to: Vec3): Vec3 {
+  const a = new THREE.Vector3(...from)
+  const b = new THREE.Vector3(...to)
+  if (kind === 'force' || kind === 'dimension') return a.add(b).multiplyScalar(0.5).toArray() as Vec3
+  if (kind !== 'moment') return to
+  const d = b.clone().sub(a)
+  const len = d.length()
+  const axis = len > 1e-5 ? d.normalize() : new THREE.Vector3(0, 1, 0)
+  const radius = Math.min(0.09, Math.max(0.035, len * 0.6))
+  const u = new THREE.Vector3().crossVectors(axis, Math.abs(axis.y) < 0.9 ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(1, 0, 0)).normalize()
+  const w = new THREE.Vector3().crossVectors(axis, u).normalize()
+  const t = Math.PI * 1.5
+  return a.add(u.multiplyScalar(Math.cos(t) * radius)).add(w.multiplyScalar(Math.sin(t) * radius)).toArray() as Vec3
+}
+
 export function resolveAnnotation(ann: NoteAnnotationSpec, frames: Map<string, PartFrame>, scope: Record<string, number>): { from: Vec3; to: Vec3 } | null {
   const a = ann.anchor
   const fr = a ? frames.get(a.part) : undefined
@@ -551,6 +571,9 @@ export function resolveAnnotation(ann: NoteAnnotationSpec, frames: Map<string, P
   if (ann.kind === 'force') {
     const dir = new THREE.Vector3(...DIRS[ann.direction ?? '-y'])
     const len = Math.max(0.02, evalDim(ann.length, scope, 0.12))
+    // a push ends on the face it presses; a pull (pointing away from the part, a plate in tension, a shaft
+    // pulled at its end) starts at the face, so neither is drawn through the part
+    if (point.clone().sub(fr.center).dot(dir) > 1e-6) return { from: v(point), to: v(point.clone().addScaledVector(dir, len)) }
     return { from: v(point.clone().addScaledVector(dir, -len)), to: v(point) }
   }
   if (ann.kind === 'moment') {
