@@ -9,7 +9,7 @@ import type { SceneDef } from '@/modules/types'
 import { MATERIALS, type MaterialKey } from '@/render/materials'
 import { Part, PartMesh } from '@/render/Part'
 import { useView } from '@/render/view'
-import { GEARS, ROUND, resolveAnnotation, resolveAssembly, type Placement } from './assembly'
+import { GEARS, ROUND, labelPoint, resolveAnnotation, resolveAssembly, type Placement } from './assembly'
 import { buildKinematics, type Kinematics } from './kinematics'
 
 /** how the model's mechanism moves now: one clock for every part, worked out from the mounts */
@@ -216,7 +216,53 @@ function LocalPartNode({
   )
 }
 
+/**
+ * Arrow labels are drawn the same size on screen however far off they are, so two can land on top of each other
+ * from one angle and not another. Every frame each label is placed where it belongs and, if that covers one
+ * already placed, moved up or down a label's height at a time to the nearest free place (its sprite's centre
+ * moves, not its point in the model). Labels are taken lowest first, so the stack grows upwards.
+ */
+const LabelLayoutCtx = createContext<Set<THREE.Sprite> | null>(null)
+function LabelLayout() {
+  const labels = useContext(LabelLayoutCtx)
+  const v = useMemo(() => new THREE.Vector3(), [])
+  useFrame(({ camera, size }) => {
+    if (!labels?.size) return
+    const persp = (camera as THREE.PerspectiveCamera).isPerspectiveCamera
+    const ortho = camera as THREE.OrthographicCamera
+    // a label's height and width on screen, as a share of the view (-1..1 each way)
+    const unit = persp ? 1 / Math.tan(((camera as THREE.PerspectiveCamera).fov * Math.PI) / 360) : 2 / ((ortho.top - ortho.bottom) / ortho.zoom)
+    const aspect = size.width / Math.max(1, size.height)
+    const items = [...labels]
+      .filter((s) => s.visible && s.parent)
+      .map((s) => {
+        s.getWorldPosition(v).project(camera)
+        return { s, x: v.x, y: v.y, h: s.scale.y * unit, w: (s.scale.x * unit) / aspect, behind: v.z > 1 }
+      })
+      .filter((it) => !it.behind)
+      .sort((a, b) => a.y - b.y)
+    const placed: { x0: number; x1: number; y0: number; y1: number }[] = []
+    const steps = [0, 1, -1, 2, -2, 3, -3, 4, -4]
+    for (const it of items) {
+      let chosen = 0
+      for (const k of steps) {
+        const y0 = it.y + (0.35 + k * 1.08) * it.h
+        const box = { x0: it.x - it.w / 2, x1: it.x + it.w / 2, y0, y1: y0 + it.h }
+        if (!placed.some((p) => box.x0 < p.x1 && box.x1 > p.x0 && box.y0 < p.y1 && box.y1 > p.y0)) {
+          chosen = k
+          placed.push(box)
+          break
+        }
+        if (k === steps[steps.length - 1]) placed.push(box)
+      }
+      it.s.center.y = -0.35 - chosen * 1.08
+    }
+  })
+  return null
+}
+
 function LabelSprite({ position, label, value, color }: { position: [number, number, number]; label: string; value: string; color: string }) {
+  const layout = useContext(LabelLayoutCtx)
   const sprite = useMemo(() => {
     const ratio = 2
     const font = `600 ${13 * ratio}px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace`
@@ -270,6 +316,10 @@ function LabelSprite({ position, label, value, color }: { position: [number, num
     },
     [sprite],
   )
+  useEffect(() => {
+    layout?.add(sprite)
+    return () => void layout?.delete(sprite)
+  }, [layout, sprite])
   return <primitive object={sprite} position={position} />
 }
 
@@ -306,7 +356,6 @@ function Annotation3D({
     () => (ann.to ? evalVec3(ann.to, params, [from[0], from[1] + 0.08, from[2]]) : ([from[0], from[1] + 0.08, from[2]] as [number, number, number])),
     [ann.to, from, params],
   )
-  const mid: [number, number, number] = [(from[0] + to[0]) * 0.5, (from[1] + to[1]) * 0.5, (from[2] + to[2]) * 0.5]
   const color = ann.color ?? (ann.kind === 'force' ? '#ef4444' : ann.kind === 'moment' ? '#f59e0b' : ann.kind === 'dimension' ? '#38bdf8' : '#10b981')
   const text = annotationText(ann, params)
 
@@ -372,7 +421,7 @@ function Annotation3D({
         <Line points={[from, to]} color={color} lineWidth={ann.kind === 'dimension' ? 1.8 : 2.4} dashed={ann.kind === 'dimension'} dashSize={0.012} gapSize={0.008} />
       )}
       {isLoad || showLabels ? (
-        <LabelSprite position={ann.kind === 'force' || ann.kind === 'dimension' ? mid : moment ? moment.end : to} label={ann.label} value={text} color={color} />
+        <LabelSprite position={labelPoint(ann.kind, from, to)} label={ann.label} value={text} color={color} />
       ) : null}
     </group>
   )
@@ -500,6 +549,7 @@ export function NoteSceneViewport({
       }),
     [spec.annotations, assembly, scope],
   )
+  const labelSet = useMemo(() => new Set<THREE.Sprite>(), [])
   const projMode = projectionOverride ?? spec.showProjectionPlanes ?? 'none'
   const extent = spec.extent ?? 0.35
 
@@ -512,9 +562,12 @@ export function NoteSceneViewport({
         {spec.parts.map((part) => (
           <LocalPartNode key={part.id} part={part} params={scope} clipPlane={clipPlane} placed={part.mount ? assembly.placements.get(part.id) : undefined} />
         ))}
-        {annotations.map((ann) => (
-          <Annotation3D key={ann.id} ann={ann} params={scope} />
-        ))}
+        <LabelLayoutCtx.Provider value={labelSet}>
+          {annotations.map((ann) => (
+            <Annotation3D key={ann.id} ann={ann} params={scope} />
+          ))}
+          <LabelLayout />
+        </LabelLayoutCtx.Provider>
         {projMode !== 'none' && <OrthographicGlassPlanes extent={extent} mode={projMode} />}
       </group>
       </KinCtx.Provider>
