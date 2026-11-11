@@ -177,8 +177,10 @@ export default function OpenFilePage() {
         ) : (
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {examples.map((ex) => (
-              <div key={ex.file} className="flex flex-col rounded-2xl border border-line bg-panel p-4">
-                <div className="flex items-start justify-between gap-2">
+              <div key={ex.file} className="relative flex flex-col rounded-2xl border border-line bg-panel p-4 transition hover:border-ink/30">
+                {/* the whole card opens the model; the buttons below sit above this layer */}
+                <button type="button" disabled={busy} onClick={() => readUrl(`/slfy/examples/${ex.file}`, ex.file)} aria-label={`Open ${ex.title}`} className="absolute inset-0 cursor-pointer rounded-2xl" />
+                <div className="pointer-events-none flex items-start justify-between gap-2">
                   <h3 className="text-[14.5px] font-semibold leading-snug text-ink">{ex.title}</h3>
                   {ex.question ? <span className="shrink-0 rounded-full bg-accent/12 px-2 py-0.5 text-[11px] font-medium text-accent">Question</span> : null}
                 </div>
@@ -187,7 +189,7 @@ export default function OpenFilePage() {
                   {ex.parts} part{ex.parts === 1 ? '' : 's'}
                   {ex.calculations ? ` · ${ex.calculations} calculation${ex.calculations === 1 ? '' : 's'}` : ''}
                 </p>
-                <div className="mt-3 flex gap-2">
+                <div className="relative mt-3 flex gap-2">
                   <button type="button" disabled={busy} onClick={() => readUrl(`/slfy/examples/${ex.file}`, ex.file)} className={`${primaryBtn} px-4 py-1.5 text-[12.5px]`}>
                     Open
                   </button>

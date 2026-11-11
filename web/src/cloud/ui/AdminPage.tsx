@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
+import { Fragment, useCallback, useEffect, useRef, useState, useSyncExternalStore, type FormEvent, type ReactNode } from 'react'
 import { create } from 'zustand'
 import { startTask } from '@/ui/tasks'
 import { useNavigate, useSearchParams } from 'react-router-dom'
@@ -97,6 +97,9 @@ const BUILD_NOTE = 'Building… about a minute'
 /** what is wrong with a draft's mechanism, checked now with today's rules (a draft may predate them) */
 const mechCache = new WeakMap<object, string[]>()
 function draftMechanism(d: LibraryDraft): string[] {
+  return mechCache.get(d.spec) ?? []
+}
+function draftMechanismNow(d: LibraryDraft): string[] {
   const hit = mechCache.get(d.spec)
   if (hit) return hit
   let out: string[] = []
@@ -133,14 +136,15 @@ const SERIOUS: Record<string, string> = {
   'calculations work': 'calculations broken',
 }
 /** what makes a draft worth rebuilding, by today's checks */
-function draftFaults(d: LibraryDraft): string[] {
-  return draftLive(d)
+function draftFaults(d: LibraryDraft, now = false): string[] {
+  return (now ? draftLiveNow(d) : draftLive(d))
     .checks.filter((x) => !x.ok && x.name in SERIOUS)
     .map((x) => SERIOUS[x.name])
 }
 
 const liveCache = new WeakMap<object, { score: number; checks: EvalCheck[] }>()
-function draftLive(d: LibraryDraft): { score: number; checks: EvalCheck[] } {
+/** scores a draft now (slow: it builds every part's shape; hundreds of milliseconds, seconds for a ball bearing) */
+function draftLiveNow(d: LibraryDraft): { score: number; checks: EvalCheck[] } {
   const hit = liveCache.get(d.spec)
   if (hit) return hit
   let out = { score: d.score, checks: d.checks ?? [] }
@@ -154,6 +158,48 @@ function draftLive(d: LibraryDraft): { score: number; checks: EvalCheck[] } {
   }
   liveCache.set(d.spec, out)
   return out
+}
+
+// Scoring every draft while the page first draws froze it for about ten seconds (18 drafts). The page shows the
+// stored score at once and re-scores in the background, one draft between paints; cards update as each is done.
+const liveQueue: LibraryDraft[] = []
+const liveListeners = new Set<() => void>()
+let liveVersion = 0
+let liveRunning = false
+function liveStep() {
+  const d = liveQueue.shift()
+  if (!d) {
+    liveRunning = false
+    return
+  }
+  if (!liveCache.has(d.spec)) {
+    draftLiveNow(d)
+    draftMechanismNow(d)
+    liveVersion++
+    liveListeners.forEach((f) => f())
+  }
+  setTimeout(liveStep, 30)
+}
+/** re-renders the caller as drafts are re-scored in the background */
+function useLiveScores() {
+  return useSyncExternalStore(
+    (f) => {
+      liveListeners.add(f)
+      return () => liveListeners.delete(f)
+    },
+    () => liveVersion,
+  )
+}
+/** a draft's checks and score: today's once worked out (in the background), the stored ones until then */
+function draftLive(d: LibraryDraft): { score: number; checks: EvalCheck[] } {
+  const hit = liveCache.get(d.spec)
+  if (hit) return hit
+  if (!liveQueue.some((x) => x.spec === d.spec)) liveQueue.push(d)
+  if (!liveRunning) {
+    liveRunning = true
+    setTimeout(liveStep, 60)
+  }
+  return { score: d.score, checks: d.checks ?? [] }
 }
 
 const date = (t: number) => new Date(t).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })
@@ -721,8 +767,9 @@ function DraftCard({ d, onDone, onChanged, backTo }: { d: LibraryDraft; onDone: 
   const [reviewOpen, setReviewOpen] = useState(false)
   const [moreOpen, setMoreOpen] = useState(false)
   const [confirmRebuild, setConfirmRebuild] = useState(false)
-  const mech = draftMechanism(d)
+  useLiveScores()
   const now = draftLive(d)
+  const mech = draftMechanism(d)
   // everything wrong, as plain lines: the motion check's reasons, then each other failed check
   const problems = [...mech, ...now.checks.filter((x) => !x.ok && x.name !== 'mechanism moves right' && x.name !== 'under two minutes').map((x) => (x.detail ? `${x.name}: ${x.detail}` : x.name))]
   const tick = (k: keyof ReviewChecklist, v: boolean) => {
@@ -780,9 +827,10 @@ function DraftCard({ d, onDone, onChanged, backTo }: { d: LibraryDraft; onDone: 
 
   return (
     <article className={`${card} flex flex-col gap-3 overflow-hidden p-4`}>
-      <div className="relative -mx-4 -mt-4 mb-1 aspect-[16/10] overflow-hidden rounded-t-2xl bg-[var(--color-stage)]">
+      {/* the picture opens the model, like the Open in 3D button */}
+      <button type="button" disabled={!!busy} onClick={() => void act('open')} aria-label={`Open ${d.title} in 3D`} title="Open in 3D" className="relative -mx-4 -mt-4 mb-1 block aspect-[16/10] cursor-pointer overflow-hidden rounded-t-2xl bg-[var(--color-stage)] transition hover:opacity-90">
         {d.thumbnail ? <img src={d.thumbnail} alt="" className="h-full w-full object-cover" /> : <span className="absolute inset-0 grid place-items-center text-[11.5px] text-dim">Drawing a picture…</span>}
-      </div>
+      </button>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           {d.topic ? <div className="text-[11.5px] uppercase tracking-wide text-dim">{d.topic}</div> : null}
@@ -1051,7 +1099,7 @@ function RebuildFlagged({ flagged, onChanged }: { flagged: LibraryDraft[]; onCha
           const next = { ...d, ...updated, thumbnail: undefined }
           onChanged(next)
           ok++
-          if (!draftFaults(next).length) fixed++
+          if (!draftFaults(next, true).length) fixed++
         } catch {
           // one failed build doesn't stop the rest
         }
@@ -1099,6 +1147,7 @@ function RebuildFlagged({ flagged, onChanged }: { flagged: LibraryDraft[]; onCha
 }
 
 export function ReviewQueue({ canDraft = true, backTo = '/admin?tab=review' }: { canDraft?: boolean; backTo?: string }) {
+  useLiveScores()
   const { data, setData, error, reload } = useLoad(getDrafts)
   // drafts without a picture get one drawn, one at a time (each uses the page's one 3D view)
   const tried = useRef(new Set<string>())
@@ -1201,7 +1250,9 @@ function LibraryRow({ item, onChanged, onRemoved }: { item: LibraryCard; onChang
 
   return (
     <li className="grid gap-3 px-4 py-3 md:grid-cols-[7rem_minmax(0,1fr)_auto] md:items-center">
-      <div className="hidden aspect-[16/10] overflow-hidden rounded-lg bg-[var(--color-stage)] md:block">{item.thumbnail ? <img src={item.thumbnail} alt="" className="h-full w-full object-cover" /> : null}</div>
+      <button type="button" disabled={!!busy} onClick={() => void run('open')} aria-label={`Open ${item.title} in 3D`} title="Open in 3D" className="hidden aspect-[16/10] cursor-pointer overflow-hidden rounded-lg bg-[var(--color-stage)] transition hover:opacity-90 md:block">
+        {item.thumbnail ? <img src={item.thumbnail} alt="" className="h-full w-full object-cover" /> : null}
+      </button>
       <div className="grid min-w-0 gap-2 sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
         <input aria-label="Title" value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120} className={`${inputCls} py-1.5! font-semibold`} />
         <input aria-label="Topic" value={topic} onChange={(e) => setTopic(e.target.value)} maxLength={60} placeholder="Topic" className={`${inputCls} py-1.5!`} />
