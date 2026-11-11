@@ -67,7 +67,7 @@
     "file": "quick-return-mechanism.slfy",
     "title": "Crank & Slotted-Lever Quick-Return Mechanism",
     "summary": "Whitworth crank and slotted-lever drive for a metal shaper. Constant-speed rotation of the bull gear drives a sliding block within the slotted rocker, producing a slow forward cutting stroke and a rapid return stroke.",
-    "parts": 8,
+    "parts": 7,
     "calculations": 6,
     "question": false
   },
