@@ -158,7 +158,7 @@ export function BuildYourOwn() {
   return (
     <section className="mx-auto grid max-w-[1360px] gap-8 px-5 pt-20 sm:px-10 lg:grid-cols-12 lg:gap-12">
       <div className="lg:col-span-5">
-        <h2 className="text-[30px] font-semibold tracking-[-0.03em] sm:text-[38px]">Or describe your own machine.</h2>
+        <h2 className="text-[30px] font-semibold tracking-[-0.03em] sm:text-[38px]">Describe a machine. Watch it built.</h2>
         <p className="mt-3 text-[15px] leading-relaxed text-mute">
           Type what you need, or upload a photo. Solidify builds it part by part in front of you, works out the engineering, and lets you change anything by chatting.
         </p>
