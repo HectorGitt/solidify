@@ -81,6 +81,7 @@ export type NoteShapeKind =
   | 'spring'
   | 'hexNut'
   | 'hexBolt'
+  | 'bearing'
 
 export interface NoteShapeSpec {
   kind: NoteShapeKind
@@ -114,6 +115,8 @@ export interface NoteShapeSpec {
   pitch?: DimExpr
   // Hex nut / hex bolt: thread diameter (bolt shank length is h)
   d?: DimExpr
+  /** a bearing's type (kind 'bearing'): ball (default), roller, taper, needle or thrust */
+  bearing?: 'ball' | 'roller' | 'taper' | 'needle' | 'thrust'
   // Spring
   turns?: DimExpr
   wireRadius?: DimExpr
@@ -735,6 +738,7 @@ export const noteShapeSchema = z.object({
     'spring',
     'hexNut',
     'hexBolt',
+    'bearing',
   ]),
   op: z.enum(['add', 'subtract', 'intersect']).optional(),
   position: vec3ExprSchema.optional(),
@@ -762,6 +766,8 @@ export const noteShapeSchema = z.object({
   profile: z.array(z.tuple([dimExprSchema, dimExprSchema])).max(64).optional(),
   polygon: z.array(z.tuple([dimExprSchema, dimExprSchema])).max(64).optional(),
   depth: dimExprSchema.optional(),
+  /** a bearing's type */
+  bearing: z.enum(['ball', 'roller', 'taper', 'needle', 'thrust']).optional(),
 })
 
 export const notePartSchema: z.ZodType<NotePartSpec> = z.lazy(() =>

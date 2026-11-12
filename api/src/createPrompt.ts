@@ -23,6 +23,7 @@ export const SHAPE_KINDS = [
   'spring',
   'hexNut',
   'hexBolt',
+  'bearing',
 ] as const
 
 export const MATERIALS = [
@@ -48,7 +49,7 @@ GEOMETRY RULES
 1. Units and scale
    - All coordinates and dimensions are in METRES, centred near [0, 0, 0].
    - Size the model so it is about 0.25 to 0.7 m across on screen (extent 0.45 to 0.65, floorY about -0.22). A small part such as a nut is scaled up to that size, and its real size goes in a parameter.
-   - Cylinder, tube, cone, gear, pulley, spring, hexNut and hexBolt run along the local Y axis.
+   - Cylinder, tube, cone, gear, pulley, spring, hexNut, hexBolt and bearing run along the local Y axis.
      For the X axis set rotation: [0, 0, 1.5708]. For the Z axis set rotation: [1.5708, 0, 0].
 2. Parts
    - A machine has 3 to 8 parts. A single component (a nut, a bolt, a bracket, a shaft) has 1 or 2 parts; do not invent extra pieces.
@@ -73,6 +74,7 @@ GEOMETRY RULES
    - extrude: { kind: "extrude", polygon: [[x, y], ...], depth }
    - hexNut: { kind: "hexNut", d, h? } (hexagon nut for thread diameter d; across flats 1.5 d; height h, default 0.8 d)
    - hexBolt: { kind: "hexBolt", d, h } (hexagon-head bolt, thread diameter d, shank length h below the head)
+   - bearing: { kind: "bearing", bearing: "ball" | "roller" | "taper" | "needle" | "thrust", d, h } (a standard rolling bearing, drawn complete by Solidify: races, cage and balls or rollers; d is its bore, the diameter of the shaft it sits on, h its width). Use it for every rolling bearing, mounted coaxial with its shaft; never build a bearing from tubes, tori and spheres.
    Every shape may also have op ("add" default, "subtract", "intersect" against the shapes before it), position, rotation, and radialCount with radialRadius for a circular pattern about Y.
    Any other kind is invalid. Build anything else from these: a plate is a box, a washer is a tube, a pin is a cylinder, a hole is a subtracted cylinder.
 4. Layout: ASSEMBLE BY RELATION, not by coordinates

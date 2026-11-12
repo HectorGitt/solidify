@@ -31,7 +31,7 @@ export interface AssemblyIssue {
 }
 
 /** shapes that turn about their own axis (local Y before the shape's rotation) */
-export const ROUND = new Set(['cylinder', 'tube', 'cone', 'gear', 'bevelGear', 'pulley', 'sprocket', 'spring', 'hexNut', 'hexBolt', 'torus'])
+export const ROUND = new Set(['cylinder', 'tube', 'cone', 'gear', 'bevelGear', 'pulley', 'sprocket', 'spring', 'hexNut', 'hexBolt', 'torus', 'bearing'])
 export const GEARS = new Set(['gear', 'bevelGear', 'sprocket'])
 
 export interface LocalInfo {
