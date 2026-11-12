@@ -17,7 +17,7 @@ import {
   type V2,
 } from '@/geometry'
 import { hexBolt } from '@/geometry/parts'
-import { hexNut } from '@/parts/lib/elements'
+import { ballBearing, hexNut, needleBearing, rollerBearing, taperBearing, thrustBearing } from '@/parts/lib/elements'
 import { evalDim, evalVec3, type NoteShapeSpec } from './schema'
 
 
@@ -208,6 +208,19 @@ function buildSingleShapeGeometry(
       const h = Math.max(0.001, evalDim(spec.h, params, 0.8 * d))
       // the library nut stands on y = 0 at its standard height (0.8 d); scale it to h and centre it like the other shapes
       return xform(hexNut(d), mat4.c(mat4.t(0, -h / 2, 0), new THREE.Matrix4().makeScale(1, h / (0.8 * d), 1)))
+    }
+    case 'bearing': {
+      // a standard rolling bearing, drawn from the lab rigs' own bearings (races, cage and rolling elements) and
+      // scaled to its bore `d` (the shaft it sits on) and width `h`; its axis is Y, centred
+      const kinds = { ball: ballBearing, roller: rollerBearing, taper: taperBearing, needle: needleBearing, thrust: thrustBearing }
+      const ref = (kinds[spec.bearing ?? 'ball'] ?? ballBearing)()
+      const bore = Math.max(0.004, evalDim(spec.d ?? (spec.rInner !== undefined ? `2 * (${spec.rInner})` : undefined), params, 0.04))
+      const s = bore / 0.04
+      const w = evalDim(spec.h, params, NaN)
+      const sy = Number.isFinite(w) && w > 0 ? w / (ref.width * 0.001) : s
+      const parts = [ref.inner, ref.outer, ref.cage].filter((g): g is THREE.BufferGeometry => !!g)
+      if (ref.element) for (const m of ref.placements) parts.push(ref.element.clone().applyMatrix4(m))
+      return xform(merge(...parts), new THREE.Matrix4().makeScale(s, sy, s))
     }
     case 'hexBolt': {
       const d = Math.max(0.002, evalDim(spec.d ?? spec.r, params, 0.016))

@@ -17,6 +17,7 @@ export const SERIOUS: Record<string, string> = {
   'calculations work': 'calculations broken',
   'loads act right': 'a force or moment drawn wrongly',
   'moves freely': 'parts hit each other or come apart as it moves',
+  'standard parts': 'a standard part built by hand from simple shapes',
   'looks right': 'looks wrong in its picture',
 }
 
@@ -24,7 +25,7 @@ export const SERIOUS: Record<string, string> = {
  * Bump when a check is added or changed: stored models are then re-checked (the admin Library tab re-scores
  * each published model once per version; the review queue always scores drafts afresh).
  */
-export const CHECKS_VERSION = 6
+export const CHECKS_VERSION = 7
 
 /** the motion check's name: worked out when a model is built, kept with the draft (too slow to redo on every page load) */
 export const MOVES = 'moves freely'

@@ -17,7 +17,9 @@ export function openingCut(spec: NoteSceneSpec): { enabled: boolean; normal: [nu
     const kin = buildKinematics(spec, scope)
     const drive = spec.parts.filter((p) => kin.derived.has(p.id) || kin.drivers.has(p.id) || !!p.motion)
     if (!drive.length) return null
-    for (const h of spec.parts.filter((p) => p.role === 'housing')) {
+    // a casing round the works (hollowed out, or named as one), not a base plate with pedestals under a shaft
+    const casing = (p: (typeof spec.parts)[number]) => p.shapes.some((s) => s.op === 'subtract') || /\b(casing|housing|gear ?box|gear ?case|crank ?case|cover|enclosure)\b/i.test(p.name)
+    for (const h of spec.parts.filter((p) => p.role === 'housing' && casing(p))) {
       const box = frames.get(h.id)?.box
       if (!box) continue
       const inner = box.clone().expandByScalar(-0.002)

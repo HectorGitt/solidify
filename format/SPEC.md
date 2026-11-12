@@ -176,6 +176,7 @@ pattern: `radialCount` copies spaced evenly round the part's Y axis at radius `r
 | `spring` | `r` coil radius (0.025), `wireRadius` (0.0035), `h` (0.1), `turns` (6; 2–40) | helical coil spring about Y, centred |
 | `hexNut` | `d` thread diameter (0.02), `h` (0.8 d) | hexagon nut about Y, centred |
 | `hexBolt` | `d` (0.016), `h` shank length (5 d) | hexagon-head bolt about Y |
+| `bearing` | `bearing` (`ball`, `roller`, `taper`, `needle`, `thrust`; default `ball`), `d` bore (0.04), `h` width (in proportion) | a standard rolling bearing about Y, centred: races, cage and rolling elements, drawn by the viewer from a reference bearing scaled to `d` and `h` |
 
 Sizes below a shape's minimum are raised to it (about 1–2 mm for most) so every part draws. A viewer meeting
 an unknown `kind` SHOULD draw a small placeholder block rather than fail.
