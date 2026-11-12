@@ -72,6 +72,9 @@ export interface SceneDef {
   reset?: () => void
   /** part id the camera keeps following (e.g. 'tractor' in field scenes), preserving its offset */
   follow?: string
+  /** in the headset, the part that is the machine: its size and lowest point place it (the tractor, not the load
+   *  sledge it tows on a chain); otherwise everything but flat scenery */
+  xrSubject?: string
   /**
    * Live values handed to a detail scene when you drill down from here, in shared units:
    * rpm, slip (0–1), pullKN, wheelLoadKN, speedKmh, CI (kPa), tyre ('bias' | 'radial').
