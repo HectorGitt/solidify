@@ -301,6 +301,13 @@ export function BuildController({ floorY = 0 }: { floorY?: number }) {
     }
     // the same, for fingers in a headset: the part under the pinch, carried with it, fitted if let go by its home
     const held = new Map<string, THREE.Vector3>()
+    // development only: the parts' tray and home spots and the hand hooks, for recordings that build by hand
+    if (import.meta.env.DEV)
+      (window as unknown as { __build?: unknown }).__build = {
+        hands: buildHands,
+        slots: () => [...slots.current.entries()].map(([id, s]) => ({ id, at: s.at.toArray(), home: s.home.toArray() })),
+        state: () => ({ placed: useBuild.getState().placed, next: (() => { const d = useBuild.getState().def; return d ? nextSteps(d, useBuild.getState().placed).map((x) => x.id) : [] })(), done: !!useBuild.getState().finishedAt }),
+      }
     buildHands.grab = (p, reach) => {
       if (useBuild.getState().finishedAt) return null
       const placed = useBuild.getState().placed
