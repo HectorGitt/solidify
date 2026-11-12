@@ -38,10 +38,11 @@ const HERO_SCENES: { moduleId: string; sceneId: string; label: string; frame: St
 
 const COPY = {
   professional: {
-    eyebrow: 'Interactive 3D machinery simulator and engineering lab',
+    eyebrow: 'Engineering in 3D: working labs, your own models, and VR',
     title: 'Open up the machine.',
-    lead: 'Cut through a running tractor, pull a specimen until it snaps, or bring a steam plant up to pressure. Set the conditions, watch the test run, and read the results as they come in.',
-    primary: { label: 'Explore the tractor', to: '/m/powertrain/line-of-drive' },
+    lead: 'Run real machines in 3D, cut them open and take them apart, with the calculations live. Describe a machine of your own and Solidify builds it. Then put any of them on your table in a headset.',
+    primary: { label: 'Open the labs', to: '/labs' },
+    labs: { label: 'Build a model', to: '/create/new' },
     features: [
       { icon: 'cut', title: 'True cutaways', text: 'Slice any assembly at any angle. Cut faces are hatched by material like an engineering drawing; moving parts stay whole so you can watch them work.' },
       { icon: 'sliders', title: 'Live calculations', text: 'Every slider drives the physics: belt tensions, clutch capacity, hydrostatic flow, slip and tractive efficiency, with the working shown.' },
@@ -50,11 +51,11 @@ const COPY = {
     ],
   },
   academic: {
-    eyebrow: '3D models, labs and worked answers for engineering and science students',
+    eyebrow: 'Engineering in 3D: working labs, your own models, and VR',
     title: 'Engineering, brought to life.',
-    lead: 'Paste any question, from materials science to machine design, and see it in 3D with the working step by step. Run lab tests on engines, materials, mechanisms and thermal plant, then practise with fresh numbers and see the slip behind a wrong answer.',
-    primary: { label: 'Solve a question', to: '/questions' },
-    labs: { label: 'Open the labs', to: '/labs' },
+    lead: 'Run real machines in 3D, cut them open and take them apart, with the calculations live. Describe a machine of your own, or paste a question, and Solidify builds it with the working shown. Then put any of them on your table in a headset.',
+    primary: { label: 'Open the labs', to: '/labs' },
+    labs: { label: 'Build a model', to: '/create/new' },
     features: [
       { icon: 'cut', title: 'Interactive diagrams', text: 'Every textbook figure becomes a model you can turn, slice, explode and run in slow motion, down to 1/200 of real speed.' },
       { icon: 'book', title: 'Worked examples', text: 'Load exam-style data into any scene and follow the working: the formula, the numbers substituted, then the answer.' },
@@ -385,13 +386,11 @@ function Hero({ copy }: { copy: (typeof COPY)[keyof typeof COPY] }) {
               <Link to={copy.primary.to} className="inline-flex items-center gap-2 rounded-full bg-accent px-7 py-4 text-[15px] font-semibold text-accent-ink transition-transform hover:brightness-105 active:scale-[0.98]">
                 {copy.primary.label} <Icon.chevron width={16} height={16} />
               </Link>
-              {'labs' in copy ? (
-                <Link to={copy.labs.to} className="inline-flex items-center gap-2 rounded-full border border-line-2 bg-[var(--color-scrim)] px-6 py-4 text-[15px] font-medium text-ink backdrop-blur-xl transition-colors hover:border-accent/50">
-                  {copy.labs.label}
-                </Link>
-              ) : null}
+              <Link to={copy.labs.to} className="inline-flex items-center gap-2 rounded-full border border-line-2 bg-[var(--color-scrim)] px-6 py-4 text-[15px] font-medium text-ink backdrop-blur-xl transition-colors hover:border-accent/50">
+                {copy.labs.label}
+              </Link>
               <Link to="/promo" className="inline-flex items-center gap-2 rounded-full border border-line-2 bg-[var(--color-scrim)] px-6 py-4 text-[15px] font-medium text-ink backdrop-blur-xl transition-colors hover:border-accent/50">
-                <Icon.tour width={16} height={16} /> Watch the tour
+                <Icon.tour width={16} height={16} /> Watch the demo
               </Link>
             </div>
           </div>
@@ -611,7 +610,62 @@ function AudienceCard({ who, title, points, active, onChoose }: { who: string; t
   )
 }
 
-const HOME_TITLE = 'Solidify — Engineering in 3D: models, labs and worked answers'
+const HOME_TITLE = 'Solidify — Engineering in 3D: labs, your own models and VR'
+
+/** What Solidify is, in three: the labs, a model of your own, and either of them in a headset. */
+function Pillars() {
+  const items = [
+    { name: 'scenes/powertrain--gearboxes', alt: 'A tractor gearbox cut open, its power path in orange', title: 'Labs that run', text: 'Hand-built machines and test rigs on real physics. Run them, cut them open, take them apart and read the numbers as they change.', to: '/labs', link: 'Open the labs' },
+    { name: 'home/create', alt: 'A helical gear pair built from a description, its tooth forces shown on it', title: 'Your own machine, from words', text: 'Describe a machine or upload a photo. Solidify builds a working model with its sizes, loads and calculations, and changes it when you ask.', to: '/create/new', link: 'Build a model' },
+    { name: 'home/vr', alt: 'The gear pair on a table in a headset, a hand at its control panel', title: 'On your table, in a headset', text: 'Open a lab or a model on a Quest. Stand it on the table in front of you, or beside you at real size, and work it with your hands.', to: '/labs', link: 'Pick a lab to open' },
+  ]
+  return (
+    <section id="what" className="mx-auto grid max-w-[1360px] scroll-mt-20 gap-4 px-5 pt-14 sm:px-10 md:grid-cols-3">
+      {items.map((it) => (
+        <Link key={it.title} to={it.to} className="group flex flex-col overflow-hidden rounded-3xl border border-line bg-panel transition-colors hover:border-accent/50">
+          <Media name={it.name} alt={it.alt} className="aspect-[4/3] w-full bg-[var(--color-stage)] object-cover" />
+          <div className="flex flex-1 flex-col p-6">
+            <h2 className="text-[20px] font-semibold tracking-[-0.02em] text-ink">{it.title}</h2>
+            <p className="mt-2 flex-1 text-[14px] leading-relaxed text-mute">{it.text}</p>
+            <span className="mt-5 inline-flex items-center gap-1.5 text-[13.5px] font-semibold text-accent">
+              {it.link} <Icon.chevron width={14} height={14} className="transition-transform group-hover:translate-x-0.5" />
+            </span>
+          </div>
+        </Link>
+      ))}
+    </section>
+  )
+}
+
+/** The open model format: a model is a file anyone can read, not something locked in the app. */
+function OpenFormat() {
+  const out = 'rounded-full border border-line-2 px-5 py-2.5 text-[13.5px] font-semibold text-ink transition-colors hover:border-accent/50'
+  return (
+    <section id="format" className="mx-auto max-w-[1360px] scroll-mt-20 px-5 pt-20 sm:px-10">
+      <div className="grid gap-6 rounded-3xl border border-line bg-panel p-7 sm:p-10 lg:grid-cols-12 lg:items-center">
+        <div className="lg:col-span-7">
+          <p className="font-mono text-[13px] text-accent">.slfy</p>
+          <h2 className="mt-2 text-[26px] font-semibold tracking-[-0.03em] sm:text-[32px]">An open format for working models</h2>
+          <p className="mt-3 max-w-2xl text-[15px] leading-relaxed text-mute">
+            Every model Solidify builds saves as a .slfy file: plain text holding the parts, how they join and move, the sizes you can change and the calculations. The format is public, with a specification, a schema and worked examples, so a model
+            is never locked in.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2 lg:col-span-5 lg:justify-end">
+          <a href="https://slfy.solidify.studio" target="_blank" rel="noreferrer" className="rounded-full bg-accent px-5 py-2.5 text-[13.5px] font-semibold text-accent-ink hover:brightness-110">
+            Read the specification
+          </a>
+          <Link to="/create/open" className={out}>
+            Open a model file
+          </Link>
+          <a href="https://github.com/HectorGitt/slfy" target="_blank" rel="noreferrer" className={out}>
+            GitHub
+          </a>
+        </div>
+      </div>
+    </section>
+  )
+}
 
 /** Two ways to reach us: ask for a feature, or talk to us about a school or company plan. */
 function Contact() {
@@ -661,6 +715,10 @@ export function Landing() {
 
       <Hero copy={copy} />
 
+      <Pillars />
+
+      <BuildYourOwn />
+
       <LiveTest />
 
       <section id="systems" className="mx-auto max-w-[1360px] scroll-mt-20 px-5 pt-16 sm:px-10">
@@ -682,8 +740,6 @@ export function Landing() {
 
       <RigOfTheDay />
 
-      <BuildYourOwn />
-
       <section className="mx-auto grid max-w-[1360px] gap-4 px-5 pt-20 sm:grid-cols-2 sm:px-10 lg:grid-cols-4">
         <Stat value={total} label="interactive 3D scenes" />
         <Stat value={READY.length} label="systems and labs" />
@@ -703,6 +759,8 @@ export function Landing() {
           ))}
         </div>
       </section>
+
+      <OpenFormat />
 
       <Roles />
 
