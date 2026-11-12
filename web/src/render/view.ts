@@ -81,6 +81,12 @@ export interface ViewState {
   resetView: () => void
 }
 
+/**
+ * Whether moving parts are sectioned because a preset said so ("Section the gears too"), not because the student
+ * ticked it: a later preset that says nothing then puts them back whole, instead of leaving gears cut for good.
+ */
+let movingByPreset = false
+
 const initialCut: CutState = {
   enabled: true,
   planes: DEFAULT_CUT_PRESETS[0].planes,
@@ -123,7 +129,10 @@ export const useView = create<ViewState>((set, get) => ({
   setFaultMode: (faultMode) => set({ faultMode }),
   setStudioMode: (studioMode) => set({ studioMode }),
   setLabels: (labels) => set({ labels }),
-  setCut: (patch) => set((s) => ({ cut: { ...s.cut, ...patch } })),
+  setCut: (patch) => {
+    if ('sectionMoving' in patch) movingByPreset = false
+    set((s) => ({ cut: { ...s.cut, ...patch } }))
+  },
   setPlane: (i, patch) =>
     set((s) => ({
       activePreset: null,
@@ -132,6 +141,8 @@ export const useView = create<ViewState>((set, get) => ({
   applyPreset: (id) => {
     const p = get().cutPresets.find((x) => x.id === id)
     if (!p) return
+    const keepMoving = movingByPreset ? false : get().cut.sectionMoving
+    movingByPreset = !!p.sectionMoving
     set((s) => ({
       activePreset: id,
       cut: {
@@ -139,7 +150,7 @@ export const useView = create<ViewState>((set, get) => ({
         enabled: true,
         planes: p.planes.map((pl) => ({ normal: [...pl.normal] as [number, number, number], pos: pl.pos })),
         intersection: p.intersection ?? false,
-        sectionMoving: p.sectionMoving ?? s.cut.sectionMoving,
+        sectionMoving: p.sectionMoving ?? keepMoving,
       },
     }))
   },
