@@ -560,8 +560,103 @@ function Lab({ scene }: { scene: SceneDef }) {
           </group>
           <Panel scene={scene} placing={placing} />
         </group>
+        <PartTag origin={origin} />
       </XROrigin>
     </>
+  )
+}
+
+/**
+ * The part last touched, named beside it: a small card just above the part, turned to face the student, with the
+ * part's name and what it does (as the card beside a picked part on the desktop). Drawn in the headset's own
+ * metres, so it reads the same over a table model and over a tractor at real size.
+ */
+function PartTag({ origin }: { origin: React.RefObject<THREE.Group | null> }) {
+  const selectedId = useView((s) => s.selectedId)
+  const part = useParts((s) => (selectedId ? s.parts[selectedId] : undefined))
+  const tag = useRef<THREE.Group>(null)
+  const { camera } = useThree()
+  const box = useMemo(() => new THREE.Box3(), [])
+  const top = useMemo(() => new THREE.Vector3(), [])
+  const eye = useMemo(() => new THREE.Vector3(), [])
+  const W = 0.24
+  const card = useMemo(() => {
+    if (!part) return null
+    const cw = 768
+    const canvas = document.createElement('canvas')
+    const g = canvas.getContext('2d')!
+    const pad = 34
+    const font = (w: number, px: number) => `${w} ${px}px Sora, system-ui, sans-serif`
+    // the summary in at most three lines
+    g.font = font(400, 30)
+    const words = (part.info?.summary ?? '').split(/\s+/).filter(Boolean)
+    const lines: string[] = []
+    let line = ''
+    for (const w of words) {
+      const next = line ? `${line} ${w}` : w
+      if (g.measureText(next).width > cw - pad * 2 && line) {
+        lines.push(line)
+        line = w
+        if (lines.length === 3) break
+      } else line = next
+    }
+    if (line && lines.length < 3) lines.push(line)
+    if (lines.length === 3 && words.join(' ').length > lines.join(' ').length) lines[2] = lines[2].replace(/\s*\S*$/, '') + '…'
+    const ch = pad * 2 + 52 + (lines.length ? 14 + lines.length * 40 : 0)
+    canvas.width = cw
+    canvas.height = ch
+    g.fillStyle = 'rgba(14,17,19,0.94)'
+    g.beginPath()
+    g.roundRect(0, 0, cw, ch, 28)
+    g.fill()
+    g.fillStyle = '#c6f24e'
+    g.fillRect(pad, pad + 4, 8, 40)
+    g.fillStyle = '#ffffff'
+    g.font = font(600, 40)
+    g.textBaseline = 'top'
+    g.fillText(part.name, pad + 22, pad, cw - pad * 2 - 22)
+    g.fillStyle = 'rgba(255,255,255,0.78)'
+    g.font = font(400, 30)
+    lines.forEach((l, i) => g.fillText(l, pad, pad + 66 + i * 40, cw - pad * 2))
+    const tex = new THREE.CanvasTexture(canvas)
+    tex.colorSpace = THREE.SRGBColorSpace
+    tex.anisotropy = 4
+    return { tex, aspect: ch / cw }
+  }, [part])
+  useEffect(() => () => card?.tex.dispose(), [card])
+  useFrame(() => {
+    const g = tag.current
+    const o = origin.current
+    if (!g || !o) return
+    const obj = selectedId ? partObjects.get(selectedId) : undefined
+    if (!obj || !card) {
+      g.visible = false
+      return
+    }
+    box.setFromObject(obj)
+    if (box.isEmpty()) {
+      g.visible = false
+      return
+    }
+    // just above the part's top, in the headset's metres
+    box.getCenter(top)
+    top.y = box.max.y
+    o.updateMatrixWorld()
+    o.worldToLocal(top)
+    top.y += 0.03 + (W * card.aspect) / 2
+    g.position.copy(top)
+    camera.getWorldPosition(eye)
+    g.visible = true
+    g.lookAt(eye)
+  })
+  if (!card) return null
+  return (
+    <group ref={tag} visible={false}>
+      <mesh renderOrder={10}>
+        <planeGeometry args={[W, W * card.aspect]} />
+        <meshBasicMaterial map={card.tex} transparent depthTest={false} toneMapped={false} />
+      </mesh>
+    </group>
   )
 }
 
@@ -798,6 +893,12 @@ function Panel({ scene, placing }: { scene: SceneDef; placing: boolean }) {
 
   // development only: a panel action by id, for recordings (a scripted hand can land a button off)
   if (import.meta.env.DEV) (window as unknown as { __xrAct?: (id: string) => void }).__xrAct = act
+  // development only: pick a part by id, as pointing at it and pinching does, and list the parts there are
+  if (import.meta.env.DEV) {
+    const w = window as unknown as { __xrSelect?: (id: string | null) => void; __xrParts?: () => { id: string; name: string }[] }
+    w.__xrSelect = (id) => useView.getState().select(id)
+    w.__xrParts = () => Object.values(useParts.getState().parts).map((p) => ({ id: p.id, name: p.name }))
+  }
 
   // a point on the panel, in canvas pixels
   const toPx = (p: THREE.Vector3) => {
