@@ -17,6 +17,7 @@ const scene: SceneDef = {
   Panel: ConfiguratorPanel,
   camera: SIDE,
   follow: 'tractor',
+  xrSubject: 'tractor',
   extent: 14,
   floorY: -0.6,
   hatchScale: 0.05,

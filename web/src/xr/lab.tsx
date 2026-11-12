@@ -251,11 +251,18 @@ function Lab({ scene }: { scene: SceneDef }) {
     const machine = boxes.filter((b) => !scenery(b))
     const tallest = Math.max(0, ...machine.map((b) => b.max.y - b.min.y))
     const box = new THREE.Box3()
-    for (const b of machine) if (b.max.y - b.min.y > tallest * 0.05) box.union(b)
+    // a scene can name the part that is the machine (a tractor pulling a load sledge on a chain): what it tows
+    // would make it twice as long, and put it twice as far off
+    const subject = scene.xrSubject ? partObjects.get(scene.xrSubject) : undefined
+    const own = subject ? owners.indexOf(subject) : -1
+    if (own >= 0) box.copy(boxes[own])
+    else for (const b of machine) if (b.max.y - b.min.y > tallest * 0.05) box.union(b)
     if (box.isEmpty()) return null
     const s = box.getSize(new THREE.Vector3())
     const c = box.getCenter(new THREE.Vector3())
-    return { size: Math.max(s.x, s.y, s.z), foot: Math.max(s.x, s.z), x: c.x, z: c.z, scenery: owners.filter((_, i) => scenery(boxes[i])) }
+    // a named machine part stands on its own lowest point (a tractor's tyres sit in ruts below the field's level);
+    // anything else on the scene's floor level (a plough's share is meant to be below it, in the furrow)
+    return { size: Math.max(s.x, s.y, s.z), foot: Math.max(s.x, s.z), x: c.x, z: c.z, y: own >= 0 ? box.min.y : undefined, scenery: owners.filter((_, i) => scenery(boxes[i])) }
   }
   const [measured, setMeasured] = useState<ReturnType<typeof measure>>(null)
   const tries = useRef(0)
@@ -280,7 +287,7 @@ function Lab({ scene }: { scene: SceneDef }) {
   const big = fit.size > BIG
   if (import.meta.env.DEV) (window as unknown as { __xrFit?: unknown }).__xrFit = fit
   useEffect(() => useLab.setState({ big, full: big }), [big])
-  const base = useMemo(() => new THREE.Vector3(fit.x, scene.floorY ?? 0, fit.z), [fit, scene])
+  const base = useMemo(() => new THREE.Vector3(fit.x, ('y' in fit ? fit.y : undefined) ?? scene.floorY ?? 0, fit.z), [fit, scene])
   // where the followed part (scene.follow) was first seen, and how far it has gone since
   const followStart = useRef<THREE.Vector3 | null>(null)
   const followNow = useMemo(() => new THREE.Vector3(), [])
@@ -440,7 +447,7 @@ function Lab({ scene }: { scene: SceneDef }) {
         // (looking at a table, or a room whose floor is not found) just far enough ahead that its near side
         // clears them with room to see it whole, so it stands close, not off past the table
         const onFloor = hit.current && hit.current.y < head.y - 0.9 ? hit.current : null
-        const target = onFloor ? tmp.copy(onFloor).setY(0) : tmp.copy(head).addScaledVector(fwd, fit.size * 0.6 + 0.9).setY(0)
+        const target = onFloor ? tmp.copy(onFloor).setY(0) : tmp.copy(head).addScaledVector(fwd, Math.min(3, fit.size * 0.6 + 0.9)).setY(0)
         if (!place.floor) place.floor = target.clone()
         place.floor.lerp(target, 0.35)
         // the panel: low, at desk height and a little to the right, within reach, so it stands beside the machine (over
@@ -788,6 +795,9 @@ function Panel({ scene, placing }: { scene: SceneDef; placing: boolean }) {
       }
     }
   }
+
+  // development only: a panel action by id, for recordings (a scripted hand can land a button off)
+  if (import.meta.env.DEV) (window as unknown as { __xrAct?: (id: string) => void }).__xrAct = act
 
   // a point on the panel, in canvas pixels
   const toPx = (p: THREE.Vector3) => {
