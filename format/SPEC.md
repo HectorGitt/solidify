@@ -169,7 +169,7 @@ pattern: `radialCount` copies spaced evenly round the part's Y axis at radius `r
 | `lathe` | `profile`: [[r, y], …] (≤ 64 points) | the profile turned a full circle about Y |
 | `extrude` | `polygon`: [[x, y], …], `depth` (0.04) | the polygon in the XY plane, extruded along Z, centred in Z |
 | `gear` | `teeth` (20; 6–120), `module` (metres, 0.004), `h` face width (0.024), `rInner` bore (teeth·module/6), `pressureAngle` (degrees, 20; 14.5–30), `helixAngle` (degrees, 0; −45–45) | involute spur or helical gear about Y; pitch radius = module·teeth/2 |
-| `bevelGear` | as `gear` | in 0.1 drawn as `gear`; a true bevel form is planned |
+| `bevelGear` | as `gear`, plus `pitchAngle` (degrees, 45; 10–80) | a straight bevel gear about Y, centred, its cone narrowing towards +Y; two meshed bevel gears stand at 90° with their pitch cones' apexes together |
 | `rack` | `sx` length (0.24), `sy` (0.024), `sz` (0.024) | a toothed bar along X |
 | `pulley` | `rOuter` (0.06), `rInner` bore (0.012), `h` (0.028) | V-grooved pulley about Y |
 | `sprocket` | `teeth` (16; 8–80), `module` (0.004), `h` (0.01), `rInner` (teeth·module/5) | chain sprocket about Y |
@@ -177,6 +177,7 @@ pattern: `radialCount` copies spaced evenly round the part's Y axis at radius `r
 | `hexNut` | `d` thread diameter (0.02), `h` (0.8 d) | hexagon nut about Y, centred |
 | `hexBolt` | `d` (0.016), `h` shank length (5 d) | hexagon-head bolt about Y |
 | `bearing` | `bearing` (`ball`, `roller`, `taper`, `needle`, `thrust`; default `ball`), `d` bore (0.04), `h` width (in proportion) | a standard rolling bearing about Y, centred: races, cage and rolling elements, drawn by the viewer from a reference bearing scaled to `d` and `h` |
+| `worm` | `teeth` starts (1; 1–4), `module` (0.004), `r` pitch radius (5 module), `h` length (8π module) | a threaded worm about Y, centred; a gear meshed with it stands square to it at the sum of the pitch radii and turns `teeth`/z₂ of a turn per turn of the worm |
 
 Sizes below a shape's minimum are raised to it (about 1–2 mm for most) so every part draws. A viewer meeting
 an unknown `kind` SHOULD draw a small placeholder block rather than fail.

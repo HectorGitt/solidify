@@ -82,6 +82,7 @@ export type NoteShapeKind =
   | 'hexNut'
   | 'hexBolt'
   | 'bearing'
+  | 'worm'
 
 export interface NoteShapeSpec {
   kind: NoteShapeKind
@@ -115,6 +116,8 @@ export interface NoteShapeSpec {
   pitch?: DimExpr
   // Hex nut / hex bolt: thread diameter (bolt shank length is h)
   d?: DimExpr
+  /** a bevel gear's pitch cone half-angle, degrees (45 for a mitre pair; for a 90° pair tan γ = z1 / z2) */
+  pitchAngle?: DimExpr
   /** a bearing's type (kind 'bearing'): ball (default), roller, taper, needle or thrust */
   bearing?: 'ball' | 'roller' | 'taper' | 'needle' | 'thrust'
   // Spring
@@ -739,6 +742,7 @@ export const noteShapeSchema = z.object({
     'hexNut',
     'hexBolt',
     'bearing',
+    'worm',
   ]),
   op: z.enum(['add', 'subtract', 'intersect']).optional(),
   position: vec3ExprSchema.optional(),
@@ -766,6 +770,8 @@ export const noteShapeSchema = z.object({
   profile: z.array(z.tuple([dimExprSchema, dimExprSchema])).max(64).optional(),
   polygon: z.array(z.tuple([dimExprSchema, dimExprSchema])).max(64).optional(),
   depth: dimExprSchema.optional(),
+  /** a bevel gear's pitch cone half-angle, degrees (45 for a mitre pair) */
+  pitchAngle: dimExprSchema.optional(),
   /** a bearing's type */
   bearing: z.enum(['ball', 'roller', 'taper', 'needle', 'thrust']).optional(),
 })
