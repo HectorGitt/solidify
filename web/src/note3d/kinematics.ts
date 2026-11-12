@@ -249,7 +249,8 @@ export function buildKinematics(spec: Pick<NoteSceneSpec, 'parts'> | null, scope
       continue
     }
     if (!m || !t || !moving(p) || !moving(t)) continue
-    if (m.kind === 'coaxial' && round(t)) {
+    // fitted by a feature onto a turning part, a part turns with it as a coaxial one does
+    if ((m.kind === 'coaxial' || m.kind === 'fit') && round(t)) {
       // fixed to a turning part: a gear on its shaft, or a pin, a block, a cam carried round with it. Unless the
       // model wrote it a clearly different speed: then it runs free on a bearing (a differential's side gears)
       const own = (x: NotePartSpec) => (x.motion?.kind === 'rotate' ? Math.abs(evalDim(x.motion.speed, scope, NaN)) : NaN)

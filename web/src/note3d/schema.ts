@@ -86,6 +86,8 @@ export type NoteShapeKind =
 
 export interface NoteShapeSpec {
   kind: NoteShapeKind
+  /** a name for this shape as a feature other parts fit to ("bore", "pin", "seat", "slot") */
+  name?: string
   /** CSG boolean operation against preceding shapes in the same part (default: 'add') */
   op?: 'add' | 'subtract' | 'intersect'
   /** Local translation [x, y, z] in scene units (meters) */
@@ -175,6 +177,11 @@ export type NoteMountSpec =
   /** a key in the keyway of shaft `target`: its long side along the shaft, sunk half its height into it at radius
    *  `r` (the shaft's radius there), `at` along the shaft, `angle` degrees round it from the top; it turns with the shaft */
   | { kind: 'keyed'; target: string; r?: DimExpr; at?: DimExpr; offset?: DimExpr; angle?: DimExpr; shift?: Vec3Expr }
+  /** fitted by named features: this part's shape `own` (default its main round shape, or its whole middle) goes
+   *  into the target's shape `feature`, their axes on one line (a pin in a hole, a shaft in a bore, a rod through a
+   *  bushing), `at` along the feature (0 one end, 1 the other, default 0.5) and `offset` metres further; with
+   *  `face` (a face of the feature: +y on top), this part sits against that face of it instead, centred on it */
+  | { kind: 'fit'; target: string; feature: string; own?: string; at?: DimExpr; offset?: DimExpr; face?: AxisDir; turn?: DimExpr; shift?: Vec3Expr }
 
 export type AxisDir = '+x' | '-x' | '+y' | '-y' | '+z' | '-z'
 
@@ -709,6 +716,7 @@ export const noteMountSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('lever'), target: z.string().min(1).max(80), pivot: z.string().min(1).max(80), throw: dimExprSchema, angle: dimExprSchema.optional(), direction: axisDirSchema.optional(), shift: vec3ExprSchema.optional() }),
   z.object({ kind: z.literal('follower'), target: z.string().min(1).max(80), direction: axisDirSchema, of: z.enum(['pin', 'tip']).optional(), throw: dimExprSchema.optional(), angle: dimExprSchema.optional(), offset: dimExprSchema.optional(), shift: vec3ExprSchema.optional() }),
   z.object({ kind: z.literal('hooke'), target: z.string().min(1).max(80), angle: dimExprSchema, shift: vec3ExprSchema.optional() }),
+  z.object({ kind: z.literal('fit'), target: z.string().min(1).max(80), feature: z.string().min(1).max(40), own: z.string().min(1).max(40).optional(), at: dimExprSchema.optional(), offset: dimExprSchema.optional(), face: axisDirSchema.optional(), turn: dimExprSchema.optional(), shift: vec3ExprSchema.optional() }),
   z.object({ kind: z.literal('keyed'), target: z.string().min(1).max(80), r: dimExprSchema.optional(), at: dimExprSchema.optional(), offset: dimExprSchema.optional(), angle: dimExprSchema.optional(), shift: vec3ExprSchema.optional() }),
 ])
 
@@ -744,6 +752,7 @@ export const noteShapeSchema = z.object({
     'bearing',
     'worm',
   ]),
+  name: z.string().trim().min(1).max(40).optional(),
   op: z.enum(['add', 'subtract', 'intersect']).optional(),
   position: vec3ExprSchema.optional(),
   rotation: vec3ExprSchema.optional(),

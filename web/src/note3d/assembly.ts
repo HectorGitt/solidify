@@ -65,6 +65,24 @@ function shapeAxis(sh: NoteShapeSpec, scope: Record<string, number>) {
 }
 
 /** a part's own frame: its box, centre, axis, length, pitch radius; what the motion is worked out from */
+/** a part's shape by its feature name (its children's too) */
+function featureOf(part: NotePartSpec, name: string): NoteShapeSpec | undefined {
+  const want = name.trim().toLowerCase()
+  return part.shapes.find((s) => s.name?.trim().toLowerCase() === want)
+}
+
+/** a shape's own frame in its part: centre, axis (its Y, turned), length along that axis, turn and local box */
+function shapeFrame(s: NoteShapeSpec, scope: Record<string, number>) {
+  const r = evalVec3(s.rotation, scope, [0, 0, 0])
+  const quat = new THREE.Quaternion().setFromEuler(new THREE.Euler(r[0], r[1], r[2], 'XYZ'))
+  const g = buildPartGeometry([{ ...s, position: undefined, rotation: undefined, op: 'add' }], scope)
+  g.computeBoundingBox()
+  const box = g.boundingBox?.clone() ?? new THREE.Box3(new THREE.Vector3(-0.01, -0.01, -0.01), new THREE.Vector3(0.01, 0.01, 0.01))
+  g.dispose()
+  const centre = new THREE.Vector3(...evalVec3(s.position, scope, [0, 0, 0])).add(box.getCenter(new THREE.Vector3()).applyQuaternion(quat))
+  return { centre, axis: new THREE.Vector3(0, 1, 0).applyQuaternion(quat).normalize(), length: box.max.y - box.min.y, quat, box }
+}
+
 /** a part's bevel gear shape, if it is one */
 const bevelOf = (p: NotePartSpec) => p.shapes.find((s) => s.kind === 'bevelGear' && s.op !== 'subtract')
 /** a part's worm shape, if it is one */
@@ -439,6 +457,44 @@ export function resolveAssembly(
       const own = si.center.clone().applyQuaternion(b.quat).add(b.pos)
       point = own.addScaledVector(d, F.clone().sub(own).dot(d) + evalDim(m.offset, scope, 0))
       quat = b.quat
+    } else if (m.kind === 'fit') {
+      // fitted by named features: the target's shape named `feature`, this part's shape `own` (or its main round
+      // shape), their axes on one line, or this part against a face of the feature. No offsets to work out by hand
+      const F = featureOf(target, m.feature)
+      if (!F) {
+        issues.push({ partId: p.id, kind: 'missing-target', message: `${p.name} fits to "${m.feature}" on ${target.name}, which has no shape of that name` })
+        return void done.set(p.id, base(p))
+      }
+      const fFrame = shapeFrame(F, scope)
+      const fCentre = fFrame.centre.clone().applyQuaternion(T.quat).add(T.pos)
+      const fAxis = fFrame.axis.clone().applyQuaternion(T.quat).normalize()
+      if (m.face) {
+        // against a face of the feature (its own box, turned with it), centred on it
+        quat = base(p).quat
+        const n = new THREE.Vector3(...DIRS[m.face]).applyQuaternion(fFrame.quat).applyQuaternion(T.quat).normalize()
+        const half = (box: THREE.Box3, dir: THREE.Vector3) => {
+          const s = box.getSize(new THREE.Vector3()).multiplyScalar(0.5)
+          return Math.abs(dir.x) * s.x + Math.abs(dir.y) * s.y + Math.abs(dir.z) * s.z
+        }
+        const fBoxLocal = fFrame.box
+        const nLocal = new THREE.Vector3(...DIRS[m.face])
+        const sb = worldBox(si.box, quat)
+        const sc = sb.getCenter(new THREE.Vector3())
+        point = fCentre.clone().addScaledVector(n, half(fBoxLocal, nLocal) + half(sb, n) + evalDim(m.offset, scope, 0))
+        const pos = point.sub(sc).add(new THREE.Vector3(...evalVec3(m.shift, scope, [0, 0, 0])))
+        done.set(p.id, { pos, quat })
+        return
+      }
+      const O = m.own ? featureOf(p, m.own) : (p.shapes.find((s) => s.op !== 'subtract' && GEARS.has(s.kind)) ?? p.shapes.find((s) => s.op !== 'subtract' && ROUND.has(s.kind)))
+      const oFrame = O ? shapeFrame(O, scope) : { centre: si.center.clone(), axis: si.axis.clone(), length: si.length, quat: new THREE.Quaternion(), box: si.box }
+      quat = alignment(oFrame.axis, fAxis)
+      const turn = evalDim(m.turn, scope, 0)
+      if (turn) quat = new THREE.Quaternion().setFromAxisAngle(fAxis, (turn * Math.PI) / 180).multiply(quat)
+      const at = Math.min(1, Math.max(0, evalDim(m.at, scope, 0.5)))
+      point = fCentre.clone().addScaledVector(fAxis, (at - 0.5) * fFrame.length + evalDim(m.offset, scope, 0))
+      const pos = point.sub(oFrame.centre.clone().applyQuaternion(quat)).add(new THREE.Vector3(...evalVec3(m.shift, scope, [0, 0, 0])))
+      done.set(p.id, { pos, quat })
+      return
     } else if (m.kind === 'keyed') {
       // a key in the shaft's keyway: long side along the shaft, thin side radial, its middle at the shaft's surface
       // (half in the shaft, half in the hub), worked out here so it cannot end up at the centre or lying across
