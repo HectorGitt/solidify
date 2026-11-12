@@ -49,3 +49,35 @@ describe('opening cut away', () => {
     expect(openingCut(spec(base))).toBeNull()
   })
 })
+
+describe('worms and bevel gears drawn and meshed by the app', () => {
+  const Zr: [number, number, number] = [0, 0, Math.PI / 2]
+  it('a single-start worm turns a 30-tooth wheel at 30 : 1, the wheel square to it', async () => {
+    const { buildKinematics } = await import('./kinematics')
+    const { resolveAssembly } = await import('./assembly')
+    const parts = [
+      { id: 'worm', name: 'Worm', role: 'moving' as const, position: [0, 0, 0] as [number, number, number], rotation: Zr, motion: { kind: 'rotate' as const, axis: 'y' as const, speed: 6 }, shapes: [{ kind: 'worm' as const, teeth: 1, module: 0.004, h: 0.08 }] },
+      { id: 'wheel', name: 'Wheel', role: 'moving' as const, mount: { kind: 'mesh' as const, target: 'worm', side: '+y' as const }, shapes: [{ kind: 'gear' as const, teeth: 30, module: 0.004, h: 0.03 }] },
+    ]
+    const kin = buildKinematics({ parts }, {})
+    kin.update(1)
+    expect(Math.abs(kin.move('wheel')!.spin)).toBeCloseTo(0.2, 6)
+    const f = resolveAssembly({ parts }, {}).frames.get('wheel')!
+    // the wheel's axis square to the worm's (X), its centre the two pitch radii above
+    expect(Math.abs(f.axis.x)).toBeLessThan(1e-6)
+    expect(f.center.y).toBeCloseTo(0.02 + 0.06, 3)
+  })
+  it('a 18 : 36 bevel pair turns at 2 : 1 with its axes square', async () => {
+    const { buildKinematics } = await import('./kinematics')
+    const { resolveAssembly } = await import('./assembly')
+    const parts = [
+      { id: 'p', name: 'Pinion', role: 'moving' as const, position: [0, 0, 0] as [number, number, number], rotation: Zr, motion: { kind: 'rotate' as const, axis: 'y' as const, speed: 1.5 }, shapes: [{ kind: 'bevelGear' as const, teeth: 18, module: 0.004, pitchAngle: 26.565 }] },
+      { id: 'g', name: 'Wheel', role: 'moving' as const, mount: { kind: 'mesh' as const, target: 'p', side: '-y' as const }, shapes: [{ kind: 'bevelGear' as const, teeth: 36, module: 0.004, pitchAngle: 63.435 }] },
+    ]
+    const kin = buildKinematics({ parts }, {})
+    kin.update(1)
+    expect(Math.abs(kin.move('g')!.spin)).toBeCloseTo(0.75, 6)
+    const a = resolveAssembly({ parts }, {}).frames
+    expect(Math.abs(a.get('p')!.axis.dot(a.get('g')!.axis))).toBeLessThan(1e-6)
+  })
+})

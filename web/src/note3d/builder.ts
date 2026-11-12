@@ -16,7 +16,7 @@ import {
   type CsgOp,
   type V2,
 } from '@/geometry'
-import { hexBolt } from '@/geometry/parts'
+import { bevelGear as bevelGearGeometry, hexBolt } from '@/geometry/parts'
 import { ballBearing, hexNut, needleBearing, rollerBearing, taperBearing, thrustBearing } from '@/parts/lib/elements'
 import { evalDim, evalVec3, type NoteShapeSpec } from './schema'
 
@@ -112,8 +112,17 @@ function buildSingleShapeGeometry(
       const depth = Math.max(0.002, evalDim(spec.depth ?? spec.h, params, 0.04))
       return extrude(shape, depth)
     }
-    case 'gear':
     case 'bevelGear': {
+      // a true straight bevel gear: teeth on a cone, `pitchAngle` the cone's half-angle (45° for a mitre pair; for
+      // a 90° pair tan γ = z1 / z2). Axis Y, centred along it; the cone narrows towards +Y, where its apex is
+      const teeth = Math.max(6, Math.min(120, Math.round(evalDim(spec.teeth, params, 20))))
+      const m = Math.max(0.001, evalDim(spec.module, params, 0.004))
+      const { pitch, width } = bevelSize(spec, params)
+      const bore = Math.max(0, evalDim(spec.rInner, params, (teeth * m) / 6))
+      const g = bevelGearGeometry({ teeth, module: m, faceWidth: width, pitchAngleDeg: pitch, bore })
+      return standUp(xform(g, new THREE.Matrix4().makeTranslation(0, 0, -bevelSize(spec, params).along / 2)))
+    }
+    case 'gear': {
       const teeth = Math.max(6, Math.min(120, Math.round(evalDim(spec.teeth, params, 20))))
       const m = Math.max(0.001, evalDim(spec.module, params, 0.004))
       const width = Math.max(0.003, evalDim(spec.h ?? spec.depth, params, 0.024))
@@ -222,6 +231,22 @@ function buildSingleShapeGeometry(
       if (ref.element) for (const m of ref.placements) parts.push(ref.element.clone().applyMatrix4(m))
       return xform(merge(...parts), new THREE.Matrix4().makeScale(s, sy, s))
     }
+    case 'worm': {
+      // a worm: `teeth` starts (1 to 4), `module`, pitch radius `r` (default 10 modules: a diameter factor q of 10),
+      // length `h`; a threaded screw about Y, centred. Its wheel is a gear meshed with it (the assembly sets them square)
+      const m = Math.max(0.0005, evalDim(spec.module, params, 0.004))
+      const starts = Math.max(1, Math.min(4, Math.round(evalDim(spec.teeth, params, 1))))
+      const r = Math.max(2 * m, evalDim(spec.r ?? spec.rOuter, params, 5 * m))
+      const h = Math.max(4 * m, evalDim(spec.h, params, 8 * Math.PI * m))
+      const lead = starts * Math.PI * m
+      const turns = Math.max(1, h / lead)
+      const parts = [xform(cylinder(r - 1.1 * m, h, 32), new THREE.Matrix4())]
+      for (let k = 0; k < starts; k++) {
+        const thread = helixSpring(r - 0.25 * m, 0.75 * m, h, turns, false)
+        parts.push(xform(thread, new THREE.Matrix4().makeRotationY((2 * Math.PI * k) / starts).multiply(new THREE.Matrix4().makeTranslation(0, -h / 2, 0))))
+      }
+      return merge(...parts)
+    }
     case 'hexBolt': {
       const d = Math.max(0.002, evalDim(spec.d ?? spec.r, params, 0.016))
       const length = Math.max(d, evalDim(spec.h, params, 5 * d))
@@ -255,6 +280,21 @@ const angleIn = (v: number, min: number, max: number, fallback: number) => (Numb
 export function rackModule(spec: NoteShapeSpec, params: Record<string, number>) {
   const sy = Math.max(0.008, evalDim(spec.sy, params, 0.024))
   return Math.max(0.0005, evalDim(spec.module, params, sy / 3.5))
+}
+
+/**
+ * A bevel gear's cone, as drawn: pitch half-angle (degrees), face width, its length along the axis, pitch radius,
+ * and how far its apex is from the shape's centre along +Y (the assembly meets two gears' apexes there).
+ */
+export function bevelSize(spec: NoteShapeSpec, params: Record<string, number>) {
+  const teeth = Math.max(6, Math.min(120, Math.round(evalDim(spec.teeth, params, 20))))
+  const m = Math.max(0.001, evalDim(spec.module, params, 0.004))
+  const pitch = angleIn(evalDim(spec.pitchAngle, params, 45), 10, 80, 45)
+  const g = (pitch * Math.PI) / 180
+  const R = (teeth * m) / 2
+  const width = Math.max(0.003, Math.min(evalDim(spec.h ?? spec.depth, params, R / 2.5), (0.3 * R) / Math.sin(g)))
+  const along = width * Math.cos(g)
+  return { pitch, width, along, R, apex: -along / 2 + R / Math.tan(g) }
 }
 
 export function buildPartGeometry(

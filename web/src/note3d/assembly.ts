@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import { buildPartGeometry, rackModule } from './builder'
+import { bevelSize, buildPartGeometry, rackModule } from './builder'
 import { evalDim, evalVec3, type AxisDir, type NoteAnnotationSpec, type NotePartSpec, type NoteSceneSpec, type NoteShapeSpec } from './schema'
 
 /**
@@ -31,7 +31,7 @@ export interface AssemblyIssue {
 }
 
 /** shapes that turn about their own axis (local Y before the shape's rotation) */
-export const ROUND = new Set(['cylinder', 'tube', 'cone', 'gear', 'bevelGear', 'pulley', 'sprocket', 'spring', 'hexNut', 'hexBolt', 'torus', 'bearing'])
+export const ROUND = new Set(['cylinder', 'tube', 'cone', 'gear', 'bevelGear', 'pulley', 'sprocket', 'spring', 'hexNut', 'hexBolt', 'torus', 'bearing', 'worm'])
 export const GEARS = new Set(['gear', 'bevelGear', 'sprocket'])
 
 export interface LocalInfo {
@@ -65,6 +65,11 @@ function shapeAxis(sh: NoteShapeSpec, scope: Record<string, number>) {
 }
 
 /** a part's own frame: its box, centre, axis, length, pitch radius; what the motion is worked out from */
+/** a part's bevel gear shape, if it is one */
+const bevelOf = (p: NotePartSpec) => p.shapes.find((s) => s.kind === 'bevelGear' && s.op !== 'subtract')
+/** a part's worm shape, if it is one */
+const wormOf = (p: NotePartSpec) => p.shapes.find((s) => s.kind === 'worm' && s.op !== 'subtract')
+
 export function partInfo(part: NotePartSpec, scope: Record<string, number>): LocalInfo {
   return localInfo(part, scope)
 }
@@ -96,9 +101,12 @@ function localInfo(part: NotePartSpec, scope: Record<string, number>): LocalInfo
   const length = Math.abs(axis.x) * size.x + Math.abs(axis.y) * size.y + Math.abs(axis.z) * size.z
   const gear = adds.find((s) => GEARS.has(s.kind))
   const pulley = adds.find((s) => s.kind === 'pulley')
+  const wormShape = adds.find((s) => s.kind === 'worm')
   const pitchR = gear
     ? (Math.max(6, Math.round(evalDim(gear.teeth, scope, 20))) * evalDim(gear.module, scope, 0.004)) / 2
-    : pulley
+    : wormShape
+      ? Math.max(2 * evalDim(wormShape.module, scope, 0.004), evalDim(wormShape.r ?? wormShape.rOuter, scope, 5 * evalDim(wormShape.module, scope, 0.004)))
+      : pulley
       ? evalDim(pulley.rOuter ?? pulley.r, scope, 0.06)
       : 0
   const hollow = lead?.kind === 'tube' || part.shapes.some((s) => s.op === 'subtract' && ROUND.has(s.kind)) || /\b(ring gear|annulus|ring)\b/i.test(part.name)
@@ -312,6 +320,40 @@ export function resolveAssembly(
       const pos = point.sub(own.applyQuaternion(quat)).add(new THREE.Vector3(...evalVec3(m.shift, scope, [0, 0, 0])))
       done.set(p.id, { pos, quat })
       return
+    } else if (m.kind === 'mesh' && bevelOf(p) && bevelOf(target)) {
+      // two bevel gears: axes at 90°, their pitch cones' apexes at one point, so the teeth meet along the cones
+      const tLead = bevelOf(target)!
+      const pLead = bevelOf(p)!
+      const tAx = shapeAxis(tLead, scope)
+      const tPos = new THREE.Vector3(...evalVec3(tLead.position, scope, [0, 0, 0]))
+      const apex = tPos.clone().addScaledVector(tAx, bevelSize(tLead, scope).apex).applyQuaternion(T.quat).add(T.pos)
+      const aT = tAx.clone().applyQuaternion(T.quat).normalize()
+      const up = new THREE.Vector3(0, 1, 0)
+      let side = m.side ? new THREE.Vector3(...DIRS[m.side]) : Math.abs(aT.dot(up)) > 0.9 ? new THREE.Vector3(0, 0, 1) : up.clone()
+      side.addScaledVector(aT, -side.dot(aT))
+      if (side.lengthSq() < 1e-6) side = new THREE.Vector3(1, 0, 0).addScaledVector(aT, -aT.x)
+      side.normalize()
+      const turn = evalDim(m.angle, scope, 0)
+      if (turn) side.applyAxisAngle(aT, (turn * Math.PI) / 180)
+      // this gear stands on that side, its cone pointing back at the shared apex
+      const pAx = shapeAxis(pLead, scope)
+      const q = new THREE.Quaternion().setFromUnitVectors(pAx, side.clone().negate())
+      const centre = apex.clone().addScaledVector(side, bevelSize(pLead, scope).apex)
+      const pPos = new THREE.Vector3(...evalVec3(pLead.position, scope, [0, 0, 0])).applyQuaternion(q)
+      const pos = centre.sub(pPos).add(new THREE.Vector3(...evalVec3(m.shift, scope, [0, 0, 0])))
+      done.set(p.id, { pos, quat: q })
+      return
+    } else if (m.kind === 'mesh' && (wormOf(p) || wormOf(target))) {
+      // a worm and its wheel: axes square to each other, centres the two pitch radii apart
+      const up = new THREE.Vector3(0, 1, 0)
+      let side = m.side ? new THREE.Vector3(...DIRS[m.side]) : Math.abs(tAxis.dot(up)) > 0.9 ? new THREE.Vector3(0, 0, 1) : up.clone().negate()
+      side.addScaledVector(tAxis, -side.dot(tAxis))
+      if (side.lengthSq() < 1e-6) side = new THREE.Vector3(1, 0, 0).addScaledVector(tAxis, -tAxis.x)
+      side.normalize()
+      // its axis square to the target's and to the line between them
+      const own = new THREE.Vector3().crossVectors(tAxis, side).normalize()
+      quat = new THREE.Quaternion().setFromUnitVectors(si.axis.clone().normalize(), own)
+      point = tCenter.clone().addScaledVector(side, (si.pitchR || 0.02) + (ti.pitchR || 0.02))
     } else if (m.kind === 'mesh') {
       quat = alignment(si.axis, tAxis)
       const up = new THREE.Vector3(0, 1, 0)

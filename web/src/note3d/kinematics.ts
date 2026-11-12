@@ -213,6 +213,11 @@ export function buildKinematics(spec: Pick<NoteSceneSpec, 'parts'> | null, scope
     const q = base.get(id)!
     return info.get(id)!.center.clone().applyQuaternion(q.quat).add(q.pos)
   }
+  /** a worm's number of starts (0 when the part is not a worm) */
+  const wormStarts = (p: NotePartSpec) => {
+    const w = p.shapes.find((s) => s.kind === 'worm' && s.op !== 'subtract')
+    return w ? Math.max(1, Math.min(4, Math.round(evalDim(w.teeth, scope, 1)))) : 0
+  }
   const teethOf = (p: NotePartSpec) => {
     const l = lead(p)
     return l && GEARS.has(l.kind) ? Math.max(6, Math.round(evalDim(l.teeth, scope, 20))) : 0
@@ -255,6 +260,14 @@ export function buildKinematics(spec: Pick<NoteSceneSpec, 'parts'> | null, scope
       }
       addLink(t.id, p.id, { kind: 'rigid' })
       if (round(p)) addLink(p.id, t.id, { kind: 'rigid' })
+    } else if (m.kind === 'mesh' && (wormStarts(p) || wormStarts(t))) {
+      // a worm and its wheel: each turn of the worm moves the wheel on by its number of starts, in teeth
+      const worm = wormStarts(p) ? p : t
+      const wheel = worm === p ? t : p
+      const teeth = Math.max(6, Math.round(evalDim(lead(wheel)?.teeth, scope, 30)))
+      const k = wormStarts(worm) / teeth
+      addLink(worm.id, wheel.id, { kind: 'gear', k, phase: 0 })
+      addLink(wheel.id, worm.id, { kind: 'gear', k: 1 / k, phase: 0 })
     } else if (m.kind === 'mesh') {
       const ip = info.get(p.id)!
       const it = info.get(t.id)!
