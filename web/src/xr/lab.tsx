@@ -579,6 +579,13 @@ function PartTag({ origin }: { origin: React.RefObject<THREE.Group | null> }) {
   const box = useMemo(() => new THREE.Box3(), [])
   const top = useMemo(() => new THREE.Vector3(), [])
   const eye = useMemo(() => new THREE.Vector3(), [])
+  // where the card rests: set where the part was touched, and moved only when the part goes somewhere else (taken
+  // apart, put back), never with its running (a piston's stroke would carry the card up and down with it)
+  const anchor = useRef<THREE.Vector3 | null>(null)
+  const goal = useMemo(() => new THREE.Vector3(), [])
+  useEffect(() => {
+    anchor.current = null
+  }, [selectedId])
   const W = 0.24
   const card = useMemo(() => {
     if (!part) return null
@@ -644,7 +651,12 @@ function PartTag({ origin }: { origin: React.RefObject<THREE.Group | null> }) {
     o.updateMatrixWorld()
     o.worldToLocal(top)
     top.y += 0.03 + (W * card.aspect) / 2
-    g.position.copy(top)
+    if (!anchor.current) {
+      anchor.current = top.clone()
+      goal.copy(top)
+    } else if (top.distanceTo(goal) > 0.15) goal.copy(top)
+    anchor.current.lerp(goal, 0.15)
+    g.position.copy(anchor.current)
     camera.getWorldPosition(eye)
     g.visible = true
     g.lookAt(eye)
