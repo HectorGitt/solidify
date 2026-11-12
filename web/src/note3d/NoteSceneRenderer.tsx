@@ -1,4 +1,5 @@
 import { Line } from '@react-three/drei'
+import { symbolText } from './symbolText'
 import { Html } from '@/render/Html'
 import { useFrame, useThree, type ThreeEvent } from '@react-three/fiber'
 import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
@@ -316,7 +317,7 @@ function LabelSprite({ position, label, value, color }: { position: [number, num
     const font = `600 ${13 * ratio}px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace`
     const measure = document.createElement('canvas').getContext('2d')!
     measure.font = font
-    const head = label
+    const head = symbolText(label)
     const tail = value ? ` = ${value}` : ''
     const padX = 8 * ratio
     const w = Math.ceil(measure.measureText(head + tail).width + padX * 2)
