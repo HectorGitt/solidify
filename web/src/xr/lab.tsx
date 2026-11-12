@@ -281,6 +281,13 @@ function Lab({ scene }: { scene: SceneDef }) {
   if (import.meta.env.DEV) (window as unknown as { __xrFit?: unknown }).__xrFit = fit
   useEffect(() => useLab.setState({ big, full: big }), [big])
   const base = useMemo(() => new THREE.Vector3(fit.x, scene.floorY ?? 0, fit.z), [fit, scene])
+  // where the followed part (scene.follow) was first seen, and how far it has gone since
+  const followStart = useRef<THREE.Vector3 | null>(null)
+  const followNow = useMemo(() => new THREE.Vector3(), [])
+  const followShift = useMemo(() => new THREE.Vector3(), [])
+  useEffect(() => {
+    followStart.current = null
+  }, [scene])
   const scale = big && !full ? fit.size / TABLE_SIZE : 1
   // the turntable just round the machine's footprint as it is shown
   const turntable = Math.max(0.16, (fit.foot / scale) * 0.5 * 1.18)
@@ -429,14 +436,16 @@ function Lab({ scene }: { scene: SceneDef }) {
       if (fwd.lengthSq() < 1e-6) fwd.set(0, 0, -1)
       fwd.normalize()
       if (full) {
-        // a big machine at real size: it stands where the student looks on the floor (or a little way off);
-        // the panel comes to rest in front of them, within reach
+        // a big machine at real size: it stands where the student looks on the floor; with no floor in sight
+        // (looking at a table, or a room whose floor is not found) just far enough ahead that its near side
+        // clears them with room to see it whole, so it stands close, not off past the table
         const onFloor = hit.current && hit.current.y < head.y - 0.9 ? hit.current : null
-        const target = onFloor ? tmp.copy(onFloor).setY(0) : tmp.copy(head).addScaledVector(fwd, fit.size * 0.75 + 1.3).setY(0)
+        const target = onFloor ? tmp.copy(onFloor).setY(0) : tmp.copy(head).addScaledVector(fwd, fit.size * 0.6 + 0.9).setY(0)
         if (!place.floor) place.floor = target.clone()
         place.floor.lerp(target, 0.35)
-        // low, at desk height, so it never stands between the student and the machine
-        tmp2.copy(head).addScaledVector(fwd, 0.45)
+        // the panel: low, at desk height and a little to the right, within reach, so it never stands between
+        // the student and the machine
+        tmp2.copy(head).addScaledVector(fwd, 0.45).add(tmp.set(-fwd.z, 0, fwd.x).multiplyScalar(0.32))
         tmp2.y = head.y - 0.62
         place.at.lerp(tmp2, 0.35)
       } else {
@@ -458,7 +467,16 @@ function Lab({ scene }: { scene: SceneDef }) {
     // its own size so the student sees it whole, with the panel still within reach
     if (full && !place.floor) place.floor = new THREE.Vector3(place.at.x - Math.sin(place.face) * (fit.size * 0.6 + 0.4), 0, place.at.z - Math.cos(place.face) * (fit.size * 0.6 + 0.4))
     const spot = full && place.floor ? place.floor : place.at
-    o.position.copy(base).sub(tmp.copy(spot).applyAxisAngle(UP, place.turn).multiplyScalar(scale))
+    // a scene that follows a moving part (a tractor driving down its field) runs on the spot in the headset: the
+    // anchor moves with the part, as the desktop camera does, so it does not drive off out of the room
+    followShift.set(0, 0, 0)
+    const followed = scene.follow ? partObjects.get(scene.follow) : undefined
+    if (followed) {
+      followed.getWorldPosition(followNow)
+      if (!followStart.current) followStart.current = followNow.clone()
+      followShift.set(followNow.x - followStart.current.x, 0, followNow.z - followStart.current.z)
+    }
+    o.position.copy(base).add(followShift).sub(tmp.copy(spot).applyAxisAngle(UP, place.turn).multiplyScalar(scale))
     if (roomThings.current) {
       roomThings.current.position.copy(place.at)
       roomThings.current.rotation.set(0, place.face, 0)
