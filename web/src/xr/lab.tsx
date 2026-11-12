@@ -443,9 +443,9 @@ function Lab({ scene }: { scene: SceneDef }) {
         const target = onFloor ? tmp.copy(onFloor).setY(0) : tmp.copy(head).addScaledVector(fwd, fit.size * 0.6 + 0.9).setY(0)
         if (!place.floor) place.floor = target.clone()
         place.floor.lerp(target, 0.35)
-        // the panel: low, at desk height and a little to the right, within reach, so it never stands between
-        // the student and the machine
-        tmp2.copy(head).addScaledVector(fwd, 0.45).add(tmp.set(-fwd.z, 0, fwd.x).multiplyScalar(0.32))
+        // the panel: low, at desk height and a little to the right, within reach, so it stands beside the machine (over
+        // a wheel at most) rather than between the student and it
+        tmp2.copy(head).addScaledVector(fwd, 0.45).add(tmp.set(-fwd.z, 0, fwd.x).multiplyScalar(0.18))
         tmp2.y = head.y - 0.62
         place.at.lerp(tmp2, 0.35)
       } else {
