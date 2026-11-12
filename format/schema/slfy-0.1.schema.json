@@ -672,6 +672,85 @@
                 "angle"
               ],
               "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "type": "string",
+                  "const": "fit"
+                },
+                "target": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 80
+                },
+                "feature": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 40
+                },
+                "own": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 40
+                },
+                "at": {
+                  "$ref": "#/$defs/__schema5"
+                },
+                "offset": {
+                  "$ref": "#/$defs/__schema5"
+                },
+                "face": {
+                  "$ref": "#/$defs/__schema6"
+                },
+                "turn": {
+                  "$ref": "#/$defs/__schema5"
+                },
+                "shift": {
+                  "$ref": "#/$defs/__schema4"
+                }
+              },
+              "required": [
+                "kind",
+                "target",
+                "feature"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "type": "string",
+                  "const": "keyed"
+                },
+                "target": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 80
+                },
+                "r": {
+                  "$ref": "#/$defs/__schema5"
+                },
+                "at": {
+                  "$ref": "#/$defs/__schema5"
+                },
+                "offset": {
+                  "$ref": "#/$defs/__schema5"
+                },
+                "angle": {
+                  "$ref": "#/$defs/__schema5"
+                },
+                "shift": {
+                  "$ref": "#/$defs/__schema4"
+                }
+              },
+              "required": [
+                "kind",
+                "target"
+              ],
+              "additionalProperties": false
             }
           ]
         },
@@ -758,8 +837,15 @@
             "sprocket",
             "spring",
             "hexNut",
-            "hexBolt"
+            "hexBolt",
+            "bearing",
+            "worm"
           ]
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 40
         },
         "op": {
           "type": "string",
@@ -851,6 +937,19 @@
         },
         "depth": {
           "$ref": "#/$defs/__schema5"
+        },
+        "pitchAngle": {
+          "$ref": "#/$defs/__schema5"
+        },
+        "bearing": {
+          "type": "string",
+          "enum": [
+            "ball",
+            "roller",
+            "taper",
+            "needle",
+            "thrust"
+          ]
         }
       },
       "required": [

@@ -136,8 +136,10 @@ mount on them; cycles are invalid. `shift` (Vec3Expr, metres, world axes) moves 
 | `follower` | `direction`, `of` (`pin` or `tip`), `throw`, `angle`, `offset` | slides along `direction` with the target's crank pin (scotch yoke) or a lever's far end (shaper ram); fixed across that direction |
 | `hooke` | `angle` (degrees) | the output shaft of a Hooke's joint at the end of input shaft `target`, its axis `angle` off the input's; it turns by tan θ₂ = tan θ₁ / cos β |
 | `keyed` | `r`, `at` (0–1, default 0.5), `offset`, `angle` (degrees) | a key in the keyway of shaft `target`: its longest side along the shaft, its thinnest radial, its middle at radius `r` from the axis (the shaft's radius there; half in the shaft, half in the hub), `at` along the shaft, `angle` round it from the top. It turns with the shaft |
+| `fit` | `feature`, `own`, `at` (0–1, default 0.5), `offset`, `face` (AxisDir), `turn` (degrees) | joined by named features: this part's shape named `own` (default its main round shape) goes into the target's shape named `feature`, their axes on one line, `at` along the feature and `offset` metres further, turned `turn` about it (a pin in a hole, a shaft in a bore). With `face`, this part sits against that face of the feature instead, centred on it. A target with no shape of that name is an error the viewer SHOULD report |
 
-A part placed by a mount that transmits motion (`mesh`, `slider`, `link`, `lever`, `follower`, `hooke`, `keyed`, and
+A part placed by a mount that transmits motion (`mesh`, `slider`, `link`, `lever`, `follower`, `hooke`, `keyed`, `fit`
+on a turning part, and
 `coaxial` on a turning shaft) moves because its target moves; it SHOULD NOT also have its own `motion`.
 
 ### 7.3 Motion
@@ -157,6 +159,8 @@ A viewer MAY play time slower than real time so motion is easy to follow, and SH
 Every shape has `kind`, and MAY have `op` (`add` default, `subtract`, `intersect`: applied to the shapes
 before it in the same part, in order), `position` and `rotation` (in the part's frame), and a circular
 pattern: `radialCount` copies spaced evenly round the part's Y axis at radius `radialRadius`, in the XZ plane.
+A shape MAY have a `name` (1–40 characters, unique within its part, matched ignoring case): a feature that a
+`fit` mount on another part refers to (`"bore"`, `"pin"`, `"seat"`).
 
 | `kind` | Fields (defaults) | Definition |
 |---|---|---|
