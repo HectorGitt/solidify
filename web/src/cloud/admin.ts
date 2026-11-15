@@ -256,3 +256,33 @@ export const getAccounts = (f: AccountFilter) =>
   api<{ accounts: Account[]; total: number; page: number; pages: number; size: number; counts: { all: number; students: number; teachers: number; staff: number; active7: number; new7: number } }>(`/v1/admin/accounts?${accountQuery(f)}`)
 export const lookupPerson = (email: string) => api<Lookup>(`/v1/admin/people/lookup?email=${encodeURIComponent(email)}`)
 export const setFeedbackStatus = (id: string, status: 'new' | 'done') => api<{ ok: true }>(`/v1/feedback/${encodeURIComponent(id)}`, { method: 'PUT', body: { status } })
+
+/** AI help controls (Admin → Settings): change without a deploy; null = the server's default */
+export interface AiLimits {
+  aiPaused: boolean
+  tutorDaily: number | null
+  createDaily: number | null
+  notePagesDaily: number | null
+  /** AI actions by all students together in a day (UTC); null = no cap */
+  aiDailyCap: number | null
+}
+export const getAiLimits = () => api<{ limits: AiLimits; defaults: { tutor: number; create: number; notePages: number }; today: number }>('/v1/admin/limits')
+export const saveAiLimits = (patch: Partial<AiLimits>) => api<{ limits: AiLimits }>('/v1/admin/limits', { method: 'PUT', body: patch })
+
+/** a fault reported from students' browsers, grouped (Admin → Crashes) */
+export interface CrashGroup {
+  id: string
+  where: string
+  message: string
+  stack?: string
+  routes: string[]
+  build?: string
+  device?: string
+  count: number
+  headset: number
+  firstAt: number
+  lastAt: number
+  days: Record<string, number>
+}
+export const getCrashes = () => api<{ items: CrashGroup[] }>('/v1/admin/crashes')
+export const markCrashFixed = (id: string) => api<void>(`/v1/admin/crashes/${encodeURIComponent(id)}`, { method: 'DELETE' })
