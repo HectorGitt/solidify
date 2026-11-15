@@ -70,8 +70,9 @@ import {
 } from '../admin'
 import { Modal, ghostBtn, inputCls, primaryBtn } from './Modal'
 import { ThumbnailMaker } from './ThumbnailMaker'
+import { AiHelpPanel, Crashes } from './AdminSafety'
 
-type Tab = 'quality' | 'review' | 'library' | 'users' | 'activity' | 'feedback' | 'waitlist' | 'settings'
+type Tab = 'quality' | 'review' | 'library' | 'users' | 'activity' | 'crashes' | 'feedback' | 'waitlist' | 'settings'
 
 /** scores a build made from the admin page with the nightly run's own checks */
 function scoreReply(prompt: string, reply: BuildReply, caseId?: string) {
@@ -2169,6 +2170,7 @@ function Settings({ admin }: { admin: boolean }) {
     <Loading error={error} onRetry={reload}>
       {data && form ? (
         <div className="space-y-5">
+          {admin ? <AiHelpPanel /> : null}
           {admin ? <AppCheckPanel /> : null}
           {admin ? (
             <section className={`${card} space-y-4 p-5`}>
@@ -2395,6 +2397,7 @@ const TABS: { value: Tab; label: string; perm: Perm }[] = [
   { value: 'library', label: 'Library', perm: 'curate' },
   { value: 'users', label: 'Users', perm: 'admin' },
   { value: 'activity', label: 'Activity', perm: 'admin' },
+  { value: 'crashes', label: 'Crashes', perm: 'support' },
   { value: 'feedback', label: 'Feedback', perm: 'support' },
   { value: 'waitlist', label: 'Waitlist', perm: 'support' },
   { value: 'settings', label: 'Settings', perm: 'curate' },
@@ -2453,6 +2456,8 @@ export default function AdminPage() {
           <Users />
         ) : tab === 'activity' ? (
           <Activity />
+        ) : tab === 'crashes' ? (
+          <Crashes />
         ) : tab === 'feedback' ? (
           <Feedback />
         ) : tab === 'waitlist' ? (

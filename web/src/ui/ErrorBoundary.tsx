@@ -1,4 +1,6 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react'
+import { reportCrash } from '@/cloud/crashes'
+import { useXRSession } from '@/xr/session'
 import { announceUpdate, isUpdateError } from './appUpdate'
 
 /**
@@ -20,6 +22,8 @@ export class ErrorBoundary extends Component<{ children: ReactNode; label: strin
       return
     }
     console.error(`[${this.props.label}]`, error, info.componentStack)
+    // the team hears about it (Admin → Activity → Crashes), without names
+    reportCrash(this.props.label, error, { headset: useXRSession.getState().active })
   }
 
   componentDidUpdate(prev: { resetKey?: unknown }) {
