@@ -309,6 +309,37 @@ describe('shared links and feedback', () => {
     expect((await as('ada').send('POST', '/v1/shares', { route: 'javascript:alert(1)', state: {} })).status).toBe(400)
   })
 
+  it('shares a solved question by link: anyone can open it, it follows the student’s changes, and stops when unshared or deleted', async () => {
+    const spec = { id: 'beam', title: 'Beam', parts: [{ id: 'p' }], question: { text: 'Find the deflection.', find: ['deflection'] } }
+    const { id } = await (await as('ada:Ada Obi').send('POST', '/v1/creations', { title: 'Beam', prompt: 'A beam…', spec, history: [{ prompt: 'A beam…', response: 'Worked: δ = 2 mm' }] })).json()
+    expect((await as('bola').send('POST', `/v1/creations/${id}/share`, {})).status).toBe(404)
+    const first = await as('ada:Ada Obi').send('POST', `/v1/creations/${id}/share`, {})
+    expect(first.status).toBe(201)
+    const { shareId } = await first.json()
+    const again = await (await as('ada:Ada Obi').send('POST', `/v1/creations/${id}/share`, {})).json()
+    expect(again.shareId).toBe(shareId)
+    const open = await (await as(null).get(`/v1/shared/${shareId}`)).json()
+    expect(open).toMatchObject({ id: shareId, title: 'Beam', by: 'Ada', explanation: 'Worked: δ = 2 mm', yours: false, spec: { question: { text: 'Find the deflection.' } } })
+    expect(open.uid).toBeUndefined()
+    expect((await (await as('ada:Ada Obi').get(`/v1/shared/${shareId}`)).json()).yours).toBe(true)
+    expect((await (await as('ada:Ada Obi').get('/v1/creations')).json()).items[0].shareId).toBe(shareId)
+    await as('ada:Ada Obi').send('PUT', `/v1/creations/${id}`, { title: 'Simply supported beam', params: { L: 3 } })
+    expect(await (await as(null).get(`/v1/shared/${shareId}`)).json()).toMatchObject({ title: 'Simply supported beam', params: { L: 3 } })
+    expect((await as('ada:Ada Obi').del(`/v1/creations/${id}/share`)).status).toBe(204)
+    expect((await as(null).get(`/v1/shared/${shareId}`)).status).toBe(404)
+    expect((await (await as('ada:Ada Obi').get(`/v1/creations/${id}`)).json()).shareId).toBeUndefined()
+    const { shareId: next } = await (await as('ada:Ada Obi').send('POST', `/v1/creations/${id}/share`, {})).json()
+    expect(next).not.toBe(shareId)
+    await as('ada:Ada Obi').del(`/v1/creations/${id}`)
+    expect((await as(null).get(`/v1/shared/${next}`)).status).toBe(404)
+    expect((await as(null).get('/v1/shared/..%2Fusers')).status).toBe(404)
+  })
+
+  it('does not share a written answer (nothing was built)', async () => {
+    const { id } = await (await as('ada').send('POST', '/v1/creations', { title: 'Answer', spec: { answerOnly: true } })).json()
+    expect((await as('ada').send('POST', `/v1/creations/${id}/share`, {})).status).toBe(400)
+  })
+
   it('takes reports from anyone and shows the queue to admins only', async () => {
     expect((await as(null).send('POST', '/v1/feedback', { kind: 'error', message: 'Torque should be 16 N·m', route: '/m/elements/clutch-brake' })).status).toBe(201)
     await as('ada').send('POST', '/v1/feedback', { kind: 'idea', message: 'Add a baler knotter close-up' })
