@@ -770,3 +770,15 @@ Every entry is numbered (in the order they appear, top to bottom) and set out th
 - **Cause:** the router is a HashRouter (Netlify serves one page); the bar's action group was one unwrapping row whose buttons and state text could break inside, sized for fewer buttons.
 - **Solution:** links are `origin/#/s/<id>` (`shareUrl`, like the class invitation); the bar's buttons and state never break inside (`whitespace-nowrap`, the headset button too), the action group wraps as a whole to its own row when it doesn't fit, and New model sits only in the phone Menu (Create › Build a new model). Checked in Edge at 390 and 1366 wide, signed out and as the sharer.
 - **Lesson:** build any link to a page from the router the app really uses; each button added to a bar must be checked at phone width with the longest state text beside it.
+
+### 132. Every unit test failed to start while a dev server was running (2026-11-16)
+- **Problem:** all 178 web test files, and later all 12 API test files, failed before running a single test with "Cannot read properties of undefined (reading 'config')" at their first `describe`. The same code passed in a fresh copy of the repo with the same packages, and an earlier run in the same folder had passed.
+- **Cause:** a Vite dev server left running from `web/` (started for a browser check, its wrapper task stopped but the server itself still alive) disturbed Vitest in the same tree; the fault came and went with it.
+- **Solution:** stopped the stray server (found by its port, 5180); every suite passed at once (web 2,328, API 117). Browser checks now stop their servers by port when they finish, and nothing runs Vitest while one is up.
+- **Lesson:** when every test file fails before any test runs, look for a stray dev server before suspecting the code or the packages; stopping a task's wrapper does not always stop the server it started.
+
+### 133. A shared link showed no preview in WhatsApp (2026-11-16)
+- **Problem:** a share link pasted into WhatsApp showed only the bare address: no title, no picture, nothing saying what it was.
+- **Cause:** the app routes after `#/` and link previewers never see that part, nor run the page's script: every link looked like the home page to them, and the shared model's picture lived only inside the API as a data URL.
+- **Solution:** share links are now `solidify.studio/s/<id>`, answered by a Netlify edge function with the model's title, its question or summary, who shared it and its picture (`GET /v1/shared/:id/image`), and a redirect to `/#/s/<id>` for people (keeping `?try=1`); the site's own preview if the API is down; the app also opens a `/s/<id>` address that reaches it directly. Tested with the API's replies stubbed: a question, practice, a model, a stopped link, the API down, a bad path.
+- **Lesson:** a link meant for sharing needs a server-side page for previewers; anything after `#` is invisible to them.

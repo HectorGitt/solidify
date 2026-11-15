@@ -55,8 +55,10 @@ export interface SharedModel {
   yours: boolean
 }
 
-/** the link anyone can open */
-export const shareUrl = (shareId: string) => `${window.location.origin}/#/s/${shareId}`
+/** the link anyone can open: /s/<id> on the site, answered by an edge function with a preview for WhatsApp and
+ * the like (web/netlify/edge-functions/share-preview.ts) that sends people on to /#/s/<id>; a local dev server has
+ * no edge functions, so there the link is the app's own */
+export const shareUrl = (shareId: string) => `${window.location.origin}${import.meta.env.DEV ? '/#' : ''}/s/${shareId}`
 /** share a saved model by link (the same link each time, until sharing stops) */
 export const shareCreation = (id: string) => api<{ shareId: string }>(`/v1/creations/${encodeURIComponent(id)}/share`, { method: 'POST', body: {} })
 /** stop sharing: the link stops working */
