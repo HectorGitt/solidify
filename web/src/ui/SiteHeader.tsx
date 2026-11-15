@@ -37,7 +37,7 @@ const NAV: NavGroup[] = [
       { to: '/create/open', label: 'Open a model file', hint: 'A .slfy file from your computer or a link' },
       { to: '/questions', label: 'Solve a question', hint: 'Paste a problem or a screenshot; get it in 3D, worked out' },
     ],
-    match: (p) => p.startsWith('/create') || p === '/library',
+    match: (p) => p.startsWith('/create') || p === '/library' || p.startsWith('/s/'),
   },
   { label: 'Read notes', items: [{ to: '/read', label: 'Read notes in 3D' }], match: (p) => p === '/read' },
   {

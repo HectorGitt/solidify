@@ -32,6 +32,7 @@ const ClassPage = lazy(() => import('./cloud/ui/ClassPage'))
 const CreatePage = lazy(() => import('./cloud/ui/CreatePage'))
 const CreationLabPage = lazy(() => import('./cloud/ui/CreationLabPage'))
 const ModelLab = lazy(() => import('./cloud/ui/ModelLab'))
+const SharedPage = lazy(() => import('./cloud/ui/SharedPage'))
 const ReadPage = lazy(() => import('./note3d/ReadPage'))
 const PaperPage = lazy(() => import('./cloud/ui/PaperPage'))
 const AdminPage = lazy(() => import('./cloud/ui/AdminPage'))
@@ -86,6 +87,7 @@ export default function App() {
         <Route path="/create/lab" element={page(<CreationLabPage />)} />
         <Route path="/create/open" element={page(<OpenFilePage />)} />
         <Route path="/create/:id" element={page(<ModelLab />, <WorkspaceSkeleton />)} />
+        <Route path="/s/:shareId" element={page(<SharedPage />, <WorkspaceSkeleton />)} />
         <Route path="/read" element={page(<ReadPage />)} />
         <Route path="/admin" element={page(<AdminPage />)} />
         <Route path="/review" element={page(<ReviewPage />)} />

@@ -34,6 +34,7 @@ import { getCreation, saveNewCreation, updateCreation } from '../creations'
 import { logEvent } from '../events'
 import { useProfile } from '../profile'
 import { PublishDialog } from './PublishDialog'
+import { ShareDialog } from './ShareDialog'
 import { LibraryMatches } from './LibraryMatches'
 import { clearPendingBuild, peekPendingBuild } from '../pendingBuild'
 import { peekPreviewModel, previewBackAfterReload, setPreviewModel } from '../previewModel'
@@ -433,8 +434,10 @@ function LiveReply({ progress, isNew, photo }: { progress: LiveProgress | null; 
  * them), and the engineering on the right. /create/new starts the build the Create page handed over;
  * /create/:id opens a saved model. Every change is saved to My models.
  */
-export default function ModelLab() {
-  const { id: routeId } = useParams()
+/** `route`: the page that shows a model another way (a share link) opens it as a preview */
+export default function ModelLab({ route }: { route?: string } = {}) {
+  const params0 = useParams()
+  const routeId = route ?? params0.id
   // ?try=1: a solved question opened from Exam practice's "Your questions" starts as practice
   const [search] = useSearchParams()
   const startTrying = search.get('try') === '1'
@@ -443,6 +446,10 @@ export default function ModelLab() {
   const signedIn = authStatus === 'signed-in'
   const isAdmin = useProfile((s) => !!s.profile?.isAdmin)
   const [publishing, setPublishing] = useState(false)
+  const [sharing, setSharing] = useState(false)
+  /** a saved model shared by link: which model, and the id in its link */
+  const [share, setShare] = useState<{ of: string; id: string } | null>(null)
+  const [keeping, setKeeping] = useState(false)
 
   const [spec, setSpec] = useState<NoteSceneSpec | null>(null)
   const [params, setParams] = useState<Record<string, number>>({})
@@ -470,6 +477,7 @@ export default function ModelLab() {
   const [newPart, setNewPart] = useState<{ name: string; kind: NoteShapeKind; material: MaterialKey; motion: 'none' | 'rotate' | 'translate' }>({ name: 'New part', kind: 'gear', material: 'steel', motion: 'rotate' })
 
   const [creationId, setCreationId] = useState<string | null>(null)
+  const shareId = share && share.of === creationId ? share.id : null
   const creationIdRef = useRef<string | null>(null)
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
   const lastSavedRef = useRef('')
@@ -810,6 +818,34 @@ export default function ModelLab() {
   const draftBaseRef = useRef('')
   const [savingDraft, setSavingDraft] = useState(false)
   const draftChanged = !!viewing?.draftId && !!spec && !live && JSON.stringify([spec, params]) !== draftBaseRef.current
+  /* a model opened from someone's share link: the reader keeps a copy of their own, to change and practise */
+  const keepCopy = async () => {
+    if (!viewing || !spec) return
+    if (!signedIn) {
+      toast('Sign in to keep a copy in My models.', { tone: 'warn', action: { label: 'Sign in', run: () => useAuth.getState().openDialog() } })
+      return
+    }
+    setKeeping(true)
+    try {
+      const kept = { ...spec, parameters: spec.parameters.map((p) => ({ ...p, value: params[p.id] ?? p.value })) }
+      const thumbnail = (await requestSnapshot()) ?? undefined
+      const { id } = await saveNewCreation({
+        title: (spec.title ?? viewing.title).slice(0, 120),
+        prompt: viewing.prompt.slice(0, 2000),
+        spec: kept as unknown as Record<string, unknown>,
+        params,
+        history: viewing.explanation ? [{ prompt: viewing.prompt.slice(0, 2000), response: viewing.explanation.slice(0, 4000) }] : [],
+        thumbnail,
+      })
+      toast('Kept in My models.', { tone: 'ok' })
+      navigate(`/create/${id}`)
+    } catch (e) {
+      toast(e instanceof ApiError ? e.message : 'Couldn’t keep a copy. Please try again.', { tone: 'warn' })
+    } finally {
+      setKeeping(false)
+    }
+  }
+
   const saveToDraft = async () => {
     if (!viewing?.draftId || !spec) return
     setSavingDraft(true)
@@ -844,6 +880,7 @@ export default function ModelLab() {
         creationIdRef.current = routeId
         setCreationId(routeId)
         setViewKey(routeId)
+        setShare(c.shareId ? { of: routeId, id: c.shareId } : null)
         // a written answer kept with the models (nothing was built): it reopens as the conversation
         if ((c.spec as { answerOnly?: unknown }).answerOnly === true) {
           lastSavedRef.current = ''
@@ -1036,6 +1073,18 @@ export default function ModelLab() {
         />
       ) : null}
 
+      {sharing && spec && creationId ? (
+        <ShareDialog
+          open
+          onClose={() => setSharing(false)}
+          creationId={creationId}
+          title={spec.title ?? 'Model'}
+          isQuestion={!!spec.question}
+          shareId={shareId}
+          onChange={(id) => setShare(id ? { of: creationId, id } : null)}
+        />
+      ) : null}
+
       {/* the model's own bar */}
       {/* phones: two rows, the way back and the name, then the state and the actions */}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-b border-line px-3 py-2 sm:px-6">
@@ -1061,14 +1110,27 @@ export default function ModelLab() {
             {live?.progress?.title ?? spec?.title ?? (live ? 'Building…' : answerView ? 'Worked answer' : routeId === 'new' ? 'New model' : 'Model')}
           </button>
         )}
-        <span className="min-w-0 text-[12px] text-dim max-sm:flex-1">
-          {live ? (live.progress?.title || spec ? 'Building…' : '') : routeId === 'preview' && !creationId ? (viewing?.draftId ? (savingDraft ? 'Saving to the draft…' : draftChanged ? 'Draft under review: changes not saved yet' : 'Draft under review: saved') : 'Preview, not saved') : creationId ? (saveState === 'saving' ? 'Saving…' : saveState === 'error' ? 'Not saved: check your connection' : 'Saved') : ''}
+        <span className="whitespace-nowrap text-[12px] text-dim max-sm:flex-1">
+          {live ? (live.progress?.title || spec ? 'Building…' : '') : routeId === 'preview' && !creationId ? (viewing?.draftId ? (savingDraft ? 'Saving to the draft…' : draftChanged ? 'Draft under review: changes not saved yet' : 'Draft under review: saved') : viewing?.shared ? (viewing.shared.yours ? 'Your shared link' : `Shared by ${viewing.shared.by}`) : 'Preview, not saved') : creationId ? (saveState === 'saving' ? 'Saving…' : saveState === 'error' ? 'Not saved: check your connection' : 'Saved') : ''}
         </span>
-        <div className="ml-auto flex items-center gap-2">
+        <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
           {/* on a headset: the model (or the question's setup) on the student's table, with its sizes and readings beside it */}
           {spec && !live ? <HeadsetButton what={spec.question ? 'this question' : 'this model'} className="px-3 py-1.5" /> : null}
           {/* something looks wrong: a student tells the review team (a library model's report is counted on it) */}
           {spec && !live && authStatus === 'signed-in' && !viewing?.draftId ? <ReportProblem title={spec.title ?? 'Model'} prompt={turns[0]?.prompt ?? viewing?.prompt} /> : null}
+          {/* a saved model, shared by link: anyone can open it (a solved question with its worked solution) */}
+          {spec && !live && creationId ? (
+            <button type="button" onClick={() => setSharing(true)} title={shareId ? 'Shared by link: copy the link or stop sharing' : 'Share by link: anyone can open it'} aria-label={spec.question ? 'Share this solution' : 'Share this model'} className={`${ghostBtn} inline-flex items-center gap-1.5 px-3 py-1.5 text-[12.5px] ${shareId ? 'border-accent/50 text-accent' : ''}`}>
+              <Icon.share width={14} height={14} />
+              <span className="max-sm:hidden">{shareId ? 'Shared' : 'Share'}</span>
+            </button>
+          ) : null}
+          {/* someone's shared model: keep a copy of your own */}
+          {spec && !live && viewing?.shared && !viewing.shared.yours ? (
+            <button type="button" disabled={keeping} onClick={() => void keepCopy()} title="Save your own copy in My models, to change and practise" className={`${primaryBtn} whitespace-nowrap px-4 py-1.5 text-[12.5px]`}>
+              {keeping ? 'Keeping…' : 'Keep a copy'}
+            </button>
+          ) : null}
           {/* the model as an open .slfy file, at its current sizes: anyone can open it (Create → Open a model file) */}
           {spec && !live ? (
             <button type="button" onClick={() => downloadSlfy(spec, params)} title="Download as a model file (.slfy) that anyone can open" aria-label="Download as a model file" className={`${ghostBtn} inline-flex items-center gap-1.5 px-3 py-1.5 text-[12.5px]`}>
@@ -1096,7 +1158,7 @@ export default function ModelLab() {
             </button>
           ) : null}
           {spec || live ? (
-            <Link to="/create/new" className={`${ghostBtn} px-4 py-1.5 text-[12.5px] ${viewing?.draftId ? 'max-sm:hidden' : ''}`}>
+            <Link to="/create/new" className={`${ghostBtn} whitespace-nowrap px-4 py-1.5 text-[12.5px] max-sm:hidden`}>
               New model
             </Link>
           ) : null}
