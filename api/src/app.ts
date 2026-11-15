@@ -1,6 +1,7 @@
 import { isBusy, retryBusy } from './retry.js'
 import { RateLimiter, clientIp } from './ratelimit.js'
 import { FakeEmbedder, cosine, keywordScore, type Embedder } from './embed.js'
+import { createHash } from 'node:crypto'
 import { Hono, type Context } from 'hono'
 import { cors } from 'hono/cors'
 import { HTTPException } from 'hono/http-exception'
@@ -357,15 +358,59 @@ export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision
     return c.json({ progress: { scenes: merged.scenes, questions: merged.questions, challenges: merged.challenges }, updatedAt: t })
   })
 
+  /* ------------------------------------------------------------------ AI controls */
+
+  /*
+   * What admins can change without a deploy (Admin → Settings): pause AI help for students, change each
+   * student's daily allowances, and cap AI actions across everyone in a day, so the bill cannot run away
+   * while nobody is watching. Staff are never held back. Read at most every 30 seconds per server.
+   */
+  const limitsSchema = z.object({
+    aiPaused: z.boolean(),
+    tutorDaily: z.number().int().min(0).max(1000).nullable(),
+    createDaily: z.number().int().min(0).max(1000).nullable(),
+    notePagesDaily: z.number().int().min(0).max(1000).nullable(),
+    /** AI actions by all students together in a day (UTC); null = no cap */
+    aiDailyCap: z.number().int().min(0).max(1_000_000).nullable(),
+  })
+  type Limits = z.infer<typeof limitsSchema>
+  const DEFAULT_LIMITS: Limits = { aiPaused: false, tutorDaily: null, createDaily: null, notePagesDaily: null, aiDailyCap: null }
+  let limitsCache: { at: number; v: Limits } | null = null
+  const getLimits = async (fresh = false): Promise<Limits> => {
+    if (!fresh && limitsCache && now() - limitsCache.at < 30_000) return limitsCache.v
+    const v = { ...DEFAULT_LIMITS, ...((await db.get<Partial<Limits>>('settings/limits')) ?? {}) }
+    limitsCache = { at: now(), v }
+    return v
+  }
+  const isStaff = async (u: AuthUser) => (await rolesOfEmail(u.email)).length > 0
+  const AI_PAUSED = 'AI help is paused for a while. The labs, the library and your saved models all work as usual.'
+  const AI_CAPPED = 'Solidify has used all of today’s AI help for everyone. It comes back at midnight UTC; the labs, the library and your saved models work as usual.'
+  /** lets a student's AI action through, or says why not; `cost` counts against the everyone-together cap */
+  const aiGate = async (u: AuthUser, cost = 1) => {
+    const l = await getLimits()
+    if (l.aiPaused && !(await isStaff(u))) throw fail(503, AI_PAUSED)
+    if (l.aiDailyCap !== null) {
+      const n = await db.transact<{ count: number }>(`aiCalls/${day(now())}`, (prev) => ({ count: (prev?.count ?? 0) + cost }))
+      if (n.count > l.aiDailyCap && !(await isStaff(u))) throw fail(429, AI_CAPPED)
+    }
+    return l
+  }
+  const allowance = (l: Limits) => ({
+    tutor: l.tutorDaily ?? config.tutorDailyLimit,
+    create: l.createDaily ?? config.createDailyLimit ?? 15,
+    notePages: l.notePagesDaily ?? config.noteDailyPageLimit ?? 20,
+  })
+
   /* ------------------------------------------------------------------ tutor */
 
   app.post('/v1/tutor', async (c) => {
     const u = requireUser(c)
     const req = await body(c, tutorRequest)
+    const limit = allowance(await aiGate(u)).tutor
     const t = now()
     const usage = await db.transact<{ count: number }>(`tutorUsage/${u.uid}_${day(t)}`, (prev) => ({ count: (prev?.count ?? 0) + 1 }))
-    if (usage.count > config.tutorDailyLimit) throw fail(429, `You've reached today's limit of ${config.tutorDailyLimit} tutor questions. It resets at midnight UTC.`)
-    const remaining = config.tutorDailyLimit - usage.count
+    if (usage.count > limit) throw fail(429, `You've reached today's limit of ${limit} tutor questions. It resets at midnight UTC.`)
+    const remaining = limit - usage.count
 
     return streamSSE(c, async (stream) => {
       const ac = new AbortController()
@@ -429,7 +474,7 @@ export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision
   app.post('/v1/notes/analyze', async (c) => {
     const u = requireUser(c)
     const req = await body(c, noteAnalyzeRequest)
-    const remainingPages = await spend(u.uid, 'noteUsage', config.noteDailyPageLimit ?? 20, 'note pages')
+    const remainingPages = await spend(u.uid, 'noteUsage', allowance(await aiGate(u)).notePages, 'note pages')
     const out = await model(() => noteVision.analyzePage(req))
     return c.json({ ...out, remainingPages })
   })
@@ -437,7 +482,7 @@ export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision
   app.post('/v1/notes/refine', async (c) => {
     const u = requireUser(c)
     const req = await body(c, noteRefineRequest)
-    const remaining = await spend(u.uid, 'createUsage', config.createDailyLimit ?? 15, '3D builds')
+    const remaining = await spend(u.uid, 'createUsage', allowance(await aiGate(u)).create, '3D builds')
     const out = await model(() => noteVision.refineSpec(req))
     return c.json({ ...out, remaining })
   })
@@ -446,7 +491,8 @@ export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision
     const u = requireUser(c)
     const req = await withReference(await body(c, create3dRequest))
     // a careful build (planned first) is two model calls, and counts as two builds
-    const remaining = await spend(u.uid, 'createUsage', config.createDailyLimit ?? 15, '3D builds', req.plan && !req.currentSpec ? 2 : 1)
+    const cost = req.plan && !req.currentSpec ? 2 : 1
+    const remaining = await spend(u.uid, 'createUsage', allowance(await aiGate(u, cost)).create, '3D builds', cost)
     const { usage, ...out } = await model(() => noteVision.createOrEdit3D(req))
     await recordUsage(actionOf(req, out.isQuestion, out.answerOnly), usage)
     return c.json({ ...out, remaining })
@@ -461,7 +507,8 @@ export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision
     const u = requireUser(c)
     const req = await withReference(await body(c, create3dRequest))
     // a careful build (planned first) is two model calls, and counts as two builds
-    const remaining = await spend(u.uid, 'createUsage', config.createDailyLimit ?? 15, '3D builds', req.plan && !req.currentSpec ? 2 : 1)
+    const cost = req.plan && !req.currentSpec ? 2 : 1
+    const remaining = await spend(u.uid, 'createUsage', allowance(await aiGate(u, cost)).create, '3D builds', cost)
     return streamSSE(c, async (stream) => {
       const ac = new AbortController()
       stream.onAbort(() => ac.abort())
@@ -667,6 +714,113 @@ export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision
       .map((k) => `${k}: ${JSON.stringify(before[k])} → ${JSON.stringify(patch[k])}`)
     if (changes.length) await audit(await whoIs(u), 'changed settings', { type: 'settings' }, changes.join('; '))
     return c.json({ settings: await getSettings() })
+  })
+
+  app.get('/v1/admin/limits', async (c) => {
+    await requireAdmin(c)
+    const today = (await db.get<{ count: number }>(`aiCalls/${day(now())}`))?.count ?? 0
+    return c.json({ limits: await getLimits(true), defaults: allowance(DEFAULT_LIMITS), today })
+  })
+
+  app.put('/v1/admin/limits', async (c) => {
+    const u = await requireAdmin(c)
+    const patch = await body(c, limitsSchema.partial())
+    const before = await getLimits(true)
+    await db.set('settings/limits', { ...before, ...patch })
+    limitsCache = null
+    const changes = (Object.keys(patch) as (keyof Limits)[])
+      .filter((k) => JSON.stringify(before[k]) !== JSON.stringify(patch[k]))
+      .map((k) => `${k}: ${JSON.stringify(before[k])} → ${JSON.stringify(patch[k])}`)
+    if (changes.length) await audit(await whoIs(u), 'changed AI limits', { type: 'settings' }, changes.join('; '))
+    return c.json({ limits: await getLimits(true) })
+  })
+
+  /* ------------------------------------------------------------------ crash reports */
+
+  /*
+   * A page that breaks in a student's browser reports it here (no account, no names): the part that broke,
+   * the error, the page and the kind of device. The same fault from many students is one line with a count,
+   * so the admin page shows what to fix first. New kinds of fault are capped per day, so a flood can't fill it.
+   */
+  const crashInput = z.object({
+    where: z.string().trim().min(1).max(60),
+    message: z.string().trim().min(1).max(500),
+    stack: z.string().max(4000).optional(),
+    route: z.string().max(200).optional(),
+    build: z.string().max(40).optional(),
+    device: z.string().max(80).optional(),
+    headset: z.boolean().optional(),
+  })
+  interface CrashDoc {
+    [k: string]: unknown
+    where: string
+    message: string
+    stack?: string
+    routes: string[]
+    build?: string
+    device?: string
+    count: number
+    headset: number
+    firstAt: number
+    lastAt: number
+    days: Record<string, number>
+  }
+  const CRASH_GROUPS_PER_DAY = 200
+  /** numbers and ids in a message vary between students; the fault is the same */
+  const crashKey = (where: string, message: string) =>
+    createHash('sha1').update(`${where}|${message.replace(/[0-9a-f]{8,}/gi, '~').replace(/\d+/g, '#').slice(0, 200)}`).digest('hex').slice(0, 20)
+
+  app.post('/v1/crashes', async (c) => {
+    const r = await body(c, crashInput)
+    const key = crashKey(r.where, r.message)
+    const d = day(now())
+    const t = now()
+    if (!(await db.get(`crashes/${key}`))) {
+      const fresh = await db.transact<{ count: number }>(`crashDays/${d}`, (prev) => ({ count: (prev?.count ?? 0) + 1 }))
+      if (fresh.count > CRASH_GROUPS_PER_DAY) return c.body(null, 204)
+    }
+    await db.transact<CrashDoc>(`crashes/${key}`, (prev) => {
+      const days = { ...(prev?.days ?? {}), [d]: ((prev?.days ?? {})[d] ?? 0) + 1 }
+      // the last fortnight is enough to see a trend
+      for (const k of Object.keys(days).sort().slice(0, -14)) delete days[k]
+      const had = prev?.routes ?? []
+      const routes = r.route && !had.includes(r.route) ? [r.route, ...had].slice(0, 8) : had
+      const stack = prev?.stack ?? r.stack
+      const build = r.build ?? prev?.build
+      const device = r.device ?? prev?.device
+      return {
+        where: r.where,
+        message: prev?.message ?? r.message,
+        ...(stack ? { stack } : {}),
+        routes,
+        ...(build ? { build } : {}),
+        ...(device ? { device } : {}),
+        count: (prev?.count ?? 0) + 1,
+        headset: (prev?.headset ?? 0) + (r.headset ? 1 : 0),
+        firstAt: prev?.firstAt ?? t,
+        lastAt: t,
+        days,
+      }
+    })
+    return c.body(null, 204)
+  })
+
+  app.get('/v1/admin/crashes', async (c) => {
+    await requirePerm(c, 'support')
+    const rows = await db.list<CrashDoc>('crashes', { limit: 1000 })
+    const items = rows.map(({ id, data }) => ({ id, ...data })).sort((a, b) => b.lastAt - a.lastAt).slice(0, 100)
+    return c.json({ items })
+  })
+
+  /** fixed: the line goes; if it happens again it comes back as new */
+  app.delete('/v1/admin/crashes/:id', async (c) => {
+    const u = await requirePerm(c, 'support')
+    const id = c.req.param('id')
+    if (!/^[0-9a-f]{20}$/.test(id)) throw fail(404, 'Not found.')
+    const d = await db.get<CrashDoc>(`crashes/${id}`)
+    await db.delete(`crashes/${id}`)
+    if (d) await audit(await whoIs(u), 'marked a crash fixed', { type: 'settings' }, `${d.where}: ${d.message.slice(0, 120)} (${d.count}×)`)
+    return c.body(null, 204)
   })
 
   app.put('/v1/admin/topics', async (c) => {
@@ -1565,6 +1719,16 @@ export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision
       await db.set(path, rest)
     }
     return c.body(null, 204)
+  })
+
+  /** Public: a shared model's picture, for link previews (WhatsApp and the like fetch it by URL) */
+  app.get('/v1/shared/:id/image', async (c) => {
+    const id = c.req.param('id')
+    if (!/^[a-z0-9]{6,20}$/.test(id)) throw fail(404, 'No picture.')
+    const d = await db.get<SharedModelDoc>(`sharedModels/${id}`)
+    const m = d?.thumbnail ? /^data:(image\/(?:jpeg|webp|png));base64,(.+)$/.exec(d.thumbnail) : null
+    if (!m) throw fail(404, 'No picture.')
+    return c.body(Buffer.from(m[2], 'base64'), 200, { 'Content-Type': m[1], 'Cache-Control': 'public, max-age=600' })
   })
 
   /** Public: a shared model, for anyone with its link */
