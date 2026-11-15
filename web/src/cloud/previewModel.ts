@@ -12,6 +12,8 @@ export interface PreviewModel {
   backTo: string
   /** a draft under review: changes made in the workspace can be saved back to it */
   draftId?: string
+  /** opened from a share link: who shared it, and whether it is the student’s own */
+  shared?: { id: string; by: string; yours: boolean }
 }
 
 let preview: PreviewModel | null = null

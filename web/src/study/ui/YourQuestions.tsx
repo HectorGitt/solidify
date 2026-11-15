@@ -88,6 +88,7 @@ export function YourQuestions({ showSolve = true }: { showSolve?: boolean }) {
                   ) : c.question!.written ? (
                     <span className="absolute inset-0 grid place-items-center text-[12.5px] font-medium text-mute">Worked answer, no model</span>
                   ) : null}
+                  {c.shareId ? <span className="absolute bottom-2 left-2 rounded-full bg-panel/90 px-2 py-0.5 text-[11px] text-mute backdrop-blur">Shared by link</span> : null}
                 </Link>
                 <div className="flex min-w-0 flex-1 flex-col p-4">
                   <h3 className="truncate text-[14px] font-semibold text-ink">{c.title}</h3>

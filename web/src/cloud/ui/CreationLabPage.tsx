@@ -81,6 +81,7 @@ function CreationCard({ item, onRenamed, onDuplicated, onDeleted }: { item: Crea
         <span className="absolute bottom-2 left-2 rounded-full bg-panel/90 px-2 py-0.5 text-[11px] text-mute backdrop-blur">
           {item.parts} {item.parts === 1 ? 'part' : 'parts'}
           {item.fromPhoto ? ' · from a photo' : ''}
+          {item.shareId ? ' · shared by link' : ''}
         </span>
       </Link>
       <div className="flex flex-1 flex-col gap-1 p-3.5">

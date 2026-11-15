@@ -14,7 +14,7 @@ export function HeadsetButton({ what = 'this rig', disabled = false, className =
       type="button"
       disabled={disabled}
       onClick={() => void enterXR()}
-      className={`flex items-center gap-1.5 rounded-md bg-accent px-2.5 py-1 text-[12.5px] font-semibold text-accent-ink hover:brightness-110 disabled:opacity-50 ${className}`}
+      className={`flex items-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-2.5 py-1 text-[12.5px] font-semibold text-accent-ink hover:brightness-110 disabled:opacity-50 ${className}`}
       title={supported === 'ar' ? `Put ${what} on your real table, and work it with your hands` : `Open ${what} in VR, and work it with your hands`}
     >
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
