@@ -132,6 +132,28 @@ describe('tutor', () => {
     expect((await as('ada').send('POST', '/v1/tutor', ask)).status).toBe(200)
   })
 
+  it('admins can pause AI help, change the allowance and cap everyone’s total without a deploy; staff are never held back', async () => {
+    expect((await as('ada').send('PUT', '/v1/admin/limits', { aiPaused: true })).status).toBe(403)
+    expect((await as('boss').send('PUT', '/v1/admin/limits', { aiPaused: true })).status).toBe(200)
+    const paused = await as('ada').send('POST', '/v1/tutor', ask)
+    expect(paused.status).toBe(503)
+    expect((await paused.json()).error).toMatch(/paused/)
+    expect((await as('boss').send('POST', '/v1/tutor', ask)).status).toBe(200)
+    await as('boss').send('PUT', '/v1/admin/limits', { aiPaused: false, tutorDaily: 1 })
+    expect((await as('ada').send('POST', '/v1/tutor', ask)).status).toBe(200)
+    const over = await as('ada').send('POST', '/v1/tutor', ask)
+    expect(over.status).toBe(429)
+    expect((await over.json()).error).toMatch(/limit of 1 tutor/)
+    await as('boss').send('PUT', '/v1/admin/limits', { tutorDaily: null, aiDailyCap: 1 })
+    expect((await as('ben').send('POST', '/v1/tutor', ask)).status).toBe(200)
+    const capped = await as('cy').send('POST', '/v1/tutor', ask)
+    expect(capped.status).toBe(429)
+    expect((await capped.json()).error).toMatch(/everyone/)
+    const view = await (await as('boss').get('/v1/admin/limits')).json()
+    expect(view).toMatchObject({ limits: { aiDailyCap: 1, aiPaused: false }, defaults: { tutor: 3, create: 15, notePages: 20 } })
+    expect(view.today).toBeGreaterThanOrEqual(2)
+  })
+
   it('needs sign-in and a question', async () => {
     expect((await as(null).send('POST', '/v1/tutor', ask)).status).toBe(401)
     expect((await as('ada').send('POST', '/v1/tutor', { question: '' })).status).toBe(400)
@@ -338,6 +360,32 @@ describe('shared links and feedback', () => {
   it('does not share a written answer (nothing was built)', async () => {
     const { id } = await (await as('ada').send('POST', '/v1/creations', { title: 'Answer', spec: { answerOnly: true } })).json()
     expect((await as('ada').send('POST', `/v1/creations/${id}/share`, {})).status).toBe(400)
+  })
+
+  it('takes crash reports without an account, groups the same fault, and shows them to admins', async () => {
+    const crash = (message: string, route = '/create/abc', headset = false) => as(null).send('POST', '/v1/crashes', { where: 'model view', message, route, build: 'b1', device: 'Chrome · Android', headset })
+    expect((await crash('Cannot read properties of undefined (reading 12)')).status).toBe(204)
+    await crash('Cannot read properties of undefined (reading 40)', '/create/xyz', true)
+    await crash('WebGL context lost')
+    expect((await as(null).send('POST', '/v1/crashes', { where: '', message: '' })).status).toBe(400)
+    expect((await as('ada').get('/v1/admin/crashes')).status).toBe(403)
+    const { items } = await (await as('boss').get('/v1/admin/crashes')).json()
+    expect(items).toHaveLength(2)
+    const grouped = items.find((i: { message: string }) => i.message.startsWith('Cannot'))
+    expect(grouped).toMatchObject({ where: 'model view', count: 2, headset: 1, routes: ['/create/xyz', '/create/abc'], device: 'Chrome · Android' })
+    expect((await as('boss').del(`/v1/admin/crashes/${grouped.id}`)).status).toBe(204)
+    expect((await (await as('boss').get('/v1/admin/crashes')).json()).items).toHaveLength(1)
+  })
+
+  it('serves a shared model’s picture for link previews', async () => {
+    const png = 'data:image/png;base64,' + Buffer.from('fakepng').toString('base64')
+    const { id } = await (await as('ada').send('POST', '/v1/creations', { title: 'Gear', spec: { parts: [] }, thumbnail: png })).json()
+    const { shareId } = await (await as('ada').send('POST', `/v1/creations/${id}/share`, {})).json()
+    const img = await as(null).get(`/v1/shared/${shareId}/image`)
+    expect(img.status).toBe(200)
+    expect(img.headers.get('content-type')).toBe('image/png')
+    expect(await img.text()).toBe('fakepng')
+    expect((await as(null).get('/v1/shared/nothinghere/image')).status).toBe(404)
   })
 
   it('takes reports from anyone and shows the queue to admins only', async () => {
