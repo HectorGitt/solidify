@@ -1434,7 +1434,34 @@ export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision
     parts: number
     createdAt: number
     updatedAt: number
+    /** shared by link: the id of its public copy (sharedModels/{shareId}) */
+    shareId?: string
   }
+
+  /** a creation's public copy, read by anyone with the link; kept in step with the creation as it is saved */
+  interface SharedModelDoc {
+    [k: string]: unknown
+    uid: string
+    creationId: string
+    by: string
+    title: string
+    prompt: string
+    spec: Record<string, unknown>
+    params: Record<string, number>
+    explanation?: string
+    thumbnail?: string
+    createdAt: number
+    updatedAt: number
+  }
+  /** what a shared copy holds of a creation: the model, its sizes, and the first answer as its explanation */
+  const sharedCopy = (d: CreationDoc) => ({
+    title: d.title,
+    prompt: d.prompt,
+    spec: d.spec,
+    params: d.params ?? {},
+    explanation: d.history?.find((h) => h.response)?.response,
+    ...(d.thumbnail ? { thumbnail: d.thumbnail } : {}),
+  })
 
   const checkSpecSize = (spec?: Record<string, unknown>) => {
     if (spec && JSON.stringify(spec).length > 300_000) throw fail(413, 'This model is too large to save.')
@@ -1459,7 +1486,7 @@ export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision
     const u = requireUser(c)
     const rows = await db.list<CreationDoc>(`users/${u.uid}/creations`)
     const items = rows
-      .map(({ id, data: d }) => ({ id, title: d.title, prompt: d.prompt, fromPhoto: d.fromPhoto, thumbnail: d.thumbnail, parts: d.parts, createdAt: d.createdAt, updatedAt: d.updatedAt, question: questionSummary(d.spec) }))
+      .map(({ id, data: d }) => ({ id, title: d.title, prompt: d.prompt, fromPhoto: d.fromPhoto, thumbnail: d.thumbnail, parts: d.parts, createdAt: d.createdAt, updatedAt: d.updatedAt, question: questionSummary(d.spec), ...(d.shareId ? { shareId: d.shareId } : {}) }))
       .sort((a, b) => b.updatedAt - a.updatedAt)
     return c.json({ items, limit: CREATION_LIMIT })
   })
@@ -1488,16 +1515,66 @@ export function createApp({ db, verifier, tutor, noteVision = new FakeNoteVision
     const path = creationPath(u.uid, c.req.param('id'))
     const patch = await body(c, creationPatch)
     checkSpecSize(patch.spec)
-    if (!(await db.get(path))) throw fail(404, 'Model not found.')
+    const prev = await db.get<CreationDoc>(path)
+    if (!prev) throw fail(404, 'Model not found.')
     const clean = Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined))
-    await db.set(path, { ...clean, ...(patch.spec ? { parts: partCount(patch.spec) } : {}), updatedAt: now() }, { merge: true })
+    const t = now()
+    await db.set(path, { ...clean, ...(patch.spec ? { parts: partCount(patch.spec) } : {}), updatedAt: t }, { merge: true })
+    // a shared model's link shows it as it is now
+    if (prev.shareId) await db.set(`sharedModels/${prev.shareId}`, { ...sharedCopy({ ...prev, ...clean } as CreationDoc), updatedAt: t }, { merge: true })
     return c.body(null, 204)
   })
 
   app.delete('/v1/creations/:id', async (c) => {
     const u = requireUser(c)
-    await db.delete(creationPath(u.uid, c.req.param('id')))
+    const path = creationPath(u.uid, c.req.param('id'))
+    const prev = await db.get<CreationDoc>(path)
+    // a deleted model's link stops working with it
+    if (prev?.shareId) await db.delete(`sharedModels/${prev.shareId}`)
+    await db.delete(path)
     return c.body(null, 204)
+  })
+
+  /** share a saved model (a solved question with its worked solution, or any model) by link: anyone with the
+   * link can open it, signed in or not, and keep a copy of their own. Sharing again keeps the same link. */
+  app.post('/v1/creations/:id/share', async (c) => {
+    const u = requireUser(c)
+    const id = c.req.param('id')
+    const path = creationPath(u.uid, id)
+    const d = await db.get<CreationDoc>(path)
+    if (!d) throw fail(404, 'Model not found.')
+    if ((d.spec as { answerOnly?: unknown }).answerOnly === true) throw fail(400, 'Only a model can be shared, not a written answer.')
+    const t = now()
+    const shareId = d.shareId ?? randomId()
+    const who = await whoIs(u)
+    const existing = d.shareId ? await db.get<SharedModelDoc>(`sharedModels/${shareId}`) : null
+    await db.set(`sharedModels/${shareId}`, { uid: u.uid, creationId: id, by: who.name.split(/[\s@]/)[0].slice(0, 40), ...sharedCopy(d), createdAt: existing?.createdAt ?? t, updatedAt: t })
+    if (!d.shareId) await db.set(path, { shareId }, { merge: true })
+    return c.json({ shareId }, d.shareId ? 200 : 201)
+  })
+
+  /** stop sharing: the link stops working (sharing again makes a new one) */
+  app.delete('/v1/creations/:id/share', async (c) => {
+    const u = requireUser(c)
+    const path = creationPath(u.uid, c.req.param('id'))
+    const d = await db.get<CreationDoc>(path)
+    if (!d) throw fail(404, 'Model not found.')
+    if (d.shareId) {
+      await db.delete(`sharedModels/${d.shareId}`)
+      const { shareId: _gone, ...rest } = d
+      await db.set(path, rest)
+    }
+    return c.body(null, 204)
+  })
+
+  /** Public: a shared model, for anyone with its link */
+  app.get('/v1/shared/:id', async (c) => {
+    const id = c.req.param('id')
+    if (!/^[a-z0-9]{6,20}$/.test(id)) throw fail(404, 'This link has stopped working or never existed.')
+    const d = await db.get<SharedModelDoc>(`sharedModels/${id}`)
+    if (!d) throw fail(404, 'This link has stopped working or never existed.')
+    const { uid, creationId: _c, ...shown } = d
+    return c.json({ id, ...shown, yours: c.get('user')?.uid === uid })
   })
 
   /* ------------------------------------------------------------------ classes */
