@@ -782,3 +782,9 @@ Every entry is numbered (in the order they appear, top to bottom) and set out th
 - **Cause:** the app routes after `#/` and link previewers never see that part, nor run the page's script: every link looked like the home page to them, and the shared model's picture lived only inside the API as a data URL.
 - **Solution:** share links are now `solidify.studio/s/<id>`, answered by a Netlify edge function with the model's title, its question or summary, who shared it and its picture (`GET /v1/shared/:id/image`), and a redirect to `/#/s/<id>` for people (keeping `?try=1`); the site's own preview if the API is down; the app also opens a `/s/<id>` address that reaches it directly. Tested with the API's replies stubbed: a question, practice, a model, a stopped link, the API down, a bad path.
 - **Lesson:** a link meant for sharing needs a server-side page for previewers; anything after `#` is invisible to them.
+
+### 134. A one-file edit emptied the owner's working copy of the home page (2026-11-16)
+- **Problem:** swapping the home page's test video meant committing one change to `web/src/ui/Landing.tsx` while leaving the owner's own uncommitted changes in it out of the commit. The script that applied the edit to the working copy left the file empty.
+- **Cause:** it called `open(path, 'w').write(edit(text))`: Python opens (and so empties) the file before working out what to write, and the edit then failed on Windows line endings, so nothing was written back.
+- **Solution:** rebuilt the file from the staged copy plus the owner's three changes, taken from the diff printed just before (the diff afterwards matches it line for line); later edits work out the new text in full, check it, and only then open the file.
+- **Lesson:** never open a file for writing until the new contents exist; when a file holds someone else's uncommitted work, print its diff first so it can be restored.
