@@ -67,14 +67,14 @@ const COPY = {
 
 /** Rigs to jump to from the live test section. */
 const LAB_LINKS = [
+  { label: 'Beam bending', to: '/m/materials/beam' },
   { label: 'Tensile test', to: '/m/materials/tensile' },
   { label: 'Four-bar linkage', to: '/m/mechanisms/four-bar' },
-  { label: 'Beam bending', to: '/m/materials/beam' },
   { label: 'Steam plant', to: '/m/thermal/steam-plant' },
   { label: 'Refrigeration', to: '/m/thermal/refrigeration' },
 ]
 
-/** A real recording of the tensile rig: the feature is easier to show than to describe. */
+/** A real recording of the beam bending rig's test: the feature is easier to show than to describe. */
 function LiveTest() {
   // no autoplay for anyone who has asked for less motion; they still get the controls
   const calm = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
@@ -82,7 +82,7 @@ function LiveTest() {
     <section id="live-test" className="mx-auto grid max-w-[1360px] scroll-mt-20 items-center gap-8 px-5 pt-16 sm:px-10 lg:grid-cols-12 lg:gap-12">
       <div className="lg:col-span-4">
         <h2 className="text-[30px] font-semibold tracking-[-0.03em] sm:text-[38px]">Set the conditions. Watch the test run.</h2>
-        <p className="mt-3 text-[15px] leading-relaxed text-mute">Choose a material, start the test, and the machine pulls it until it breaks. The curve draws itself, the readings fill the table, and the properties are worked out from those readings, scatter and all.</p>
+        <p className="mt-3 text-[15px] leading-relaxed text-mute">Set the supports, the loads and the section, then start the test: the weights go on step by step and the beam bends. The dial gauge is read at each load, the graph draws itself against theory, and the Young’s modulus (E) of its material is worked out from those readings.</p>
         <div className="mt-6 flex flex-wrap gap-2">
           {LAB_LINKS.map((l) => (
             <Link key={l.to} to={l.to} className="rounded-full border border-line-2 px-3.5 py-1.5 text-[13px] font-medium text-ink transition-colors hover:border-accent/50">
@@ -92,7 +92,7 @@ function LiveTest() {
         </div>
       </div>
       <div className="overflow-hidden rounded-3xl border border-line bg-[var(--color-stage)] lg:col-span-8">
-        <video className="block aspect-video w-full" src={`${MEDIA}/lab/tensile-test.mp4`} poster={`${MEDIA}/lab/tensile-test.webp`} autoPlay={!calm} controls={calm} muted loop playsInline preload="metadata" aria-label="A specimen pulled to failure in the tensile rig, with the stress-strain curve and table of readings building beside it" />
+        <video className="block aspect-video w-full" src={`${MEDIA}/lab/beam-test.mp4`} poster={`${MEDIA}/lab/beam-test.webp`} autoPlay={!calm} controls={calm} muted loop playsInline preload="metadata" aria-label="A beam loaded step by step on the bending rig, with the load against deflection graph and the table of dial readings building beside it, ending with E worked out from the test" />
       </div>
     </section>
   )
