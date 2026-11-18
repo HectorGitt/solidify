@@ -65,5 +65,7 @@ export function Flow({ curve, count = 60, radius = 0.003, color, intensity, spee
     mesh.instanceMatrix.needsUpdate = true
   })
 
-  return <instancedMesh ref={ref} args={[geo, mat, count]} frustumCulled={false} renderOrder={xray ? 10 : 0} />
+  // userData.effect: not part of the machine's size (the headset sizes a machine by what it is drawn with;
+  // before its first frame every particle is the unit sphere at the origin, 2 m across)
+  return <instancedMesh ref={ref} args={[geo, mat, count]} frustumCulled={false} renderOrder={xray ? 10 : 0} userData={{ effect: true }} />
 }

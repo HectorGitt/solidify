@@ -232,7 +232,16 @@ function Lab({ scene }: { scene: SceneDef }) {
       o.updateWorldMatrix(true, true)
       o.traverseVisible((m) => {
         const geo = (m as THREE.Mesh).geometry
-        if (!(m as THREE.Mesh).isMesh || !geo) return
+        if (!(m as THREE.Mesh).isMesh || !geo || m.userData.effect) return
+        // an instanced mesh (chain links, track plates) by where its instances are: its geometry is one
+        // instance, often a unit shape scaled down per instance
+        const inst = m as THREE.InstancedMesh
+        if (inst.isInstancedMesh) {
+          if (inst.count === 0) return
+          inst.computeBoundingBox()
+          if (inst.boundingBox) b.union(g.copy(inst.boundingBox).applyMatrix4(m.matrixWorld))
+          return
+        }
         if (!geo.boundingBox) geo.computeBoundingBox()
         b.union(g.copy(geo.boundingBox!).applyMatrix4(m.matrixWorld))
       })
@@ -927,6 +936,24 @@ function Panel({ scene, placing }: { scene: SceneDef; placing: boolean }) {
     mirrorChange(h.id, Number(Math.min(h.max, Math.max(h.min, v)).toPrecision(10)))
   }
 
+  /** a press on the panel: what is under it does its thing */
+  const tap = (hit: Hit) => {
+    if (hit.kind === 'button') act(hit.id)
+    else if (hit.kind === 'page') setPage((p) => Math.max(0, Math.min(pageCount.current - 1, p + hit.dir)))
+    else if (hit.kind === 'option') hit.id.startsWith('dom:') ? dom.press(hit.value) : mirrorChange(hit.id, hit.value)
+    else if (hit.kind === 'toggle' && handlers.has(hit.id)) mirrorChange(hit.id, !hit.checked)
+    else if (hit.kind === 'slider') setSlider(hit, hit.x + hit.w * 0.5)
+    dirty.current = true
+  }
+  // development only: press the panel at a point (its own pixels), as a recording's hand does
+  if (import.meta.env.DEV) {
+    ;(window as unknown as { __xrPress?: (x: number, y: number) => void }).__xrPress = (x, y) => {
+      const hit = hitAt(hits.current, x, y)
+      if (hit?.kind === 'slider') setSlider(hit, x)
+      else if (hit) tap(hit)
+    }
+  }
+
   const h = (PANEL_M * PANEL_H) / PANEL_W
   return (
     <mesh
@@ -949,11 +976,7 @@ function Panel({ scene, placing }: { scene: SceneDef; placing: boolean }) {
         const t = performance.now()
         if (t - lastTap.current < 300) return
         lastTap.current = t
-        if (hit.kind === 'button') act(hit.id)
-        else if (hit.kind === 'page') setPage((p) => Math.max(0, Math.min(pageCount.current - 1, p + hit.dir)))
-        else if (hit.kind === 'option') hit.id.startsWith('dom:') ? dom.press(hit.value) : mirrorChange(hit.id, hit.value)
-        else if (hit.kind === 'toggle' && handlers.has(hit.id)) mirrorChange(hit.id, !hit.checked)
-        dirty.current = true
+        tap(hit)
       }}
       onPointerMove={(e) => {
         // pointing at the panel: no part is under the hand
