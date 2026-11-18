@@ -18,9 +18,13 @@ reel-out/
 # one-off scratch scripts (browser checks, demo recordings)
 web/scripts/look*.mjs
 web/scripts/demo-*.mjs
+web/scripts/demo-*.sh
 web/scripts/check-*.mjs
 web/scripts/beam-spec.mjs
 
 # .slfy website build output (published from the HectorGitt/slfy repo)
 format/www/
 format/site/
+
+# rendered demo videos
+demo-out/
