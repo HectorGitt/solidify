@@ -9,7 +9,6 @@ dist
 *.log
 .env
 .env.*
-.claude/settings.local.json
 tsconfig.tsbuildinfo
 
 # reels made by web/scripts/reel
@@ -28,3 +27,6 @@ format/site/
 
 # rendered demo videos
 demo-out/
+
+# local Claude Code settings
+.claude/
